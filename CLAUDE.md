@@ -136,9 +136,9 @@ plex-dashboard/
 
 ## Current Status
 
-**Phase**: Epic 2 - Configuration (In Progress)
-**Completed**: US-0.1 through US-2.1 (7 stories)
-**Next US**: US-2.2 - Configure Jellyseerr Connection
+**Phase**: Epic 7 - Background Tasks & Refresh (In Progress)
+**Completed**: US-0.1 through US-2.3, US-7.1 (11 stories)
+**Next US**: US-7.1.5 - Local Integration Test for Sync
 
 **Production URL**: https://mediajanitor.com
 
@@ -275,6 +275,37 @@ class UserSettings(Base):
 2. Test the feature manually via curl: `curl -X POST http://localhost:8080/api/...`
 3. Check Docker logs for errors: `docker-compose logs backend`
 4. If errors appear, fix and re-run tests
+
+### Integration Testing with Real APIs
+
+**For features that interact with Jellyfin/Jellyseerr**, use the test account in `.env.example`:
+- **Email**: `APP_USER_EMAIL` from `.env.example`
+- **Password**: `APP_USER_PASSWORD` from `.env.example`
+
+This account has Jellyfin and Jellyseerr already configured in the app settings. Use it for:
+- Testing sync functionality with real data
+- Verifying cached data is stored correctly
+- Testing any feature that reads from cached media/requests
+
+**Integration test workflow:**
+```bash
+# 1. Start local environment
+docker-compose up -d
+
+# 2. Login to get JWT token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<APP_USER_EMAIL>","password":"<APP_USER_PASSWORD>"}' \
+  | jq -r '.access_token')
+
+# 3. Trigger sync
+curl -X POST http://localhost:8080/api/sync \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. Check sync status
+curl http://localhost:8080/api/sync/status \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ### Frontend (SvelteKit + Svelte 5)
 
