@@ -3,17 +3,28 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores';
 
-	// Form state
+	// Jellyfin form state
 	let jellyfinUrl = $state('');
 	let jellyfinApiKey = $state('');
-	let error = $state<string | null>(null);
-	let success = $state<string | null>(null);
-	let isLoading = $state(false);
+	let jellyfinError = $state<string | null>(null);
+	let jellyfinSuccess = $state<string | null>(null);
+	let isJellyfinLoading = $state(false);
 	let isFetchingSettings = $state(true);
 
-	// Current settings state
+	// Jellyfin current settings state
 	let hasJellyfinConfigured = $state(false);
 	let currentJellyfinUrl = $state<string | null>(null);
+
+	// Jellyseerr form state
+	let jellyseerrUrl = $state('');
+	let jellyseerrApiKey = $state('');
+	let jellyseerrError = $state<string | null>(null);
+	let jellyseerrSuccess = $state<string | null>(null);
+	let isJellyseerrLoading = $state(false);
+
+	// Jellyseerr current settings state
+	let hasJellyseerrConfigured = $state(false);
+	let currentJellyseerrUrl = $state<string | null>(null);
 
 	onMount(async () => {
 		await loadCurrentSettings();
@@ -22,16 +33,32 @@
 	async function loadCurrentSettings() {
 		try {
 			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/jellyfin', {
+
+			// Load Jellyfin settings
+			const jellyfinResponse = await fetch('/api/settings/jellyfin', {
 				headers: { Authorization: `Bearer ${token}` }
 			});
 
-			if (response.ok) {
-				const data = await response.json();
+			if (jellyfinResponse.ok) {
+				const data = await jellyfinResponse.json();
 				hasJellyfinConfigured = data.api_key_configured;
 				currentJellyfinUrl = data.server_url;
 				if (data.server_url) {
 					jellyfinUrl = data.server_url;
+				}
+			}
+
+			// Load Jellyseerr settings
+			const jellyseerrResponse = await fetch('/api/settings/jellyseerr', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (jellyseerrResponse.ok) {
+				const data = await jellyseerrResponse.json();
+				hasJellyseerrConfigured = data.api_key_configured;
+				currentJellyseerrUrl = data.server_url;
+				if (data.server_url) {
+					jellyseerrUrl = data.server_url;
 				}
 			}
 		} catch (e) {
@@ -41,11 +68,11 @@
 		}
 	}
 
-	async function handleSubmit(event: SubmitEvent) {
+	async function handleJellyfinSubmit(event: SubmitEvent) {
 		event.preventDefault();
-		error = null;
-		success = null;
-		isLoading = true;
+		jellyfinError = null;
+		jellyfinSuccess = null;
+		isJellyfinLoading = true;
 
 		try {
 			const token = localStorage.getItem('access_token');
@@ -67,14 +94,51 @@
 				throw new Error(data.detail || 'Failed to save settings');
 			}
 
-			success = data.message || 'Settings saved successfully!';
+			jellyfinSuccess = data.message || 'Settings saved successfully!';
 			hasJellyfinConfigured = true;
 			currentJellyfinUrl = jellyfinUrl;
 			jellyfinApiKey = ''; // Clear the API key field after successful save
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save settings';
+			jellyfinError = e instanceof Error ? e.message : 'Failed to save settings';
 		} finally {
-			isLoading = false;
+			isJellyfinLoading = false;
+		}
+	}
+
+	async function handleJellyseerrSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		jellyseerrError = null;
+		jellyseerrSuccess = null;
+		isJellyseerrLoading = true;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/jellyseerr', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					server_url: jellyseerrUrl,
+					api_key: jellyseerrApiKey
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save settings');
+			}
+
+			jellyseerrSuccess = data.message || 'Jellyseerr connected successfully!';
+			hasJellyseerrConfigured = true;
+			currentJellyseerrUrl = jellyseerrUrl;
+			jellyseerrApiKey = ''; // Clear the API key field after successful save
+		} catch (e) {
+			jellyseerrError = e instanceof Error ? e.message : 'Failed to save settings';
+		} finally {
+			isJellyseerrLoading = false;
 		}
 	}
 
@@ -114,16 +178,16 @@
 				</div>
 			{/if}
 
-			<form onsubmit={handleSubmit} class="settings-form">
-				{#if error}
+			<form onsubmit={handleJellyfinSubmit} class="settings-form">
+				{#if jellyfinError}
 					<div class="message error-message" role="alert">
-						{error}
+						{jellyfinError}
 					</div>
 				{/if}
 
-				{#if success}
+				{#if jellyfinSuccess}
 					<div class="message success-message" role="status">
-						{success}
+						{jellyfinSuccess}
 					</div>
 				{/if}
 
@@ -159,13 +223,86 @@
 					</span>
 				</div>
 
-				<button type="submit" disabled={isLoading} class="submit-button">
-					{#if isLoading}
+				<button type="submit" disabled={isJellyfinLoading} class="submit-button">
+					{#if isJellyfinLoading}
 						Validating connection...
 					{:else if hasJellyfinConfigured}
 						Update Connection
 					{:else}
 						Connect to Jellyfin
+					{/if}
+				</button>
+			</form>
+		</section>
+
+		<section class="settings-section">
+			<h2>Jellyseerr Connection</h2>
+			<p class="section-description">
+				Connect your Jellyseerr server to track media requests.
+			</p>
+
+			{#if hasJellyseerrConfigured}
+				<div class="status-badge connected">
+					Connected to {currentJellyseerrUrl}
+				</div>
+			{:else}
+				<div class="status-badge not-connected">
+					Not connected
+				</div>
+			{/if}
+
+			<form onsubmit={handleJellyseerrSubmit} class="settings-form">
+				{#if jellyseerrError}
+					<div class="message error-message" role="alert">
+						{jellyseerrError}
+					</div>
+				{/if}
+
+				{#if jellyseerrSuccess}
+					<div class="message success-message" role="status">
+						{jellyseerrSuccess}
+					</div>
+				{/if}
+
+				<div class="form-group">
+					<label for="jellyseerr-url">Server URL</label>
+					<input
+						type="url"
+						id="jellyseerr-url"
+						bind:value={jellyseerrUrl}
+						required
+						placeholder="https://your-jellyseerr-server.com"
+					/>
+					<span class="hint">The full URL to your Jellyseerr server</span>
+				</div>
+
+				<div class="form-group">
+					<label for="jellyseerr-api-key">
+						API Key
+						{#if hasJellyseerrConfigured}
+							<span class="optional">(leave blank to keep current)</span>
+						{/if}
+					</label>
+					<input
+						type="password"
+						id="jellyseerr-api-key"
+						bind:value={jellyseerrApiKey}
+						required={!hasJellyseerrConfigured}
+						placeholder={hasJellyseerrConfigured ? '••••••••••••••••' : 'Enter your API key'}
+						autocomplete="off"
+					/>
+					<span class="hint">
+						Find this in Jellyseerr Settings → General → API Key
+					</span>
+				</div>
+
+				<button type="submit" disabled={isJellyseerrLoading} class="submit-button">
+					{#if isJellyseerrLoading}
+						Validating connection...
+					{:else if hasJellyseerrConfigured}
+						Update Connection
+					{:else}
+						Connect to Jellyseerr
 					{/if}
 				</button>
 			</form>
@@ -216,6 +353,11 @@
 		border-radius: 0.75rem;
 		padding: 1.5rem;
 		border: 1px solid var(--border);
+		margin-bottom: 1.5rem;
+	}
+
+	.settings-section:last-child {
+		margin-bottom: 0;
 	}
 
 	h2 {
