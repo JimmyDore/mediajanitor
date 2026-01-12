@@ -21,24 +21,15 @@
 			message = '';
 		}
 	});
-
-	function handleLogout() {
-		auth.logout();
-		window.location.href = '/login';
-	}
 </script>
 
 <svelte:head>
-	<title>Plex Dashboard</title>
+	<title>Dashboard - Media Janitor</title>
 </svelte:head>
 
-<div class="hello-container">
+<div class="dashboard-container">
 	{#if $auth.isAuthenticated && $auth.user}
-		<div class="user-info">
-			<span>Logged in as: {$auth.user.email}</span>
-			<a href="/settings" class="settings-link">Settings</a>
-			<button onclick={handleLogout} class="logout-button">Log out</button>
-		</div>
+		<p class="welcome-text">Welcome back, {$auth.user.email}</p>
 	{/if}
 	{#if error}
 		<div class="error">
@@ -52,13 +43,19 @@
 </div>
 
 <style>
-	.hello-container {
+	.dashboard-container {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		min-height: 60vh;
 		text-align: center;
+	}
+
+	.welcome-text {
+		color: var(--text-secondary);
+		font-size: 0.875rem;
+		margin-bottom: 1rem;
 	}
 
 	.hello-message {
@@ -88,47 +85,5 @@
 	.error .hint {
 		color: var(--text-secondary);
 		font-size: 0.875rem;
-	}
-
-	.user-info {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		margin-bottom: 2rem;
-		padding: 1rem;
-		background: var(--bg-secondary);
-		border-radius: 0.5rem;
-	}
-
-	.logout-button {
-		padding: 0.5rem 1rem;
-		background: transparent;
-		color: var(--danger);
-		border: 1px solid var(--danger);
-		border-radius: 0.25rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		transition: all 0.2s;
-	}
-
-	.logout-button:hover {
-		background: var(--danger);
-		color: white;
-	}
-
-	.settings-link {
-		padding: 0.5rem 1rem;
-		background: transparent;
-		color: var(--accent);
-		border: 1px solid var(--accent);
-		border-radius: 0.25rem;
-		font-size: 0.875rem;
-		text-decoration: none;
-		transition: all 0.2s;
-	}
-
-	.settings-link:hover {
-		background: var(--accent);
-		color: white;
 	}
 </style>

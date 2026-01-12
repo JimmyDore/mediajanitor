@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores';
 
 	// Jellyfin form state
@@ -142,21 +141,16 @@
 		}
 	}
 
-	function handleBack() {
-		goto('/');
-	}
 </script>
 
 <svelte:head>
-	<title>Settings - Plex Dashboard</title>
+	<title>Settings - Media Janitor</title>
 </svelte:head>
 
 <div class="settings-container">
-	<div class="header">
-		<button onclick={handleBack} class="back-button">
-			&larr; Back to Dashboard
-		</button>
+	<div class="page-header">
 		<h1>Settings</h1>
+		<p class="page-description">Configure your media server connections.</p>
 	</div>
 
 	{#if isFetchingSettings}
@@ -314,31 +308,21 @@
 	.settings-container {
 		max-width: 600px;
 		margin: 0 auto;
-		padding: 1rem;
 	}
 
-	.header {
+	.page-header {
 		margin-bottom: 2rem;
 	}
 
-	.back-button {
-		background: none;
-		border: none;
-		color: var(--accent);
-		cursor: pointer;
-		padding: 0.5rem 0;
-		font-size: 0.875rem;
-		margin-bottom: 1rem;
-	}
-
-	.back-button:hover {
-		text-decoration: underline;
-	}
-
-	h1 {
-		color: var(--text);
+	.page-header h1 {
+		color: var(--text-primary);
 		font-size: 2rem;
 		font-weight: 700;
+		margin: 0 0 0.5rem 0;
+	}
+
+	.page-description {
+		color: var(--text-secondary);
 		margin: 0;
 	}
 

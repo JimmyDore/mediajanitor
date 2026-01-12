@@ -4,11 +4,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores';
+	import Header from '$lib/components/Header.svelte';
 
 	let { children } = $props();
 
 	// Public routes that don't require authentication
 	const publicRoutes = ['/login', '/register'];
+
+	// Check if current route is public
+	let isPublicRoute = $derived(publicRoutes.includes($page.url.pathname));
 
 	onMount(async () => {
 		// Check if user is authenticated
@@ -33,13 +37,16 @@
 
 {#if $auth.isLoading}
 	<div class="app">
-		<main class="content">
+		<main class="content content-centered">
 			<div class="loading">Loading...</div>
 		</main>
 	</div>
 {:else}
 	<div class="app">
-		<main class="content">
+		{#if $auth.isAuthenticated && !isPublicRoute}
+			<Header />
+		{/if}
+		<main class="content" class:content-centered={isPublicRoute || !$auth.isAuthenticated}>
 			{@render children()}
 		</main>
 	</div>
@@ -49,14 +56,22 @@
 	.app {
 		min-height: 100vh;
 		display: flex;
-		align-items: center;
-		justify-content: center;
+		flex-direction: column;
 	}
 
 	.content {
 		width: 100%;
-		max-width: 800px;
+		max-width: 1200px;
+		margin: 0 auto;
 		padding: 2rem;
+		flex: 1;
+	}
+
+	.content-centered {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		max-width: 800px;
 	}
 
 	.loading {

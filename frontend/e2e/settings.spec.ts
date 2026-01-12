@@ -204,35 +204,5 @@ test.describe('Settings Page', () => {
 			await expect(page.locator('#jellyfin-api-key')).toHaveValue('my-api-key-12345');
 		});
 
-		test('settings page has back button to dashboard', async ({ page }) => {
-			await page.route('**/api/auth/me', async (route) => {
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify({ id: 1, email: 'test@example.com' })
-				});
-			});
-
-			await page.route('**/api/settings/jellyfin', async (route) => {
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify({ server_url: null, api_key_configured: false })
-				});
-			});
-
-			await page.route('**/api/settings/jellyseerr', async (route) => {
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify({ server_url: null, api_key_configured: false })
-				});
-			});
-
-			await page.goto('/settings');
-
-			const backButton = page.getByRole('button', { name: /back to dashboard/i });
-			await expect(backButton).toBeVisible();
-		});
 	});
 });
