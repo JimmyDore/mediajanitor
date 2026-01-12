@@ -141,6 +141,18 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): add Jellyfin connection configuration
 
+### 2026-01-12: US-2.1.5 - Backend Cleanup
+- Deleted unused Pydantic models: content.py, jellyseerr.py, whitelist.py
+- Updated models/__init__.py to only export user.py and settings.py models
+- Removed premature SQLAlchemy tables from database.py:
+  - WhitelistContent, WhitelistFrenchOnly, WhitelistFrenchSubsOnly
+  - WhitelistLanguageExempt, WhitelistEpisodeExempt, AppSettings
+- Removed unused 'relationship' import from database.py
+- Added types-python-jose to dev dependencies for mypy compatibility
+- Files changed: database.py, models/__init__.py, pyproject.toml
+- Commits:
+  - chore(backend): [US-2.1.5] remove premature code
+
 ## Current Status
 
 **Phase**: Epic 2 - Configuration (In Progress)
