@@ -274,3 +274,154 @@ class TestSyncService:
             item_ids = [item.jellyfin_id for item in items]
             assert "old-item-123" not in item_ids
             assert "test-movie-1" in item_ids
+
+
+class TestSyncRateLimiting:
+    """Test rate limiting for sync endpoint (US-7.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "ratelimit@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.decrypt_value")
+    def test_sync_rate_limited_after_recent_sync(
+        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+    ) -> None:
+        """POST /api/sync should return 429 if user synced within 5 minutes."""
+        mock_decrypt.return_value = "decrypted-key"
+        mock_fetch.return_value = []  # Empty response for simplicity
+
+        token = self._get_auth_token(client, "ratelimit1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Configure Jellyfin
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers,
+            )
+
+        # First sync should succeed (this updates DB sync status)
+        response1 = client.post("/api/sync", headers=headers)
+        assert response1.status_code == 200
+
+        # Second sync immediately after should be rate limited
+        response2 = client.post("/api/sync", headers=headers)
+        assert response2.status_code == 429
+        assert "rate" in response2.json()["detail"].lower() or "minute" in response2.json()["detail"].lower()
+
+    @patch("app.routers.sync.get_sync_status")
+    @patch("app.routers.sync.run_user_sync")
+    def test_sync_allowed_after_5_minutes(
+        self, mock_run_sync: AsyncMock, mock_get_status: AsyncMock, client: TestClient
+    ) -> None:
+        """POST /api/sync should succeed if last sync was >5 minutes ago."""
+        from datetime import timedelta
+
+        mock_run_sync.return_value = {
+            "status": "success",
+            "media_items_synced": 10,
+            "requests_synced": 5,
+        }
+
+        # Mock that last sync was 6 minutes ago
+        old_sync_time = datetime.now(timezone.utc) - timedelta(minutes=6)
+        mock_status = SyncStatus(
+            user_id=1,
+            last_sync_started=old_sync_time,
+            last_sync_completed=old_sync_time,
+            last_sync_status="success",
+        )
+        mock_get_status.return_value = mock_status
+
+        token = self._get_auth_token(client, "ratelimit2@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Configure Jellyfin
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers,
+            )
+
+        # Sync should succeed since last sync was >5 minutes ago
+        response = client.post("/api/sync", headers=headers)
+        assert response.status_code == 200
+
+    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.decrypt_value")
+    def test_sync_rate_limit_response_includes_wait_time(
+        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+    ) -> None:
+        """Rate limit response should include how long to wait."""
+        mock_decrypt.return_value = "decrypted-key"
+        mock_fetch.return_value = []
+
+        token = self._get_auth_token(client, "ratelimit3@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Configure Jellyfin
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers,
+            )
+
+        # First sync
+        client.post("/api/sync", headers=headers)
+
+        # Second sync - should include wait time info
+        response = client.post("/api/sync", headers=headers)
+        assert response.status_code == 429
+        # Should mention minutes or time remaining
+        detail = response.json()["detail"]
+        assert "minute" in detail.lower()
+
+    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.decrypt_value")
+    def test_rate_limit_is_per_user(
+        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+    ) -> None:
+        """Rate limit should be per-user, not global."""
+        mock_decrypt.return_value = "decrypted-key"
+        mock_fetch.return_value = []
+
+        # User 1
+        token1 = self._get_auth_token(client, "ratelimit4@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers1,
+            )
+
+        # User 2
+        token2 = self._get_auth_token(client, "ratelimit5@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers2,
+            )
+
+        # User 1 syncs
+        response1 = client.post("/api/sync", headers=headers1)
+        assert response1.status_code == 200
+
+        # User 2 should still be able to sync
+        response2 = client.post("/api/sync", headers=headers2)
+        assert response2.status_code == 200

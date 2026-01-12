@@ -13,12 +13,29 @@
 		error: string | null;
 	}
 
+	interface SyncResponse {
+		status: string;
+		media_items_synced: number;
+		requests_synced: number;
+		error: string | null;
+	}
+
 	let syncStatus = $state<SyncStatus | null>(null);
 	let syncLoading = $state(false);
+	let toastMessage = $state<string | null>(null);
+	let toastType = $state<'success' | 'error'>('success');
 
 	function formatDate(isoString: string): string {
 		const date = new Date(isoString);
 		return date.toLocaleString();
+	}
+
+	function showToast(message: string, type: 'success' | 'error') {
+		toastMessage = message;
+		toastType = type;
+		setTimeout(() => {
+			toastMessage = null;
+		}, 5000);
 	}
 
 	async function fetchSyncStatus() {
@@ -34,6 +51,54 @@
 			}
 		} catch {
 			// Ignore sync status errors
+		}
+	}
+
+	async function triggerSync() {
+		if (syncLoading) return;
+
+		syncLoading = true;
+		try {
+			const token = localStorage.getItem('access_token');
+			if (!token) {
+				showToast('Not authenticated', 'error');
+				return;
+			}
+
+			const response = await fetch('/api/sync', {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (response.status === 429) {
+				const data = await response.json();
+				showToast(data.detail || 'Rate limited. Please wait before syncing again.', 'error');
+				return;
+			}
+
+			if (!response.ok) {
+				const data = await response.json();
+				showToast(data.detail || 'Sync failed', 'error');
+				return;
+			}
+
+			const data: SyncResponse = await response.json();
+			await fetchSyncStatus();
+
+			if (data.status === 'success') {
+				showToast(
+					`Synced ${data.media_items_synced} media items and ${data.requests_synced} requests`,
+					'success'
+				);
+			} else if (data.status === 'partial') {
+				showToast(`Sync completed with warnings: ${data.error}`, 'success');
+			} else {
+				showToast(data.error || 'Sync failed', 'error');
+			}
+		} catch {
+			showToast('Failed to sync data', 'error');
+		} finally {
+			syncLoading = false;
 		}
 	}
 
@@ -62,6 +127,12 @@
 	<title>Dashboard - Media Janitor</title>
 </svelte:head>
 
+{#if toastMessage}
+	<div class="toast toast-{toastType}" role="alert">
+		{toastMessage}
+	</div>
+{/if}
+
 <div class="dashboard-container">
 	{#if $auth.isAuthenticated && $auth.user}
 		<p class="welcome-text">Welcome back, {$auth.user.email}</p>
@@ -89,6 +160,19 @@
 				{:else}
 					<p class="sync-time">Never synced</p>
 				{/if}
+				<button
+					class="refresh-button"
+					onclick={triggerSync}
+					disabled={syncLoading}
+					aria-label="Refresh data"
+				>
+					{#if syncLoading}
+						<span class="spinner" aria-hidden="true"></span>
+						Syncing...
+					{:else}
+						Refresh
+					{/if}
+				</button>
 			</div>
 		{/if}
 	{/if}
@@ -157,5 +241,78 @@
 		color: var(--text-muted);
 		font-size: 0.75rem;
 		margin-top: 0.25rem;
+	}
+
+	.refresh-button {
+		margin-top: 1rem;
+		padding: 0.5rem 1rem;
+		background: var(--accent);
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: background-color 0.2s ease;
+	}
+
+	.refresh-button:hover:not(:disabled) {
+		background: var(--accent-hover, #4f46e5);
+	}
+
+	.refresh-button:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.spinner {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.toast {
+		position: fixed;
+		top: 1rem;
+		right: 1rem;
+		padding: 1rem 1.5rem;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		z-index: 1000;
+		animation: slideIn 0.3s ease;
+	}
+
+	.toast-success {
+		background: var(--success, #22c55e);
+		color: white;
+	}
+
+	.toast-error {
+		background: var(--danger, #ef4444);
+		color: white;
+	}
+
+	@keyframes slideIn {
+		from {
+			transform: translateX(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
 	}
 </style>

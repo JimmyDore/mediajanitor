@@ -1,5 +1,6 @@
 """Sync router for data sync endpoints."""
 
+from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,9 @@ from app.database import User, get_db
 from app.services.auth import get_current_user
 from app.services.jellyfin import get_user_jellyfin_settings
 from app.services.sync import run_user_sync, get_sync_status
+
+# Rate limit: max 1 sync per 5 minutes per user
+SYNC_RATE_LIMIT_MINUTES = 5
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
@@ -43,7 +47,22 @@ async def trigger_sync(
 
     Fetches data from Jellyfin and Jellyseerr (if configured)
     and caches it in the database.
+
+    Rate limited to 1 sync per 5 minutes per user.
     """
+    # Check rate limit
+    sync_status = await get_sync_status(db, current_user.id)
+    if sync_status and sync_status.last_sync_started:
+        time_since_sync = datetime.now(timezone.utc) - sync_status.last_sync_started.replace(tzinfo=timezone.utc)
+        rate_limit = timedelta(minutes=SYNC_RATE_LIMIT_MINUTES)
+        if time_since_sync < rate_limit:
+            remaining = rate_limit - time_since_sync
+            minutes_remaining = int(remaining.total_seconds() // 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited. Please wait {minutes_remaining} minute(s) before syncing again.",
+            )
+
     # Check if Jellyfin is configured
     settings = await get_user_jellyfin_settings(db, current_user.id)
     if not settings or not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:

@@ -223,10 +223,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-7.1] add data sync service and endpoints
 
+### 2026-01-12: US-7.2 - Manual Data Refresh
+- Added rate limiting to sync endpoint (1 refresh per 5 minutes per user):
+  - Modified routers/sync.py to check last_sync_started timestamp
+  - Returns 429 with "Rate limited. Please wait X minute(s)" message
+- Added Refresh button to dashboard:
+  - Button shows loading spinner with "Syncing..." text during sync
+  - Toast notifications for success, rate limit, or error messages
+  - Button disabled during sync to prevent double-clicks
+- Dashboard updates sync status after successful refresh
+- Backend tests: 4 new tests for rate limiting functionality
+- Frontend tests: 9 new tests for sync API integration
+- E2E tests: 8 new tests for refresh button UI
+- Verified in browser: refresh button works, rate limiting enforced
+- Files changed: routers/sync.py, +page.svelte, tests/test_sync.py, tests/sync.test.ts, e2e/sync.spec.ts
+- Commits:
+  - feat(sync): [US-7.2] add manual data refresh with rate limiting
+
 ## Current Status
 
-**Phase**: Epic 7 - Data Sync (In Progress)
-**Next US**: US-7.2 - Manual Data Refresh
+**Phase**: Epic 3 - Content Analysis (In Progress)
+**Next US**: US-7.1.5 - Local Integration Test for Sync (manual) or US-3.1 - View Old Unwatched Content
 
 ## Notes
 
