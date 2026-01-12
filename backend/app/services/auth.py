@@ -1,7 +1,7 @@
 """Authentication service for password hashing and user operations."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Union
+from typing import Annotated, Any, Union
 
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -44,12 +44,6 @@ async def get_user_by_email_async(db: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-def get_user_by_email(db: Union[Session, AsyncSession], email: str) -> User | None:
-    """Get a user by email address (sync version for compatibility)."""
-    result = db.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
-
-
 def create_user_sync(db: Session, email: str, password: str) -> User:
     """Create a new user with hashed password (sync version)."""
     hashed_password = hash_password(password)
@@ -80,7 +74,7 @@ def create_user(db: Union[Session, AsyncSession], email: str, password: str) -> 
     return user
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     settings = get_settings()
     to_encode = data.copy()
@@ -91,7 +85,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
             minutes=settings.access_token_expire_minutes
         )
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+    encoded_jwt: str = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
     return encoded_jwt
 
 

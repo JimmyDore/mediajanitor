@@ -70,7 +70,7 @@ class EpisodeExemptionListResponse(BaseModel):
 class BulkAddRequest(BaseModel):
     """Request to add multiple items to a whitelist."""
 
-    names: list[str] = Field(min_items=1)
+    names: list[str] = Field(min_length=1)
 
 
 class BulkAddResponse(BaseModel):
