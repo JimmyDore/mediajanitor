@@ -92,11 +92,18 @@ Examples:
 
 ```
 plex-dashboard/
-├── PRD.md                 # User Stories & Acceptance Criteria
-├── progress.txt           # Completed tasks log
+├── PRD.md                 # User Stories & Acceptance Criteria (human-readable)
+├── prd.json               # Machine-readable task tracking for Ralph
+├── progress.txt           # Completed tasks log + Codebase Patterns
+├── SUGGESTIONS.md         # Observations with [P1]/[P2]/[P3] priorities
 ├── CLAUDE.md              # This file - project context
+├── prompt.md              # Ralph execution loop prompt
 ├── ralph-once.sh          # Single iteration Ralph script
 ├── afk-ralph.sh           # Autonomous loop Ralph script
+├── .claude/
+│   └── skills/
+│       ├── prd.md         # /prd skill - PRD creation
+│       └── ralph-init.md  # /ralph-init skill - PRD to JSON
 ├── docker-compose.yml     # Local development
 ├── .env.example           # Environment template
 │
@@ -129,11 +136,42 @@ plex-dashboard/
 
 ## Current Status
 
-**Phase**: Epic 1 - Authentication (In Progress)
-**Completed**: US-0.1, US-0.2, US-0.3, US-1.1 (User Registration)
-**Next US**: US-1.2 - User Login
+**Phase**: Epic 2 - Configuration (In Progress)
+**Completed**: US-0.1 through US-2.1 (7 stories)
+**Next US**: US-2.2 - Configure Jellyseerr Connection
 
 **Production URL**: https://mediajanitor.com
+
+Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
+
+## Ralph Workflow
+
+### Skills (Human-driven, before Ralph)
+
+1. **`/prd`** - Create well-structured PRD with right-sized stories
+   - Location: `.claude/skills/prd.md`
+   - Ensures stories fit in one context window
+   - Adds verifiable acceptance criteria
+
+2. **`/ralph-init`** - Convert PRD.md to prd.json
+   - Location: `.claude/skills/ralph-init.md`
+   - Creates machine-readable task tracking
+   - Validates story sizing and dependencies
+
+### Ralph Loop (Autonomous execution)
+
+Run `./ralph-once.sh` (human-in-the-loop) or `./afk-ralph.sh N` (autonomous N iterations)
+
+Prompt location: `prompt.md`
+
+Workflow:
+1. Pick next story where `passes: false` from prd.json
+2. Implement with TDD (test first)
+3. Run quality checks (pytest, mypy, npm test, npm run check)
+4. Verify in Docker if backend changed
+5. Update prd.json → `passes: true`
+6. Commit, log to progress.txt, update CLAUDE.md
+7. Add observations to SUGGESTIONS.md with [P1]/[P2]/[P3] priorities
 
 ## Learnings & Patterns
 
@@ -259,11 +297,28 @@ npm run test:e2e:ui         # Interactive mode
 
 ### Testing Strategy
 
-1. **Backend Unit Tests**: pytest with TestClient, in-memory SQLite
-2. **Frontend Unit Tests**: vitest for logic/API contract tests
-3. **E2E Tests**: Playwright for UI smoke tests (form renders, can fill, links work)
-   - E2E tests should work without backend (test UI only)
-   - Use HTML5 validation attributes for form validation where possible
+1. **Backend Unit Tests** (pytest): Test API endpoints, services, database operations
+   - Location: `backend/tests/`
+   - Run: `cd backend && uv run pytest`
+
+2. **Frontend Unit Tests** (vitest): Test API contracts and business logic
+   - Location: `frontend/tests/`
+   - Run: `cd frontend && npm run test`
+   - **REQUIRED** for any page that makes API calls
+   - Pattern: Mock `fetch`, verify request format and response handling
+   - Example: `login.test.ts`, `register.test.ts`
+
+3. **E2E Tests** (Playwright): UI smoke tests only
+   - Location: `frontend/e2e/`
+   - Run: `cd frontend && npm run test:e2e`
+   - Test that forms render, can be filled, navigation works
+   - Mock API responses to isolate UI testing
+   - NOT a substitute for unit tests
+
+**When to write each:**
+- Backend changed → Backend unit tests (always)
+- Frontend API calls added → Frontend unit tests (always)
+- Frontend UI changed → E2E tests (smoke tests only)
 
 ## Environment Variables
 

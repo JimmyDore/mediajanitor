@@ -1,5 +1,55 @@
 # Plex Dashboard - Progress Log
 
+# Codebase Patterns
+
+Reusable patterns discovered during development. Update this section when you find something useful for future iterations.
+
+## Backend Patterns
+
+### Async Database Sessions
+- Always use `AsyncSession` with `async def` endpoints
+- Use `await db.execute()` then `.scalar_one_or_none()`
+- Tests must also use async sessions to match production
+
+### Password Hashing
+- Use `bcrypt` directly (not passlib) for Python 3.12+ compatibility
+- `bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())`
+
+### Encrypted User Settings
+- Use Fernet from `app/services/encryption.py`
+- Store `*_encrypted` fields, return `*_configured` booleans in API responses
+- Never return actual API keys in GET responses
+
+### Protected Routes
+- Use `get_current_user` dependency from `app/services/auth.py`
+- Returns 401 if token invalid/missing
+
+## Frontend Patterns
+
+### API Contract Testing (vitest)
+- Location: `frontend/tests/*.test.ts`
+- Mock `fetch` with `vi.fn()`
+- Test success, 401, 422 responses
+- Example: `login.test.ts`, `register.test.ts`
+
+### Auth Store
+- Location: `frontend/src/lib/stores/auth.ts`
+- Methods: `checkAuth()`, `logout()`, `setUser()`
+- Layout checks auth on mount, redirects to /login if not authenticated
+
+### E2E Testing (Playwright)
+- Location: `frontend/e2e/*.spec.ts`
+- Mock API responses with `page.route()`
+- Test UI rendering, not business logic
+
+## Docker Verification
+- Always test backend changes in Docker before marking complete
+- `docker-compose up --build -d`
+- Test via curl: `curl -X POST http://localhost:8080/api/...`
+- Check logs: `docker-compose logs backend`
+
+---
+
 ## Completed Tasks
 
 ### 2026-01-12: US-0.1 - Hello World (Full Stack)

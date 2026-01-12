@@ -1,0 +1,448 @@
+{
+  "project": "Plex Dashboard",
+  "branchName": "main",
+  "userStories": [
+    {
+      "id": "US-0.1",
+      "title": "Hello World (Full Stack)",
+      "story": "As a developer, I want a working frontend that displays Hello World from the backend, so that I can verify the full stack communication works",
+      "acceptanceCriteria": [
+        "Backend endpoint GET /api/hello returns {\"message\": \"Hello World\"}",
+        "Frontend displays the message fetched from backend",
+        "Both run locally with docker-compose up",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-0.2",
+      "title": "Dockerize the Application",
+      "story": "As a developer, I want the entire application containerized, so that I can deploy it anywhere",
+      "acceptanceCriteria": [
+        "Dockerfile for backend",
+        "Dockerfile for frontend",
+        "docker-compose.yml that runs both + database",
+        "docker-compose up starts the full app on localhost",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-0.3",
+      "title": "Deploy to VPS",
+      "story": "As a developer, I want to deploy the app to my VPS, so that it's accessible on the internet",
+      "acceptanceCriteria": [
+        "GitHub Actions workflow for CI/CD",
+        "Auto-deploy to VPS on push to main",
+        "App accessible at configured domain",
+        "HTTPS via Let's Encrypt / Caddy",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-1.1",
+      "title": "User Registration",
+      "story": "As a new user, I want to create an account, so that I can use the dashboard",
+      "acceptanceCriteria": [
+        "Registration form (email, password)",
+        "Backend creates user in database",
+        "Password is hashed securely",
+        "User redirected to login after signup",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-1.2",
+      "title": "User Login",
+      "story": "As a registered user, I want to log in, so that I can access my dashboard",
+      "acceptanceCriteria": [
+        "Login form (email, password)",
+        "Backend validates credentials and returns JWT",
+        "Token stored in frontend (localStorage)",
+        "User redirected to dashboard",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-1.3",
+      "title": "Protected Routes",
+      "story": "As a user, I want my data to be private, so that only I can see my content",
+      "acceptanceCriteria": [
+        "API endpoints require valid JWT",
+        "Frontend redirects to login if not authenticated",
+        "Each user sees only their own data",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-2.1",
+      "title": "Configure Jellyfin Connection",
+      "story": "As a user, I want to input my Jellyfin API key and URL, so that the app can fetch my library data",
+      "acceptanceCriteria": [
+        "Settings page with form for Jellyfin URL and API key",
+        "Backend validates connection before saving",
+        "Credentials stored encrypted in database",
+        "Success/error feedback shown to user",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Completed 2026-01-12"
+    },
+    {
+      "id": "US-2.2",
+      "title": "Configure Jellyseerr Connection",
+      "story": "As a user, I want to input my Jellyseerr API key and URL, so that the app can fetch my requests data",
+      "acceptanceCriteria": [
+        "Settings page with form for Jellyseerr URL and API key",
+        "Backend validates connection before saving",
+        "Credentials stored encrypted in database",
+        "Success/error feedback shown to user",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-3.1",
+      "title": "View Old Unwatched Content",
+      "story": "As a user, I want to see a list of content not watched in 4+ months, so that I can decide what to delete",
+      "acceptanceCriteria": [
+        "Dashboard shows list of old/unwatched movies and series",
+        "Each item shows: name, type, year, size, last watched date, path",
+        "List sorted by size (largest first)",
+        "Total count and total size displayed",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-3.2",
+      "title": "Delete Content from Jellyfin",
+      "story": "As a user, I want to delete a movie/series directly from the dashboard, so that I don't have to go to Jellyfin",
+      "acceptanceCriteria": [
+        "Delete button on each content item",
+        "Confirmation modal before deletion",
+        "Backend calls Jellyfin API to delete",
+        "Item removed from list after deletion",
+        "Success/error toast notification",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-3.3",
+      "title": "Protect Content from Deletion",
+      "story": "As a user, I want to add content to a whitelist, so that it won't appear in the to delete list",
+      "acceptanceCriteria": [
+        "Protect button on each content item",
+        "Item added to user's content whitelist",
+        "Protected items no longer appear in old/unwatched list",
+        "Visual indicator for protected items",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-3.4",
+      "title": "Manage Content Whitelist",
+      "story": "As a user, I want to view and edit my content whitelist, so that I can remove protection from items",
+      "acceptanceCriteria": [
+        "Whitelist page shows all protected items",
+        "Remove button to unprotect items",
+        "Add button to manually add items by name",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.1",
+      "title": "Landing Page Hero",
+      "story": "As a visitor, I want to see an attractive landing page, so that I understand the value and sign up",
+      "acceptanceCriteria": [
+        "Bold hero section with gradient background (blue to purple)",
+        "Tagline: Keep Your Media Library Clean",
+        "Value proposition subtitle",
+        "Primary CTA: Get Started Free -> /register",
+        "Secondary link: Already have an account? -> /login",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.2",
+      "title": "Feature Highlights",
+      "story": "As a visitor, I want to see the main features, so that I understand what the product does",
+      "acceptanceCriteria": [
+        "4 feature cards with icons",
+        "Old Content, Large Files, Language Issues, Request Tracking",
+        "Each: title, icon, 1-line description",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.3",
+      "title": "Dashboard Preview",
+      "story": "As a visitor, I want to see a preview of the dashboard, so that I know what to expect",
+      "acceptanceCriteria": [
+        "Placeholder mockup/screenshot",
+        "Device frame around preview",
+        "CTA below preview",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.4",
+      "title": "Trust Section",
+      "story": "As a visitor, I want to know my data is secure, so that I feel confident signing up",
+      "acceptanceCriteria": [
+        "Security messaging (encrypted keys, your servers)",
+        "Privacy-focused copy",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.5",
+      "title": "Auth Page CTAs",
+      "story": "As a visitor, I want clear calls-to-action on auth pages, so that I convert easily",
+      "acceptanceCriteria": [
+        "Register: value-focused headline and button",
+        "Login: clear CTA and link to register",
+        "Consistent branding with landing page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-4.1",
+      "title": "View Large Movies",
+      "story": "As a user, I want to see movies larger than 13GB, so that I can re-download them in lower quality",
+      "acceptanceCriteria": [
+        "Page shows movies exceeding size threshold",
+        "Each item shows: name, year, size, watched status",
+        "Configurable threshold in settings",
+        "Total size of large movies displayed",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-5.1",
+      "title": "View Content with Language Issues",
+      "story": "As a user, I want to see content missing French or English audio, so that I can re-download proper versions",
+      "acceptanceCriteria": [
+        "Page shows content with language problems",
+        "Shows which languages are missing (EN/FR audio, FR subs)",
+        "For series: shows which episodes have issues",
+        "Filter by issue type",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-5.2",
+      "title": "Mark Content as French-Only",
+      "story": "As a user, I want to mark French films as not needing English audio, so that they don't appear as language issues",
+      "acceptanceCriteria": [
+        "Mark as French-only button",
+        "Item added to french-only whitelist",
+        "Item no longer flagged for missing English",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-5.3",
+      "title": "Exempt Content from Language Checks",
+      "story": "As a user, I want to completely exempt content from language checks, so that special cases don't show as issues",
+      "acceptanceCriteria": [
+        "Exempt from checks button",
+        "Item no longer appears in language issues",
+        "Manage exemptions in whitelist page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-6.1",
+      "title": "View Unavailable Requests",
+      "story": "As a user, I want to see Jellyseerr requests that aren't available, so that I can manually find them",
+      "acceptanceCriteria": [
+        "Page shows requests with unavailable status",
+        "Shows: title, type, requested by, request date",
+        "For TV: shows which seasons are missing",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-6.2",
+      "title": "View Currently Airing Series",
+      "story": "As a user, I want to see series that are currently airing, so that I know new episodes are coming",
+      "acceptanceCriteria": [
+        "Section shows in-progress series",
+        "Shows: title, current season, episodes aired/total",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-6.3",
+      "title": "View Recently Available Content",
+      "story": "As a user, I want to see what became available this week, so that I can notify my friends",
+      "acceptanceCriteria": [
+        "Page shows content available in past 7 days",
+        "Grouped by date",
+        "Copy-friendly format for sharing",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-7.1",
+      "title": "Automatic Daily Data Sync",
+      "story": "As a user, I want my data to refresh automatically every day, so that the dashboard is always up-to-date",
+      "acceptanceCriteria": [
+        "Background task runs daily per user",
+        "Fetches data from Jellyfin and Jellyseerr",
+        "Stores results in database",
+        "Dashboard shows last sync time",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-7.2",
+      "title": "Manual Data Refresh",
+      "story": "As a user, I want to manually trigger a data refresh, so that I can see changes immediately",
+      "acceptanceCriteria": [
+        "Refresh button on dashboard",
+        "Shows loading state during refresh",
+        "Data updates after refresh completes",
+        "Rate limited to prevent API abuse",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-8.1",
+      "title": "Configure Thresholds",
+      "story": "As a user, I want to customize analysis thresholds, so that the dashboard matches my preferences",
+      "acceptanceCriteria": [
+        "Settings for: months cutoff, min age, large movie size",
+        "Changes apply to user's analysis",
+        "Defaults provided for new users",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
