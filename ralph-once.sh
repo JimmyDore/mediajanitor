@@ -3,7 +3,7 @@
 # Ralph Once - Human-in-the-loop mode
 # Run this script, watch what Claude does, then run again
 
-claude --permission-mode acceptEdits "@PRD.md @progress.txt @CLAUDE.md \
+claude --permission-mode acceptEdits "@PRD.md @progress.txt @CLAUDE.md @SUGGESTIONS.md \
 1. Read the PRD, progress file, and CLAUDE.md for context. \
 2. Find the next incomplete task (unchecked [ ] item) and implement it. \
 3. Follow TDD: write a failing test first, then implement to pass. \
@@ -21,4 +21,11 @@ claude --permission-mode acceptEdits "@PRD.md @progress.txt @CLAUDE.md \
 10. Append what you did to progress.txt. \
 11. Update CLAUDE.md with any learnings, patterns, or context useful for future iterations. \
 12. Commit your changes with a descriptive message. \
+13. Review the broader context and add observations to SUGGESTIONS.md (create if missing): \
+    - Missing UI elements (navigation, headers, footers, breadcrumbs)? \
+    - Patterns to extract (components, utilities, hooks)? \
+    - Consistency issues with existing code? \
+    - Security or performance concerns? \
+    - Database schema improvements needed? \
+    Mark items [P1]/[P2]/[P3]. P1 items need human review for PRD promotion. \
 ONLY DO ONE TASK AT A TIME."

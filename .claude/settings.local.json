@@ -23,7 +23,15 @@
       "Bash(docker exec:*)",
       "Bash(docker-compose restart:*)",
       "Bash(docker port:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(jq:*)",
+      "Bash(pkill:*)",
+      "Bash(tree:*)",
+      "Bash(git push:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "puppeteer"
+  ]
 }

@@ -18,7 +18,7 @@ for ((i=1; i<=$1; i++)); do
   echo "--- Iteration $i of $1 ---"
   echo ""
 
-  result=$(docker sandbox run claude --permission-mode acceptEdits -p "@PRD.md @progress.txt @CLAUDE.md \
+  result=$(docker sandbox run claude --permission-mode acceptEdits -p "@PRD.md @progress.txt @CLAUDE.md @SUGGESTIONS.md \
   1. Read the PRD, progress file, and CLAUDE.md for context. \
   2. Find the next incomplete task (unchecked [ ] item) and implement it. \
   3. Follow TDD: write a failing test first, then implement to pass. \
@@ -35,10 +35,34 @@ for ((i=1; i<=$1; i++)); do
   9. Append what you did to progress.txt with timestamp. \
   10. Update CLAUDE.md with any learnings, patterns, or context useful for future iterations. \
   11. Commit your changes with a descriptive message. \
+  12. Review the broader context and add observations to SUGGESTIONS.md (create if missing): \
+      - Missing UI elements (navigation, headers, footers, breadcrumbs)? \
+      - Patterns to extract (components, utilities, hooks)? \
+      - Consistency issues with existing code? \
+      - Security or performance concerns? \
+      - Database schema improvements needed? \
+      Mark items [P1]/[P2]/[P3]. P1 items need human review for PRD promotion. \
   ONLY WORK ON A SINGLE TASK. \
   If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>.")
 
   echo "$result"
+
+  # Integration review every 3 iterations
+  if (( i % 3 == 0 )); then
+    echo ""
+    echo "--- Integration Review (iteration $i) ---"
+    echo ""
+
+    docker sandbox run claude --permission-mode acceptEdits -p "@PRD.md @SUGGESTIONS.md @CLAUDE.md \
+    Perform an integration review of the application: \
+    1. Review all implemented features for consistency \
+    2. Check for missing cross-cutting concerns (navigation, error handling, auth guards) \
+    3. Verify UI coherence across pages using browser tools \
+    4. Look for security gaps, performance issues, accessibility problems \
+    5. Update SUGGESTIONS.md with any new observations (mark priority [P1]/[P2]/[P3]) \
+    6. If there are [P1] items, add a note at the top of SUGGESTIONS.md: '## ACTION NEEDED: Review P1 items for PRD promotion' \
+    Do NOT implement anything. Only observe, document, and commit SUGGESTIONS.md updates."
+  fi
 
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
     echo ""
