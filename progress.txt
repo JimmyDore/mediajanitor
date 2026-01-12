@@ -240,10 +240,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-7.2] add manual data refresh with rate limiting
 
+### 2026-01-12: US-7.1.5 - Local Integration Test for Sync
+- Manual integration test verifying sync service with real APIs
+- Test steps executed:
+  1. Started docker-compose locally
+  2. Logged in with test credentials (jimmy291295+2@gmail.com)
+  3. Configured Jellyfin connection: https://jimmydore.eclipse.usbx.me/jellyfin
+  4. Configured Jellyseerr connection: https://jellyseerr-jimmydore.eclipse.usbx.me/
+  5. Triggered sync via UI Refresh button
+  6. Verified sync completed successfully
+- Results:
+  - 324 media items synced from Jellyfin
+  - 244 requests synced from Jellyseerr
+  - Last synced timestamp displayed on dashboard
+  - /api/sync/status returns correct counts
+- All acceptance criteria verified successfully
+- No issues found during integration testing
+
 ## Current Status
 
 **Phase**: Epic 3 - Content Analysis (In Progress)
-**Next US**: US-7.1.5 - Local Integration Test for Sync (manual) or US-3.1 - View Old Unwatched Content
+**Next US**: US-3.1 - View Old Unwatched Content
 
 ## Notes
 
