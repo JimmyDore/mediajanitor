@@ -1,0 +1,248 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: ./backend
+  FRONTEND_DIR: ./frontend
+
+tasks:
+  default:
+    cmds:
+      - task --list
+  # =============================================================================
+  # Development Servers
+  # =============================================================================
+
+  dev:
+    desc: Start both backend and frontend (use docker:up for single command)
+    cmds:
+      - echo "Run in separate terminals - task dev:backend and task dev:frontend"
+      - echo "Or use - task docker:up:build"
+
+  dev:backend:
+    desc: Start backend development server
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run uvicorn app.main:app --reload --port 8000
+
+  dev:frontend:
+    desc: Start frontend development server
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run dev
+
+  # =============================================================================
+  # Docker
+  # =============================================================================
+
+  docker:up:
+    desc: Start all services with Docker Compose
+    cmds:
+      - docker-compose up
+
+  docker:up:build:
+    desc: Rebuild and start all services with Docker Compose
+    cmds:
+      - docker-compose up --build
+
+  docker:down:
+    desc: Stop all Docker services
+    cmds:
+      - docker-compose down
+
+  docker:rebuild:
+    desc: Full rebuild of Docker images (no cache)
+    cmds:
+      - docker-compose down
+      - docker-compose build --no-cache
+      - docker-compose up
+
+  # =============================================================================
+  # Testing
+  # =============================================================================
+
+  test:
+    desc: Run all tests (backend + frontend unit + e2e)
+    cmds:
+      - task: test:backend
+      - task: test:frontend
+      - task: test:e2e
+
+  test:backend:
+    desc: Run backend unit tests
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run pytest -v
+
+  test:backend:watch:
+    desc: Run backend tests in watch mode
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run pytest -v --watch
+
+  test:backend:cov:
+    desc: Run backend tests with coverage
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run pytest --cov=app --cov-report=term-missing
+
+  test:frontend:
+    desc: Run frontend unit tests
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run test -- --run
+
+  test:frontend:watch:
+    desc: Run frontend tests in watch mode
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run test
+
+  test:frontend:ui:
+    desc: Run frontend tests with UI
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run test:ui
+
+  test:e2e:
+    desc: Run Playwright E2E tests
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run test:e2e
+
+  test:e2e:ui:
+    desc: Run Playwright E2E tests with UI
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run test:e2e:ui
+
+  test:e2e:headed:
+    desc: Run Playwright E2E tests in headed mode (visible browser)
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npx playwright test --headed
+
+  # =============================================================================
+  # Installation & Setup
+  # =============================================================================
+
+  install:
+    desc: Install all dependencies (backend + frontend)
+    cmds:
+      - task: install:backend
+      - task: install:frontend
+
+  install:backend:
+    desc: Install backend dependencies
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv sync --extra dev
+
+  install:frontend:
+    desc: Install frontend dependencies
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm install
+      - npx playwright install chromium
+
+  # =============================================================================
+  # Code Quality
+  # =============================================================================
+
+  lint:
+    desc: Run linters on all code
+    cmds:
+      - task: lint:backend
+      - task: lint:frontend
+
+  lint:backend:
+    desc: Run ruff linter on backend
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run ruff check .
+
+  lint:backend:fix:
+    desc: Run ruff linter and fix issues
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run ruff check --fix .
+
+  lint:frontend:
+    desc: Run eslint on frontend
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run lint
+
+  typecheck:
+    desc: Run type checking on all code
+    cmds:
+      - task: typecheck:backend
+      - task: typecheck:frontend
+
+  typecheck:backend:
+    desc: Run mypy on backend
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run mypy app
+
+  typecheck:frontend:
+    desc: Run svelte-check on frontend
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run check
+
+  # =============================================================================
+  # Build
+  # =============================================================================
+
+  build:
+    desc: Build all for production
+    cmds:
+      - task: build:frontend
+
+  build:frontend:
+    desc: Build frontend for production
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run build
+
+  # =============================================================================
+  # Database
+  # =============================================================================
+
+  db:reset:
+    desc: Reset the development database
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - rm -f plex_dashboard.db && echo "Database reset"
+
+  # =============================================================================
+  # Utilities
+  # =============================================================================
+
+  clean:
+    desc: Clean all build artifacts and caches
+    cmds:
+      - rm -rf {{.BACKEND_DIR}}/.pytest_cache
+      - rm -rf {{.BACKEND_DIR}}/__pycache__
+      - rm -rf {{.BACKEND_DIR}}/app/__pycache__
+      - rm -rf {{.BACKEND_DIR}}/.mypy_cache
+      - rm -rf {{.FRONTEND_DIR}}/.svelte-kit
+      - rm -rf {{.FRONTEND_DIR}}/node_modules/.vite
+      - rm -rf {{.FRONTEND_DIR}}/playwright-report
+      - rm -rf {{.FRONTEND_DIR}}/test-results
+      - echo "Cleaned all caches"
+
+  logs:
+    desc: Show Docker logs
+    cmds:
+      - docker-compose logs -f
+
+  logs:backend:
+    desc: Show backend Docker logs
+    cmds:
+      - docker-compose logs -f backend
+
+  logs:frontend:
+    desc: Show frontend Docker logs
+    cmds:
+      - docker-compose logs -f frontend
