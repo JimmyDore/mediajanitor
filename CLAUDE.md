@@ -129,11 +129,62 @@ plex-dashboard/
 
 ## Current Status
 
-**Phase**: Epic 0 - Foundation & Deployment (Complete)
-**Completed**: US-0.1 (Hello World), US-0.2 (Docker), US-0.3 (Deploy to VPS)
-**Next US**: US-1.1 - User Registration
+**Phase**: Epic 1 - Authentication (In Progress)
+**Completed**: US-0.1, US-0.2, US-0.3, US-1.1 (User Registration)
+**Next US**: US-1.2 - User Login
 
 **Production URL**: https://mediajanitor.com
+
+## Learnings & Patterns
+
+### Backend (FastAPI + SQLAlchemy)
+
+**Package Management**: Use `uv` for Python dependency management
+```bash
+cd backend
+uv sync --extra dev          # Install dependencies
+uv run pytest                # Run tests
+uv run uvicorn app.main:app --reload  # Run server
+```
+
+**Password Hashing**: Use `bcrypt` directly (not passlib) for Python 3.12+ compatibility
+```python
+import bcrypt
+hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+```
+
+**Test Database**: Use sync SQLAlchemy sessions in tests with in-memory SQLite
+```python
+# tests/conftest.py - override get_db with sync session
+engine = create_engine("sqlite:///:memory:", poolclass=StaticPool)
+```
+
+### Frontend (SvelteKit + Svelte 5)
+
+**Svelte 5 Runes**: Use `$state()` for reactive state, `$props()` for component props
+```svelte
+<script lang="ts">
+  let value = $state('');
+  let { children } = $props();
+</script>
+```
+
+**E2E Testing**: Playwright with webServer config auto-starts dev server
+```bash
+npm run test:e2e            # Run E2E tests
+npm run test:e2e:ui         # Interactive mode
+```
+
+**CSS Variables**: Defined in `src/app.css` with light/dark mode support
+- Use `--text-primary`, `--bg-primary`, `--accent`, etc.
+
+### Testing Strategy
+
+1. **Backend Unit Tests**: pytest with TestClient, in-memory SQLite
+2. **Frontend Unit Tests**: vitest for logic/API contract tests
+3. **E2E Tests**: Playwright for UI smoke tests (form renders, can fill, links work)
+   - E2E tests should work without backend (test UI only)
+   - Use HTML5 validation attributes for form validation where possible
 
 ## Environment Variables
 
@@ -153,7 +204,7 @@ SECRET_KEY=your-secret-key-here
 
 ## Running the Project
 
-### Development (after US-0.2)
+### Development (Docker)
 ```bash
 docker-compose up
 # Backend: http://localhost:8000
@@ -163,16 +214,16 @@ docker-compose up
 ### Backend Only
 ```bash
 cd backend
-python -m venv venv && source venv/bin/activate
-pip install -e ".[dev]"
-pytest                              # Run tests
-uvicorn app.main:app --reload      # Run server
+uv sync --extra dev                 # Install dependencies
+uv run pytest                       # Run tests
+uv run uvicorn app.main:app --reload  # Run server
 ```
 
 ### Frontend Only
 ```bash
 cd frontend
 npm install
-npm run test                       # Run tests
+npm run test                       # Run unit tests
+npm run test:e2e                   # Run E2E tests
 npm run dev                        # Run dev server
 ```

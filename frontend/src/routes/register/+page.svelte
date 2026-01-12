@@ -1,9 +1,16 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
 	let email = $state('');
 	let password = $state('');
 	let error = $state<string | null>(null);
 	let isLoading = $state(false);
 	let passwordError = $state<string | null>(null);
+	let mounted = $state(false);
+
+	onMount(() => {
+		mounted = true;
+	});
 
 	function validatePassword(pwd: string): string | null {
 		if (pwd.length < 8) {
