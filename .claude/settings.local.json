@@ -9,7 +9,21 @@
       "Bash(npm run test:*)",
       "Bash(npm install:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm init:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx svelte-kit:*)",
+      "Bash(task default)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(curl:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(docker port:*)",
+      "Bash(lsof:*)"
     ]
   }
 }
