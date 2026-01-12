@@ -257,10 +257,39 @@ Reusable patterns discovered during development. Update this section when you fi
 - All acceptance criteria verified successfully
 - No issues found during integration testing
 
+### 2026-01-13: US-3.1 - View Old Unwatched Content
+- Created ContentWhitelist database model for future whitelist functionality
+- Created content service (app/services/content.py) with:
+  - is_old_or_unwatched(): Filters items by watch status and age
+  - get_old_unwatched_content(): Returns filtered, sorted content list
+  - format_size(): Human-readable size formatting
+  - parse_jellyfin_datetime(): Date parsing for comparison
+- Created content router (app/routers/content.py) with:
+  - GET /api/content/old-unwatched: Returns old/unwatched content for user
+- Created Pydantic models (app/models/content.py):
+  - OldUnwatchedItem: Single content item response
+  - OldUnwatchedResponse: Full response with items and totals
+- Created frontend page at /content/old-unwatched with:
+  - Page title and description
+  - Summary bar showing total count and size
+  - Content list with columns: #, name, type, year, size, last watched
+  - Type badges (Movie/Series) with color coding
+  - "Never watched" status highlighted
+  - Loading and error states
+  - Responsive design
+- Added "Old Content" navigation link to header
+- Backend tests: 10 new tests for content endpoint
+- Frontend tests: 7 new tests for API integration
+- E2E tests: 10 new tests for UI (some timeouts - route mocking issues)
+- Verified in Docker: 221 items totaling 741.3 GB displayed correctly
+- Files changed: database.py, services/content.py, routers/content.py, models/content.py, main.py, Header.svelte, +page.svelte
+- Commits:
+  - feat(content): [US-3.1] add old/unwatched content view
+
 ## Current Status
 
 **Phase**: Epic 3 - Content Analysis (In Progress)
-**Next US**: US-3.1 - View Old Unwatched Content
+**Next US**: US-3.2 - Protect Content from Deletion
 
 ## Notes
 

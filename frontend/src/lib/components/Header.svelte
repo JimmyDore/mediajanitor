@@ -27,6 +27,13 @@
 					Dashboard
 				</a>
 				<a
+					href="/content/old-unwatched"
+					class="nav-link"
+					class:active={currentPath === '/content/old-unwatched'}
+				>
+					Old Content
+				</a>
+				<a
 					href="/settings"
 					class="nav-link"
 					class:active={currentPath === '/settings'}

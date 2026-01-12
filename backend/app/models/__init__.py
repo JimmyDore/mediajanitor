@@ -11,6 +11,10 @@ from app.models.settings import (
     JellyfinSettingsResponse,
     SettingsSaveResponse,
 )
+from app.models.content import (
+    OldUnwatchedItem,
+    OldUnwatchedResponse,
+)
 
 __all__ = [
     # User
@@ -22,4 +26,7 @@ __all__ = [
     "JellyfinSettingsCreate",
     "JellyfinSettingsResponse",
     "SettingsSaveResponse",
+    # Content
+    "OldUnwatchedItem",
+    "OldUnwatchedResponse",
 ]
