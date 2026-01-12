@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores';
 
 	let email = $state('');
 	let password = $state('');
@@ -9,6 +11,12 @@
 
 	onMount(() => {
 		mounted = true;
+		// If already authenticated, redirect to home
+		auth.subscribe((authState) => {
+			if (authState.isAuthenticated && !authState.isLoading) {
+				goto('/');
+			}
+		})();
 	});
 
 	async function handleSubmit(event: SubmitEvent) {
@@ -32,8 +40,9 @@
 			// Store token in localStorage
 			localStorage.setItem('access_token', data.access_token);
 
-			// Login successful - redirect to dashboard
-			window.location.href = '/';
+			// Update auth state and redirect
+			await auth.checkAuth();
+			goto('/');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Login failed';
 		} finally {

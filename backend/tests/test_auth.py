@@ -3,6 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services.auth import create_access_token
+
 
 class TestUserLogin:
     """Tests for POST /api/auth/login endpoint."""
@@ -204,3 +206,84 @@ class TestUserRegistration:
         assert response.status_code == 201
         # The fact that registration succeeded and password is not in response
         # is a basic check. Full hash verification happens in service tests.
+
+
+class TestProtectedRoutes:
+    """Tests for protected API endpoints requiring valid JWT."""
+
+    def test_protected_endpoint_without_token(self, client: TestClient) -> None:
+        """Test protected endpoint returns 401 without token."""
+        response = client.get("/api/auth/me")
+        assert response.status_code == 401
+        assert "not authenticated" in response.json()["detail"].lower()
+
+    def test_protected_endpoint_with_invalid_token(self, client: TestClient) -> None:
+        """Test protected endpoint returns 401 with invalid token."""
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+        assert response.status_code == 401
+
+    def test_protected_endpoint_with_valid_token(self, client: TestClient) -> None:
+        """Test protected endpoint returns user data with valid token."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "protected@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        # Login to get token
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "protected@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        token = login_response.json()["access_token"]
+
+        # Access protected endpoint
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "protected@example.com"
+        assert "id" in data
+
+    def test_protected_endpoint_with_expired_token(self, client: TestClient) -> None:
+        """Test protected endpoint returns 401 with expired token."""
+        from datetime import timedelta
+
+        # Create an already-expired token
+        expired_token = create_access_token(
+            data={"sub": "test@example.com"},
+            expires_delta=timedelta(seconds=-10),  # Expired 10 seconds ago
+        )
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {expired_token}"},
+        )
+        assert response.status_code == 401
+
+    def test_protected_endpoint_with_malformed_header(self, client: TestClient) -> None:
+        """Test protected endpoint returns 401 with malformed auth header."""
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": "NotBearer some-token"},
+        )
+        assert response.status_code == 401
+
+    def test_protected_endpoint_user_not_found(self, client: TestClient) -> None:
+        """Test protected endpoint returns 401 if user in token doesn't exist."""
+        # Create token for non-existent user
+        token = create_access_token(data={"sub": "nonexistent@example.com"})
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401

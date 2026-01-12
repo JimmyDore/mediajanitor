@@ -97,9 +97,9 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** only I can see my content
 
 **Acceptance Criteria:**
-- [ ] API endpoints require valid JWT
-- [ ] Frontend redirects to login if not authenticated
-- [ ] Each user sees only their own data
+- [x] API endpoints require valid JWT
+- [x] Frontend redirects to login if not authenticated
+- [x] Each user sees only their own data
 
 ---
 
@@ -403,7 +403,7 @@ Each user story above becomes a checklist item:
 - [x] US-0.3: Deploy to VPS
 - [x] US-1.1: User Registration
 - [x] US-1.2: User Login
-- [ ] US-1.3: Protected Routes
+- [x] US-1.3: Protected Routes
 - [ ] US-2.1: Configure Jellyfin Connection
 - [ ] US-2.2: Configure Jellyseerr Connection
 - [ ] US-3.1: View Old Unwatched Content

@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { auth } from '$lib/stores';
 
 	let message = $state('Loading...');
 	let error = $state<string | null>(null);
 
 	onMount(async () => {
 		try {
-			const response = await fetch('/api/hello');
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/hello', {
+				headers: token ? { Authorization: `Bearer ${token}` } : {}
+			});
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`);
 			}
@@ -17,6 +21,11 @@
 			message = '';
 		}
 	});
+
+	function handleLogout() {
+		auth.logout();
+		window.location.href = '/login';
+	}
 </script>
 
 <svelte:head>
@@ -24,6 +33,12 @@
 </svelte:head>
 
 <div class="hello-container">
+	{#if $auth.isAuthenticated && $auth.user}
+		<div class="user-info">
+			<span>Logged in as: {$auth.user.email}</span>
+			<button onclick={handleLogout} class="logout-button">Log out</button>
+		</div>
+	{/if}
 	{#if error}
 		<div class="error">
 			<p>Error: {error}</p>
@@ -72,5 +87,31 @@
 	.error .hint {
 		color: var(--text-secondary);
 		font-size: 0.875rem;
+	}
+
+	.user-info {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin-bottom: 2rem;
+		padding: 1rem;
+		background: var(--bg-secondary);
+		border-radius: 0.5rem;
+	}
+
+	.logout-button {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		color: var(--danger);
+		border: 1px solid var(--danger);
+		border-radius: 0.25rem;
+		cursor: pointer;
+		font-size: 0.875rem;
+		transition: all 0.2s;
+	}
+
+	.logout-button:hover {
+		background: var(--danger);
+		color: white;
 	}
 </style>

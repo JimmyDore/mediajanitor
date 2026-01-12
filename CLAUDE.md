@@ -181,6 +181,28 @@ async def service_async(db: AsyncSession, ...):
 
 **Why this matters:** Using sync test sessions masks async bugs. Tests pass but production fails with `'coroutine' object has no attribute 'scalar_one_or_none'`.
 
+### Protected Routes Pattern
+
+**Backend - get_current_user dependency:**
+```python
+from fastapi.security import OAuth2PasswordBearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
+async def get_current_user(
+    token: Annotated[str | None, Depends(oauth2_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    # Validate token, get user from DB
+    # Raises HTTPException 401 if invalid
+```
+
+**Frontend - Auth store pattern:**
+```typescript
+// Store with checkAuth(), logout(), setUser() methods
+// Layout checks auth on mount, redirects to /login if not authenticated
+// Public routes: /login, /register (no redirect)
+```
+
 ### Docker Verification (CRITICAL)
 
 **Unit tests passing is NOT enough.** Before marking a backend task complete:

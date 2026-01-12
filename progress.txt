@@ -55,10 +55,24 @@
 - Commits:
   - feat(auth): add user login endpoint with JWT
 
+### 2026-01-12: US-1.3 - Protected Routes
+- Implemented `get_current_user` dependency for JWT token validation
+- Added `/api/auth/me` endpoint to return current user info
+- Created OAuth2PasswordBearer scheme for token extraction
+- Frontend auth store with checkAuth(), logout(), setUser() methods
+- Layout redirects unauthenticated users to /login (public routes: /login, /register)
+- Login page updates auth state and redirects to dashboard
+- Dashboard shows user email and logout button when authenticated
+- Backend tests: 6 new tests for protected endpoint scenarios
+- E2E tests: 4 new tests for protected routes behavior
+- Verified in Docker: full auth flow (register -> login -> /me -> logout)
+- Commits:
+  - feat(auth): add protected routes with JWT validation
+
 ## Current Status
 
-**Phase**: Epic 1 - Authentication (IN PROGRESS)
-**Next US**: US-1.3 - Protected Routes
+**Phase**: Epic 1 - Authentication (COMPLETE)
+**Next US**: US-2.1 - Configure Jellyfin Connection
 
 ## Notes
 

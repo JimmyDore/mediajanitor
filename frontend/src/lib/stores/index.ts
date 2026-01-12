@@ -2,8 +2,70 @@
  * Svelte stores for global state management
  */
 
-import { writable } from 'svelte/store';
-import type { Settings, ApiStats } from '../types';
+import { writable, derived } from 'svelte/store';
+import type { Settings, ApiStats, AuthState } from '../types';
+
+// Authentication state
+function createAuthStore() {
+	const { subscribe, set, update } = writable<AuthState>({
+		isAuthenticated: false,
+		user: null,
+		isLoading: true
+	});
+
+	return {
+		subscribe,
+		setUser: (user: { id: number; email: string } | null) => {
+			update((state) => ({
+				...state,
+				isAuthenticated: user !== null,
+				user,
+				isLoading: false
+			}));
+		},
+		setLoading: (loading: boolean) => {
+			update((state) => ({ ...state, isLoading: loading }));
+		},
+		logout: () => {
+			if (typeof localStorage !== 'undefined') {
+				localStorage.removeItem('access_token');
+			}
+			set({ isAuthenticated: false, user: null, isLoading: false });
+		},
+		checkAuth: async () => {
+			if (typeof localStorage === 'undefined') {
+				set({ isAuthenticated: false, user: null, isLoading: false });
+				return false;
+			}
+
+			const token = localStorage.getItem('access_token');
+			if (!token) {
+				set({ isAuthenticated: false, user: null, isLoading: false });
+				return false;
+			}
+
+			try {
+				const response = await fetch('/api/auth/me', {
+					headers: { Authorization: `Bearer ${token}` }
+				});
+				if (response.ok) {
+					const user = await response.json();
+					set({ isAuthenticated: true, user, isLoading: false });
+					return true;
+				} else {
+					localStorage.removeItem('access_token');
+					set({ isAuthenticated: false, user: null, isLoading: false });
+					return false;
+				}
+			} catch {
+				set({ isAuthenticated: false, user: null, isLoading: false });
+				return false;
+			}
+		}
+	};
+}
+
+export const auth = createAuthStore();
 
 // Dashboard stats
 export const dashboardStats = writable<ApiStats>({

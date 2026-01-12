@@ -147,3 +147,15 @@ export interface ApiStats {
 	unavailableRequests: number;
 	inProgressRequests: number;
 }
+
+// Authentication types
+export interface AuthUser {
+	id: number;
+	email: string;
+}
+
+export interface AuthState {
+	isAuthenticated: boolean;
+	user: AuthUser | null;
+	isLoading: boolean;
+}
