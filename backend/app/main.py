@@ -34,4 +34,4 @@ async def health() -> dict[str, str]:
 @app.get("/api/hello")
 async def hello() -> dict[str, str]:
     """Hello World endpoint - US-0.1."""
-    return {"message": "Hello World"}
+    return {"message": "Hello World again"}
