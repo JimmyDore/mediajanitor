@@ -40,6 +40,13 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def dispose_engine() -> AsyncGenerator[None, None]:
+    """Dispose the async engine after all tests to prevent hanging."""
+    yield
+    await async_engine.dispose()
+
+
 @pytest.fixture(autouse=True)
 async def setup_database() -> AsyncGenerator[None, None]:
     """Create fresh database tables for each test."""
