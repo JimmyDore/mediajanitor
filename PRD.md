@@ -185,6 +185,82 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 
 ---
 
+### Epic M: Marketing & Conversion
+
+#### US-M.1: Landing Page Hero
+**As a** visitor
+**I want** to see an attractive landing page
+**So that** I understand the value and sign up
+
+**Acceptance Criteria:**
+- [ ] Bold hero section with gradient background (blue→purple)
+- [ ] Tagline: "Keep Your Media Library Clean"
+- [ ] Value proposition subtitle
+- [ ] Primary CTA: "Get Started Free" → /register
+- [ ] Secondary link: "Already have an account?" → /login
+
+---
+
+#### US-M.2: Feature Highlights
+**As a** visitor
+**I want** to see the main features
+**So that** I understand what the product does
+
+**Acceptance Criteria:**
+- [ ] 4 feature cards with icons
+- [ ] Old Content, Large Files, Language Issues, Request Tracking
+- [ ] Each: title, icon, 1-line description
+
+---
+
+#### US-M.3: Dashboard Preview
+**As a** visitor
+**I want** to see a preview of the dashboard
+**So that** I know what to expect
+
+**Acceptance Criteria:**
+- [ ] Placeholder mockup/screenshot
+- [ ] Device frame around preview
+- [ ] CTA below preview
+
+---
+
+#### US-M.4: Trust Section
+**As a** visitor
+**I want** to know my data is secure
+**So that** I feel confident signing up
+
+**Acceptance Criteria:**
+- [ ] Security messaging (encrypted keys, your servers)
+- [ ] Privacy-focused copy
+
+---
+
+#### US-M.5: Auth Page CTAs
+**As a** visitor
+**I want** clear calls-to-action on auth pages
+**So that** I convert easily
+
+**Acceptance Criteria:**
+- [ ] Register: value-focused headline and button
+- [ ] Login: clear CTA and link to register
+- [ ] Consistent branding with landing page
+
+---
+
+#### US-M.6: Google Sign Up (Low Priority)
+**As a** user
+**I want** to sign up with Google
+**So that** I don't need a new password
+
+**Acceptance Criteria:**
+- [ ] "Continue with Google" button
+- [ ] OAuth 2.0 flow
+- [ ] Backend token exchange
+- [ ] User created or logged in
+
+---
+
 ### Epic 4: Large Movies
 
 #### US-4.1: View Large Movies
@@ -334,6 +410,12 @@ Each user story above becomes a checklist item:
 - [ ] US-3.2: Delete Content from Jellyfin
 - [ ] US-3.3: Protect Content from Deletion
 - [ ] US-3.4: Manage Content Whitelist
+- [ ] US-M.1: Landing Page Hero
+- [ ] US-M.2: Feature Highlights
+- [ ] US-M.3: Dashboard Preview
+- [ ] US-M.4: Trust Section
+- [ ] US-M.5: Auth Page CTAs
+- [ ] US-M.6: Google Sign Up (Low Priority)
 - [ ] US-4.1: View Large Movies
 - [ ] US-5.1: View Content with Language Issues
 - [ ] US-5.2: Mark Content as French-Only
