@@ -1,0 +1,13 @@
+# Plex Dashboard - Progress Log
+
+## Completed Tasks
+
+- [2026-01-12] Created project directory structure
+- [2026-01-12] Created PRD.md with task checklist
+- [2026-01-12] Created progress.txt
+- [2026-01-12] Created CLAUDE.md with project context
+- [2026-01-12] Created ralph-once.sh and afk-ralph.sh scripts
+
+## Current Status
+
+Phase 0: Project Setup - In Progress
