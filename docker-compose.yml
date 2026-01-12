@@ -6,15 +6,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8080:8000"
     environment:
-      - DATABASE_URL=sqlite:///./plex_dashboard.db
+      - DATABASE_URL=sqlite:///./data/plex_dashboard.db
     volumes:
-      - ./backend/app:/app/app  # Hot reload in dev
+      - ./data:/app/data  # Persist database
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 3
 
   frontend:
@@ -25,7 +26,6 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://backend:8000
-    volumes:
-      - ./frontend/src:/app/src  # Hot reload in dev
     depends_on:
       - backend
+    restart: unless-stopped
