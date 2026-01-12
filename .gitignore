@@ -73,3 +73,6 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+
+to_remove.txt
+.specstory/
