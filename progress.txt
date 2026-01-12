@@ -201,10 +201,32 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-2.3] add navigation header component
 
+### 2026-01-12: US-7.1 - Automatic Daily Data Sync
+- Created database cache models in database.py:
+  - CachedMediaItem: stores Jellyfin movies/series with all metadata
+  - CachedJellyseerrRequest: stores Jellyseerr requests
+  - SyncStatus: tracks last sync timestamp and status per user
+- Created sync service (app/services/sync.py) with:
+  - fetch_jellyfin_media(): Fetches all movies/series from Jellyfin API
+  - fetch_jellyseerr_requests(): Fetches all requests with pagination
+  - cache_media_items(): Stores fetched data in DB, replacing old cache
+  - cache_jellyseerr_requests(): Stores requests in DB
+  - run_user_sync(): Orchestrates full sync for a user
+  - get_sync_status(): Returns last sync info for dashboard display
+- Created sync router (app/routers/sync.py) with:
+  - POST /api/sync: Triggers sync for authenticated user
+  - GET /api/sync/status: Returns last sync timestamp and counts
+- Updated dashboard to display "Last synced" timestamp
+- Backend tests: 11 new tests for sync functionality
+- Verified in Docker: endpoints work correctly
+- Files changed: database.py, services/sync.py, routers/sync.py, main.py, +page.svelte
+- Commits:
+  - feat(sync): [US-7.1] add data sync service and endpoints
+
 ## Current Status
 
-**Phase**: Epic 2 - Configuration (Complete)
-**Next US**: US-7.1 - Automatic Daily Data Sync
+**Phase**: Epic 7 - Data Sync (In Progress)
+**Next US**: US-7.2 - Manual Data Refresh
 
 ## Notes
 
