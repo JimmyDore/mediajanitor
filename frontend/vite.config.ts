@@ -1,6 +1,9 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
+// Use env var for API target (Docker uses 'backend', local uses 'localhost')
+const apiTarget = process.env.VITE_API_URL || 'http://localhost:8000';
+
 export default defineConfig({
 	plugins: [sveltekit()],
 	test: {
@@ -11,7 +14,7 @@ export default defineConfig({
 	server: {
 		proxy: {
 			'/api': {
-				target: 'http://localhost:8000',
+				target: apiTarget,
 				changeOrigin: true
 			}
 		}
