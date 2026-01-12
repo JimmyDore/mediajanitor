@@ -69,10 +69,32 @@
 - Commits:
   - feat(auth): add protected routes with JWT validation
 
+### 2026-01-12: US-2.1 - Configure Jellyfin Connection
+- Created UserSettings model in database.py with per-user encrypted credentials
+- Implemented Fernet encryption for API keys (app/services/encryption.py)
+- Created Jellyfin service (app/services/jellyfin.py) with:
+  - validate_jellyfin_connection() - Tests connection to Jellyfin server
+  - save_jellyfin_settings() - Saves encrypted credentials to DB
+  - get_user_jellyfin_settings() - Retrieves user's settings
+- Created settings router (app/routers/settings.py) with:
+  - POST /api/settings/jellyfin - Save settings after validation
+  - GET /api/settings/jellyfin - Get current settings (masked API key)
+- Created settings page at /settings with:
+  - Form for Jellyfin URL and API key
+  - Status badge showing connection state
+  - Success/error feedback messages
+  - Back to dashboard link
+- Added Settings link to dashboard page
+- Backend tests: 9 new tests for settings endpoints
+- E2E tests: 7 new tests for settings page UI
+- Verified in Docker: API endpoints work correctly
+- Commits:
+  - feat(settings): add Jellyfin connection configuration
+
 ## Current Status
 
-**Phase**: Epic 1 - Authentication (COMPLETE)
-**Next US**: US-2.1 - Configure Jellyfin Connection
+**Phase**: Epic 2 - Configuration (In Progress)
+**Next US**: US-2.2 - Configure Jellyseerr Connection
 
 ## Notes
 

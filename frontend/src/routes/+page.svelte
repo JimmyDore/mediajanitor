@@ -36,6 +36,7 @@
 	{#if $auth.isAuthenticated && $auth.user}
 		<div class="user-info">
 			<span>Logged in as: {$auth.user.email}</span>
+			<a href="/settings" class="settings-link">Settings</a>
 			<button onclick={handleLogout} class="logout-button">Log out</button>
 		</div>
 	{/if}
@@ -112,6 +113,22 @@
 
 	.logout-button:hover {
 		background: var(--danger);
+		color: white;
+	}
+
+	.settings-link {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		color: var(--accent);
+		border: 1px solid var(--accent);
+		border-radius: 0.25rem;
+		font-size: 0.875rem;
+		text-decoration: none;
+		transition: all 0.2s;
+	}
+
+	.settings-link:hover {
+		background: var(--accent);
 		color: white;
 	}
 </style>

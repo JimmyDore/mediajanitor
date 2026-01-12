@@ -203,6 +203,33 @@ async def get_current_user(
 // Public routes: /login, /register (no redirect)
 ```
 
+### Encrypted User Settings Pattern
+
+**Storing sensitive per-user data (API keys):**
+```python
+# app/services/encryption.py - Fernet symmetric encryption
+from cryptography.fernet import Fernet
+
+def encrypt_value(value: str) -> str:
+    """Encrypt using app's secret_key as Fernet key."""
+    fernet = _get_fernet()  # Derives key from settings.secret_key
+    return fernet.encrypt(value.encode()).decode()
+
+def decrypt_value(encrypted: str) -> str:
+    return fernet.decrypt(encrypted.encode()).decode()
+
+# app/database.py - UserSettings model
+class UserSettings(Base):
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    jellyfin_server_url: Mapped[str | None]
+    jellyfin_api_key_encrypted: Mapped[str | None]  # Store encrypted!
+```
+
+**Settings endpoint pattern:**
+- POST validates connection BEFORE saving (call external API)
+- GET returns masked info (api_key_configured: bool, not the actual key)
+- Mock external API calls in tests using `@patch("app.routers.settings.function_name")`
+
 ### Docker Verification (CRITICAL)
 
 **Unit tests passing is NOT enough.** Before marking a backend task complete:

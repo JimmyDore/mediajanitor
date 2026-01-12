@@ -111,10 +111,10 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** the app can fetch my library data
 
 **Acceptance Criteria:**
-- [ ] Settings page with form for Jellyfin URL and API key
-- [ ] Backend validates connection before saving
-- [ ] Credentials stored encrypted in database
-- [ ] Success/error feedback shown to user
+- [x] Settings page with form for Jellyfin URL and API key
+- [x] Backend validates connection before saving
+- [x] Credentials stored encrypted in database
+- [x] Success/error feedback shown to user
 
 ---
 
@@ -404,7 +404,7 @@ Each user story above becomes a checklist item:
 - [x] US-1.1: User Registration
 - [x] US-1.2: User Login
 - [x] US-1.3: Protected Routes
-- [ ] US-2.1: Configure Jellyfin Connection
+- [x] US-2.1: Configure Jellyfin Connection
 - [ ] US-2.2: Configure Jellyseerr Connection
 - [ ] US-3.1: View Old Unwatched Content
 - [ ] US-3.2: Delete Content from Jellyfin

@@ -96,6 +96,28 @@ class AppSettings(Base):
     )
 
 
+class UserSettings(Base):
+    """Per-user settings for external service connections."""
+
+    __tablename__ = "user_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True
+    )
+    # Jellyfin settings (API key is encrypted)
+    jellyfin_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    jellyfin_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Jellyseerr settings (API key is encrypted)
+    jellyseerr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    jellyseerr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 # Database engine and session
 settings = get_settings()
 
