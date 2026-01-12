@@ -56,10 +56,10 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** it's accessible on the internet
 
 **Acceptance Criteria:**
-- [ ] GitHub Actions workflow for CI/CD
-- [ ] Auto-deploy to VPS on push to `main`
-- [ ] App accessible at configured domain
-- [ ] HTTPS via Let's Encrypt / Caddy
+- [x] GitHub Actions workflow for CI/CD
+- [x] Auto-deploy to VPS on push to `main`
+- [x] App accessible at configured domain
+- [x] HTTPS via Let's Encrypt / Caddy
 
 ---
 
@@ -324,7 +324,7 @@ Each user story above becomes a checklist item:
 
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
-- [ ] US-0.3: Deploy to VPS
+- [x] US-0.3: Deploy to VPS
 - [ ] US-1.1: User Registration
 - [ ] US-1.2: User Login
 - [ ] US-1.3: Protected Routes

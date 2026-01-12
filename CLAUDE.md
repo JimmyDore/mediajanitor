@@ -129,8 +129,11 @@ plex-dashboard/
 
 ## Current Status
 
-**Phase**: Epic 0 - Foundation & Deployment
-**Current US**: US-0.1 - Hello World (Full Stack)
+**Phase**: Epic 0 - Foundation & Deployment (Complete)
+**Completed**: US-0.1 (Hello World), US-0.2 (Docker), US-0.3 (Deploy to VPS)
+**Next US**: US-1.1 - User Registration
+
+**Production URL**: https://mediajanitor.com
 
 ## Environment Variables
 

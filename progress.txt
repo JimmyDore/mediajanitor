@@ -13,14 +13,26 @@
   - feat(ui): display hello message from backend
   - chore(docker): add Docker setup for full stack
 
+### 2026-01-12: US-0.3 - Deploy to VPS
+- Configured DNS for mediajanitor.com (A record pointing to 194.32.76.43)
+- Deployed app to VPS at ~/mediajanitor
+- Configured nginx reverse proxy with SSL (certbot)
+- Set up GitHub Actions CI/CD workflow
+- Configured GitHub secrets (VPS_HOST, VPS_USERNAME, VPS_SSH_KEY)
+- App accessible at https://mediajanitor.com
+- Commits:
+  - chore: add allowedHosts for production domain
+  - chore: configure GitHub Actions for auto-deploy
+
 ## Current Status
 
-**Phase**: Epic 0 - Foundation & Deployment
-**Next US**: US-0.2 - Dockerize the Application (already done as part of US-0.1)
-**Actual Next**: US-0.3 - Deploy to VPS
+**Phase**: Epic 0 - Foundation & Deployment (COMPLETE)
+**Next US**: US-1.1 - User Registration
 
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
-- Backend runs on port 8000, Frontend on port 5173
+- Backend runs on port 8080 (mapped from 8000), Frontend on port 5173
 - API proxy configured in vite.config.ts for dev environment
+- Production: https://mediajanitor.com with HTTPS via Let's Encrypt
+- CI/CD: Push to main triggers auto-deploy to VPS
