@@ -286,10 +286,37 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-3.1] add old/unwatched content view
 
+### 2026-01-13: US-3.2 - Protect Content from Deletion
+- Created whitelist router (app/routers/whitelist.py) with:
+  - POST /api/whitelist/content: Add content to user's whitelist
+  - Returns 201 with success message on add
+  - Returns 409 Conflict if already in whitelist
+  - Requires authentication (user_id from JWT)
+- Extended content service (app/services/content.py) with:
+  - add_to_whitelist(): Creates whitelist entry, checks for duplicates
+- Extended content models (app/models/content.py) with:
+  - WhitelistAddRequest: Request model for adding to whitelist
+  - WhitelistAddResponse: Response model with success message
+- Updated old-unwatched frontend page with:
+  - "Protect" button in Actions column for each item
+  - Clicking button calls POST /api/whitelist/content
+  - Item immediately removed from list on success
+  - Total count and size update after protection
+  - Toast notification showing "Added to whitelist" or error message
+  - Button shows loading spinner during API call
+  - Button disabled while processing
+- Backend tests: 7 new tests for whitelist endpoint
+- Frontend tests: 5 new tests for whitelist API integration
+- E2E tests: 7 new tests for Protect button functionality
+- Verified in Docker: Protected "Spider-Man: Across the Spider-Verse", count dropped 221→220, size dropped 741.3→728.9 GB
+- Files changed: routers/whitelist.py, services/content.py, models/content.py, main.py, +page.svelte, test_content.py, old-unwatched.test.ts, old-unwatched.spec.ts
+- Commits:
+  - feat(content): [US-3.2] add protect content from deletion
+
 ## Current Status
 
 **Phase**: Epic 3 - Content Analysis (In Progress)
-**Next US**: US-3.2 - Protect Content from Deletion
+**Next US**: US-3.3 - Manage Content Whitelist
 
 ## Notes
 
