@@ -12,6 +12,8 @@ export default defineConfig({
 		globals: true
 	},
 	server: {
+		host: true,
+		allowedHosts: ['mediajanitor.com', 'www.mediajanitor.com', 'localhost'],
 		proxy: {
 			'/api': {
 				target: apiTarget,
