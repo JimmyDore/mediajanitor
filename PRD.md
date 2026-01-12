@@ -248,6 +248,27 @@ Keep dashboard data fresh through automatic and manual sync mechanisms.
 
 ---
 
+#### US-7.1.5: Local Integration Test for Sync
+**As a** developer
+**I want** to verify the sync service works with real Jellyfin/Jellyseerr APIs locally
+**So that** I can confirm data is fetched and cached correctly before deploying
+
+**Acceptance Criteria:**
+- [ ] Run `docker-compose up` locally
+- [ ] Register/login with credentials from `.env.example` (APP_USER_EMAIL, APP_USER_PASSWORD)
+- [ ] Configure Jellyfin settings via Settings UI (user's real Jellyfin server)
+- [ ] Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)
+- [ ] Trigger sync via `curl -X POST http://localhost:8080/api/sync` with JWT token
+- [ ] Verify `cached_media_items` table has data (query via SQLite or check /api/sync/status)
+- [ ] Verify `cached_jellyseerr_requests` table has data
+- [ ] Verify `GET /api/sync/status` returns correct counts (media_items_count > 0, requests_count > 0)
+- [ ] Dashboard displays "Last synced" timestamp after sync
+- [ ] Document any issues found in SUGGESTIONS.md
+
+**Note:** This is a manual integration test, not automated. Must be run before marking US-7.1 as truly complete.
+
+---
+
 #### US-7.2: Manual Data Refresh
 **As a** user
 **I want** to manually trigger a data refresh

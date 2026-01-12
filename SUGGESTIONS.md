@@ -25,7 +25,10 @@ The following P1 items were identified during the integration review on 2026-01-
 - [P3] Add password confirmation field on registration form
 
 ## Architecture
+- [P1] US-7.1 delivered sync service but NO scheduler - "Automatic Daily Data Sync" has no automatic component. Need APScheduler, Celery Beat, or system cron to trigger `/api/sync` for all users daily.
 - [P2] Frontend api.ts defines endpoints for future features (contentApi, languageApi, etc.) that don't exist yet - should match actual backend endpoints
+- [P2] Add sync retry mechanism with exponential backoff for transient API failures
+- [P2] Add sync queue/throttling to prevent overloading Jellyfin/Jellyseerr when multiple users sync
 - [P3] Consider extracting sync status display into reusable component for dashboard
 
 ## Security
@@ -44,6 +47,7 @@ The following P1 items were identified during the integration review on 2026-01-
 - [P3] Consider caching user settings in frontend store to avoid re-fetching on settings page visits
 
 ## Testing
+- [P1] US-7.1 was not manually tested with real API keys - only unit tests with mocks. Need real integration test.
 - [P2] E2E tests should cover the full auth flow (register -> login -> dashboard -> settings -> logout)
 - [P3] Add integration tests for sync service with mocked external APIs
 

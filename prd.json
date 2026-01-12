@@ -188,7 +188,27 @@
       ],
       "priority": 30,
       "passes": true,
-      "notes": "Completed 2026-01-12"
+      "notes": "Completed 2026-01-12 - MISSING: scheduler for daily auto-sync, see SUGGESTIONS.md [P1]"
+    },
+    {
+      "id": "US-7.1.5",
+      "title": "Local Integration Test for Sync",
+      "story": "As a developer, I want to verify the sync service works with real Jellyfin/Jellyseerr APIs locally, so that I can confirm data is fetched and cached correctly before deploying",
+      "acceptanceCriteria": [
+        "Run docker-compose up locally",
+        "Register/login with credentials from .env.example (APP_USER_EMAIL, APP_USER_PASSWORD)",
+        "Configure Jellyfin settings via Settings UI (user's real Jellyfin server)",
+        "Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)",
+        "Trigger sync via curl -X POST http://localhost:8080/api/sync with JWT token",
+        "Verify cached_media_items table has data (query via SQLite or check /api/sync/status)",
+        "Verify cached_jellyseerr_requests table has data",
+        "Verify GET /api/sync/status returns correct counts (media_items_count > 0, requests_count > 0)",
+        "Dashboard displays Last synced timestamp after sync",
+        "Document any issues found in SUGGESTIONS.md"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Manual integration test - not automated"
     },
     {
       "id": "US-7.2",
