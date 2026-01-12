@@ -153,10 +153,31 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - chore(backend): [US-2.1.5] remove premature code
 
+### 2026-01-12: US-2.2 - Configure Jellyseerr Connection
+- Created Jellyseerr service (app/services/jellyseerr.py) with:
+  - validate_jellyseerr_connection() - Tests connection to Jellyseerr /api/v1/status
+  - save_jellyseerr_settings() - Saves encrypted credentials to DB
+  - get_user_jellyseerr_settings() - Retrieves user's settings
+  - get_decrypted_jellyseerr_api_key() - Decrypts stored API key
+- Extended settings router with Jellyseerr endpoints:
+  - POST /api/settings/jellyseerr - Save settings after validation
+  - GET /api/settings/jellyseerr - Get current settings (masked API key)
+- Added Jellyseerr Pydantic models (JellyseerrSettingsCreate, JellyseerrSettingsResponse)
+- Extended settings page with Jellyseerr section below Jellyfin:
+  - Form for Jellyseerr URL and API key
+  - Status badge showing connection state
+  - Success/error feedback messages
+- Backend tests: 9 new tests for Jellyseerr settings endpoints
+- Frontend tests: 8 new tests for Jellyseerr API integration
+- Verified in Docker: API endpoints and UI work correctly
+- Files changed: settings.py, models/settings.py, routers/settings.py, +page.svelte
+- Commits:
+  - feat(settings): [US-2.2] add Jellyseerr connection configuration
+
 ## Current Status
 
 **Phase**: Epic 2 - Configuration (In Progress)
-**Next US**: US-2.2 - Configure Jellyseerr Connection
+**Next US**: US-2.3 - Navigation Header
 
 ## Notes
 
