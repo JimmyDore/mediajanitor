@@ -264,4 +264,152 @@ describe('Old/Unwatched Content API Integration', () => {
 			expect(mediaTypes).toContain('Series');
 		});
 	});
+
+	describe('POST /api/whitelist/content (US-3.2)', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Test Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts POST with valid payload and returns 201', async () => {
+			const successResponse = {
+				message: 'Added to whitelist',
+				jellyfin_id: 'movie-123',
+				name: 'Test Movie'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Test Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Test Movie',
+					media_type: 'Movie'
+				})
+			});
+			expect(response.status).toBe(201);
+
+			const data = await response.json();
+			expect(data.message).toBe('Added to whitelist');
+			expect(data.jellyfin_id).toBe('movie-123');
+			expect(data.name).toBe('Test Movie');
+		});
+
+		it('returns 409 Conflict for duplicate entries', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ detail: "Content 'Test Movie' is already in whitelist" })
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Test Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(409);
+			const data = await response.json();
+			expect(data.detail).toContain('already in whitelist');
+		});
+
+		it('returns 422 for invalid/missing required fields', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 422,
+				json: () =>
+					Promise.resolve({
+						detail: [{ loc: ['body', 'jellyfin_id'], msg: 'Field required', type: 'missing' }]
+					})
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					name: 'Test Movie',
+					media_type: 'Movie'
+					// Missing jellyfin_id
+				})
+			});
+
+			expect(response.status).toBe(422);
+		});
+
+		it('works with Series media type', async () => {
+			const successResponse = {
+				message: 'Added to whitelist',
+				jellyfin_id: 'series-456',
+				name: 'Test Series'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'series-456',
+					name: 'Test Series',
+					media_type: 'Series'
+				})
+			});
+
+			expect(response.status).toBe(201);
+			const data = await response.json();
+			expect(data.jellyfin_id).toBe('series-456');
+		});
+	});
 });

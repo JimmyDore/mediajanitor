@@ -418,3 +418,241 @@ class TestContentWhitelistModel:
             await session.commit()
             assert entry.id is not None
             assert entry.created_at is not None
+
+
+class TestAddToContentWhitelist:
+    """Test POST /api/whitelist/content endpoint (US-3.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "whitelist@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_requires_authentication(self, client: TestClient) -> None:
+        """POST /api/whitelist/content should require authentication."""
+        response = client.post(
+            "/api/whitelist/content",
+            json={
+                "jellyfin_id": "movie-123",
+                "name": "Test Movie",
+                "media_type": "Movie"
+            },
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_adds_content_to_whitelist(self, client: TestClient) -> None:
+        """Should add content to user's whitelist and return success."""
+        token = self._get_auth_token(client, "add-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-123",
+                "name": "Test Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to whitelist"
+        assert data["jellyfin_id"] == "movie-123"
+        assert data["name"] == "Test Movie"
+
+    @pytest.mark.asyncio
+    async def test_whitelist_entry_persisted_to_database(self, client: TestClient) -> None:
+        """Whitelist entry should be stored in database."""
+        token = self._get_auth_token(client, "persist-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get user ID
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Add to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-persist",
+                "name": "Persisted Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        # Verify in database
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ContentWhitelist).where(
+                    ContentWhitelist.user_id == user_id,
+                    ContentWhitelist.jellyfin_id == "movie-persist"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            assert entry is not None
+            assert entry.name == "Persisted Movie"
+            assert entry.media_type == "Movie"
+
+    @pytest.mark.asyncio
+    async def test_protected_item_disappears_from_old_content_list(
+        self, client: TestClient
+    ) -> None:
+        """After adding to whitelist, item should not appear in old content list."""
+        token = self._get_auth_token(client, "protect-disappear@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create old unwatched content
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-to-protect",
+                name="Movie To Protect",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Verify item appears in old content list
+        response = client.get("/api/content/old-unwatched", headers=headers)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert any(i["jellyfin_id"] == "movie-to-protect" for i in items)
+
+        # Add to whitelist
+        protect_response = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-to-protect",
+                "name": "Movie To Protect",
+                "media_type": "Movie"
+            },
+        )
+        assert protect_response.status_code == 201
+
+        # Verify item no longer appears in old content list
+        response = client.get("/api/content/old-unwatched", headers=headers)
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert not any(i["jellyfin_id"] == "movie-to-protect" for i in items)
+
+    @pytest.mark.asyncio
+    async def test_prevents_duplicate_whitelist_entries(self, client: TestClient) -> None:
+        """Should not create duplicate entries for same jellyfin_id."""
+        token = self._get_auth_token(client, "duplicate-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time
+        response1 = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-duplicate",
+                "name": "Duplicate Movie",
+                "media_type": "Movie"
+            },
+        )
+        assert response1.status_code == 201
+
+        # Try to add again
+        response2 = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-duplicate",
+                "name": "Duplicate Movie",
+                "media_type": "Movie"
+            },
+        )
+        # Should return 409 Conflict
+        assert response2.status_code == 409
+        assert "already in whitelist" in response2.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_validates_required_fields(self, client: TestClient) -> None:
+        """Should validate that all required fields are provided."""
+        token = self._get_auth_token(client, "validate-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Missing jellyfin_id
+        response = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "name": "Test Movie",
+                "media_type": "Movie"
+            },
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_user_isolation(self, client: TestClient) -> None:
+        """Users should only be able to see their own whitelist entries."""
+        token1 = self._get_auth_token(client, "user1-wl@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        token2 = self._get_auth_token(client, "user2-wl@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        me1 = client.get("/api/auth/me", headers=headers1).json()
+        me2 = client.get("/api/auth/me", headers=headers2).json()
+
+        # User 1 adds to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers1,
+            json={
+                "jellyfin_id": "user1-movie",
+                "name": "User 1 Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        # Create old content for both users
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Same jellyfin_id for both users
+            item1 = CachedMediaItem(
+                user_id=me1["id"],
+                jellyfin_id="user1-movie",
+                name="User 1 Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            item2 = CachedMediaItem(
+                user_id=me2["id"],
+                jellyfin_id="user1-movie",  # Same jellyfin_id
+                name="User 1 Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        # User 1's whitelist should protect User 1's content
+        response1 = client.get("/api/content/old-unwatched", headers=headers1)
+        assert not any(i["jellyfin_id"] == "user1-movie" for i in response1.json()["items"])
+
+        # User 2's content with same jellyfin_id should NOT be protected
+        response2 = client.get("/api/content/old-unwatched", headers=headers2)
+        assert any(i["jellyfin_id"] == "user1-movie" for i in response2.json()["items"])

@@ -338,3 +338,373 @@ test.describe('Old/Unwatched Content Page (US-3.1)', () => {
 		await expect(page.getByRole('heading', { name: /old.*unwatched/i })).toBeVisible();
 	});
 });
+
+test.describe('Protect Content Button (US-3.2)', () => {
+	test.beforeEach(async ({ page }) => {
+		// Set up a mock token to bypass auth check
+		await page.goto('/login');
+		await page.evaluate(() => {
+			localStorage.setItem('access_token', 'mock-token-for-ui-testing');
+		});
+
+		// Mock auth check to simulate logged-in user
+		await page.route('**/api/auth/me', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ id: 1, email: 'test@example.com' })
+			});
+		});
+	});
+
+	test('displays Protect button for each content item', async ({ page }) => {
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Should see Protect button
+		const protectButton = page.getByRole('button', { name: /protect/i });
+		await expect(protectButton).toBeVisible();
+	});
+
+	test('clicking Protect button calls whitelist API', async ({ page }) => {
+		let whitelistCalled = false;
+
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API
+		await page.route('**/api/whitelist/content', async (route) => {
+			whitelistCalled = true;
+			await route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					message: 'Added to whitelist',
+					jellyfin_id: 'movie-1',
+					name: 'Test Movie'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Click Protect button
+		await page.getByRole('button', { name: /protect/i }).click();
+
+		// Wait for API call
+		await page.waitForTimeout(500);
+		expect(whitelistCalled).toBe(true);
+	});
+
+	test('shows success toast after protecting content', async ({ page }) => {
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API
+		await page.route('**/api/whitelist/content', async (route) => {
+			await route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					message: 'Added to whitelist',
+					jellyfin_id: 'movie-1',
+					name: 'Test Movie'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Click Protect button
+		await page.getByRole('button', { name: /protect/i }).click();
+
+		// Should see success toast
+		await expect(page.getByText(/added to whitelist/i)).toBeVisible();
+	});
+
+	test('removes item from list after protecting', async ({ page }) => {
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API
+		await page.route('**/api/whitelist/content', async (route) => {
+			await route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					message: 'Added to whitelist',
+					jellyfin_id: 'movie-1',
+					name: 'Test Movie'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Verify item is visible - use exact match to avoid matching path
+		await expect(page.getByText('Test Movie', { exact: true })).toBeVisible();
+
+		// Click Protect button
+		await page.getByRole('button', { name: /protect/i }).click();
+
+		// Item should disappear from the list
+		await expect(page.getByText('Test Movie', { exact: true })).not.toBeVisible();
+	});
+
+	test('shows error toast when whitelist API fails', async ({ page }) => {
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API with 409 conflict
+		await page.route('**/api/whitelist/content', async (route) => {
+			await route.fulfill({
+				status: 409,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					detail: 'Content is already in whitelist'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Click Protect button
+		await page.getByRole('button', { name: /protect/i }).click();
+
+		// Should see error toast
+		await expect(page.getByText(/already in whitelist/i)).toBeVisible();
+	});
+
+	test('Protect button shows loading state while API is processing', async ({ page }) => {
+		// Mock content response
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie'
+						}
+					],
+					total_count: 1,
+					total_size_bytes: 10000000000,
+					total_size_formatted: '9.3 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API with delay
+		await page.route('**/api/whitelist/content', async (route) => {
+			await new Promise((r) => setTimeout(r, 1000));
+			await route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					message: 'Added to whitelist',
+					jellyfin_id: 'movie-1',
+					name: 'Test Movie'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Click Protect button
+		const protectButton = page.getByRole('button', { name: /protect/i });
+		await protectButton.click();
+
+		// Button should be disabled while loading
+		await expect(protectButton).toBeDisabled();
+	});
+
+	test('updates total count and size after protecting item', async ({ page }) => {
+		// Mock content response with 2 items
+		await page.route('**/api/content/old-unwatched', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					items: [
+						{
+							jellyfin_id: 'movie-1',
+							name: 'Test Movie 1',
+							media_type: 'Movie',
+							production_year: 2020,
+							size_bytes: 10000000000,
+							size_formatted: '9.3 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie 1'
+						},
+						{
+							jellyfin_id: 'movie-2',
+							name: 'Test Movie 2',
+							media_type: 'Movie',
+							production_year: 2019,
+							size_bytes: 5000000000,
+							size_formatted: '4.7 GB',
+							last_played_date: null,
+							path: '/media/movies/Test Movie 2'
+						}
+					],
+					total_count: 2,
+					total_size_bytes: 15000000000,
+					total_size_formatted: '14.0 GB'
+				})
+			});
+		});
+
+		// Mock whitelist API
+		await page.route('**/api/whitelist/content', async (route) => {
+			await route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					message: 'Added to whitelist',
+					jellyfin_id: 'movie-1',
+					name: 'Test Movie 1'
+				})
+			});
+		});
+
+		await page.goto('/content/old-unwatched');
+		await page.waitForLoadState('networkidle');
+
+		// Verify initial count is 2
+		await expect(page.getByText('2').first()).toBeVisible();
+
+		// Click first Protect button
+		await page.getByRole('button', { name: /protect/i }).first().click();
+
+		// Wait for update
+		await page.waitForTimeout(500);
+
+		// Count should now be 1
+		await expect(page.getByText('1').first()).toBeVisible();
+	});
+});

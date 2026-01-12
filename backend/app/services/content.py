@@ -148,3 +148,37 @@ async def get_old_unwatched_content(
         total_size_bytes=total_size_bytes,
         total_size_formatted=format_size(total_size_bytes),
     )
+
+
+async def add_to_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    jellyfin_id: str,
+    name: str,
+    media_type: str,
+) -> ContentWhitelist:
+    """Add content to user's whitelist.
+
+    Raises ValueError if the content is already in the whitelist.
+    """
+    # Check if already whitelisted
+    result = await db.execute(
+        select(ContentWhitelist).where(
+            ContentWhitelist.user_id == user_id,
+            ContentWhitelist.jellyfin_id == jellyfin_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise ValueError(f"Content '{name}' is already in whitelist")
+
+    # Create new whitelist entry
+    entry = ContentWhitelist(
+        user_id=user_id,
+        jellyfin_id=jellyfin_id,
+        name=name,
+        media_type=media_type,
+    )
+    db.add(entry)
+    await db.flush()  # Get the ID assigned
+    return entry

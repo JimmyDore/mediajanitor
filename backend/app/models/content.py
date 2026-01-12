@@ -23,3 +23,19 @@ class OldUnwatchedResponse(BaseModel):
     total_count: int
     total_size_bytes: int
     total_size_formatted: str
+
+
+class WhitelistAddRequest(BaseModel):
+    """Request model for adding content to whitelist."""
+
+    jellyfin_id: str
+    name: str
+    media_type: str  # "Movie" or "Series"
+
+
+class WhitelistAddResponse(BaseModel):
+    """Response model for successful whitelist addition."""
+
+    message: str
+    jellyfin_id: str
+    name: str

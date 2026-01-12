@@ -263,8 +263,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Protect button with toast, item removal, count/size update verified in Docker"
     },
     {
       "id": "US-3.3",

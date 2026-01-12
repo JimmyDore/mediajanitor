@@ -22,6 +22,8 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let data = $state<OldUnwatchedResponse | null>(null);
+	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let protectingIds = $state<Set<string>>(new Set());
 
 	function formatPath(path: string | null): string {
 		if (!path) return '';
@@ -64,6 +66,89 @@
 		return !item.last_played_date;
 	}
 
+	function showToast(message: string, type: 'success' | 'error') {
+		toast = { message, type };
+		setTimeout(() => {
+			toast = null;
+		}, 3000);
+	}
+
+	async function protectContent(item: OldUnwatchedItem) {
+		const token = localStorage.getItem('access_token');
+		if (!token) {
+			showToast('Not authenticated', 'error');
+			return;
+		}
+
+		// Add to protecting set to show loading state
+		protectingIds = new Set([...protectingIds, item.jellyfin_id]);
+
+		try {
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					jellyfin_id: item.jellyfin_id,
+					name: item.name,
+					media_type: item.media_type
+				})
+			});
+
+			if (response.status === 401) {
+				showToast('Session expired. Please log in again.', 'error');
+				return;
+			}
+
+			if (response.status === 409) {
+				showToast('Content is already in whitelist', 'error');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Failed to protect content', 'error');
+				return;
+			}
+
+			// Remove item from the list immediately
+			if (data) {
+				const removedItem = data.items.find((i) => i.jellyfin_id === item.jellyfin_id);
+				const removedSize = removedItem?.size_bytes || 0;
+				data = {
+					...data,
+					items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+					total_count: data.total_count - 1,
+					total_size_bytes: data.total_size_bytes - removedSize,
+					total_size_formatted: formatSize(data.total_size_bytes - removedSize)
+				};
+			}
+
+			showToast('Added to whitelist', 'success');
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : 'Failed to protect content', 'error');
+		} finally {
+			// Remove from protecting set
+			const newSet = new Set(protectingIds);
+			newSet.delete(item.jellyfin_id);
+			protectingIds = newSet;
+		}
+	}
+
+	function formatSize(sizeBytes: number): string {
+		if (sizeBytes === 0) return '0 B';
+		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		let size = sizeBytes;
+		let unitIndex = 0;
+		while (size >= 1024 && unitIndex < units.length - 1) {
+			size /= 1024;
+			unitIndex++;
+		}
+		return unitIndex === 0 ? `${Math.round(size)} ${units[unitIndex]}` : `${size.toFixed(1)} ${units[unitIndex]}`;
+	}
+
 	async function fetchOldUnwatchedContent() {
 		try {
 			const token = localStorage.getItem('access_token');
@@ -103,6 +188,12 @@
 <svelte:head>
 	<title>Old Content - Media Janitor</title>
 </svelte:head>
+
+{#if toast}
+	<div class="toast toast-{toast.type}" role="alert">
+		{toast.message}
+	</div>
+{/if}
 
 <div class="page-container">
 	<div class="page-header">
@@ -146,6 +237,7 @@
 					<span class="col-year">Year</span>
 					<span class="col-size">Size</span>
 					<span class="col-status">Last Watched</span>
+					<span class="col-actions">Actions</span>
 				</div>
 				{#each data.items as item, index}
 					<div class="content-item">
@@ -165,6 +257,20 @@
 						<span class="col-size">{item.size_formatted}</span>
 						<span class="col-status" class:never-watched={wasNeverWatched(item)}>
 							{formatLastWatched(item.last_played_date, !!item.last_played_date)}
+						</span>
+						<span class="col-actions">
+							<button
+								class="btn-protect"
+								onclick={() => protectContent(item)}
+								disabled={protectingIds.has(item.jellyfin_id)}
+								title="Add to whitelist - protects from deletion suggestions"
+							>
+								{#if protectingIds.has(item.jellyfin_id)}
+									<span class="btn-spinner"></span>
+								{:else}
+									Protect
+								{/if}
+							</button>
 						</span>
 					</div>
 				{/each}
@@ -288,7 +394,7 @@
 
 	.list-header {
 		display: grid;
-		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem;
+		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem 5rem;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
 		background: var(--bg-tertiary, var(--bg-secondary));
@@ -302,7 +408,7 @@
 
 	.content-item {
 		display: grid;
-		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem;
+		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem 5rem;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
 		border-bottom: 1px solid var(--border);
@@ -387,6 +493,79 @@
 		color: var(--warning, #f59e0b);
 	}
 
+	.col-actions {
+		text-align: center;
+	}
+
+	.btn-protect {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--accent, #3b82f6);
+		background: transparent;
+		border: 1px solid var(--accent, #3b82f6);
+		border-radius: 0.25rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		min-width: 4rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-protect:hover:not(:disabled) {
+		background: var(--accent, #3b82f6);
+		color: white;
+	}
+
+	.btn-protect:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.btn-spinner {
+		width: 0.875rem;
+		height: 0.875rem;
+		border: 2px solid currentColor;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	/* Toast notifications */
+	.toast {
+		position: fixed;
+		bottom: 1.5rem;
+		right: 1.5rem;
+		padding: 0.75rem 1.25rem;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		z-index: 1000;
+		animation: slideIn 0.2s ease;
+	}
+
+	.toast-success {
+		background: var(--success, #22c55e);
+		color: white;
+	}
+
+	.toast-error {
+		background: var(--danger, #ef4444);
+		color: white;
+	}
+
+	@keyframes slideIn {
+		from {
+			transform: translateX(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+
 	/* Responsive design */
 	@media (max-width: 768px) {
 		.list-header {
@@ -412,6 +591,11 @@
 		.col-size,
 		.col-status {
 			font-size: 0.75rem;
+		}
+
+		.col-actions {
+			order: 2;
+			text-align: left;
 		}
 	}
 </style>
