@@ -313,10 +313,45 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-3.2] add protect content from deletion
 
+### 2026-01-13: US-3.3 - Manage Content Whitelist
+- Extended whitelist router (app/routers/whitelist.py) with:
+  - GET /api/whitelist/content: List all items in user's whitelist
+  - DELETE /api/whitelist/content/{id}: Remove item from whitelist by ID
+  - Returns 404 if item not found or belongs to another user
+- Extended content service (app/services/content.py) with:
+  - get_whitelist(): Returns all whitelist entries for user
+  - remove_from_whitelist(): Deletes entry by ID with user validation
+- Extended content models (app/models/content.py) with:
+  - WhitelistItem: Single whitelist item response
+  - WhitelistListResponse: Response with items array and count
+  - WhitelistRemoveResponse: Success message for deletion
+- Created whitelist frontend page at /whitelist with:
+  - Page title "Protected Content" and description
+  - Summary bar showing total protected items count
+  - Content list with columns: name, type, date added, actions
+  - Type badges (Movie/Series) with color coding
+  - "Remove" button to unprotect items
+  - Empty state with link to Old Content page
+  - Toast notifications for success/error
+  - Loading and error states
+  - Responsive design
+- Added "Whitelist" navigation link to header
+- Backend tests: 10 new tests for GET and DELETE endpoints
+- Frontend tests: 10 new tests for whitelist API integration
+- E2E tests: 14 tests for whitelist page UI
+- Verified in Docker:
+  - Added item via Protect button (221→220 items)
+  - Whitelist shows item with Remove button
+  - Remove button deletes item
+  - Item reappears in old content list (220→221 items)
+- Files changed: routers/whitelist.py, services/content.py, models/content.py, Header.svelte, +page.svelte, test_content.py, whitelist.test.ts, whitelist.spec.ts
+- Commits:
+  - feat(content): [US-3.3] add manage content whitelist
+
 ## Current Status
 
-**Phase**: Epic 3 - Content Analysis (In Progress)
-**Next US**: US-3.3 - Manage Content Whitelist
+**Phase**: Epic 4 - Large Movies (In Progress)
+**Next US**: US-4.1 - View Large Movies
 
 ## Notes
 

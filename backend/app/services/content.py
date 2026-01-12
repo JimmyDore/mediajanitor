@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CachedMediaItem, ContentWhitelist
-from app.models.content import OldUnwatchedItem, OldUnwatchedResponse
+from app.models.content import OldUnwatchedItem, OldUnwatchedResponse, WhitelistItem, WhitelistListResponse
 
 
 # Hardcoded thresholds per acceptance criteria
@@ -182,3 +182,57 @@ async def add_to_whitelist(
     db.add(entry)
     await db.flush()  # Get the ID assigned
     return entry
+
+
+async def get_whitelist(
+    db: AsyncSession,
+    user_id: int,
+) -> WhitelistListResponse:
+    """Get all whitelist entries for a user."""
+    result = await db.execute(
+        select(ContentWhitelist)
+        .where(ContentWhitelist.user_id == user_id)
+        .order_by(ContentWhitelist.created_at.desc())
+    )
+    entries = result.scalars().all()
+
+    items = [
+        WhitelistItem(
+            id=entry.id,
+            jellyfin_id=entry.jellyfin_id,
+            name=entry.name,
+            media_type=entry.media_type,
+            created_at=entry.created_at.isoformat() if entry.created_at else "",
+        )
+        for entry in entries
+    ]
+
+    return WhitelistListResponse(
+        items=items,
+        total_count=len(items),
+    )
+
+
+async def remove_from_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    whitelist_id: int,
+) -> bool:
+    """Remove an item from the user's whitelist.
+
+    Returns True if item was found and deleted, False otherwise.
+    Only deletes items that belong to the specified user.
+    """
+    result = await db.execute(
+        select(ContentWhitelist).where(
+            ContentWhitelist.id == whitelist_id,
+            ContentWhitelist.user_id == user_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        return False
+
+    await db.delete(entry)
+    return True

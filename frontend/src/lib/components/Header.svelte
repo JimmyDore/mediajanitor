@@ -34,6 +34,13 @@
 					Old Content
 				</a>
 				<a
+					href="/whitelist"
+					class="nav-link"
+					class:active={currentPath === '/whitelist'}
+				>
+					Whitelist
+				</a>
+				<a
 					href="/settings"
 					class="nav-link"
 					class:active={currentPath === '/settings'}

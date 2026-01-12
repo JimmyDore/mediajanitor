@@ -281,8 +281,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Whitelist page with list, Remove button, and navigation link verified in Docker"
     },
     {
       "id": "US-4.1",

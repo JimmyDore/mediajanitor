@@ -39,3 +39,26 @@ class WhitelistAddResponse(BaseModel):
     message: str
     jellyfin_id: str
     name: str
+
+
+class WhitelistItem(BaseModel):
+    """Response model for a single whitelist item."""
+
+    id: int
+    jellyfin_id: str
+    name: str
+    media_type: str  # "Movie" or "Series"
+    created_at: str
+
+
+class WhitelistListResponse(BaseModel):
+    """Response model for whitelist list."""
+
+    items: list[WhitelistItem]
+    total_count: int
+
+
+class WhitelistRemoveResponse(BaseModel):
+    """Response model for successful whitelist removal."""
+
+    message: str

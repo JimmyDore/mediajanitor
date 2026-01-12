@@ -656,3 +656,293 @@ class TestAddToContentWhitelist:
         # User 2's content with same jellyfin_id should NOT be protected
         response2 = client.get("/api/content/old-unwatched", headers=headers2)
         assert any(i["jellyfin_id"] == "user1-movie" for i in response2.json()["items"])
+
+
+class TestGetContentWhitelist:
+    """Test GET /api/whitelist/content endpoint (US-3.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "whitelist@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_requires_authentication(self, client: TestClient) -> None:
+        """GET /api/whitelist/content should require authentication."""
+        response = client.get("/api/whitelist/content")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_whitelist_items(
+        self, client: TestClient
+    ) -> None:
+        """Should return empty list when user has no whitelist entries."""
+        token = self._get_auth_token(client, "empty-wl@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/whitelist/content", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_returns_user_whitelist_items(self, client: TestClient) -> None:
+        """Should return all items in user's whitelist."""
+        token = self._get_auth_token(client, "get-wl@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get user ID
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create whitelist entries directly in DB
+        async with TestingAsyncSessionLocal() as session:
+            entry1 = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-wl-1",
+                name="Whitelisted Movie 1",
+                media_type="Movie",
+            )
+            entry2 = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="series-wl-1",
+                name="Whitelisted Series 1",
+                media_type="Series",
+            )
+            session.add_all([entry1, entry2])
+            await session.commit()
+
+        response = client.get("/api/whitelist/content", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+
+        # Check both items are present
+        jellyfin_ids = [item["jellyfin_id"] for item in data["items"]]
+        assert "movie-wl-1" in jellyfin_ids
+        assert "series-wl-1" in jellyfin_ids
+
+    @pytest.mark.asyncio
+    async def test_returns_all_required_fields(self, client: TestClient) -> None:
+        """Each whitelist item should have required fields: id, name, media_type, created_at."""
+        token = self._get_auth_token(client, "wl-fields@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add item to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-fields-test",
+                "name": "Fields Test Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        response = client.get("/api/whitelist/content", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert "id" in item
+        assert "jellyfin_id" in item
+        assert "name" in item
+        assert "media_type" in item
+        assert "created_at" in item
+
+    @pytest.mark.asyncio
+    async def test_user_only_sees_their_own_whitelist(self, client: TestClient) -> None:
+        """User should only see their own whitelist, not other users'."""
+        token1 = self._get_auth_token(client, "wl-user1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        token2 = self._get_auth_token(client, "wl-user2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        # User 1 adds to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers1,
+            json={
+                "jellyfin_id": "user1-wl-movie",
+                "name": "User 1 WL Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        # User 2 adds different item to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers2,
+            json={
+                "jellyfin_id": "user2-wl-movie",
+                "name": "User 2 WL Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        # User 1 should only see their item
+        response1 = client.get("/api/whitelist/content", headers=headers1)
+        data1 = response1.json()
+        assert data1["total_count"] == 1
+        assert data1["items"][0]["jellyfin_id"] == "user1-wl-movie"
+
+        # User 2 should only see their item
+        response2 = client.get("/api/whitelist/content", headers=headers2)
+        data2 = response2.json()
+        assert data2["total_count"] == 1
+        assert data2["items"][0]["jellyfin_id"] == "user2-wl-movie"
+
+
+class TestDeleteFromContentWhitelist:
+    """Test DELETE /api/whitelist/content/{id} endpoint (US-3.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "whitelist@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_requires_authentication(self, client: TestClient) -> None:
+        """DELETE /api/whitelist/content/{id} should require authentication."""
+        response = client.delete("/api/whitelist/content/1")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_removes_item_from_whitelist(self, client: TestClient) -> None:
+        """Should remove item from user's whitelist."""
+        token = self._get_auth_token(client, "delete-wl@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add item to whitelist first
+        add_response = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-to-delete",
+                "name": "Movie To Delete",
+                "media_type": "Movie"
+            },
+        )
+        assert add_response.status_code == 201
+
+        # Get the whitelist to find the item ID
+        list_response = client.get("/api/whitelist/content", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete the item
+        delete_response = client.delete(f"/api/whitelist/content/{item_id}", headers=headers)
+        assert delete_response.status_code == 200
+        assert delete_response.json()["message"] == "Removed from whitelist"
+
+        # Verify item is gone from whitelist
+        list_response = client.get("/api/whitelist/content", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_nonexistent_item(self, client: TestClient) -> None:
+        """Should return 404 when trying to delete non-existent whitelist item."""
+        token = self._get_auth_token(client, "delete-404@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.delete("/api/whitelist/content/99999", headers=headers)
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_cannot_delete_other_users_whitelist_items(
+        self, client: TestClient
+    ) -> None:
+        """User should not be able to delete another user's whitelist items."""
+        token1 = self._get_auth_token(client, "delete-user1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        token2 = self._get_auth_token(client, "delete-user2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        # User 1 adds to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers1,
+            json={
+                "jellyfin_id": "user1-delete-movie",
+                "name": "User 1 Delete Movie",
+                "media_type": "Movie"
+            },
+        )
+
+        # Get user 1's whitelist item ID
+        list_response = client.get("/api/whitelist/content", headers=headers1)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # User 2 tries to delete user 1's item - should get 404
+        delete_response = client.delete(f"/api/whitelist/content/{item_id}", headers=headers2)
+        assert delete_response.status_code == 404
+
+        # Verify user 1's item still exists
+        list_response = client.get("/api/whitelist/content", headers=headers1)
+        assert list_response.json()["total_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_removed_item_reappears_in_old_content_list(
+        self, client: TestClient
+    ) -> None:
+        """After removing from whitelist, item should reappear in old content list if still old."""
+        token = self._get_auth_token(client, "reappear@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get user ID
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create old unwatched content
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-reappear",
+                name="Movie Reappear",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Add to whitelist
+        client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-reappear",
+                "name": "Movie Reappear",
+                "media_type": "Movie"
+            },
+        )
+
+        # Verify item does NOT appear in old content list
+        old_content = client.get("/api/content/old-unwatched", headers=headers)
+        assert not any(i["jellyfin_id"] == "movie-reappear" for i in old_content.json()["items"])
+
+        # Get whitelist item ID and delete
+        list_response = client.get("/api/whitelist/content", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+        client.delete(f"/api/whitelist/content/{item_id}", headers=headers)
+
+        # Verify item NOW appears in old content list
+        old_content = client.get("/api/content/old-unwatched", headers=headers)
+        assert any(i["jellyfin_id"] == "movie-reappear" for i in old_content.json()["items"])
