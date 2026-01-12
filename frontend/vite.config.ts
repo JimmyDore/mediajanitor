@@ -9,7 +9,11 @@ export default defineConfig({
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}', 'tests/**/*.{test,spec}.{js,ts}'],
 		environment: 'jsdom',
-		globals: true
+		globals: true,
+		setupFiles: ['./vitest.setup.ts'],
+		alias: {
+			'$lib': './src/lib'
+		}
 	},
 	server: {
 		host: true,

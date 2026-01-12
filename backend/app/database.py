@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import AsyncGenerator
 
-from sqlalchemy import String, Integer, DateTime, Text, ForeignKey, create_engine
+from sqlalchemy import Boolean, String, Integer, DateTime, Text, ForeignKey, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -14,6 +14,21 @@ class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
 
     pass
+
+
+class User(Base):
+    """User model for authentication."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class WhitelistContent(Base):

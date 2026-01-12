@@ -24,10 +24,26 @@
   - chore: add allowedHosts for production domain
   - chore: configure GitHub Actions for auto-deploy
 
+### 2026-01-12: US-1.1 - User Registration
+- Created User model with SQLAlchemy (email, hashed_password, timestamps)
+- Implemented POST /api/auth/register endpoint with validation
+- Password hashing using bcrypt
+- Registration form at /register with email/password fields
+- Client-side password validation (min 8 characters)
+- Error handling for duplicate emails and validation errors
+- Redirect to login page after successful registration
+- Backend tests: 7 new tests for registration endpoint
+- Frontend tests: 6 new tests for API integration and validation
+- Migrated from passlib to bcrypt directly (compatibility fix)
+- Converted project to use uv package manager
+- Commits:
+  - feat(auth): add user registration endpoint with password hashing
+  - feat(ui): add registration form page
+
 ## Current Status
 
-**Phase**: Epic 0 - Foundation & Deployment (COMPLETE)
-**Next US**: US-1.1 - User Registration
+**Phase**: Epic 1 - Authentication (IN PROGRESS)
+**Next US**: US-1.2 - User Login
 
 ## Notes
 
