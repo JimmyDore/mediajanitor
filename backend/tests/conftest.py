@@ -1,50 +1,57 @@
-"""Pytest configuration and fixtures."""
+"""Pytest configuration and fixtures.
 
-from typing import Generator
+IMPORTANT: This file uses ASYNC sessions to match production behavior.
+Using sync sessions here would mask async/await bugs that only appear
+in production Docker. See CLAUDE.md "Async/Sync Consistency" section.
+"""
+
+from typing import AsyncGenerator, Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
 
-# Use in-memory SQLite for tests
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+# CRITICAL: Use async SQLite (aiosqlite) to match production's AsyncSession.
+# Using sync sqlite:///:memory: will cause tests to pass but production to fail.
+SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-engine = create_engine(
+async_engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingAsyncSessionLocal = async_sessionmaker(
+    async_engine, expire_on_commit=False, class_=AsyncSession
+)
 
 
-def override_get_db() -> Generator:
-    """Override the get_db dependency for testing with sync session."""
-    db = TestingSessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Override the get_db dependency for testing with async session."""
+    async with TestingAsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 @pytest.fixture(autouse=True)
-def setup_database() -> Generator:
+async def setup_database() -> AsyncGenerator[None, None]:
     """Create fresh database tables for each test."""
-    Base.metadata.create_all(bind=engine)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    Base.metadata.drop_all(bind=engine)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     """Create a test client for the FastAPI app."""
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:

@@ -153,11 +153,41 @@ import bcrypt
 hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
 ```
 
-**Test Database**: Use sync SQLAlchemy sessions in tests with in-memory SQLite
+**Test Database**: Use **async** SQLAlchemy sessions in tests to match production
 ```python
-# tests/conftest.py - override get_db with sync session
-engine = create_engine("sqlite:///:memory:", poolclass=StaticPool)
+# tests/conftest.py - override get_db with async session (MUST match production)
+async_engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
+TestingAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
+
+### Async/Sync Consistency (CRITICAL)
+
+**Always use async sessions in tests to match production:**
+- Production uses `AsyncSession` via `get_db()`
+- Tests MUST also use `AsyncSession` via async `override_get_db()`
+- Never mix sync endpoints (`def`) with async database sessions
+
+**Pattern for async endpoints:**
+```python
+# Router - always use async def with AsyncSession
+async def endpoint(db: AsyncSession = Depends(get_db)):
+    result = await service_async(db, ...)
+
+# Service - provide async version
+async def service_async(db: AsyncSession, ...):
+    result = await db.execute(...)
+    return result.scalar_one_or_none()
+```
+
+**Why this matters:** Using sync test sessions masks async bugs. Tests pass but production fails with `'coroutine' object has no attribute 'scalar_one_or_none'`.
+
+### Docker Verification (CRITICAL)
+
+**Unit tests passing is NOT enough.** Before marking a backend task complete:
+1. Run `task docker:up:build` (or `docker-compose up --build -d`)
+2. Test the feature manually via curl: `curl -X POST http://localhost:8080/api/...`
+3. Check Docker logs for errors: `docker-compose logs backend`
+4. If errors appear, fix and re-run tests
 
 ### Frontend (SvelteKit + Svelte 5)
 
