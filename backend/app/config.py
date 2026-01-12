@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "sqlite:///./plex_dashboard.db"
 
+    # Authentication
+    secret_key: str = "your-secret-key-change-in-production"
+    access_token_expire_minutes: int = 30
+
     # Content Analysis Settings
     old_content_months_cutoff: int = 4
     min_age_months: int = 3

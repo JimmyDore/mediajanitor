@@ -4,6 +4,110 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+class TestUserLogin:
+    """Tests for POST /api/auth/login endpoint."""
+
+    def test_login_success(self, client: TestClient) -> None:
+        """Test successful login returns JWT token."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "login@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        # Then login
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "login@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+
+    def test_login_invalid_email(self, client: TestClient) -> None:
+        """Test login with non-existent email."""
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "nonexistent@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        assert response.status_code == 401
+        assert "invalid" in response.json()["detail"].lower()
+
+    def test_login_wrong_password(self, client: TestClient) -> None:
+        """Test login with wrong password."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "wrongpass@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        # Then login with wrong password
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "wrongpass@example.com",
+                "password": "WrongPassword123!",
+            },
+        )
+        assert response.status_code == 401
+        assert "invalid" in response.json()["detail"].lower()
+
+    def test_login_missing_email(self, client: TestClient) -> None:
+        """Test login without email field."""
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "password": "SecurePassword123!",
+            },
+        )
+        assert response.status_code == 422
+
+    def test_login_missing_password(self, client: TestClient) -> None:
+        """Test login without password field."""
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "test@example.com",
+            },
+        )
+        assert response.status_code == 422
+
+    def test_login_returns_valid_jwt(self, client: TestClient) -> None:
+        """Test that the returned token is a valid JWT."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "jwttest@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        # Then login
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "jwttest@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        assert response.status_code == 200
+        token = response.json()["access_token"]
+        # JWT tokens have 3 parts separated by dots
+        parts = token.split(".")
+        assert len(parts) == 3
+
+
 class TestUserRegistration:
     """Tests for POST /api/auth/register endpoint."""
 

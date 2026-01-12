@@ -84,10 +84,10 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** I can access my dashboard
 
 **Acceptance Criteria:**
-- [ ] Login form (email, password)
-- [ ] Backend validates credentials and returns JWT
-- [ ] Token stored in frontend (httpOnly cookie or localStorage)
-- [ ] User redirected to dashboard
+- [x] Login form (email, password)
+- [x] Backend validates credentials and returns JWT
+- [x] Token stored in frontend (httpOnly cookie or localStorage)
+- [x] User redirected to dashboard
 
 ---
 
@@ -326,7 +326,7 @@ Each user story above becomes a checklist item:
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
 - [x] US-1.1: User Registration
-- [ ] US-1.2: User Login
+- [x] US-1.2: User Login
 - [ ] US-1.3: Protected Routes
 - [ ] US-2.1: Configure Jellyfin Connection
 - [ ] US-2.2: Configure Jellyseerr Connection

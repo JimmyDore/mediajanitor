@@ -1,13 +1,18 @@
 """Authentication service for password hashing and user operations."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Union
 
 import bcrypt
+from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import User
+
+ALGORITHM = "HS256"
 
 
 def hash_password(password: str) -> str:
@@ -69,4 +74,31 @@ def create_user(db: Union[Session, AsyncSession], email: str, password: str) -> 
     db.add(user)
     db.flush()
     db.refresh(user)
+    return user
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    """Create a JWT access token."""
+    settings = get_settings()
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def authenticate_user_async(
+    db: AsyncSession, email: str, password: str
+) -> User | None:
+    """Authenticate a user by email and password (async version)."""
+    user = await get_user_by_email_async(db, email)
+    if not user:
+        return None
+    if not verify_password(password, user.hashed_password):
+        return None
     return user
