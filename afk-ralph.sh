@@ -18,10 +18,15 @@ for ((i=1; i<=$1; i++)); do
   echo "--- Iteration $i of $1 ---"
   echo ""
 
-  result=$(docker sandbox run claude --permission-mode acceptEdits -p "@prompt.md
-If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>.")
-
-  echo "$result"
+  logfile="ralph-output.log"
+  claude --permission-mode acceptEdits --output-format stream-json --verbose -p "@prompt.md
+If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>." 2>&1 | tee -a "$logfile" | jq -r --unbuffered '
+    select(.type == "assistant" and .message.content != null) |
+    .message.content[] |
+    select(.type == "text") |
+    .text // empty
+  ' 2>/dev/null
+  result=$(tail -100 "$logfile")
 
   # Integration review every 3 iterations
   if (( i % 3 == 0 )); then
@@ -29,7 +34,7 @@ If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>.")
     echo "--- Integration Review (iteration $i) ---"
     echo ""
 
-    docker sandbox run claude --permission-mode acceptEdits -p "@PRD.md @SUGGESTIONS.md @CLAUDE.md \
+    claude --permission-mode acceptEdits -p "@PRD.md @SUGGESTIONS.md @CLAUDE.md \
     Perform an integration review of the application: \
     1. Review all implemented features for consistency \
     2. Check for missing cross-cutting concerns (navigation, error handling, auth guards) \
