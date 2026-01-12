@@ -2,12 +2,25 @@
 
 ## Completed Tasks
 
-- [2026-01-12] Created project directory structure
-- [2026-01-12] Created PRD.md with task checklist
-- [2026-01-12] Created progress.txt
-- [2026-01-12] Created CLAUDE.md with project context
-- [2026-01-12] Created ralph-once.sh and afk-ralph.sh scripts
+### 2026-01-12: US-0.1 - Hello World (Full Stack)
+- Created project structure with FastAPI backend and SvelteKit frontend
+- Implemented GET /api/hello endpoint (TDD: test first, then implementation)
+- Frontend fetches and displays "Hello World" from backend
+- Docker setup: Dockerfiles + docker-compose.yml
+- Verified full stack communication with docker-compose up
+- Commits:
+  - feat(api): add hello world endpoint
+  - feat(ui): display hello message from backend
+  - chore(docker): add Docker setup for full stack
 
 ## Current Status
 
-Phase 0: Project Setup - In Progress
+**Phase**: Epic 0 - Foundation & Deployment
+**Next US**: US-0.2 - Dockerize the Application (already done as part of US-0.1)
+**Actual Next**: US-0.3 - Deploy to VPS
+
+## Notes
+
+- US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
+- Backend runs on port 8000, Frontend on port 5173
+- API proxy configured in vite.config.ts for dev environment

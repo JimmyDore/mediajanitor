@@ -31,9 +31,9 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** I can verify the full stack communication works
 
 **Acceptance Criteria:**
-- [ ] Backend endpoint `GET /api/hello` returns `{"message": "Hello World"}`
-- [ ] Frontend displays the message fetched from backend
-- [ ] Both run locally with `docker-compose up`
+- [x] Backend endpoint `GET /api/hello` returns `{"message": "Hello World"}`
+- [x] Frontend displays the message fetched from backend
+- [x] Both run locally with `docker-compose up`
 
 ---
 
@@ -43,10 +43,10 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 **So that** I can deploy it anywhere
 
 **Acceptance Criteria:**
-- [ ] Dockerfile for backend
-- [ ] Dockerfile for frontend
-- [ ] docker-compose.yml that runs both + database
-- [ ] `docker-compose up` starts the full app on localhost
+- [x] Dockerfile for backend
+- [x] Dockerfile for frontend
+- [x] docker-compose.yml that runs both + database
+- [x] `docker-compose up` starts the full app on localhost
 
 ---
 
@@ -322,8 +322,8 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 
 Each user story above becomes a checklist item:
 
-- [ ] US-0.1: Hello World (Full Stack)
-- [ ] US-0.2: Dockerize the Application
+- [x] US-0.1: Hello World (Full Stack)
+- [x] US-0.2: Dockerize the Application
 - [ ] US-0.3: Deploy to VPS
 - [ ] US-1.1: User Registration
 - [ ] US-1.2: User Login
