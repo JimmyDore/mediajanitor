@@ -174,10 +174,37 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-2.2] add Jellyseerr connection configuration
 
+### 2026-01-12: US-2.3 - Navigation Header
+- Created Header component (frontend/src/lib/components/Header.svelte) with:
+  - Logo/app name ("Media Janitor") linking to home
+  - Dashboard and Settings navigation links
+  - Logout button
+  - Active state highlighting for current page
+- Updated layout (+layout.svelte) to:
+  - Show header only on authenticated routes
+  - Hide header on public routes (/login, /register)
+  - Adjust layout for full-width content with header
+- Refactored dashboard page:
+  - Removed redundant user-info section (logout, settings link)
+  - Added simple welcome message
+  - Updated page title to "Dashboard - Media Janitor"
+- Refactored settings page:
+  - Removed back button and local header
+  - Updated page title to "Settings - Media Janitor"
+  - Added page description text
+- E2E tests: 13 new tests for header functionality
+  - Tests header visibility on auth/non-auth pages
+  - Tests navigation link functionality
+  - Tests active state highlighting
+- Removed obsolete "back to dashboard" test from settings.spec.ts
+- Files changed: Header.svelte, +layout.svelte, +page.svelte, settings/+page.svelte
+- Commits:
+  - feat(ui): [US-2.3] add navigation header component
+
 ## Current Status
 
-**Phase**: Epic 2 - Configuration (In Progress)
-**Next US**: US-2.3 - Navigation Header
+**Phase**: Epic 2 - Configuration (Complete)
+**Next US**: US-7.1 - Automatic Daily Data Sync
 
 ## Notes
 
