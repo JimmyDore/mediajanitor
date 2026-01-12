@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 from sqlalchemy import Boolean, String, Integer, DateTime, Text, ForeignKey, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import get_settings
 
@@ -26,71 +26,6 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-
-class WhitelistContent(Base):
-    """Content allowlist - protected from deletion."""
-
-    __tablename__ = "whitelist_content"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class WhitelistFrenchOnly(Base):
-    """French-only content - doesn't need English audio."""
-
-    __tablename__ = "whitelist_french_only"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class WhitelistFrenchSubsOnly(Base):
-    """French subs only - only requires French subtitles."""
-
-    __tablename__ = "whitelist_french_subs_only"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class WhitelistLanguageExempt(Base):
-    """Globally exempt from language checking."""
-
-    __tablename__ = "whitelist_language_exempt"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class WhitelistEpisodeExempt(Base):
-    """Specific episodes exempt from language checking."""
-
-    __tablename__ = "whitelist_episode_exempt"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    show_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    season: Mapped[int] = mapped_column(Integer, nullable=False)
-    episode: Mapped[int] = mapped_column(Integer, nullable=False)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class AppSettings(Base):
-    """Application settings stored in database."""
-
-    __tablename__ = "app_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    value: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

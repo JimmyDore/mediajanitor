@@ -1,64 +1,25 @@
 """Pydantic models for the API."""
 
-from app.models.content import (
-    ContentItem,
-    OldUnwatchedResponse,
-    LargeMoviesResponse,
-    DeleteContentRequest,
-    DeleteContentResponse,
+from app.models.user import (
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    Token,
 )
-from app.models.whitelist import (
-    WhitelistItemBase,
-    WhitelistItemCreate,
-    WhitelistItemResponse,
-    WhitelistListResponse,
-    EpisodeExemptionBase,
-    EpisodeExemptionCreate,
-    EpisodeExemptionResponse,
-    EpisodeExemptionListResponse,
-    BulkAddRequest,
-    BulkAddResponse,
-    DeleteResponse,
-)
-from app.models.jellyseerr import (
-    SeasonInfo,
-    InProgressSeason,
-    SeasonAnalysis,
-    JellyseerrRequest,
-    UnavailableRequestsResponse,
-    InProgressRequest,
-    InProgressRequestsResponse,
-    RecentlyAvailableItem,
-    RecentlyAvailableResponse,
+from app.models.settings import (
+    JellyfinSettingsCreate,
+    JellyfinSettingsResponse,
+    SettingsSaveResponse,
 )
 
 __all__ = [
-    # Content
-    "ContentItem",
-    "OldUnwatchedResponse",
-    "LargeMoviesResponse",
-    "DeleteContentRequest",
-    "DeleteContentResponse",
-    # Whitelist
-    "WhitelistItemBase",
-    "WhitelistItemCreate",
-    "WhitelistItemResponse",
-    "WhitelistListResponse",
-    "EpisodeExemptionBase",
-    "EpisodeExemptionCreate",
-    "EpisodeExemptionResponse",
-    "EpisodeExemptionListResponse",
-    "BulkAddRequest",
-    "BulkAddResponse",
-    "DeleteResponse",
-    # Jellyseerr
-    "SeasonInfo",
-    "InProgressSeason",
-    "SeasonAnalysis",
-    "JellyseerrRequest",
-    "UnavailableRequestsResponse",
-    "InProgressRequest",
-    "InProgressRequestsResponse",
-    "RecentlyAvailableItem",
-    "RecentlyAvailableResponse",
+    # User
+    "UserCreate",
+    "UserLogin",
+    "UserResponse",
+    "Token",
+    # Settings
+    "JellyfinSettingsCreate",
+    "JellyfinSettingsResponse",
+    "SettingsSaveResponse",
 ]
