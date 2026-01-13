@@ -237,40 +237,43 @@
 	<title>Settings - Media Janitor</title>
 </svelte:head>
 
-<div class="settings-container">
+<div class="page-container">
 	<div class="page-header">
 		<h1>Settings</h1>
-		<p class="page-description">Configure your media server connections.</p>
+		<p class="page-subtitle">Configure your media server connections and preferences.</p>
 	</div>
 
 	{#if isFetchingSettings}
-		<div class="loading">Loading settings...</div>
+		<div class="loading-state">
+			<span class="spinner"></span>
+			<span>Loading settings...</span>
+		</div>
 	{:else}
 		<section class="settings-section">
-			<h2>Jellyfin Connection</h2>
-			<p class="section-description">
-				Connect your Jellyfin server to analyze your media library.
-			</p>
+			<div class="section-header">
+				<h2>Jellyfin Connection</h2>
+				<p class="section-description">Connect your Jellyfin server to analyze your media library.</p>
+			</div>
 
 			{#if hasJellyfinConfigured}
-				<div class="status-badge connected">
+				<div class="status-badge status-connected">
 					Connected to {currentJellyfinUrl}
 				</div>
 			{:else}
-				<div class="status-badge not-connected">
+				<div class="status-badge status-disconnected">
 					Not connected
 				</div>
 			{/if}
 
 			<form onsubmit={handleJellyfinSubmit} class="settings-form">
 				{#if jellyfinError}
-					<div class="message error-message" role="alert">
+					<div class="message message-error" role="alert">
 						{jellyfinError}
 					</div>
 				{/if}
 
 				{#if jellyfinSuccess}
-					<div class="message success-message" role="status">
+					<div class="message message-success" role="status">
 						{jellyfinSuccess}
 					</div>
 				{/if}
@@ -283,6 +286,7 @@
 						bind:value={jellyfinUrl}
 						required
 						placeholder="https://your-jellyfin-server.com"
+						class="input"
 					/>
 					<span class="hint">The full URL to your Jellyfin server</span>
 				</div>
@@ -291,7 +295,7 @@
 					<label for="jellyfin-api-key">
 						API Key
 						{#if hasJellyfinConfigured}
-							<span class="optional">(leave blank to keep current)</span>
+							<span class="label-hint">(leave blank to keep current)</span>
 						{/if}
 					</label>
 					<input
@@ -301,14 +305,14 @@
 						required={!hasJellyfinConfigured}
 						placeholder={hasJellyfinConfigured ? '••••••••••••••••' : 'Enter your API key'}
 						autocomplete="off"
+						class="input"
 					/>
-					<span class="hint">
-						Find this in Jellyfin Dashboard → API Keys
-					</span>
+					<span class="hint">Find this in Jellyfin Dashboard → API Keys</span>
 				</div>
 
-				<button type="submit" disabled={isJellyfinLoading} class="submit-button">
+				<button type="submit" disabled={isJellyfinLoading} class="btn-primary">
 					{#if isJellyfinLoading}
+						<span class="spinner"></span>
 						Validating connection...
 					{:else if hasJellyfinConfigured}
 						Update Connection
@@ -320,30 +324,30 @@
 		</section>
 
 		<section class="settings-section">
-			<h2>Jellyseerr Connection</h2>
-			<p class="section-description">
-				Connect your Jellyseerr server to track media requests.
-			</p>
+			<div class="section-header">
+				<h2>Jellyseerr Connection</h2>
+				<p class="section-description">Connect your Jellyseerr server to track media requests.</p>
+			</div>
 
 			{#if hasJellyseerrConfigured}
-				<div class="status-badge connected">
+				<div class="status-badge status-connected">
 					Connected to {currentJellyseerrUrl}
 				</div>
 			{:else}
-				<div class="status-badge not-connected">
+				<div class="status-badge status-disconnected">
 					Not connected
 				</div>
 			{/if}
 
 			<form onsubmit={handleJellyseerrSubmit} class="settings-form">
 				{#if jellyseerrError}
-					<div class="message error-message" role="alert">
+					<div class="message message-error" role="alert">
 						{jellyseerrError}
 					</div>
 				{/if}
 
 				{#if jellyseerrSuccess}
-					<div class="message success-message" role="status">
+					<div class="message message-success" role="status">
 						{jellyseerrSuccess}
 					</div>
 				{/if}
@@ -356,6 +360,7 @@
 						bind:value={jellyseerrUrl}
 						required
 						placeholder="https://your-jellyseerr-server.com"
+						class="input"
 					/>
 					<span class="hint">The full URL to your Jellyseerr server</span>
 				</div>
@@ -364,7 +369,7 @@
 					<label for="jellyseerr-api-key">
 						API Key
 						{#if hasJellyseerrConfigured}
-							<span class="optional">(leave blank to keep current)</span>
+							<span class="label-hint">(leave blank to keep current)</span>
 						{/if}
 					</label>
 					<input
@@ -374,14 +379,14 @@
 						required={!hasJellyseerrConfigured}
 						placeholder={hasJellyseerrConfigured ? '••••••••••••••••' : 'Enter your API key'}
 						autocomplete="off"
+						class="input"
 					/>
-					<span class="hint">
-						Find this in Jellyseerr Settings → General → API Key
-					</span>
+					<span class="hint">Find this in Jellyseerr Settings → General → API Key</span>
 				</div>
 
-				<button type="submit" disabled={isJellyseerrLoading} class="submit-button">
+				<button type="submit" disabled={isJellyseerrLoading} class="btn-primary">
 					{#if isJellyseerrLoading}
+						<span class="spinner"></span>
 						Validating connection...
 					{:else if hasJellyseerrConfigured}
 						Update Connection
@@ -393,20 +398,20 @@
 		</section>
 
 		<section class="settings-section">
-			<h2>Analysis Preferences</h2>
-			<p class="section-description">
-				Customize thresholds for content analysis.
-			</p>
+			<div class="section-header">
+				<h2>Analysis Preferences</h2>
+				<p class="section-description">Customize thresholds for content analysis.</p>
+			</div>
 
 			<form onsubmit={handleAnalysisSubmit} class="settings-form">
 				{#if analysisError}
-					<div class="message error-message" role="alert">
+					<div class="message message-error" role="alert">
 						{analysisError}
 					</div>
 				{/if}
 
 				{#if analysisSuccess}
-					<div class="message success-message" role="status">
+					<div class="message message-success" role="status">
 						{analysisSuccess}
 					</div>
 				{/if}
@@ -420,8 +425,9 @@
 						min="1"
 						max="24"
 						required
+						class="input input-number"
 					/>
-					<span class="hint">Flag content not watched in this many months (default: 4)</span>
+					<span class="hint">Flag content not watched in this many months (default: <span class="text-mono">4</span>)</span>
 				</div>
 
 				<div class="form-group">
@@ -433,8 +439,9 @@
 						min="0"
 						max="12"
 						required
+						class="input input-number"
 					/>
-					<span class="hint">Don't flag recently added content (default: 3)</span>
+					<span class="hint">Don't flag recently added content (default: <span class="text-mono">3</span>)</span>
 				</div>
 
 				<div class="form-group">
@@ -446,13 +453,15 @@
 						min="1"
 						max="100"
 						required
+						class="input input-number"
 					/>
-					<span class="hint">Movies larger than this are flagged (default: 13)</span>
+					<span class="hint">Movies larger than this are flagged (default: <span class="text-mono">13</span>)</span>
 				</div>
 
 				<div class="button-row">
-					<button type="submit" disabled={isAnalysisLoading} class="submit-button">
+					<button type="submit" disabled={isAnalysisLoading} class="btn-primary">
 						{#if isAnalysisLoading}
+							<span class="spinner"></span>
 							Saving...
 						{:else}
 							Save Preferences
@@ -462,7 +471,7 @@
 						type="button"
 						onclick={handleResetAnalysis}
 						disabled={isAnalysisLoading}
-						class="reset-button"
+						class="btn-secondary"
 					>
 						Reset to Defaults
 					</button>
@@ -473,213 +482,258 @@
 </div>
 
 <style>
-	.settings-container {
-		max-width: 600px;
+	.page-container {
+		padding: var(--space-6);
+		max-width: 640px;
 		margin: 0 auto;
 	}
 
 	.page-header {
-		margin-bottom: 2rem;
+		margin-bottom: var(--space-8);
 	}
 
 	.page-header h1 {
-		color: var(--text-primary);
-		font-size: 2rem;
-		font-weight: 700;
-		margin: 0 0 0.5rem 0;
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: -0.02em;
+		margin-bottom: var(--space-2);
 	}
 
-	.page-description {
+	.page-subtitle {
 		color: var(--text-secondary);
+		font-size: var(--font-size-base);
 		margin: 0;
 	}
 
-	.loading {
-		text-align: center;
+	.loading-state {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-3);
+		padding: var(--space-8);
 		color: var(--text-secondary);
-		padding: 2rem;
 	}
 
+	/* Settings Section */
 	.settings-section {
 		background: var(--bg-secondary);
-		border-radius: 0.75rem;
-		padding: 1.5rem;
 		border: 1px solid var(--border);
-		margin-bottom: 1.5rem;
+		border-radius: var(--radius-lg);
+		padding: var(--space-6);
+		margin-bottom: var(--space-6);
 	}
 
 	.settings-section:last-child {
 		margin-bottom: 0;
 	}
 
-	h2 {
-		font-size: 1.25rem;
-		font-weight: 600;
-		margin: 0 0 0.5rem 0;
-		color: var(--text);
+	.section-header {
+		margin-bottom: var(--space-4);
+	}
+
+	.section-header h2 {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		margin-bottom: var(--space-1);
 	}
 
 	.section-description {
 		color: var(--text-secondary);
-		margin: 0 0 1rem 0;
-		font-size: 0.875rem;
+		font-size: var(--font-size-base);
+		margin: 0;
 	}
 
+	/* Status Badge */
 	.status-badge {
-		display: inline-block;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		margin-bottom: 1.5rem;
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		margin-bottom: var(--space-4);
 	}
 
-	.status-badge.connected {
-		background: rgba(16, 185, 129, 0.1);
-		color: #10b981;
-		border: 1px solid rgba(16, 185, 129, 0.3);
+	.status-connected {
+		background: var(--success-light);
+		color: var(--success);
+		border: 1px solid var(--success);
 	}
 
-	.status-badge.not-connected {
-		background: rgba(245, 158, 11, 0.1);
-		color: #f59e0b;
-		border: 1px solid rgba(245, 158, 11, 0.3);
+	.status-disconnected {
+		background: var(--warning-light);
+		color: var(--warning);
+		border: 1px solid var(--warning);
 	}
 
+	/* Form */
 	.settings-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-4);
 	}
 
 	.form-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	label {
-		font-weight: 500;
-		color: var(--text);
-		font-size: 0.875rem;
+		font-weight: var(--font-weight-medium);
+		font-size: var(--font-size-base);
+		color: var(--text-primary);
 	}
 
-	.optional {
-		font-weight: 400;
-		color: var(--text-secondary);
-		font-size: 0.75rem;
+	.label-hint {
+		font-weight: var(--font-weight-normal);
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
 
-	input {
-		padding: 0.75rem 1rem;
+	.input {
+		padding: var(--space-3);
+		font-size: var(--font-size-md);
 		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		font-size: 1rem;
+		border-radius: var(--radius-md);
 		background: var(--bg-primary);
-		color: var(--text);
-		transition: border-color 0.2s;
+		color: var(--text-primary);
+		transition: border-color var(--transition-fast);
 	}
 
-	input:focus {
+	.input:focus {
 		outline: none;
 		border-color: var(--accent);
 	}
 
-	input::placeholder {
-		color: var(--text-secondary);
-		opacity: 0.6;
+	.input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.input-number {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.hint {
-		color: var(--text-secondary);
-		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
 
+	.text-mono {
+		font-family: var(--font-mono);
+	}
+
+	/* Messages */
 	.message {
-		padding: 1rem;
-		border-radius: 0.5rem;
+		padding: var(--space-3);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-base);
 	}
 
-	.error-message {
-		background: rgba(239, 68, 68, 0.1);
-		border: 1px solid rgba(239, 68, 68, 0.3);
+	.message-error {
+		background: var(--danger-light);
+		border: 1px solid var(--danger);
 		color: var(--danger);
 	}
 
-	.success-message {
-		background: rgba(16, 185, 129, 0.1);
-		border: 1px solid rgba(16, 185, 129, 0.3);
-		color: #10b981;
+	.message-success {
+		background: var(--success-light);
+		border: 1px solid var(--success);
+		color: var(--success);
 	}
 
-	.submit-button {
-		padding: 0.875rem 1.5rem;
+	/* Buttons */
+	.btn-primary,
+	.btn-secondary {
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-semibold);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+	}
+
+	.btn-primary {
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: opacity 0.2s;
-		margin-top: 0.5rem;
 	}
 
-	.submit-button:hover:not(:disabled) {
-		opacity: 0.9;
+	.btn-primary:hover:not(:disabled) {
+		background: var(--accent-hover);
 	}
 
-	.submit-button:disabled {
-		opacity: 0.6;
+	.btn-secondary {
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border);
+	}
+
+	.btn-secondary:hover:not(:disabled) {
+		background: var(--bg-hover);
+		border-color: var(--text-secondary);
+	}
+
+	.btn-primary:disabled,
+	.btn-secondary:disabled {
+		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
 	.button-row {
 		display: flex;
-		gap: 1rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
-		margin-top: 0.5rem;
+		margin-top: var(--space-2);
 	}
 
-	.button-row .submit-button {
+	.button-row .btn-primary,
+	.button-row .btn-secondary {
 		flex: 1;
-		min-width: 150px;
-		margin-top: 0;
+		min-width: 140px;
 	}
 
-	.reset-button {
-		flex: 1;
-		min-width: 150px;
-		padding: 0.875rem 1.5rem;
-		background: transparent;
-		color: var(--text-secondary);
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition:
-			background 0.2s,
-			border-color 0.2s;
+	.spinner {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid currentColor;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
-	.reset-button:hover:not(:disabled) {
-		background: var(--bg-primary);
-		border-color: var(--text-secondary);
+	.btn-primary .spinner {
+		border-color: rgba(255, 255, 255, 0.3);
+		border-top-color: white;
 	}
 
-	.reset-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
-	input[type='number'] {
-		-moz-appearance: textfield;
-	}
+	@media (max-width: 640px) {
+		.page-container {
+			padding: var(--space-4);
+		}
 
-	input[type='number']::-webkit-outer-spin-button,
-	input[type='number']::-webkit-inner-spin-button {
-		-webkit-appearance: none;
-		margin: 0;
+		.settings-section {
+			padding: var(--space-4);
+		}
+
+		.button-row {
+			flex-direction: column;
+		}
+
+		.button-row .btn-primary,
+		.button-row .btn-secondary {
+			width: 100%;
+		}
 	}
 </style>

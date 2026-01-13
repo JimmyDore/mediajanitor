@@ -52,124 +52,168 @@
 </script>
 
 <svelte:head>
-	<title>Log In - Plex Dashboard</title>
+	<title>Log In - Media Janitor</title>
 </svelte:head>
 
-<div class="login-container">
-	<h1>Log In</h1>
-
-	<form onsubmit={handleSubmit} class="login-form">
-		{#if error}
-			<div class="error-message" role="alert">
-				{error}
-			</div>
-		{/if}
-
-		<div class="form-group">
-			<label for="email">Email</label>
-			<input
-				type="email"
-				id="email"
-				bind:value={email}
-				required
-				autocomplete="email"
-				placeholder="you@example.com"
-			/>
+<div class="auth-container">
+	<div class="auth-card">
+		<div class="auth-header">
+			<h1>Log In</h1>
+			<p class="auth-subtitle">Welcome back to Media Janitor</p>
 		</div>
 
-		<div class="form-group">
-			<label for="password">Password</label>
-			<input
-				type="password"
-				id="password"
-				bind:value={password}
-				required
-				autocomplete="current-password"
-				placeholder="Your password"
-			/>
-		</div>
-
-		<button type="submit" disabled={isLoading} class="submit-button">
-			{#if isLoading}
-				Logging in...
-			{:else}
-				Log In
+		<form onsubmit={handleSubmit} class="auth-form">
+			{#if error}
+				<div class="error-message" role="alert">
+					{error}
+				</div>
 			{/if}
-		</button>
-	</form>
 
-	<p class="register-link">
-		Don't have an account? <a href="/register">Sign up</a>
-	</p>
+			<div class="form-group">
+				<label for="email">Email</label>
+				<input
+					type="email"
+					id="email"
+					bind:value={email}
+					required
+					autocomplete="email"
+					placeholder="you@example.com"
+					class="input"
+				/>
+			</div>
+
+			<div class="form-group">
+				<label for="password">Password</label>
+				<input
+					type="password"
+					id="password"
+					bind:value={password}
+					required
+					autocomplete="current-password"
+					placeholder="Your password"
+					class="input"
+				/>
+			</div>
+
+			<button type="submit" disabled={isLoading} class="submit-button">
+				{#if isLoading}
+					<span class="spinner"></span>
+					Logging in...
+				{:else}
+					Log In
+				{/if}
+			</button>
+		</form>
+
+		<p class="auth-footer">
+			Don't have an account? <a href="/register">Sign up</a>
+		</p>
+	</div>
 </div>
 
 <style>
-	.login-container {
+	.auth-container {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-4);
+		background: var(--bg-primary);
+	}
+
+	.auth-card {
+		width: 100%;
 		max-width: 400px;
-		margin: 0 auto;
-		padding: 2rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-8);
 	}
 
-	h1 {
+	.auth-header {
 		text-align: center;
-		margin-bottom: 2rem;
-		color: var(--accent);
+		margin-bottom: var(--space-6);
 	}
 
-	.login-form {
+	.auth-header h1 {
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: -0.02em;
+		margin-bottom: var(--space-2);
+		color: var(--text-primary);
+	}
+
+	.auth-subtitle {
+		color: var(--text-secondary);
+		font-size: var(--font-size-base);
+		margin: 0;
+	}
+
+	.auth-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: var(--space-4);
 	}
 
 	.form-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	label {
-		font-weight: 500;
-		color: var(--text);
+		font-weight: var(--font-weight-medium);
+		font-size: var(--font-size-base);
+		color: var(--text-primary);
 	}
 
-	input {
-		padding: 0.75rem 1rem;
+	.input {
+		padding: var(--space-3);
+		font-size: var(--font-size-md);
 		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		background: var(--bg-secondary);
-		color: var(--text);
-		transition: border-color 0.2s;
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		transition: border-color var(--transition-fast);
 	}
 
-	input:focus {
+	.input:focus {
 		outline: none;
 		border-color: var(--accent);
 	}
 
+	.input::placeholder {
+		color: var(--text-muted);
+	}
+
 	.error-message {
-		padding: 1rem;
-		background: var(--bg-secondary);
+		padding: var(--space-3);
+		background: var(--danger-light);
 		border: 1px solid var(--danger);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-md);
 		color: var(--danger);
+		font-size: var(--font-size-base);
 	}
 
 	.submit-button {
-		padding: 0.875rem 1.5rem;
+		margin-top: var(--space-2);
+		padding: var(--space-3);
 		background: var(--accent);
 		color: white;
 		border: none;
-		border-radius: 0.5rem;
-		font-size: 1rem;
-		font-weight: 600;
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-semibold);
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: background var(--transition-fast);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
 	}
 
 	.submit-button:hover:not(:disabled) {
-		opacity: 0.9;
+		background: var(--accent-hover);
 	}
 
 	.submit-button:disabled {
@@ -177,18 +221,35 @@
 		cursor: not-allowed;
 	}
 
-	.register-link {
-		text-align: center;
-		margin-top: 1.5rem;
-		color: var(--text-secondary);
+	.spinner {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
-	.register-link a {
+	.auth-footer {
+		text-align: center;
+		margin-top: var(--space-6);
+		color: var(--text-secondary);
+		font-size: var(--font-size-base);
+	}
+
+	.auth-footer a {
 		color: var(--accent);
 		text-decoration: none;
+		font-weight: var(--font-weight-medium);
 	}
 
-	.register-link a:hover {
+	.auth-footer a:hover {
 		text-decoration: underline;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

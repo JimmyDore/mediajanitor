@@ -976,13 +976,14 @@ Allow users to customize analysis thresholds to match their preferences.
 ## Epic UI: Design System Polish
 
 ### Overview
-Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to create a polished, professional dashboard experience.
+Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to create a polished, professional dashboard experience. The designer has **full autonomy** to review and improve all UI elements.
 
 ### Goals
 - Establish consistent visual language across all pages
 - Improve information hierarchy and scanability
 - Polish dark mode experience
 - Make the UI feel intentionally designed, not just functional
+- Ensure all interactive elements feel crafted
 
 ### User Stories
 
@@ -998,6 +999,13 @@ Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to cr
 - Single blue accent for actions
 - Monospace for all data values
 
+**Scope**: Designer has **full autonomy** to review and improve:
+- All pages (Dashboard, Issues, Whitelist, Settings, Login, Register)
+- All components (cards, tables, forms, buttons)
+- All interactive elements (modals, popups, toasts, dropdowns)
+- Element sizing (padding, margins, font sizes, icon sizes)
+- Any other UI element that could benefit from polish
+
 **Acceptance Criteria:**
 - [ ] **Typography**: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)
 - [ ] **Spacing**: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)
@@ -1006,8 +1014,12 @@ Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to cr
 - [ ] **Cards**: Consistent padding (16px), border-only depth, no heavy shadows
 - [ ] **Buttons**: Unified styling with 150ms transitions
 - [ ] **Data Display**: Monospace font with tabular-nums for numbers/sizes/dates
+- [ ] **Modals & Popups**: Review sizing, padding, transitions; ensure they feel crafted
+- [ ] **Toasts**: Consistent styling, appropriate sizing, smooth animations
+- [ ] **Forms & Inputs**: Unified field styling, proper focus states, accessible contrast
 - [ ] **Dark Mode**: Adjust borders to 10-15% white opacity, desaturate status colors
 - [ ] **Navigation**: Consistent styling with current page indicator
+- [ ] **Autonomous Improvements**: Make any additional improvements deemed necessary
 - [ ] Typecheck passes
 - [ ] Visual review in browser (light + dark mode)
 
@@ -1020,6 +1032,7 @@ Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to cr
 - Update `app.css` with new CSS custom properties
 - Use `/design-principles` skill for guidance
 - Test all pages in both light and dark mode
+- Review all Svelte components for consistency
 
 ---
 

@@ -596,14 +596,18 @@
         "Cards: Consistent padding (16px), border-only depth, no heavy shadows",
         "Buttons: Unified styling with 150ms transitions",
         "Data Display: Monospace font with tabular-nums for numbers/sizes/dates",
+        "Modals & Popups: Review sizing, padding, transitions; ensure they feel crafted",
+        "Toasts: Consistent styling, appropriate sizing, smooth animations",
+        "Forms & Inputs: Unified field styling, proper focus states, accessible contrast",
         "Dark Mode: Adjust borders to 10-15% white opacity, desaturate status colors",
         "Navigation: Consistent styling with current page indicator",
+        "Autonomous Improvements: Make any additional improvements deemed necessary",
         "Typecheck passes",
         "Visual review in browser (light + dark mode)"
       ],
       "priority": 85,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Comprehensive design system refinement: app.css with CSS custom properties (typography scale, 4px spacing grid, 4/6/8px radius system, cool slate colors, dark mode adjustments), updated all pages (Dashboard, Issues, Whitelist, Settings, Login, Register), Header component, monospace for data values, border-only depth, single blue accent, 93 frontend tests pass, 0 typecheck errors"
     },
     {
       "id": "US-M.1",

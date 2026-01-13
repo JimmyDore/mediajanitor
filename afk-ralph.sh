@@ -31,26 +31,30 @@ wait_and_retry() {
 
 run_claude_with_retry() {
   local prompt="$1"
-  local use_streaming="${2:-true}"
+  local use_streaming="${2:-false}"
 
   while true; do
     local temp_output=$(mktemp)
 
-    # QA uses text output to support MCP tools like Puppeteer
-    # Ralph runs use streaming for better performance
-    local output_format="stream-json"
-    if [ "$use_streaming" = false ]; then
-      output_format="text"
+    if [ "$use_streaming" = true ]; then
+      # Stream JSON with jq parsing for clean output
+      claude --permission-mode acceptEdits --output-format stream-json --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output" | jq -r --unbuffered '
+        select(.type == "assistant" and .message.content != null) |
+        .message.content[] |
+        select(.type == "text") |
+        .text // empty
+      ' 2>/dev/null
+    else
+      # Text output for QA (supports MCP tools like Puppeteer)
+      claude --permission-mode acceptEdits --output-format text --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output"
     fi
-
-    claude --permission-mode acceptEdits --output-format "$output_format" --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output"
 
     local exit_code=${PIPESTATUS[0]}
     local output=$(cat "$temp_output")
     rm -f "$temp_output"
 
     if [ $exit_code -ne 0 ]; then
-      if echo "$output" | grep -qi -E "(credit|rate.?limit|quota|limit.*reached|too.?many.?requests)"; then
+      if echo "$output" | grep -qi -E "(credit|rate.?limit|quota|limit.*reached|too.?many.?requests|overloaded)"; then
         wait_and_retry "⏳ Credit/rate limit detected."
       else
         wait_and_retry "⚠️  Claude command failed with exit code $exit_code"
@@ -69,7 +73,7 @@ run_qa() {
 }
 
 run_ralph() {
-  run_claude_with_retry "$RALPH_PROMPT"
+  run_claude_with_retry "$RALPH_PROMPT" true
 }
 
 # --- Parse options ---

@@ -698,9 +698,49 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-8.1] add configurable analysis thresholds
 
+### 2026-01-14: US-UI.1 - Design System Refinement
+- Comprehensive design system overhaul following Data & Analysis + Utility & Function style:
+  - Cool slate foundation with gray-50 to gray-900 scale
+  - Sharp corners (4/6/8px radius system)
+  - Borders-only depth (no heavy shadows except hover states)
+  - Single blue accent color (#2563eb/#3b82f6)
+  - Monospace font for all data values (sizes, dates, numbers)
+- Created unified CSS custom properties in app.css:
+  - Typography scale (4px grid based): xs=11px, sm=12px, base=13px, md=14px, lg=16px, xl=18px, 2xl=24px
+  - Font weights: normal=400, medium=500, semibold=600, bold=700
+  - Font families: system sans-serif stack, monospace stack
+  - Spacing grid: 4, 8, 12, 16, 20, 24, 32, 40, 48px
+  - Border radius: sm=4px, md=6px, lg=8px
+  - Transitions: fast=150ms, base=200ms with cubic-bezier easing
+  - Semantic colors: bg-primary/secondary/tertiary, text-primary/secondary/muted
+  - Status colors: success (green), warning (amber), danger (red), info (sky)
+- Dark mode adjustments:
+  - Borders at 10-15% white opacity
+  - Desaturated status colors for better contrast
+  - Inverted text/background relationships
+- Updated all pages and components:
+  - Header: Consistent nav styling with accent highlight for active page
+  - Dashboard: Summary cards with icons, monospace values, clickable hover states
+  - Login/Register: Centered auth cards with proper form styling
+  - Settings: Section cards with status badges, form inputs with focus states
+  - Issues: Filter tabs, sortable data table, action buttons with variants
+  - Whitelist: Three sections with consistent list styling
+- Unified component styling:
+  - Buttons: btn-primary (blue), btn-secondary (ghost), btn-danger (red outline)
+  - Badges: badge-success/warning/danger/info/neutral
+  - Cards: border-only depth, consistent 16px padding
+  - Tables: uppercase labels, tabular-nums for data
+  - Forms: consistent input styling with focus accent
+  - Toasts: slide-in animation, success/error variants
+- 93 frontend tests pass, 0 typecheck errors
+- Visually verified in browser: Dashboard, Issues, Settings, Login pages in dark mode
+- Files changed: app.css, Header.svelte, +page.svelte (dashboard), login/+page.svelte, register/+page.svelte, settings/+page.svelte, issues/+page.svelte, whitelist/+page.svelte
+- Commits:
+  - style(ui): [US-UI.1] implement design system refinement
+
 ## Current Status
 
-**Phase**: Epic 8 - User Settings (In Progress)
+**Phase**: Epic 9 - Marketing (In Progress)
 **Next US**: US-M.1 - Landing Page Hero
 
 ## Notes

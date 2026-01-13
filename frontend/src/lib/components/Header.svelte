@@ -67,8 +67,8 @@
 	.header-container {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: 0 1rem;
-		height: 60px;
+		padding: 0 var(--space-4);
+		height: 56px;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -78,29 +78,30 @@
 		text-decoration: none;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.logo-text {
-		font-size: 1.25rem;
-		font-weight: 700;
-		color: var(--accent);
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+		letter-spacing: -0.02em;
 	}
 
 	.nav {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-1);
 	}
 
 	.nav-link {
-		padding: 0.5rem 1rem;
+		padding: var(--space-2) var(--space-3);
 		color: var(--text-secondary);
 		text-decoration: none;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-radius: 0.375rem;
-		transition: all 0.2s;
+		font-size: var(--font-size-base);
+		font-weight: var(--font-weight-medium);
+		border-radius: var(--radius-md);
+		transition: all var(--transition-fast);
 	}
 
 	.nav-link:hover {
@@ -110,30 +111,41 @@
 
 	.nav-link.active {
 		color: var(--accent);
-		background: rgba(0, 102, 204, 0.1);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.nav-link.active {
-			background: rgba(77, 166, 255, 0.1);
-		}
+		background: var(--accent-light);
 	}
 
 	.logout-btn {
-		padding: 0.5rem 1rem;
+		margin-left: var(--space-2);
+		padding: var(--space-2) var(--space-3);
 		background: transparent;
-		color: var(--danger);
-		border: 1px solid var(--danger);
-		border-radius: 0.375rem;
+		color: var(--text-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
 		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition: all 0.2s;
-		margin-left: 0.5rem;
+		font-size: var(--font-size-base);
+		font-weight: var(--font-weight-medium);
+		transition: all var(--transition-fast);
 	}
 
 	.logout-btn:hover {
-		background: var(--danger);
-		color: white;
+		color: var(--danger);
+		border-color: var(--danger);
+		background: var(--danger-light);
+	}
+
+	@media (max-width: 640px) {
+		.header-container {
+			padding: 0 var(--space-3);
+		}
+
+		.nav-link {
+			padding: var(--space-2);
+			font-size: var(--font-size-sm);
+		}
+
+		.logout-btn {
+			padding: var(--space-2);
+			font-size: var(--font-size-sm);
+		}
 	}
 </style>
