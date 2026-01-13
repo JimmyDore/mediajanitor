@@ -499,10 +499,42 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-5.1] add language issues detection
 
+### 2026-01-13: US-5.2 - Mark Content as French-Only
+- Created FrenchOnlyWhitelist database model for French films that don't need EN audio
+- Implemented backend API endpoints:
+  - POST /api/whitelist/french-only - Add item to French-only whitelist
+  - GET /api/whitelist/french-only - List all French-only items
+  - DELETE /api/whitelist/french-only/{id} - Remove item from French-only whitelist
+- Extended content service with:
+  - add_to_french_only_whitelist() - Creates entry, checks for duplicates
+  - get_french_only_whitelist() - Returns all entries for user
+  - remove_from_french_only_whitelist() - Deletes entry by ID
+  - get_french_only_ids() - Returns set of jellyfin_ids for checking
+- Updated get_item_issues() to respect French-only whitelist:
+  - Items in French-only list don't flag missing_en_audio
+  - Still flag missing_fr_audio (French-only content still needs French audio!)
+- Updated frontend issues page (/issues):
+  - Added "FR Only" button for items with missing_en_audio
+  - Button calls POST /api/whitelist/french-only
+  - Item removed from list on success
+  - Purple button styling to distinguish from Protect button
+- Updated frontend whitelist page (/whitelist):
+  - Renamed page to "Whitelists" with two sections
+  - Protected Content section (for deletion protection)
+  - French-Only Content section (for language exemption)
+  - Remove button to unmark items as French-only
+- Backend tests: 8 new tests for French-only whitelist endpoints
+- Frontend tests: 8 new tests for French-only API integration
+- 147 backend tests pass, 84 frontend tests pass
+- Verified in Docker: FR Only button works, item removed from language issues, appears in whitelist
+- Files changed: database.py, routers/whitelist.py, services/content.py, test_content.py, test_integration.py, issues/+page.svelte, whitelist/+page.svelte, whitelist.test.ts
+- Commits:
+  - feat(whitelist): [US-5.2] add French-only whitelist for language issues
+
 ## Current Status
 
 **Phase**: Epic 5 - Language Issues (In Progress)
-**Next US**: US-5.2 - Mark Content as French-Only
+**Next US**: US-5.3 - Exempt Content from Language Checks
 
 ## Notes
 
