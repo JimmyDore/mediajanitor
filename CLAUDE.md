@@ -176,6 +176,12 @@ Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
    - Reviews app for cross-cutting concerns
    - Updates SUGGESTIONS.md with observations
 
+6. **`/original-script`** - Debug using original script as source of truth
+   - Location: `.claude/skills/original-script/SKILL.md`
+   - Run original_script.py functions to validate app behavior
+   - Compare output counts/items between original and app
+   - Use when app results don't match expectations
+
 ### Ralph Loop (Autonomous execution)
 
 Run `./ralph-once.sh` (human-in-the-loop) or `./afk-ralph.sh N` (autonomous N iterations)
