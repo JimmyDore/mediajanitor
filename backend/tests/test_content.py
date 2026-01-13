@@ -1187,6 +1187,52 @@ class TestContentSummary:
         assert data["large_movies"]["total_size_bytes"] == 20_000_000_000
 
     @pytest.mark.asyncio
+    async def test_large_movies_includes_exactly_threshold(
+        self, client: TestClient
+    ) -> None:
+        """Movies exactly at 13GB threshold should be counted (>= not >).
+
+        This matches original_script.py list_large_movies() behavior which uses >=.
+        """
+        token = self._get_auth_token(client, "large-exact@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        threshold_bytes = 13 * 1024 * 1024 * 1024  # Exactly 13GB
+
+        async with TestingAsyncSessionLocal() as session:
+            # Movie exactly at threshold (13GB)
+            item_exact = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-exact-threshold",
+                name="Movie Exactly 13GB",
+                media_type="Movie",
+                size_bytes=threshold_bytes,  # Exactly 13GB
+                played=True,
+            )
+            # Movie just below threshold
+            item_below = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-below-threshold",
+                name="Movie Below 13GB",
+                media_type="Movie",
+                size_bytes=threshold_bytes - 1,  # 1 byte below 13GB
+                played=True,
+            )
+            session.add_all([item_exact, item_below])
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Movie at exactly 13GB should be counted (>= operator)
+        assert data["large_movies"]["count"] == 1
+        assert data["large_movies"]["total_size_bytes"] == threshold_bytes
+
+    @pytest.mark.asyncio
     async def test_excludes_whitelisted_content_from_old_count(
         self, client: TestClient
     ) -> None:

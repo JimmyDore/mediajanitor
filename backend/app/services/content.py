@@ -489,11 +489,13 @@ async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
 
 
 def is_large_movie(item: CachedMediaItem) -> bool:
-    """Check if an item is a large movie (>13GB).
+    """Check if an item is a large movie (>=13GB).
 
     Returns True if:
     - Item is a Movie (not Series)
-    - Size exceeds LARGE_MOVIE_SIZE_THRESHOLD_GB
+    - Size meets or exceeds LARGE_MOVIE_SIZE_THRESHOLD_GB
+
+    Note: Uses >= to match original_script.py list_large_movies() behavior.
     """
     if item.media_type != "Movie":
         return False
@@ -502,7 +504,7 @@ def is_large_movie(item: CachedMediaItem) -> bool:
         return False
 
     threshold_bytes = LARGE_MOVIE_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024  # 13GB in bytes
-    return item.size_bytes > threshold_bytes
+    return item.size_bytes >= threshold_bytes
 
 
 # Language code variants recognized by the system

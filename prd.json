@@ -502,8 +502,8 @@
         "Unit tests pass"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "Use /original-script skill. No whitelist involved - counts should match exactly."
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Both original script and app return 0 large movies (largest is 12.43 GB). Fixed minor bug: changed > to >= to match original script behavior. Added test for boundary condition."
     },
     {
       "id": "US-V.3",
