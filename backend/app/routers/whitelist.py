@@ -20,6 +20,9 @@ from app.services.content import (
     add_to_french_only_whitelist,
     get_french_only_whitelist,
     remove_from_french_only_whitelist,
+    add_to_language_exempt_whitelist,
+    get_language_exempt_whitelist,
+    remove_from_language_exempt_whitelist,
 )
 
 
@@ -161,3 +164,75 @@ async def remove_from_french_only(
         )
 
     return WhitelistRemoveResponse(message="Removed from french-only whitelist")
+
+
+# Language-Exempt Whitelist endpoints (US-5.3)
+
+
+@router.get("/language-exempt", response_model=WhitelistListResponse)
+async def list_language_exempt_whitelist(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistListResponse:
+    """Get all items in the user's language-exempt whitelist.
+
+    Items in this whitelist are exempt from ALL language checks.
+    """
+    return await get_language_exempt_whitelist(db=db, user_id=current_user.id)
+
+
+@router.post("/language-exempt", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+async def add_to_language_exempt(
+    request: WhitelistAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistAddResponse:
+    """Add content to the user's language-exempt whitelist.
+
+    Items in this whitelist are exempt from ALL language checks.
+    Use this for content that should never flag language issues.
+    """
+    try:
+        await add_to_language_exempt_whitelist(
+            db=db,
+            user_id=current_user.id,
+            jellyfin_id=request.jellyfin_id,
+            name=request.name,
+            media_type=request.media_type,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    return WhitelistAddResponse(
+        message="Added to language-exempt whitelist",
+        jellyfin_id=request.jellyfin_id,
+        name=request.name,
+    )
+
+
+@router.delete("/language-exempt/{whitelist_id}", response_model=WhitelistRemoveResponse)
+async def remove_from_language_exempt(
+    whitelist_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistRemoveResponse:
+    """Remove an item from the user's language-exempt whitelist.
+
+    After removal, the content may reappear in language issues if it has language problems.
+    """
+    removed = await remove_from_language_exempt_whitelist(
+        db=db,
+        user_id=current_user.id,
+        whitelist_id=whitelist_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Whitelist entry not found",
+        )
+
+    return WhitelistRemoveResponse(message="Removed from language-exempt whitelist")

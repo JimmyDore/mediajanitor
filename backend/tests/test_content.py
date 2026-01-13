@@ -2844,3 +2844,244 @@ class TestFrenchOnlyWhitelist:
         assert "missing_fr_audio" in data["items"][0]["language_issues"]
         # Should NOT have missing_en_audio (exempted by french-only)
         assert "missing_en_audio" not in data["items"][0]["language_issues"]
+
+
+class TestLanguageExemptWhitelist:
+    """Test /api/whitelist/language-exempt endpoints (US-5.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "langexempt@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def _create_movie_with_audio(
+        self, jellyfin_id: str, name: str, audio_langs: list[str]
+    ) -> dict:
+        """Create a cached media item with specific audio languages."""
+        media_streams = [
+            {"Type": "Audio", "Language": lang} for lang in audio_langs
+        ]
+        return {
+            "Id": jellyfin_id,
+            "Name": name,
+            "MediaSources": [{
+                "MediaStreams": media_streams,
+            }],
+        }
+
+    def test_add_to_language_exempt_requires_auth(self, client: TestClient) -> None:
+        """POST /api/whitelist/language-exempt should require authentication."""
+        response = client.post(
+            "/api/whitelist/language-exempt",
+            json={"jellyfin_id": "test", "name": "Test", "media_type": "Movie"},
+        )
+        assert response.status_code == 401
+
+    def test_add_to_language_exempt_creates_entry(self, client: TestClient) -> None:
+        """Should create language-exempt whitelist entry."""
+        token = self._get_auth_token(client, "langexempt-add@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/language-exempt",
+            json={
+                "jellyfin_id": "exempt-movie-1",
+                "name": "A Special Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to language-exempt whitelist"
+        assert data["jellyfin_id"] == "exempt-movie-1"
+
+    def test_add_to_language_exempt_returns_409_if_duplicate(self, client: TestClient) -> None:
+        """Should return 409 if item already in language-exempt whitelist."""
+        token = self._get_auth_token(client, "langexempt-dup@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time - should succeed
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={
+                "jellyfin_id": "exempt-dup",
+                "name": "Duplicate Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Add second time - should fail
+        response = client.post(
+            "/api/whitelist/language-exempt",
+            json={
+                "jellyfin_id": "exempt-dup",
+                "name": "Duplicate Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 409
+
+    def test_get_language_exempt_whitelist(self, client: TestClient) -> None:
+        """Should return list of language-exempt whitelist items."""
+        token = self._get_auth_token(client, "langexempt-list@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add some items
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={"jellyfin_id": "ex1", "name": "Film 1", "media_type": "Movie"},
+            headers=headers,
+        )
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={"jellyfin_id": "ex2", "name": "Film 2", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        response = client.get("/api/whitelist/language-exempt", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+
+    def test_delete_from_language_exempt(self, client: TestClient) -> None:
+        """Should remove item from language-exempt whitelist."""
+        token = self._get_auth_token(client, "langexempt-del@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add an item
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={"jellyfin_id": "ex-del", "name": "To Delete", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        # Get the list to find the ID
+        list_response = client.get("/api/whitelist/language-exempt", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete it
+        response = client.delete(f"/api/whitelist/language-exempt/{item_id}", headers=headers)
+        assert response.status_code == 200
+
+        # Verify it's gone
+        list_response = client.get("/api/whitelist/language-exempt", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_language_exempt_excludes_all_language_issues(
+        self, client: TestClient
+    ) -> None:
+        """Items in language-exempt whitelist should not have any language issues."""
+        token = self._get_auth_token(client, "langexempt-exclude@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a movie with only German audio (no EN or FR)
+        async with TestingAsyncSessionLocal() as session:
+            raw_data = self._create_movie_with_audio(
+                "language-exempt-movie",
+                "A German Film",
+                ["deu"],  # Only German audio - would flag both missing EN and FR
+            )
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="language-exempt-movie",
+                name="A German Film",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data=raw_data,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Verify it shows up as language issue
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert "missing_en_audio" in data["items"][0]["language_issues"]
+        assert "missing_fr_audio" in data["items"][0]["language_issues"]
+
+        # Add to language-exempt whitelist
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={
+                "jellyfin_id": "language-exempt-movie",
+                "name": "A German Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should no longer appear in language issues
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Item should no longer appear in language issues
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_language_exempt_does_not_affect_other_issues(
+        self, client: TestClient
+    ) -> None:
+        """Language-exempt should only exclude language issues, not other issues like old."""
+        token = self._get_auth_token(client, "langexempt-other@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create an old movie with language issues
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            raw_data = self._create_movie_with_audio(
+                "old-exempt-movie",
+                "Old Exempt Film",
+                ["deu"],  # Only German audio
+            )
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="old-exempt-movie",
+                name="Old Exempt Film",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data=raw_data,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Add to language-exempt whitelist
+        client.post(
+            "/api/whitelist/language-exempt",
+            json={
+                "jellyfin_id": "old-exempt-movie",
+                "name": "Old Exempt Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should still appear in old content filter (not language)
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "old-exempt-movie"
+        # Should have 'old' issue but NOT 'language' issue
+        assert "old" in data["items"][0]["issues"]
+        assert "language" not in data["items"][0]["issues"]

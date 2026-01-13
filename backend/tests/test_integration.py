@@ -311,6 +311,30 @@ class TestIntegrationWhitelist:
             assert "total_count" in data
             assert isinstance(data["items"], list)
 
+    def test_french_only_whitelist_endpoint(self, auth_headers):
+        """Test GET /api/whitelist/french-only returns list."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/whitelist/french-only", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            assert "items" in data
+            assert "total_count" in data
+            assert isinstance(data["items"], list)
+
+    def test_language_exempt_whitelist_endpoint(self, auth_headers):
+        """Test GET /api/whitelist/language-exempt returns list."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/whitelist/language-exempt", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            assert "items" in data
+            assert "total_count" in data
+            assert isinstance(data["items"], list)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

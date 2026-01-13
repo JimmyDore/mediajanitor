@@ -368,6 +368,111 @@ async def get_french_only_ids(db: AsyncSession, user_id: int) -> set[str]:
     return set(result.scalars().all())
 
 
+# Language-Exempt Whitelist functions (US-5.3)
+
+
+async def add_to_language_exempt_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    jellyfin_id: str,
+    name: str,
+    media_type: str,
+) -> None:
+    """Add an item to the user's language-exempt whitelist.
+
+    Items in this whitelist are exempt from ALL language checks.
+    Raises ValueError if item already exists.
+    """
+    from app.database import LanguageExemptWhitelist
+
+    # Check if already whitelisted
+    result = await db.execute(
+        select(LanguageExemptWhitelist).where(
+            LanguageExemptWhitelist.user_id == user_id,
+            LanguageExemptWhitelist.jellyfin_id == jellyfin_id,
+        )
+    )
+    if result.scalar_one_or_none():
+        raise ValueError("Item already in language-exempt whitelist")
+
+    entry = LanguageExemptWhitelist(
+        user_id=user_id,
+        jellyfin_id=jellyfin_id,
+        name=name,
+        media_type=media_type,
+    )
+    db.add(entry)
+
+
+async def get_language_exempt_whitelist(
+    db: AsyncSession,
+    user_id: int,
+) -> WhitelistListResponse:
+    """Get all items in the user's language-exempt whitelist."""
+    from app.database import LanguageExemptWhitelist
+
+    result = await db.execute(
+        select(LanguageExemptWhitelist)
+        .where(LanguageExemptWhitelist.user_id == user_id)
+        .order_by(LanguageExemptWhitelist.name)
+    )
+    entries = result.scalars().all()
+
+    items = [
+        WhitelistItem(
+            id=entry.id,
+            jellyfin_id=entry.jellyfin_id,
+            name=entry.name,
+            media_type=entry.media_type,
+            created_at=entry.created_at.isoformat() if entry.created_at else "",
+        )
+        for entry in entries
+    ]
+
+    return WhitelistListResponse(
+        items=items,
+        total_count=len(items),
+    )
+
+
+async def remove_from_language_exempt_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    whitelist_id: int,
+) -> bool:
+    """Remove an item from the user's language-exempt whitelist.
+
+    Returns True if item was found and deleted, False otherwise.
+    """
+    from app.database import LanguageExemptWhitelist
+
+    result = await db.execute(
+        select(LanguageExemptWhitelist).where(
+            LanguageExemptWhitelist.id == whitelist_id,
+            LanguageExemptWhitelist.user_id == user_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        return False
+
+    await db.delete(entry)
+    return True
+
+
+async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
+    """Get set of jellyfin_ids in user's language-exempt whitelist."""
+    from app.database import LanguageExemptWhitelist
+
+    result = await db.execute(
+        select(LanguageExemptWhitelist.jellyfin_id).where(
+            LanguageExemptWhitelist.user_id == user_id
+        )
+    )
+    return set(result.scalars().all())
+
+
 def is_large_movie(item: CachedMediaItem) -> bool:
     """Check if an item is a large movie (>13GB).
 
@@ -539,9 +644,15 @@ async def get_content_summary(
     # Get french-only whitelist for language checks
     french_only_ids = await get_french_only_ids(db, user_id)
 
-    # Calculate language issues (respecting french-only whitelist)
+    # Get language-exempt whitelist
+    language_exempt_ids = await get_language_exempt_ids(db, user_id)
+
+    # Calculate language issues (respecting french-only and language-exempt whitelists)
     language_issues_items: list[CachedMediaItem] = []
     for item in all_items:
+        # Skip items exempt from all language checks
+        if item.jellyfin_id in language_exempt_ids:
+            continue
         is_french_only = item.jellyfin_id in french_only_ids
         if has_language_issues(item, is_french_only=is_french_only):
             language_issues_items.append(item)
@@ -716,6 +827,7 @@ def get_item_issues(
     item: CachedMediaItem,
     whitelisted_ids: set[str],
     french_only_ids: set[str] | None = None,
+    language_exempt_ids: set[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Get all issue types that apply to a content item.
 
@@ -723,6 +835,7 @@ def get_item_issues(
         item: The media item to check
         whitelisted_ids: Set of jellyfin_ids in content whitelist
         french_only_ids: Set of jellyfin_ids in french-only whitelist
+        language_exempt_ids: Set of jellyfin_ids exempt from ALL language checks
 
     Returns tuple of:
     - list of issue types: "old", "large", "language", "request"
@@ -739,11 +852,13 @@ def get_item_issues(
     if is_large_movie(item):
         issues.append("large")
 
-    # Check for language issues (respecting french-only whitelist)
-    is_french_only = french_only_ids is not None and item.jellyfin_id in french_only_ids
-    if has_language_issues(item, is_french_only=is_french_only):
-        issues.append("language")
-        language_issues_detail = get_language_issues_list(item, is_french_only=is_french_only)
+    # Check for language issues (skip if language-exempt, respect french-only whitelist)
+    is_language_exempt = language_exempt_ids is not None and item.jellyfin_id in language_exempt_ids
+    if not is_language_exempt:
+        is_french_only = french_only_ids is not None and item.jellyfin_id in french_only_ids
+        if has_language_issues(item, is_french_only=is_french_only):
+            issues.append("language")
+            language_issues_detail = get_language_issues_list(item, is_french_only=is_french_only)
 
     return issues, language_issues_detail
 
@@ -786,12 +901,17 @@ async def get_content_issues(
     # Get user's french-only whitelist
     french_only_ids = await get_french_only_ids(db, user_id)
 
+    # Get user's language-exempt whitelist
+    language_exempt_ids = await get_language_exempt_ids(db, user_id)
+
     # Build list of items with issues
     # Store tuple of (item, issues_list, language_issues_detail)
     items_with_issues: list[tuple[CachedMediaItem, list[str], list[str]]] = []
 
     for item in all_items:
-        issues, language_issues_detail = get_item_issues(item, whitelisted_ids, french_only_ids)
+        issues, language_issues_detail = get_item_issues(
+            item, whitelisted_ids, french_only_ids, language_exempt_ids
+        )
 
         # Skip items with no issues
         if not issues:

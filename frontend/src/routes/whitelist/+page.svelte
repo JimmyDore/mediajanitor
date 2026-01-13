@@ -18,9 +18,11 @@
 	let error = $state<string | null>(null);
 	let data = $state<WhitelistResponse | null>(null);
 	let frenchOnlyData = $state<WhitelistResponse | null>(null);
+	let languageExemptData = $state<WhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let removingIds = $state<Set<number>>(new Set());
 	let removingFrenchOnlyIds = $state<Set<number>>(new Set());
+	let removingLanguageExemptIds = $state<Set<number>>(new Set());
 
 	function formatDate(dateStr: string): string {
 		try {
@@ -146,6 +148,25 @@
 		}
 	}
 
+	async function fetchLanguageExemptWhitelist() {
+		try {
+			const token = localStorage.getItem('access_token');
+			if (!token) {
+				return;
+			}
+
+			const response = await fetch('/api/whitelist/language-exempt', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (response.ok) {
+				languageExemptData = await response.json();
+			}
+		} catch {
+			// Silently fail - not critical
+		}
+	}
+
 	async function removeFromFrenchOnlyWhitelist(item: WhitelistItem) {
 		const token = localStorage.getItem('access_token');
 		if (!token) {
@@ -198,9 +219,62 @@
 		}
 	}
 
+	async function removeFromLanguageExemptWhitelist(item: WhitelistItem) {
+		const token = localStorage.getItem('access_token');
+		if (!token) {
+			showToast('Not authenticated', 'error');
+			return;
+		}
+
+		removingLanguageExemptIds = new Set([...removingLanguageExemptIds, item.id]);
+
+		try {
+			const response = await fetch(`/api/whitelist/language-exempt/${item.id}`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			if (response.status === 401) {
+				showToast('Session expired. Please log in again.', 'error');
+				return;
+			}
+
+			if (response.status === 404) {
+				showToast('Item not found in whitelist', 'error');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Failed to remove from whitelist', 'error');
+				return;
+			}
+
+			// Remove item from the list immediately
+			if (languageExemptData) {
+				languageExemptData = {
+					...languageExemptData,
+					items: languageExemptData.items.filter((i) => i.id !== item.id),
+					total_count: languageExemptData.total_count - 1
+				};
+			}
+
+			showToast('Removed from language-exempt whitelist', 'success');
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : 'Failed to remove from whitelist', 'error');
+		} finally {
+			const newSet = new Set(removingLanguageExemptIds);
+			newSet.delete(item.id);
+			removingLanguageExemptIds = newSet;
+		}
+	}
+
 	onMount(() => {
 		fetchWhitelist();
 		fetchFrenchOnlyWhitelist();
+		fetchLanguageExemptWhitelist();
 	});
 </script>
 
@@ -333,6 +407,64 @@
 										title="Remove from French-only list - item may show as missing English audio"
 									>
 										{#if removingFrenchOnlyIds.has(item.id)}
+											<span class="btn-spinner"></span>
+										{:else}
+											Remove
+										{/if}
+									</button>
+								</span>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{/if}
+
+		<!-- Language-Exempt Section -->
+		{#if languageExemptData}
+			<section class="whitelist-section">
+				<h2 class="section-title">Language-Exempt Content</h2>
+				<p class="section-description">Content exempt from all language checks (won't flag any language issues)</p>
+
+				<div class="summary-bar">
+					<div class="summary-stat">
+						<span class="stat-label">Language-Exempt Items</span>
+						<span class="stat-value">{languageExemptData.total_count}</span>
+					</div>
+				</div>
+
+				{#if languageExemptData.items.length === 0}
+					<div class="empty-state">
+						<p>No language-exempt content yet.</p>
+						<p class="empty-hint">
+							Use the "Exempt" button on the <a href="/issues?filter=language">Language Issues</a> page for content that should never flag language issues.
+						</p>
+					</div>
+				{:else}
+					<div class="content-list">
+						<div class="list-header">
+							<span class="col-name">Name</span>
+							<span class="col-type">Type</span>
+							<span class="col-date">Date Added</span>
+							<span class="col-actions">Actions</span>
+						</div>
+						{#each languageExemptData.items as item}
+							<div class="content-item">
+								<span class="col-name item-name">{item.name}</span>
+								<span class="col-type">
+									<span class="type-badge type-{item.media_type.toLowerCase()}">
+										{item.media_type === 'Movie' ? 'Movie' : 'Series'}
+									</span>
+								</span>
+								<span class="col-date">{formatDate(item.created_at)}</span>
+								<span class="col-actions">
+									<button
+										class="btn-remove"
+										onclick={() => removeFromLanguageExemptWhitelist(item)}
+										disabled={removingLanguageExemptIds.has(item.id)}
+										title="Remove from language-exempt list - item may show language issues again"
+									>
+										{#if removingLanguageExemptIds.has(item.id)}
 											<span class="btn-spinner"></span>
 										{:else}
 											Remove

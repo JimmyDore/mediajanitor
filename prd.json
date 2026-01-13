@@ -445,8 +445,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Exempt button on issues page, Language-Exempt section on whitelist page, 154 backend tests + 84 frontend tests pass"
     },
     {
       "id": "US-6.1",

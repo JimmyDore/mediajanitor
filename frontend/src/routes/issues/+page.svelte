@@ -33,6 +33,7 @@
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let protectingIds = $state<Set<string>>(new Set());
 	let frenchOnlyIds = $state<Set<string>>(new Set());
+	let languageExemptIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
@@ -237,6 +238,82 @@
 
 	function hasMissingEnglishAudio(item: ContentIssueItem): boolean {
 		return item.language_issues?.includes('missing_en_audio') ?? false;
+	}
+
+	function hasLanguageIssues(item: ContentIssueItem): boolean {
+		return item.issues.includes('language');
+	}
+
+	async function markAsLanguageExempt(item: ContentIssueItem) {
+		const token = localStorage.getItem('access_token');
+		if (!token) {
+			showToast('Not authenticated', 'error');
+			return;
+		}
+
+		languageExemptIds = new Set([...languageExemptIds, item.jellyfin_id]);
+
+		try {
+			const response = await fetch('/api/whitelist/language-exempt', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					jellyfin_id: item.jellyfin_id,
+					name: item.name,
+					media_type: item.media_type
+				})
+			});
+
+			if (response.status === 401) {
+				showToast('Session expired. Please log in again.', 'error');
+				return;
+			}
+
+			if (response.status === 409) {
+				showToast('Already exempt from language checks', 'error');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Failed to exempt from language checks', 'error');
+				return;
+			}
+
+			// Remove language issue from item - if it only had language issue, remove it
+			if (data) {
+				const currentItem = data.items.find((i) => i.jellyfin_id === item.jellyfin_id);
+				if (currentItem) {
+					const hasOnlyLanguageIssue = currentItem.issues.length === 1 && currentItem.issues[0] === 'language';
+
+					if (hasOnlyLanguageIssue) {
+						// Only had language issue - remove completely
+						const removedSize = currentItem.size_bytes || 0;
+						data = {
+							...data,
+							items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+							total_count: data.total_count - 1,
+							total_size_bytes: data.total_size_bytes - removedSize,
+							total_size_formatted: formatSize(data.total_size_bytes - removedSize)
+						};
+					} else {
+						// Has other issues - just refresh to get updated state
+						await fetchIssues(activeFilter);
+					}
+				}
+			}
+
+			showToast('Exempt from language checks', 'success');
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : 'Failed to exempt from language checks', 'error');
+		} finally {
+			const newSet = new Set(languageExemptIds);
+			newSet.delete(item.jellyfin_id);
+			languageExemptIds = newSet;
+		}
 	}
 
 	function formatSize(sizeBytes: number): string {
@@ -486,6 +563,20 @@
 										<span class="btn-spinner"></span>
 									{:else}
 										FR Only
+									{/if}
+								</button>
+							{/if}
+							{#if hasLanguageIssues(item)}
+								<button
+									class="btn-exempt"
+									onclick={() => markAsLanguageExempt(item)}
+									disabled={languageExemptIds.has(item.jellyfin_id)}
+									title="Exempt from all language checks"
+								>
+									{#if languageExemptIds.has(item.jellyfin_id)}
+										<span class="btn-spinner"></span>
+									{:else}
+										Exempt
 									{/if}
 								</button>
 							{/if}
@@ -857,6 +948,32 @@
 	}
 
 	.btn-french-only:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.btn-exempt {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #10b981;
+		background: transparent;
+		border: 1px solid #10b981;
+		border-radius: 0.25rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		min-width: 4rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-exempt:hover:not(:disabled) {
+		background: #10b981;
+		color: white;
+	}
+
+	.btn-exempt:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
