@@ -306,12 +306,12 @@
     {
       "id": "US-D.2",
       "title": "Dashboard Info Section",
-      "story": "As a user, I want to see informational content (recently available, airing series), so that I can stay informed about my library without these being problems",
+      "story": "As a user, I want to see informational content (recently available), so that I can stay informed about my library without these being problems",
       "acceptanceCriteria": [
         "Separate Info section below issue cards",
-        "Two cards: Recently Available (past 7 days), Currently Airing",
-        "Cards show item count",
-        "Click -> dedicated simple list view for each",
+        "Recently Available card (past 7 days)",
+        "Card shows item count",
+        "Click -> dedicated simple list view",
         "Visually distinct from issue cards (different color/style)",
         "Typecheck passes",
         "Unit tests pass",
@@ -319,7 +319,7 @@
       ],
       "priority": 44,
       "passes": true,
-      "notes": "Completed 2026-01-13 - Info section with 2 cards (Recently Available, Currently Airing), /info/recent and /info/airing list views. Also cleaned up E2E tests (79 -> 20) and updated testing documentation."
+      "notes": "Completed 2026-01-13 - Info section with Recently Available card, /info/recent list view. Also cleaned up E2E tests (79 -> 20) and updated testing documentation."
     },
     {
       "id": "US-D.3",
@@ -468,24 +468,81 @@
       "notes": "Completed 2026-01-13 - 26 unavailable requests found in test data. Filters future/recent releases per original script."
     },
     {
-      "id": "US-6.2",
-      "title": "Currently Airing Series (INFO)",
-      "story": "As a user, I want to see series that are currently airing, so that I know new episodes are coming",
+      "id": "US-V.1",
+      "title": "Validate Old Content Filtering Logic",
+      "story": "As a developer, I want to verify the old/unwatched content logic matches the original script, so that I can trust the app produces correct results",
       "acceptanceCriteria": [
-        "Refer to original_script.py function: analyze_tv_series_seasons (in_progress_seasons)",
-        "Backend service get_currently_airing() returns in-progress series (reads from cached DB)",
-        "/api/content/summary endpoint includes currently_airing count",
-        "Dedicated simple list view at /info/airing",
-        "Each item shows: title, current season, episodes aired vs total",
-        "Sorted by next air date",
-        "Accessed from dashboard Info section card",
+        "Run /original-script snippet for old content, note: total items, old items count, protected count",
+        "Run app API GET /api/content/issues?filter=old, note: total_count",
+        "Expected: app count = original (old items + protected items) since app has empty whitelist",
+        "If counts differ (excluding whitelist): investigate is_old_or_unwatched() in content.py",
+        "Known issue to check: min_age_months logic - original applies only to unplayed items, verify app does same",
+        "Document any bugs found in SUGGESTIONS.md",
+        "Fix identified bugs (separate commits per bug)",
         "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
+        "Unit tests pass"
       ],
       "priority": 61,
       "passes": false,
-      "notes": "INFO feature - displayed in dedicated simple list view, not unified issues"
+      "notes": "Use /original-script skill. Substring whitelist matching is a HACK - do NOT implement. Focus on filtering logic only."
+    },
+    {
+      "id": "US-V.2",
+      "title": "Validate Large Movies Detection",
+      "story": "As a developer, I want to verify the large movies detection matches the original script, so that users see the same large movies in both",
+      "acceptanceCriteria": [
+        "Run /original-script snippet for large movies, note count",
+        "Run app API GET /api/content/issues?filter=large, note: total_count",
+        "Counts should match (no whitelist involved for large movies)",
+        "If counts differ: investigate is_large_movie() in content.py",
+        "Verify threshold is 13GB in both",
+        "Document any bugs found in SUGGESTIONS.md",
+        "Fix identified bugs",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "Use /original-script skill. No whitelist involved - counts should match exactly."
+    },
+    {
+      "id": "US-V.3",
+      "title": "Validate Language Issues Detection",
+      "story": "As a developer, I want to verify the language issues detection matches the original script, so that users see the same language problems in both",
+      "acceptanceCriteria": [
+        "Run /original-script snippet for language issues, note count",
+        "Run app API GET /api/content/issues?filter=language, note: total_count",
+        "Compare counts (accounting for french-only and language-exempt whitelists)",
+        "If counts differ: investigate check_audio_languages() in content.py",
+        "Verify language codes checked: eng/en for English, fre/fra/fr for French",
+        "Document any bugs found in SUGGESTIONS.md",
+        "Fix identified bugs",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": "Use /original-script skill. Account for french-only and language-exempt whitelists when comparing."
+    },
+    {
+      "id": "US-V.4",
+      "title": "Validate Unavailable Requests Detection",
+      "story": "As a developer, I want to verify the unavailable requests detection matches the original script, so that users see the same pending/unavailable requests in both",
+      "acceptanceCriteria": [
+        "Run /original-script snippet for unavailable requests, note count",
+        "Run app API GET /api/content/issues?filter=requests, note: total_count",
+        "Counts should match exactly (no whitelist involved)",
+        "If counts differ: investigate get_unavailable_requests() in content.py",
+        "Verify status codes: original uses status != 5 (Available)",
+        "Verify FILTER_FUTURE_RELEASES and FILTER_RECENT_RELEASES logic matches",
+        "Document any bugs found in SUGGESTIONS.md",
+        "Fix identified bugs",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": "Use /original-script skill. No whitelist involved - counts should match exactly."
     },
     {
       "id": "US-6.3",
