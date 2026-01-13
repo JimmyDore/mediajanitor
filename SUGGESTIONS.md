@@ -9,13 +9,13 @@ P1 items should be reviewed and manually added to PRD.md if deemed necessary.
 
 ## ACTION NEEDED: Review P1 items for PRD promotion
 
-The following P1 items were identified during integration review on 2026-01-13:
+The following P1 items were identified during integration reviews:
 - **[P1] Page title inconsistency** - Login/Register pages use "Plex Dashboard" but app is named "Media Janitor" (Dashboard/Settings/Old Content pages are correct)
 - **[P1] No automatic scheduler for daily sync** - US-7.1 "Automatic Daily Data Sync" has no automatic component (only manual trigger exists)
-- **[P1] US-7.1 was not tested with real APIs** - Only unit tests with mocks exist; need manual integration test
 
 **Resolved since last review:**
 - ~~Manual sync button missing~~ - Dashboard now has "Refresh" button (US-7.2 completed)
+- ~~US-7.1 was not tested with real APIs~~ - US-7.1.5 completed: 324 media items, 244 requests synced
 
 ---
 
@@ -28,6 +28,9 @@ The following P1 items were identified during integration review on 2026-01-13:
 - [P3] Consider adding toast notifications for successful operations (toast store exists but not used on all pages)
 - [P3] Add password confirmation field on registration form
 - [P3] Navigation header could show user email or avatar for better UX
+
+## Data/Sync
+- [P2] **Bug: "Unknown" titles in Recently Available** - Jellyseerr request sync (`sync.py:209`) extracts `media.title` but the API response may not include titles. Items show "Unknown" on `/info/recent`. Need to fetch title from TMDB or store it from request submission. Affects US-6.3.
 
 ## Architecture
 - [P1] US-7.1 delivered sync service but NO scheduler - "Automatic Daily Data Sync" has no automatic component. Need APScheduler, Celery Beat, or system cron to trigger `/api/sync` for all users daily.
@@ -71,20 +74,41 @@ The following P1 items were identified during integration review on 2026-01-13:
 
 ---
 
-## Integration Review Summary (2026-01-13)
+## Exploratory QA Review (2026-01-13)
 
 ### What's Working Well
 - Authentication flow (register, login, logout, protected routes)
-- Navigation header with active state indication
-- Settings page with Jellyfin/Jellyseerr connection management
-- Old/Unwatched content page with sorting by size
+- Navigation header with active state indication and correct highlighting
+- Settings page with Jellyfin/Jellyseerr connection badges
+- Unified Issues view with filter tabs (All, Old, Large, Language, Requests, Multi-Issue)
+- FR Only button appears correctly for language issues
+- Protect button works for old content
+- Whitelists page shows both Protected and French-Only sections
 - Manual sync with rate limiting and toast notifications
 - Consistent dark theme across all pages
-- Responsive design on mobile for content table
+- **Mobile responsiveness excellent** - Dashboard and Issues pages adapt well to 375px width
+- Dashboard summary cards with correct counts and navigation
 
-### Key Issues to Address
+### Key Issues Found
 1. **P1**: Page titles say "Plex Dashboard" on login/register (should be "Media Janitor")
 2. **P1**: No automatic daily sync scheduler exists
-3. **P2**: Missing favicon causes 404
-4. **P2**: CORS needs production URL
-5. **P2**: Auth endpoints have no rate limiting
+3. **P2**: "Unknown" titles in Recently Available - Jellyseerr sync missing titles
+4. **P2**: Missing favicon causes 404
+5. **P2**: CORS needs production URL
+6. **P2**: Auth endpoints have no rate limiting
+
+### Pages Verified
+- `/login` - Works, but wrong page title
+- `/register` - Works, but wrong page title
+- `/` (Dashboard) - Working with summary cards, sync status, refresh button
+- `/issues` - Filter tabs work, Protect/FR Only/Exempt buttons functional
+- `/whitelist` - Shows all three sections (Protected, French-Only, Language-Exempt)
+- `/settings` - Jellyfin/Jellyseerr badges showing connected status
+- `/info/recent` - Shows items but titles are "Unknown" (bug)
+- `/info/airing` - Shows empty state correctly (placeholder)
+
+### US-5.3 Observations (2026-01-13)
+- **Exempt button** added for items with language issues - works correctly
+- **Language-Exempt section** on whitelist page - follows same pattern as French-Only
+- [P3] Three whitelist types now exist (Protected, French-Only, Language-Exempt) - may need UI consolidation if more are added
+- [P3] Actions column on issues page getting crowded with 3 buttons - consider dropdown menu for actions

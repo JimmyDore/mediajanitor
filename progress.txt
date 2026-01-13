@@ -531,10 +531,42 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(whitelist): [US-5.2] add French-only whitelist for language issues
 
+### 2026-01-13: US-5.3 - Exempt Content from Language Checks
+- Created LanguageExemptWhitelist database model for complete language exemption
+- Implemented backend API endpoints:
+  - POST /api/whitelist/language-exempt - Add item to language-exempt whitelist
+  - GET /api/whitelist/language-exempt - List all language-exempt items
+  - DELETE /api/whitelist/language-exempt/{id} - Remove item from language-exempt whitelist
+- Extended content service with:
+  - add_to_language_exempt_whitelist() - Creates entry, checks for duplicates
+  - get_language_exempt_whitelist() - Returns all entries for user
+  - remove_from_language_exempt_whitelist() - Deletes entry by ID
+  - get_language_exempt_ids() - Returns set of jellyfin_ids for checking
+- Updated get_item_issues() to skip language checks for exempt items:
+  - Items in language-exempt list have NO language issues flagged
+  - Other issues (old, large) still apply
+- Updated get_content_summary() to respect language-exempt whitelist
+- Updated frontend issues page (/issues):
+  - Added "Exempt" button for items with language issues
+  - Button calls POST /api/whitelist/language-exempt
+  - Item removed from list on success (if only language issue)
+  - Green button styling to distinguish from Protect/FR Only buttons
+- Updated frontend whitelist page (/whitelist):
+  - Added Language-Exempt Content section
+  - Shows all exempt items with Remove button
+  - Description: "Content exempt from all language checks"
+- Backend tests: 8 new tests for language-exempt whitelist endpoints
+- Integration tests: 2 new tests for whitelist endpoints
+- 154 backend tests pass, 84 frontend tests pass, 16 integration tests pass
+- Verified in Docker: All endpoints work correctly
+- Files changed: database.py, routers/whitelist.py, services/content.py, test_content.py, test_integration.py, issues/+page.svelte, whitelist/+page.svelte
+- Commits:
+  - feat(whitelist): [US-5.3] add language-exempt whitelist for language issues
+
 ## Current Status
 
-**Phase**: Epic 5 - Language Issues (In Progress)
-**Next US**: US-5.3 - Exempt Content from Language Checks
+**Phase**: Epic 6 - Jellyseerr Requests (In Progress)
+**Next US**: US-6.1 - Unavailable Requests Backend Service
 
 ## Notes
 
