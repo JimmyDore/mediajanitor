@@ -465,10 +465,24 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(nav): [US-D.5] fix navigation active state for Issues page
 
+### 2026-01-13: US-4.1 - Large Movies Backend Service
+- US-4.1 was already implemented as part of US-D.1 and US-D.3:
+  - is_large_movie() function in content.py (13GB threshold)
+  - Large movies marked with 'large' issue type
+  - /api/content/summary includes large_movies count and total_size
+  - /api/content/issues?filter=large returns only large movies
+  - Results sorted by size (largest first)
+- Verified in Docker: 0 large movies (user's library has no movies >13GB)
+- All acceptance criteria met
+- 133 backend tests pass, mypy typecheck passes
+- Files verified: services/content.py, routers/content.py, tests/test_content.py
+- Commits:
+  - docs: [US-4.1] mark large movies backend service complete
+
 ## Current Status
 
-**Phase**: Epic D - Dashboard (Complete)
-**Next US**: US-4.1 - Large Movies Backend Service
+**Phase**: Epic 4 - Large Movies (Complete)
+**Next US**: US-5.1 - Language Issues Backend Service
 
 ## Notes
 
