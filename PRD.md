@@ -1007,21 +1007,23 @@ Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to cr
 - Any other UI element that could benefit from polish
 
 **Acceptance Criteria:**
-- [ ] **Typography**: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)
-- [ ] **Spacing**: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)
-- [ ] **Border Radius**: Standardize to 4/6/8px system
-- [ ] **Colors**: Reduce decorative color, use gray structure + accent for actions only
-- [ ] **Cards**: Consistent padding (16px), border-only depth, no heavy shadows
-- [ ] **Buttons**: Unified styling with 150ms transitions
-- [ ] **Data Display**: Monospace font with tabular-nums for numbers/sizes/dates
-- [ ] **Modals & Popups**: Review sizing, padding, transitions; ensure they feel crafted
-- [ ] **Toasts**: Consistent styling, appropriate sizing, smooth animations
-- [ ] **Forms & Inputs**: Unified field styling, proper focus states, accessible contrast
-- [ ] **Dark Mode**: Adjust borders to 10-15% white opacity, desaturate status colors
-- [ ] **Navigation**: Consistent styling with current page indicator
-- [ ] **Autonomous Improvements**: Make any additional improvements deemed necessary
-- [ ] Typecheck passes
-- [ ] Visual review in browser (light + dark mode)
+- [x] **Typography**: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)
+- [x] **Spacing**: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)
+- [x] **Border Radius**: Standardize to 4/6/8px system
+- [x] **Colors**: Reduce decorative color, use gray structure + accent for actions only
+- [x] **Cards**: Consistent padding (16px), border-only depth, no heavy shadows
+- [x] **Buttons**: Unified styling with 150ms transitions
+- [x] **Data Display**: Monospace font with tabular-nums for numbers/sizes/dates
+- [x] **Modals & Popups**: Review sizing, padding, transitions; ensure they feel crafted
+- [x] **Toasts**: Consistent styling, appropriate sizing, smooth animations
+- [x] **Forms & Inputs**: Unified field styling, proper focus states, accessible contrast
+- [x] **Dark Mode**: Adjust borders to 10-15% white opacity, desaturate status colors
+- [x] **Navigation**: Consistent styling with current page indicator
+- [x] **Autonomous Improvements**: Make any additional improvements deemed necessary
+- [x] Typecheck passes
+- [x] Visual review in browser (light + dark mode)
+
+**Note:** Completed 2026-01-14 - Comprehensive design system refinement: app.css with CSS custom properties (typography scale, 4px spacing grid, 4/6/8px radius system, cool slate colors, dark mode adjustments), updated all pages (Dashboard, Issues, Whitelist, Settings, Login, Register), Header component, monospace for data values, border-only depth, single blue accent, 93 frontend tests pass, 0 typecheck errors
 
 ### Non-Goals
 - Complete redesign of page layouts
@@ -1033,6 +1035,183 @@ Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to cr
 - Use `/design-principles` skill for guidance
 - Test all pages in both light and dark mode
 - Review all Svelte components for consistency
+
+---
+
+## Epic 9: Infrastructure & Polish
+
+### Overview
+Address P1/P2 issues from SUGGESTIONS.md: page title inconsistency, missing favicon, and CORS configuration for production.
+
+### Goals
+- Fix branding inconsistencies
+- Eliminate 404 errors for static assets
+- Enable production deployment
+
+### User Stories
+
+#### US-9.1: Fix Page Titles
+**As a** user
+**I want** consistent branding across all pages
+**So that** the app feels professional and cohesive
+
+**Acceptance Criteria:**
+- [ ] Login page title is "Login | Media Janitor"
+- [ ] Register page title is "Register | Media Janitor"
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-9.2: Add Favicon
+**As a** user
+**I want** a favicon in my browser tab
+**So that** I can easily identify the app among my open tabs
+
+**Acceptance Criteria:**
+- [ ] Favicon displays in browser tab
+- [ ] No 404 for `/favicon.png`
+- [ ] Typecheck passes
+
+---
+
+#### US-9.3: Add CORS Production URL
+**As a** developer
+**I want** CORS configured for production
+**So that** the app works on mediajanitor.com
+
+**Acceptance Criteria:**
+- [ ] CORS allows requests from https://mediajanitor.com
+- [ ] Existing localhost origins still work
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Non-Goals
+- Custom branding per user
+- Dynamic favicon
+
+### Technical Considerations
+- Update `<svelte:head><title>` in login/register pages
+- Create `frontend/static/` folder with favicon
+- Add production URL to `backend/app/main.py` CORS origins
+
+---
+
+## Epic 10: Automatic Sync Scheduler
+
+### Overview
+Complete US-7.1 by adding automatic daily sync. Currently only manual sync exists.
+
+### Goals
+- Automate daily data refresh for all users
+- Use Celery Beat for reliable scheduling
+- Handle failures gracefully
+
+### User Stories
+
+#### US-10.1: Add Celery Infrastructure
+**As a** developer
+**I want** Celery configured with Redis
+**So that** we can run background tasks reliably
+
+**Acceptance Criteria:**
+- [ ] Celery app configured with Redis broker
+- [ ] `docker-compose up` starts redis + celery worker services
+- [ ] Can enqueue and execute a test task
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-10.2: Daily Sync Scheduler
+**As a** user
+**I want** my data to sync automatically every day
+**So that** the dashboard is always up-to-date without manual intervention
+
+**Acceptance Criteria:**
+- [ ] Celery Beat schedules `sync_all_users` task daily at 3 AM UTC
+- [ ] Task iterates all users with configured Jellyfin settings
+- [ ] Each user's sync runs independently (failures don't block others)
+- [ ] Sync status updated in database for each user
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Non-Goals
+- Per-user configurable schedule
+- Real-time sync notifications
+
+### Technical Considerations
+- Add `celery`, `redis` dependencies to `pyproject.toml`
+- Create `backend/app/celery_app.py` for Celery configuration
+- Create `backend/app/tasks.py` for task definitions
+- Add redis, celery-worker, celery-beat services to `docker-compose.yml`
+
+---
+
+## Epic 11: Temporary Whitelisting
+
+### Overview
+Allow users to whitelist items for a limited time instead of permanently. Useful for seasonal content or temporary exceptions.
+
+### Goals
+- Support optional expiration on whitelist entries
+- Default behavior remains permanent (no expiration)
+- Show expiration status in UI
+
+### User Stories
+
+#### US-11.1: Add Expiration to Whitelist Schema
+**As a** developer
+**I want** whitelist tables to support expiration dates
+**So that** users can create temporary whitelists
+
+**Acceptance Criteria:**
+- [ ] All 3 whitelist tables have nullable `expires_at` column
+- [ ] Existing entries have `expires_at = NULL` (permanent)
+- [ ] API models support optional expiration date
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-11.2: Whitelist Expiration Logic
+**As a** user
+**I want** expired whitelist entries to stop protecting content
+**So that** items automatically return to issues list when protection expires
+
+**Acceptance Criteria:**
+- [ ] Expired whitelist entries don't exclude items from issues
+- [ ] Non-expired entries still work as before
+- [ ] NULL `expires_at` means permanent (never expires)
+- [ ] API accepts optional `expires_at` when adding to whitelist
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-11.3: Temporary Whitelist UI
+**As a** user
+**I want** to choose how long to whitelist an item
+**So that** I can set temporary protection for seasonal content
+
+**Acceptance Criteria:**
+- [ ] Default is "Permanent" (no expiration)
+- [ ] Preset duration options: 3 months, 6 months, 1 year
+- [ ] Custom date picker option
+- [ ] Whitelist page shows expiration date or "Permanent"
+- [ ] Expired items show "Expired" badge
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+### Non-Goals
+- Automatic renewal of expiring whitelists
+- Notifications before expiration
+
+### Technical Considerations
+- Add `expires_at: datetime | None` to ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist
+- Update filtering logic to check `expires_at < now()` for expired entries
+- Duration selector UI with presets + custom date picker
 
 ---
 
@@ -1131,7 +1310,7 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ## Checklist Summary
 
-### Completed ✅ (32 stories)
+### Completed ✅ (33 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -1164,9 +1343,21 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-V.4: Validate Unavailable Requests Detection
 - [x] US-6.3: Recently Available Content (INFO)
 - [x] US-8.1: Configure Thresholds
+- [x] US-UI.1: Design System Refinement
 
-### Next Up - Design (1 story) **← START HERE**
-- [ ] US-UI.1: Design System Refinement
+### Next Up - Infrastructure & Polish (3 stories) **← START HERE**
+- [ ] US-9.1: Fix Page Titles
+- [ ] US-9.2: Add Favicon
+- [ ] US-9.3: Add CORS Production URL
+
+### Automatic Sync Scheduler (2 stories)
+- [ ] US-10.1: Add Celery Infrastructure
+- [ ] US-10.2: Daily Sync Scheduler
+
+### Temporary Whitelisting (3 stories)
+- [ ] US-11.1: Add Expiration to Whitelist Schema
+- [ ] US-11.2: Whitelist Expiration Logic
+- [ ] US-11.3: Temporary Whitelist UI
 
 ### Marketing (5 stories)
 - [ ] US-M.1: Landing Page Hero
