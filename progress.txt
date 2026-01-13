@@ -655,10 +655,53 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - fix(sync): [US-V.4] fetch titles from Jellyseerr during sync
 
+### 2026-01-13: US-6.3 - Recently Available Content (INFO)
+- Enhanced /info/recent list view with date grouping:
+  - Items grouped by local date with date headers (e.g., "Sunday 11 January 2026")
+  - Fixed timezone issue: getDateKey now uses local date components instead of UTC
+  - Items with same local date appear under single header
+- Updated copy list to include grouped format:
+  - Format includes date headers with indented items
+  - Example: "Sunday 11 January 2026:\n  - Movie Name (Movie)"
+- Verified in browser: 3 items correctly grouped into 2 date groups
+- 167 backend tests pass, mypy clean, 84 frontend tests pass
+- Files changed: frontend/src/routes/info/recent/+page.svelte, prd.json
+- Commits:
+  - feat(info): [US-6.3] add date grouping to recently available list
+
+### 2026-01-13: US-8.1 - Configure Thresholds
+- Extended UserSettings database model with analysis threshold fields:
+  - old_content_months: Configurable old content threshold (default: 4)
+  - min_age_months: Configurable minimum age (default: 3)
+  - large_movie_size_gb: Configurable large movie threshold (default: 13)
+- Implemented backend API endpoints for analysis preferences:
+  - GET /api/settings/analysis - Returns current values (or defaults)
+  - POST /api/settings/analysis - Saves preferences (partial update supported)
+  - DELETE /api/settings/analysis - Resets preferences to defaults
+- Created UserThresholds dataclass and get_user_thresholds() helper in content service
+- Updated content service functions to use user thresholds:
+  - get_content_summary(): Now passes thresholds to is_old_or_unwatched() and is_large_movie()
+  - get_old_unwatched_content(): Uses user's old_content_months and min_age_months
+  - get_content_issues(): Fetches thresholds and passes to get_item_issues()
+  - get_item_issues(): Accepts optional thresholds parameter
+  - is_large_movie(): Now accepts threshold_gb parameter
+- Extended frontend settings page with Analysis Preferences section:
+  - Three numeric inputs for each threshold with min/max validation
+  - Save Preferences button
+  - Reset to Defaults button
+  - Success/error feedback messages
+- Backend tests: 9 new tests for analysis preferences endpoints
+- Frontend tests: 9 new tests for analysis preferences API integration
+- 176 backend tests pass, 93 frontend tests pass, 16 integration tests pass
+- Verified in Docker: GET/POST/DELETE /api/settings/analysis work correctly
+- Files changed: database.py, models/settings.py, routers/settings.py, services/content.py, test_settings.py, +page.svelte, settings-analysis.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-8.1] add configurable analysis thresholds
+
 ## Current Status
 
-**Phase**: Epic V - Validation Against Original Script (Complete)
-**Next US**: US-6.3 - Recently Available Content (INFO)
+**Phase**: Epic 8 - User Settings (In Progress)
+**Next US**: US-M.1 - Landing Page Hero
 
 ## Notes
 
