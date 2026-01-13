@@ -4,7 +4,7 @@
 
 ## Execution Loop
 
-1. Read prd.json and find the next story where `passes: false`
+1. Read prd.json and find the next story where `passes: false` (pick the one with **lowest priority number**)
 2. Read CLAUDE.md and progress.txt for context and patterns
 3. Implement the story following TDD:
    - Write failing test first

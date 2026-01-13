@@ -506,6 +506,27 @@
       "notes": "Completed 2026-01-13 - Both original script and app return 0 large movies (largest is 12.43 GB). Fixed minor bug: changed > to >= to match original script behavior. Added test for boundary condition."
     },
     {
+      "id": "US-6.3",
+      "title": "Recently Available Content (INFO)",
+      "story": "As a user, I want to see what became available this week, so that I can notify my friends",
+      "acceptanceCriteria": [
+        "Refer to original_script.py function: get_jellyseer_recently_available_requests",
+        "Backend service get_recently_available() returns content from past 7 days (reads from cached DB)",
+        "/api/content/summary endpoint includes recently_available count",
+        "Dedicated simple list view at /info/recent",
+        "Grouped by date (newest first)",
+        "Each item shows: title, type, availability date",
+        "Copy list button for sharing (plain text format)",
+        "Accessed from dashboard Info section card",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 62,
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Items grouped by date with headers, copy list includes grouped format, 3 items verified in browser"
+    },
+    {
       "id": "US-V.3",
       "title": "Validate Language Issues Detection",
       "story": "As a developer, I want to verify the language issues detection matches the original script, so that users see the same language problems in both",
@@ -543,27 +564,6 @@
       "priority": 64,
       "passes": true,
       "notes": "Completed 2026-01-13 - App count: 26 unavailable requests. Fixed bug: titles were showing as 'Unknown' because Jellyseerr /api/v1/request endpoint doesn't include titles. Added fetch_media_title() to sync.py to fetch titles from /api/v1/movie/{id} or /api/v1/tv/{id}. Known difference: original script does complex TV series season analysis (excludes 'complete for released seasons'), app uses simpler status-based filtering. Documented in SUGGESTIONS.md [P2]."
-    },
-    {
-      "id": "US-6.3",
-      "title": "Recently Available Content (INFO)",
-      "story": "As a user, I want to see what became available this week, so that I can notify my friends",
-      "acceptanceCriteria": [
-        "Refer to original_script.py function: get_jellyseer_recently_available_requests",
-        "Backend service get_recently_available() returns content from past 7 days (reads from cached DB)",
-        "/api/content/summary endpoint includes recently_available count",
-        "Dedicated simple list view at /info/recent",
-        "Grouped by date (newest first)",
-        "Each item shows: title, type, availability date",
-        "Copy list button for sharing (plain text format)",
-        "Accessed from dashboard Info section card",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Items grouped by date with headers, copy list includes grouped format, 3 items verified in browser"
     },
     {
       "id": "US-8.1",
@@ -608,88 +608,6 @@
       "priority": 85,
       "passes": true,
       "notes": "Completed 2026-01-14 - Comprehensive design system refinement: app.css with CSS custom properties (typography scale, 4px spacing grid, 4/6/8px radius system, cool slate colors, dark mode adjustments), updated all pages (Dashboard, Issues, Whitelist, Settings, Login, Register), Header component, monospace for data values, border-only depth, single blue accent, 93 frontend tests pass, 0 typecheck errors"
-    },
-    {
-      "id": "US-M.1",
-      "title": "Landing Page Hero",
-      "story": "As a visitor, I want to see an attractive landing page, so that I understand the value and sign up",
-      "acceptanceCriteria": [
-        "Bold hero section with gradient background (blue to purple)",
-        "Tagline: Keep Your Media Library Clean (or similar)",
-        "Value proposition subtitle explaining the product",
-        "Primary CTA button: Get Started Free -> /register",
-        "Secondary link: Already have an account? -> /login",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 200,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-M.2",
-      "title": "Feature Highlights",
-      "story": "As a visitor, I want to see the main features, so that I understand what the product does",
-      "acceptanceCriteria": [
-        "4 feature cards in grid layout with icons",
-        "Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking",
-        "Each card: icon, title (3-4 words), 1-line description",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 201,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-M.3",
-      "title": "Dashboard Preview",
-      "story": "As a visitor, I want to see a preview of the dashboard, so that I know what to expect",
-      "acceptanceCriteria": [
-        "Screenshot or mockup of dashboard UI",
-        "Device frame around preview (laptop or browser window)",
-        "CTA button below: Try it Free",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 202,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-M.4",
-      "title": "Trust Section",
-      "story": "As a visitor, I want to know my data is secure, so that I feel confident signing up",
-      "acceptanceCriteria": [
-        "Section with security/privacy messaging",
-        "Key points: Your API keys are encrypted, Connects to YOUR servers, No data stored on our servers beyond cache",
-        "Optional: shield/lock icon",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 203,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-M.5",
-      "title": "Auth Page CTAs",
-      "story": "As a visitor, I want clear calls-to-action on auth pages, so that I convert easily",
-      "acceptanceCriteria": [
-        "Register page: value-focused headline above form",
-        "Login page: clear submit button and Don't have an account? link",
-        "Consistent branding (colors, fonts) with landing page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 204,
-      "passes": false,
-      "notes": ""
     },
     {
       "id": "US-9.1",
@@ -809,6 +727,88 @@
         "Verify in browser using browser tools"
       ],
       "priority": 122,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.1",
+      "title": "Landing Page Hero",
+      "story": "As a visitor, I want to see an attractive landing page, so that I understand the value and sign up",
+      "acceptanceCriteria": [
+        "Bold hero section with gradient background (blue to purple)",
+        "Tagline: Keep Your Media Library Clean (or similar)",
+        "Value proposition subtitle explaining the product",
+        "Primary CTA button: Get Started Free -> /register",
+        "Secondary link: Already have an account? -> /login",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 200,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.2",
+      "title": "Feature Highlights",
+      "story": "As a visitor, I want to see the main features, so that I understand what the product does",
+      "acceptanceCriteria": [
+        "4 feature cards in grid layout with icons",
+        "Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking",
+        "Each card: icon, title (3-4 words), 1-line description",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 201,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.3",
+      "title": "Dashboard Preview",
+      "story": "As a visitor, I want to see a preview of the dashboard, so that I know what to expect",
+      "acceptanceCriteria": [
+        "Screenshot or mockup of dashboard UI",
+        "Device frame around preview (laptop or browser window)",
+        "CTA button below: Try it Free",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 202,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.4",
+      "title": "Trust Section",
+      "story": "As a visitor, I want to know my data is secure, so that I feel confident signing up",
+      "acceptanceCriteria": [
+        "Section with security/privacy messaging",
+        "Key points: Your API keys are encrypted, Connects to YOUR servers, No data stored on our servers beyond cache",
+        "Optional: shield/lock icon",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 203,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-M.5",
+      "title": "Auth Page CTAs",
+      "story": "As a visitor, I want clear calls-to-action on auth pages, so that I convert easily",
+      "acceptanceCriteria": [
+        "Register page: value-focused headline above form",
+        "Login page: clear submit button and Don't have an account? link",
+        "Consistent branding (colors, fonts) with landing page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 204,
       "passes": false,
       "notes": ""
     }
