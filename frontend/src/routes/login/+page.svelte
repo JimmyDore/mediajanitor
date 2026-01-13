@@ -52,7 +52,7 @@
 </script>
 
 <svelte:head>
-	<title>Log In - Media Janitor</title>
+	<title>Login | Media Janitor</title>
 </svelte:head>
 
 <div class="auth-container">

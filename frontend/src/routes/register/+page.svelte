@@ -56,7 +56,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign Up - Media Janitor</title>
+	<title>Register | Media Janitor</title>
 </svelte:head>
 
 <div class="auth-container">
