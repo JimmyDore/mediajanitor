@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { auth } from '$lib/stores';
 
 	// Jellyfin form state
 	let jellyfinUrl = $state('');
@@ -33,6 +32,10 @@
 	let analysisSuccess = $state<string | null>(null);
 	let isAnalysisLoading = $state(false);
 
+	// Expand/collapse states
+	let jellyfinExpanded = $state(false);
+	let jellyseerrExpanded = $state(false);
+
 	// Default values for reset
 	const DEFAULT_OLD_CONTENT_MONTHS = 4;
 	const DEFAULT_MIN_AGE_MONTHS = 3;
@@ -58,6 +61,8 @@
 				if (data.server_url) {
 					jellyfinUrl = data.server_url;
 				}
+				// Auto-expand if not configured
+				if (!hasJellyfinConfigured) jellyfinExpanded = true;
 			}
 
 			// Load Jellyseerr settings
@@ -72,6 +77,8 @@
 				if (data.server_url) {
 					jellyseerrUrl = data.server_url;
 				}
+				// Auto-expand if not configured
+				if (!hasJellyseerrConfigured) jellyseerrExpanded = true;
 			}
 
 			// Load analysis preferences
@@ -118,10 +125,12 @@
 				throw new Error(data.detail || 'Failed to save settings');
 			}
 
-			jellyfinSuccess = data.message || 'Settings saved successfully!';
+			jellyfinSuccess = 'Connected';
 			hasJellyfinConfigured = true;
 			currentJellyfinUrl = jellyfinUrl;
-			jellyfinApiKey = ''; // Clear the API key field after successful save
+			jellyfinApiKey = '';
+			jellyfinExpanded = false;
+			setTimeout(() => jellyfinSuccess = null, 3000);
 		} catch (e) {
 			jellyfinError = e instanceof Error ? e.message : 'Failed to save settings';
 		} finally {
@@ -155,10 +164,12 @@
 				throw new Error(data.detail || 'Failed to save settings');
 			}
 
-			jellyseerrSuccess = data.message || 'Jellyseerr connected successfully!';
+			jellyseerrSuccess = 'Connected';
 			hasJellyseerrConfigured = true;
 			currentJellyseerrUrl = jellyseerrUrl;
-			jellyseerrApiKey = ''; // Clear the API key field after successful save
+			jellyseerrApiKey = '';
+			jellyseerrExpanded = false;
+			setTimeout(() => jellyseerrSuccess = null, 3000);
 		} catch (e) {
 			jellyseerrError = e instanceof Error ? e.message : 'Failed to save settings';
 		} finally {
@@ -193,7 +204,8 @@
 				throw new Error(data.detail || 'Failed to save preferences');
 			}
 
-			analysisSuccess = data.message || 'Preferences saved successfully!';
+			analysisSuccess = 'Saved';
+			setTimeout(() => analysisSuccess = null, 3000);
 		} catch (e) {
 			analysisError = e instanceof Error ? e.message : 'Failed to save preferences';
 		} finally {
@@ -219,16 +231,24 @@
 				throw new Error(data.detail || 'Failed to reset preferences');
 			}
 
-			// Reset to default values
 			oldContentMonths = DEFAULT_OLD_CONTENT_MONTHS;
 			minAgeMonths = DEFAULT_MIN_AGE_MONTHS;
 			largeMovieSizeGb = DEFAULT_LARGE_MOVIE_SIZE_GB;
 
-			analysisSuccess = 'Preferences reset to defaults!';
+			analysisSuccess = 'Reset to defaults';
+			setTimeout(() => analysisSuccess = null, 3000);
 		} catch (e) {
 			analysisError = e instanceof Error ? e.message : 'Failed to reset preferences';
 		} finally {
 			isAnalysisLoading = false;
+		}
+	}
+
+	function extractDomain(url: string): string {
+		try {
+			return new URL(url).hostname;
+		} catch {
+			return url;
 		}
 	}
 </script>
@@ -237,243 +257,234 @@
 	<title>Settings - Media Janitor</title>
 </svelte:head>
 
-<div class="page-container">
-	<div class="page-header">
+<div class="settings-page">
+	<header class="page-header">
 		<h1>Settings</h1>
-		<p class="page-subtitle">Configure your media server connections and preferences.</p>
-	</div>
+	</header>
 
 	{#if isFetchingSettings}
-		<div class="loading-state">
+		<div class="loading">
 			<span class="spinner"></span>
-			<span>Loading settings...</span>
 		</div>
 	{:else}
-		<section class="settings-section">
-			<div class="section-header">
-				<h2>Jellyfin Connection</h2>
-				<p class="section-description">Connect your Jellyfin server to analyze your media library.</p>
-			</div>
+		<!-- Connections Section -->
+		<section class="section">
+			<h2 class="section-title">Connections</h2>
 
-			{#if hasJellyfinConfigured}
-				<div class="status-badge status-connected">
-					Connected to {currentJellyfinUrl}
-				</div>
-			{:else}
-				<div class="status-badge status-disconnected">
-					Not connected
-				</div>
-			{/if}
-
-			<form onsubmit={handleJellyfinSubmit} class="settings-form">
-				{#if jellyfinError}
-					<div class="message message-error" role="alert">
-						{jellyfinError}
-					</div>
-				{/if}
-
-				{#if jellyfinSuccess}
-					<div class="message message-success" role="status">
-						{jellyfinSuccess}
-					</div>
-				{/if}
-
-				<div class="form-group">
-					<label for="jellyfin-url">Server URL</label>
-					<input
-						type="url"
-						id="jellyfin-url"
-						bind:value={jellyfinUrl}
-						required
-						placeholder="https://your-jellyfin-server.com"
-						class="input"
-					/>
-					<span class="hint">The full URL to your Jellyfin server</span>
-				</div>
-
-				<div class="form-group">
-					<label for="jellyfin-api-key">
-						API Key
+			<!-- Jellyfin -->
+			<div class="connection-row">
+				<div class="connection-info">
+					<div class="connection-header">
+						<span class="connection-name">Jellyfin</span>
 						{#if hasJellyfinConfigured}
-							<span class="label-hint">(leave blank to keep current)</span>
+							<span class="status-dot status-connected" title="Connected"></span>
+						{:else}
+							<span class="status-dot status-disconnected" title="Not connected"></span>
 						{/if}
-					</label>
-					<input
-						type="password"
-						id="jellyfin-api-key"
-						bind:value={jellyfinApiKey}
-						required={!hasJellyfinConfigured}
-						placeholder={hasJellyfinConfigured ? '••••••••••••••••' : 'Enter your API key'}
-						autocomplete="off"
-						class="input"
-					/>
-					<span class="hint">Find this in Jellyfin Dashboard → API Keys</span>
-				</div>
-
-				<button type="submit" disabled={isJellyfinLoading} class="btn-primary">
-					{#if isJellyfinLoading}
-						<span class="spinner"></span>
-						Validating connection...
-					{:else if hasJellyfinConfigured}
-						Update Connection
+					</div>
+					{#if hasJellyfinConfigured && currentJellyfinUrl}
+						<span class="connection-url">{extractDomain(currentJellyfinUrl)}</span>
 					{:else}
-						Connect to Jellyfin
+						<span class="connection-url muted">Not configured</span>
 					{/if}
+				</div>
+				<button
+					class="btn-edit"
+					onclick={() => jellyfinExpanded = !jellyfinExpanded}
+					aria-expanded={jellyfinExpanded}
+				>
+					{jellyfinExpanded ? 'Cancel' : hasJellyfinConfigured ? 'Edit' : 'Configure'}
 				</button>
-			</form>
-		</section>
-
-		<section class="settings-section">
-			<div class="section-header">
-				<h2>Jellyseerr Connection</h2>
-				<p class="section-description">Connect your Jellyseerr server to track media requests.</p>
 			</div>
 
-			{#if hasJellyseerrConfigured}
-				<div class="status-badge status-connected">
-					Connected to {currentJellyseerrUrl}
-				</div>
-			{:else}
-				<div class="status-badge status-disconnected">
-					Not connected
-				</div>
+			{#if jellyfinExpanded}
+				<form onsubmit={handleJellyfinSubmit} class="connection-form">
+					{#if jellyfinError}
+						<div class="inline-error">{jellyfinError}</div>
+					{/if}
+					{#if jellyfinSuccess}
+						<div class="inline-success">{jellyfinSuccess}</div>
+					{/if}
+					<div class="form-row">
+						<div class="form-field">
+							<label for="jellyfin-url">Server URL</label>
+							<input
+								type="url"
+								id="jellyfin-url"
+								bind:value={jellyfinUrl}
+								required
+								placeholder="https://jellyfin.example.com"
+							/>
+						</div>
+						<div class="form-field">
+							<label for="jellyfin-key">
+								API Key
+								{#if hasJellyfinConfigured}
+									<span class="optional">(leave blank to keep)</span>
+								{/if}
+							</label>
+							<input
+								type="password"
+								id="jellyfin-key"
+								bind:value={jellyfinApiKey}
+								required={!hasJellyfinConfigured}
+								placeholder={hasJellyfinConfigured ? '••••••••' : 'API key'}
+								autocomplete="off"
+							/>
+						</div>
+						<button type="submit" class="btn-save" disabled={isJellyfinLoading}>
+							{#if isJellyfinLoading}
+								<span class="spinner-small"></span>
+							{:else}
+								Save
+							{/if}
+						</button>
+					</div>
+				</form>
 			{/if}
 
-			<form onsubmit={handleJellyseerrSubmit} class="settings-form">
-				{#if jellyseerrError}
-					<div class="message message-error" role="alert">
-						{jellyseerrError}
-					</div>
-				{/if}
+			<div class="divider"></div>
 
-				{#if jellyseerrSuccess}
-					<div class="message message-success" role="status">
-						{jellyseerrSuccess}
-					</div>
-				{/if}
-
-				<div class="form-group">
-					<label for="jellyseerr-url">Server URL</label>
-					<input
-						type="url"
-						id="jellyseerr-url"
-						bind:value={jellyseerrUrl}
-						required
-						placeholder="https://your-jellyseerr-server.com"
-						class="input"
-					/>
-					<span class="hint">The full URL to your Jellyseerr server</span>
-				</div>
-
-				<div class="form-group">
-					<label for="jellyseerr-api-key">
-						API Key
+			<!-- Jellyseerr -->
+			<div class="connection-row">
+				<div class="connection-info">
+					<div class="connection-header">
+						<span class="connection-name">Jellyseerr</span>
 						{#if hasJellyseerrConfigured}
-							<span class="label-hint">(leave blank to keep current)</span>
+							<span class="status-dot status-connected" title="Connected"></span>
+						{:else}
+							<span class="status-dot status-disconnected" title="Not connected"></span>
 						{/if}
-					</label>
-					<input
-						type="password"
-						id="jellyseerr-api-key"
-						bind:value={jellyseerrApiKey}
-						required={!hasJellyseerrConfigured}
-						placeholder={hasJellyseerrConfigured ? '••••••••••••••••' : 'Enter your API key'}
-						autocomplete="off"
-						class="input"
-					/>
-					<span class="hint">Find this in Jellyseerr Settings → General → API Key</span>
-				</div>
-
-				<button type="submit" disabled={isJellyseerrLoading} class="btn-primary">
-					{#if isJellyseerrLoading}
-						<span class="spinner"></span>
-						Validating connection...
-					{:else if hasJellyseerrConfigured}
-						Update Connection
+					</div>
+					{#if hasJellyseerrConfigured && currentJellyseerrUrl}
+						<span class="connection-url">{extractDomain(currentJellyseerrUrl)}</span>
 					{:else}
-						Connect to Jellyseerr
+						<span class="connection-url muted">Not configured</span>
 					{/if}
+				</div>
+				<button
+					class="btn-edit"
+					onclick={() => jellyseerrExpanded = !jellyseerrExpanded}
+					aria-expanded={jellyseerrExpanded}
+				>
+					{jellyseerrExpanded ? 'Cancel' : hasJellyseerrConfigured ? 'Edit' : 'Configure'}
 				</button>
-			</form>
-		</section>
-
-		<section class="settings-section">
-			<div class="section-header">
-				<h2>Analysis Preferences</h2>
-				<p class="section-description">Customize thresholds for content analysis.</p>
 			</div>
 
-			<form onsubmit={handleAnalysisSubmit} class="settings-form">
+			{#if jellyseerrExpanded}
+				<form onsubmit={handleJellyseerrSubmit} class="connection-form">
+					{#if jellyseerrError}
+						<div class="inline-error">{jellyseerrError}</div>
+					{/if}
+					{#if jellyseerrSuccess}
+						<div class="inline-success">{jellyseerrSuccess}</div>
+					{/if}
+					<div class="form-row">
+						<div class="form-field">
+							<label for="jellyseerr-url">Server URL</label>
+							<input
+								type="url"
+								id="jellyseerr-url"
+								bind:value={jellyseerrUrl}
+								required
+								placeholder="https://jellyseerr.example.com"
+							/>
+						</div>
+						<div class="form-field">
+							<label for="jellyseerr-key">
+								API Key
+								{#if hasJellyseerrConfigured}
+									<span class="optional">(leave blank to keep)</span>
+								{/if}
+							</label>
+							<input
+								type="password"
+								id="jellyseerr-key"
+								bind:value={jellyseerrApiKey}
+								required={!hasJellyseerrConfigured}
+								placeholder={hasJellyseerrConfigured ? '••••••••' : 'API key'}
+								autocomplete="off"
+							/>
+						</div>
+						<button type="submit" class="btn-save" disabled={isJellyseerrLoading}>
+							{#if isJellyseerrLoading}
+								<span class="spinner-small"></span>
+							{:else}
+								Save
+							{/if}
+						</button>
+					</div>
+				</form>
+			{/if}
+		</section>
+
+		<!-- Thresholds Section -->
+		<section class="section">
+			<h2 class="section-title">Thresholds</h2>
+
+			<form onsubmit={handleAnalysisSubmit} class="thresholds-form">
 				{#if analysisError}
-					<div class="message message-error" role="alert">
-						{analysisError}
-					</div>
+					<div class="inline-error">{analysisError}</div>
 				{/if}
-
 				{#if analysisSuccess}
-					<div class="message message-success" role="status">
-						{analysisSuccess}
-					</div>
+					<div class="inline-success">{analysisSuccess}</div>
 				{/if}
 
-				<div class="form-group">
-					<label for="old-content-months">Old Content Threshold (months)</label>
-					<input
-						type="number"
-						id="old-content-months"
-						bind:value={oldContentMonths}
-						min="1"
-						max="24"
-						required
-						class="input input-number"
-					/>
-					<span class="hint">Flag content not watched in this many months (default: <span class="text-mono">4</span>)</span>
+				<div class="threshold-row">
+					<label for="old-content">Flag content unwatched for</label>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="old-content"
+							bind:value={oldContentMonths}
+							min="1"
+							max="24"
+							required
+						/>
+						<span class="unit">months</span>
+					</div>
 				</div>
 
-				<div class="form-group">
-					<label for="min-age-months">Minimum Age (months)</label>
-					<input
-						type="number"
-						id="min-age-months"
-						bind:value={minAgeMonths}
-						min="0"
-						max="12"
-						required
-						class="input input-number"
-					/>
-					<span class="hint">Don't flag recently added content (default: <span class="text-mono">3</span>)</span>
+				<div class="threshold-row">
+					<label for="min-age">Don't flag content newer than</label>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="min-age"
+							bind:value={minAgeMonths}
+							min="0"
+							max="12"
+							required
+						/>
+						<span class="unit">months</span>
+					</div>
 				</div>
 
-				<div class="form-group">
-					<label for="large-movie-size">Large Movie Size (GB)</label>
-					<input
-						type="number"
-						id="large-movie-size"
-						bind:value={largeMovieSizeGb}
-						min="1"
-						max="100"
-						required
-						class="input input-number"
-					/>
-					<span class="hint">Movies larger than this are flagged (default: <span class="text-mono">13</span>)</span>
+				<div class="threshold-row">
+					<label for="large-size">Flag movies larger than</label>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="large-size"
+							bind:value={largeMovieSizeGb}
+							min="1"
+							max="100"
+							required
+						/>
+						<span class="unit">GB</span>
+					</div>
 				</div>
 
-				<div class="button-row">
-					<button type="submit" disabled={isAnalysisLoading} class="btn-primary">
-						{#if isAnalysisLoading}
-							<span class="spinner"></span>
-							Saving...
-						{:else}
-							Save Preferences
-						{/if}
+				<div class="threshold-actions">
+					<button type="button" class="btn-reset" onclick={handleResetAnalysis} disabled={isAnalysisLoading}>
+						Reset
 					</button>
-					<button
-						type="button"
-						onclick={handleResetAnalysis}
-						disabled={isAnalysisLoading}
-						class="btn-secondary"
-					>
-						Reset to Defaults
+					<button type="submit" class="btn-save" disabled={isAnalysisLoading}>
+						{#if isAnalysisLoading}
+							<span class="spinner-small"></span>
+						{:else}
+							Save
+						{/if}
 					</button>
 				</div>
 			</form>
@@ -482,10 +493,10 @@
 </div>
 
 <style>
-	.page-container {
-		padding: var(--space-6);
+	.settings-page {
 		max-width: 640px;
 		margin: 0 auto;
+		padding: var(--space-6);
 	}
 
 	.page-header {
@@ -496,104 +507,137 @@
 		font-size: var(--font-size-2xl);
 		font-weight: var(--font-weight-semibold);
 		letter-spacing: -0.02em;
-		margin-bottom: var(--space-2);
 	}
 
-	.page-subtitle {
-		color: var(--text-secondary);
-		font-size: var(--font-size-base);
-		margin: 0;
-	}
-
-	.loading-state {
+	.loading {
 		display: flex;
-		align-items: center;
 		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-8);
-		color: var(--text-secondary);
+		padding: var(--space-12);
 	}
 
-	/* Settings Section */
-	.settings-section {
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-6);
-		margin-bottom: var(--space-6);
+	/* Section */
+	.section {
+		margin-bottom: var(--space-10);
 	}
 
-	.settings-section:last-child {
-		margin-bottom: 0;
-	}
-
-	.section-header {
-		margin-bottom: var(--space-4);
-	}
-
-	.section-header h2 {
-		font-size: var(--font-size-lg);
-		font-weight: var(--font-weight-semibold);
-		margin-bottom: var(--space-1);
-	}
-
-	.section-description {
-		color: var(--text-secondary);
-		font-size: var(--font-size-base);
-		margin: 0;
-	}
-
-	/* Status Badge */
-	.status-badge {
-		display: inline-flex;
-		align-items: center;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-md);
-		font-size: var(--font-size-sm);
+	.section-title {
+		font-size: var(--font-size-xs);
 		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
 		margin-bottom: var(--space-4);
 	}
 
-	.status-connected {
-		background: var(--success-light);
-		color: var(--success);
-		border: 1px solid var(--success);
+	.divider {
+		height: 1px;
+		background: var(--border);
+		margin: var(--space-4) 0;
 	}
 
-	.status-disconnected {
-		background: var(--warning-light);
-		color: var(--warning);
-		border: 1px solid var(--warning);
+	/* Connection Row */
+	.connection-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-3) 0;
 	}
 
-	/* Form */
-	.settings-form {
+	.connection-info {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
+		gap: 2px;
 	}
 
-	.form-group {
+	.connection-header {
 		display: flex;
-		flex-direction: column;
+		align-items: center;
 		gap: var(--space-2);
 	}
 
-	label {
+	.connection-name {
 		font-weight: var(--font-weight-medium);
-		font-size: var(--font-size-base);
 		color: var(--text-primary);
 	}
 
-	.label-hint {
-		font-weight: var(--font-weight-normal);
-		color: var(--text-muted);
-		font-size: var(--font-size-sm);
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
 	}
 
-	.input {
-		padding: var(--space-3);
-		font-size: var(--font-size-md);
+	.status-connected {
+		background: var(--success);
+	}
+
+	.status-disconnected {
+		background: var(--text-muted);
+	}
+
+	.connection-url {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+	}
+
+	.connection-url.muted {
+		color: var(--text-muted);
+	}
+
+	.btn-edit {
+		padding: var(--space-1) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-edit:hover {
+		color: var(--text-primary);
+		border-color: var(--text-muted);
+	}
+
+	/* Connection Form */
+	.connection-form {
+		padding: var(--space-4) 0;
+		padding-left: var(--space-4);
+		border-left: 2px solid var(--border);
+		margin-left: var(--space-1);
+		margin-top: var(--space-2);
+	}
+
+	.form-row {
+		display: flex;
+		gap: var(--space-3);
+		align-items: flex-end;
+		flex-wrap: wrap;
+	}
+
+	.form-field {
+		flex: 1;
+		min-width: 160px;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.form-field label {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		font-weight: var(--font-weight-medium);
+	}
+
+	.optional {
+		font-weight: var(--font-weight-normal);
+		color: var(--text-muted);
+	}
+
+	.form-field input {
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		background: var(--bg-primary);
@@ -601,139 +645,194 @@
 		transition: border-color var(--transition-fast);
 	}
 
-	.input:focus {
+	.form-field input:focus {
 		outline: none;
 		border-color: var(--accent);
 	}
 
-	.input::placeholder {
+	.form-field input::placeholder {
 		color: var(--text-muted);
 	}
 
-	.input-number {
-		font-family: var(--font-mono);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.hint {
-		color: var(--text-muted);
+	.btn-save {
+		padding: var(--space-2) var(--space-4);
 		font-size: var(--font-size-sm);
-	}
-
-	.text-mono {
-		font-family: var(--font-mono);
-	}
-
-	/* Messages */
-	.message {
-		padding: var(--space-3);
+		font-weight: var(--font-weight-medium);
+		color: white;
+		background: var(--accent);
+		border: none;
 		border-radius: var(--radius-md);
-		font-size: var(--font-size-base);
-	}
-
-	.message-error {
-		background: var(--danger-light);
-		border: 1px solid var(--danger);
-		color: var(--danger);
-	}
-
-	.message-success {
-		background: var(--success-light);
-		border: 1px solid var(--success);
-		color: var(--success);
-	}
-
-	/* Buttons */
-	.btn-primary,
-	.btn-secondary {
-		padding: var(--space-3) var(--space-4);
-		border-radius: var(--radius-md);
-		font-size: var(--font-size-md);
-		font-weight: var(--font-weight-semibold);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition: background var(--transition-fast);
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: var(--space-2);
+		min-width: 60px;
+		height: 34px;
 	}
 
-	.btn-primary {
-		background: var(--accent);
-		color: white;
-		border: none;
-	}
-
-	.btn-primary:hover:not(:disabled) {
+	.btn-save:hover:not(:disabled) {
 		background: var(--accent-hover);
 	}
 
-	.btn-secondary {
-		background: transparent;
-		color: var(--text-secondary);
+	.btn-save:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	/* Inline messages */
+	.inline-error,
+	.inline-success {
+		font-size: var(--font-size-sm);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		margin-bottom: var(--space-3);
+	}
+
+	.inline-error {
+		background: var(--danger-light);
+		color: var(--danger);
+	}
+
+	.inline-success {
+		background: var(--success-light);
+		color: var(--success);
+	}
+
+	/* Thresholds */
+	.thresholds-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.threshold-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		padding: var(--space-2) 0;
+	}
+
+	.threshold-row label {
+		font-size: var(--font-size-md);
+		color: var(--text-primary);
+	}
+
+	.threshold-input {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.threshold-input input {
+		width: 64px;
+		padding: var(--space-2);
+		font-size: var(--font-size-md);
+		font-family: var(--font-mono);
+		text-align: center;
 		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
 	}
 
-	.btn-secondary:hover:not(:disabled) {
-		background: var(--bg-hover);
-		border-color: var(--text-secondary);
+	.threshold-input input:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
-	.btn-primary:disabled,
-	.btn-secondary:disabled {
+	.unit {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		min-width: 50px;
+	}
+
+	.threshold-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		margin-top: var(--space-4);
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--border);
+	}
+
+	.btn-reset {
+		padding: var(--space-2) var(--space-4);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-reset:hover:not(:disabled) {
+		color: var(--text-primary);
+		border-color: var(--text-muted);
+	}
+
+	.btn-reset:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	.button-row {
-		display: flex;
-		gap: var(--space-3);
-		flex-wrap: wrap;
-		margin-top: var(--space-2);
-	}
-
-	.button-row .btn-primary,
-	.button-row .btn-secondary {
-		flex: 1;
-		min-width: 140px;
-	}
-
+	/* Spinners */
 	.spinner {
-		width: 1rem;
-		height: 1rem;
-		border: 2px solid currentColor;
-		border-top-color: transparent;
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
 
-	.btn-primary .spinner {
-		border-color: rgba(255, 255, 255, 0.3);
+	.spinner-small {
+		width: 14px;
+		height: 14px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
 		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
 	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+		to { transform: rotate(360deg); }
 	}
 
-	@media (max-width: 640px) {
-		.page-container {
+	/* Responsive */
+	@media (max-width: 600px) {
+		.settings-page {
 			padding: var(--space-4);
 		}
 
-		.settings-section {
-			padding: var(--space-4);
-		}
-
-		.button-row {
+		.form-row {
 			flex-direction: column;
+			align-items: stretch;
 		}
 
-		.button-row .btn-primary,
-		.button-row .btn-secondary {
+		.form-field {
+			min-width: 100%;
+		}
+
+		.btn-save {
 			width: 100%;
+		}
+
+		.threshold-row {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-2);
+		}
+
+		.threshold-input {
+			width: 100%;
+		}
+
+		.threshold-input input {
+			flex: 1;
 		}
 	}
 </style>

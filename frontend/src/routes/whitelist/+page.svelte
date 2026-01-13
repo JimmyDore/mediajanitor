@@ -14,268 +14,108 @@
 		total_count: number;
 	}
 
+	type TabType = 'protected' | 'french' | 'exempt';
+
 	let loading = $state(true);
-	let error = $state<string | null>(null);
-	let data = $state<WhitelistResponse | null>(null);
+	let activeTab = $state<TabType>('protected');
+	let protectedData = $state<WhitelistResponse | null>(null);
 	let frenchOnlyData = $state<WhitelistResponse | null>(null);
 	let languageExemptData = $state<WhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let removingIds = $state<Set<number>>(new Set());
-	let removingFrenchOnlyIds = $state<Set<number>>(new Set());
-	let removingLanguageExemptIds = $state<Set<number>>(new Set());
+
+	const tabLabels: Record<TabType, { label: string; desc: string }> = {
+		protected: { label: 'Protected', desc: 'Won\'t appear in old/unwatched list' },
+		french: { label: 'French-Only', desc: 'Won\'t flag missing English audio' },
+		exempt: { label: 'Language Exempt', desc: 'Won\'t flag any language issues' }
+	};
 
 	function formatDate(dateStr: string): string {
 		try {
 			const date = new Date(dateStr);
-			return date.toLocaleDateString('en-US', {
-				year: 'numeric',
-				month: 'short',
-				day: 'numeric'
-			});
-		} catch {
-			return 'Unknown';
-		}
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+		} catch { return '?'; }
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
 		toast = { message, type };
-		setTimeout(() => {
-			toast = null;
-		}, 3000);
+		setTimeout(() => toast = null, 3000);
 	}
 
-	async function removeFromWhitelist(item: WhitelistItem) {
-		const token = localStorage.getItem('access_token');
-		if (!token) {
-			showToast('Not authenticated', 'error');
-			return;
+	function getCurrentData(): WhitelistResponse | null {
+		switch (activeTab) {
+			case 'protected': return protectedData;
+			case 'french': return frenchOnlyData;
+			case 'exempt': return languageExemptData;
 		}
+	}
 
-		// Add to removing set to show loading state
+	function getApiPath(): string {
+		switch (activeTab) {
+			case 'protected': return '/api/whitelist/content';
+			case 'french': return '/api/whitelist/french-only';
+			case 'exempt': return '/api/whitelist/language-exempt';
+		}
+	}
+
+	async function removeItem(item: WhitelistItem) {
+		const token = localStorage.getItem('access_token');
+		if (!token) { showToast('Not authenticated', 'error'); return; }
+
 		removingIds = new Set([...removingIds, item.id]);
 
 		try {
-			const response = await fetch(`/api/whitelist/content/${item.id}`, {
+			const response = await fetch(`${getApiPath()}/${item.id}`, {
 				method: 'DELETE',
-				headers: {
-					Authorization: `Bearer ${token}`
-				}
+				headers: { Authorization: `Bearer ${token}` }
 			});
 
-			if (response.status === 401) {
-				showToast('Session expired. Please log in again.', 'error');
-				return;
-			}
+			if (!response.ok) { showToast('Failed to remove', 'error'); return; }
 
-			if (response.status === 404) {
-				showToast('Item not found in whitelist', 'error');
-				return;
-			}
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				showToast(errorData.detail || 'Failed to remove from whitelist', 'error');
-				return;
-			}
-
-			// Remove item from the list immediately
-			if (data) {
-				data = {
+			// Update the correct data source
+			const updateData = (data: WhitelistResponse | null) => {
+				if (!data) return null;
+				return {
 					...data,
 					items: data.items.filter((i) => i.id !== item.id),
 					total_count: data.total_count - 1
 				};
+			};
+
+			switch (activeTab) {
+				case 'protected': protectedData = updateData(protectedData); break;
+				case 'french': frenchOnlyData = updateData(frenchOnlyData); break;
+				case 'exempt': languageExemptData = updateData(languageExemptData); break;
 			}
 
-			showToast('Removed from whitelist', 'success');
-		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to remove from whitelist', 'error');
-		} finally {
-			// Remove from removing set
+			showToast('Removed', 'success');
+		} catch { showToast('Failed', 'error'); }
+		finally {
 			const newSet = new Set(removingIds);
 			newSet.delete(item.id);
 			removingIds = newSet;
 		}
 	}
 
-	async function fetchWhitelist() {
-		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				error = 'Not authenticated';
-				return;
-			}
-
-			const response = await fetch('/api/whitelist/content', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-
-			if (response.status === 401) {
-				error = 'Session expired. Please log in again.';
-				return;
-			}
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				error = errorData.detail || 'Failed to fetch whitelist';
-				return;
-			}
-
-			data = await response.json();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch whitelist';
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function fetchFrenchOnlyWhitelist() {
-		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				return;
-			}
-
-			const response = await fetch('/api/whitelist/french-only', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-
-			if (response.ok) {
-				frenchOnlyData = await response.json();
-			}
-		} catch {
-			// Silently fail for French-only - not critical
-		}
-	}
-
-	async function fetchLanguageExemptWhitelist() {
-		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				return;
-			}
-
-			const response = await fetch('/api/whitelist/language-exempt', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-
-			if (response.ok) {
-				languageExemptData = await response.json();
-			}
-		} catch {
-			// Silently fail - not critical
-		}
-	}
-
-	async function removeFromFrenchOnlyWhitelist(item: WhitelistItem) {
+	async function fetchAll() {
 		const token = localStorage.getItem('access_token');
-		if (!token) {
-			showToast('Not authenticated', 'error');
-			return;
-		}
-
-		removingFrenchOnlyIds = new Set([...removingFrenchOnlyIds, item.id]);
+		if (!token) return;
 
 		try {
-			const response = await fetch(`/api/whitelist/french-only/${item.id}`, {
-				method: 'DELETE',
-				headers: {
-					Authorization: `Bearer ${token}`
-				}
-			});
+			const [p, f, e] = await Promise.all([
+				fetch('/api/whitelist/content', { headers: { Authorization: `Bearer ${token}` } }),
+				fetch('/api/whitelist/french-only', { headers: { Authorization: `Bearer ${token}` } }),
+				fetch('/api/whitelist/language-exempt', { headers: { Authorization: `Bearer ${token}` } })
+			]);
 
-			if (response.status === 401) {
-				showToast('Session expired. Please log in again.', 'error');
-				return;
-			}
-
-			if (response.status === 404) {
-				showToast('Item not found in whitelist', 'error');
-				return;
-			}
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				showToast(errorData.detail || 'Failed to remove from whitelist', 'error');
-				return;
-			}
-
-			// Remove item from the list immediately
-			if (frenchOnlyData) {
-				frenchOnlyData = {
-					...frenchOnlyData,
-					items: frenchOnlyData.items.filter((i) => i.id !== item.id),
-					total_count: frenchOnlyData.total_count - 1
-				};
-			}
-
-			showToast('Removed from French-only whitelist', 'success');
-		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to remove from whitelist', 'error');
-		} finally {
-			const newSet = new Set(removingFrenchOnlyIds);
-			newSet.delete(item.id);
-			removingFrenchOnlyIds = newSet;
-		}
+			if (p.ok) protectedData = await p.json();
+			if (f.ok) frenchOnlyData = await f.json();
+			if (e.ok) languageExemptData = await e.json();
+		} catch {}
+		finally { loading = false; }
 	}
 
-	async function removeFromLanguageExemptWhitelist(item: WhitelistItem) {
-		const token = localStorage.getItem('access_token');
-		if (!token) {
-			showToast('Not authenticated', 'error');
-			return;
-		}
-
-		removingLanguageExemptIds = new Set([...removingLanguageExemptIds, item.id]);
-
-		try {
-			const response = await fetch(`/api/whitelist/language-exempt/${item.id}`, {
-				method: 'DELETE',
-				headers: {
-					Authorization: `Bearer ${token}`
-				}
-			});
-
-			if (response.status === 401) {
-				showToast('Session expired. Please log in again.', 'error');
-				return;
-			}
-
-			if (response.status === 404) {
-				showToast('Item not found in whitelist', 'error');
-				return;
-			}
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				showToast(errorData.detail || 'Failed to remove from whitelist', 'error');
-				return;
-			}
-
-			// Remove item from the list immediately
-			if (languageExemptData) {
-				languageExemptData = {
-					...languageExemptData,
-					items: languageExemptData.items.filter((i) => i.id !== item.id),
-					total_count: languageExemptData.total_count - 1
-				};
-			}
-
-			showToast('Removed from language-exempt whitelist', 'success');
-		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to remove from whitelist', 'error');
-		} finally {
-			const newSet = new Set(removingLanguageExemptIds);
-			newSet.delete(item.id);
-			removingLanguageExemptIds = newSet;
-		}
-	}
-
-	onMount(() => {
-		fetchWhitelist();
-		fetchFrenchOnlyWhitelist();
-		fetchLanguageExemptWhitelist();
-	});
+	onMount(fetchAll);
 </script>
 
 <svelte:head>
@@ -283,329 +123,175 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert">
-		{toast.message}
-	</div>
+	<div class="toast toast-{toast.type}" role="alert">{toast.message}</div>
 {/if}
 
-<div class="page-container">
-	<div class="page-header">
+<div class="whitelist-page">
+	<header class="page-header">
 		<h1>Whitelists</h1>
-		<p class="page-description">
-			Manage content exempted from various issue checks
-		</p>
-	</div>
+	</header>
+
+	<!-- Tabs -->
+	<nav class="tabs">
+		{#each Object.entries(tabLabels) as [tab, { label }]}
+			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : languageExemptData?.total_count}
+			<button
+				class="tab"
+				class:active={activeTab === tab}
+				onclick={() => activeTab = tab as TabType}
+			>
+				{label}
+				{#if count !== undefined && count > 0}
+					<span class="tab-count">{count}</span>
+				{/if}
+			</button>
+		{/each}
+	</nav>
+
+	<p class="tab-desc">{tabLabels[activeTab].desc}</p>
 
 	{#if loading}
-		<div class="loading-container">
-			<div class="spinner" aria-label="Loading"></div>
-			<p>Loading whitelist...</p>
-		</div>
-	{:else if error}
-		<div class="error-container">
-			<p class="error-message">{error}</p>
-		</div>
-	{:else if data}
-		<!-- Protected Content Section -->
-		<section class="whitelist-section">
-			<h2 class="section-title">Protected Content</h2>
-			<p class="section-description">Content protected from deletion suggestions (won't appear in old/unwatched list)</p>
-
-			<div class="summary-bar">
-				<div class="summary-stat">
-					<span class="stat-label">Protected Items</span>
-					<span class="stat-value">{data.total_count}</span>
-				</div>
+		<div class="loading"><span class="spinner"></span></div>
+	{:else}
+		{@const currentData = getCurrentData()}
+		{#if !currentData || currentData.items.length === 0}
+			<div class="empty">
+				<p>No items in this list</p>
+				<p class="empty-hint">
+					{#if activeTab === 'protected'}
+						Use "Protect" on the <a href="/issues?filter=old">Issues</a> page
+					{:else if activeTab === 'french'}
+						Use "FR" on the <a href="/issues?filter=language">Issues</a> page
+					{:else}
+						Use the checkmark on the <a href="/issues?filter=language">Issues</a> page
+					{/if}
+				</p>
 			</div>
-
-			{#if data.items.length === 0}
-				<div class="empty-state">
-					<p>No content in your protected list yet.</p>
-					<p class="empty-hint">
-						Use the "Protect" button on the <a href="/issues?filter=old">Issues</a> page to add items.
-					</p>
-				</div>
-			{:else}
-				<div class="content-list">
-					<div class="list-header">
-						<span class="col-name">Name</span>
-						<span class="col-type">Type</span>
-						<span class="col-date">Date Added</span>
-						<span class="col-actions">Actions</span>
-					</div>
-					{#each data.items as item}
-						<div class="content-item">
-							<span class="col-name item-name">{item.name}</span>
-							<span class="col-type">
-								<span class="type-badge type-{item.media_type.toLowerCase()}">
-									{item.media_type === 'Movie' ? 'Movie' : 'Series'}
-								</span>
-							</span>
-							<span class="col-date">{formatDate(item.created_at)}</span>
-							<span class="col-actions">
-								<button
-									class="btn-remove"
-									onclick={() => removeFromWhitelist(item)}
-									disabled={removingIds.has(item.id)}
-									title="Remove from whitelist - item may reappear in old content list"
-								>
-									{#if removingIds.has(item.id)}
-										<span class="btn-spinner"></span>
-									{:else}
-										Remove
-									{/if}
-								</button>
+		{:else}
+			<div class="list">
+				{#each currentData.items as item}
+					<div class="list-item">
+						<div class="item-info">
+							<span class="item-name">{item.name}</span>
+							<span class="item-meta">
+								{item.media_type === 'Movie' ? 'Movie' : 'Series'} · {formatDate(item.created_at)}
 							</span>
 						</div>
-					{/each}
-				</div>
-			{/if}
-		</section>
-
-		<!-- French-Only Section -->
-		{#if frenchOnlyData}
-			<section class="whitelist-section">
-				<h2 class="section-title">French-Only Content</h2>
-				<p class="section-description">Content that doesn't require English audio (won't flag missing EN audio)</p>
-
-				<div class="summary-bar">
-					<div class="summary-stat">
-						<span class="stat-label">French-Only Items</span>
-						<span class="stat-value">{frenchOnlyData.total_count}</span>
+						<button
+							class="btn-remove"
+							onclick={() => removeItem(item)}
+							disabled={removingIds.has(item.id)}
+							title="Remove"
+						>
+							{#if removingIds.has(item.id)}
+								<span class="btn-spin"></span>
+							{:else}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="18" y1="6" x2="6" y2="18"/>
+									<line x1="6" y1="6" x2="18" y2="18"/>
+								</svg>
+							{/if}
+						</button>
 					</div>
-				</div>
-
-				{#if frenchOnlyData.items.length === 0}
-					<div class="empty-state">
-						<p>No French-only content yet.</p>
-						<p class="empty-hint">
-							Use the "FR Only" button on the <a href="/issues?filter=language">Language Issues</a> page for French films that don't need English audio.
-						</p>
-					</div>
-				{:else}
-					<div class="content-list">
-						<div class="list-header">
-							<span class="col-name">Name</span>
-							<span class="col-type">Type</span>
-							<span class="col-date">Date Added</span>
-							<span class="col-actions">Actions</span>
-						</div>
-						{#each frenchOnlyData.items as item}
-							<div class="content-item">
-								<span class="col-name item-name">{item.name}</span>
-								<span class="col-type">
-									<span class="type-badge type-{item.media_type.toLowerCase()}">
-										{item.media_type === 'Movie' ? 'Movie' : 'Series'}
-									</span>
-								</span>
-								<span class="col-date">{formatDate(item.created_at)}</span>
-								<span class="col-actions">
-									<button
-										class="btn-remove"
-										onclick={() => removeFromFrenchOnlyWhitelist(item)}
-										disabled={removingFrenchOnlyIds.has(item.id)}
-										title="Remove from French-only list - item may show as missing English audio"
-									>
-										{#if removingFrenchOnlyIds.has(item.id)}
-											<span class="btn-spinner"></span>
-										{:else}
-											Remove
-										{/if}
-									</button>
-								</span>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</section>
-		{/if}
-
-		<!-- Language-Exempt Section -->
-		{#if languageExemptData}
-			<section class="whitelist-section">
-				<h2 class="section-title">Language-Exempt Content</h2>
-				<p class="section-description">Content exempt from all language checks (won't flag any language issues)</p>
-
-				<div class="summary-bar">
-					<div class="summary-stat">
-						<span class="stat-label">Language-Exempt Items</span>
-						<span class="stat-value">{languageExemptData.total_count}</span>
-					</div>
-				</div>
-
-				{#if languageExemptData.items.length === 0}
-					<div class="empty-state">
-						<p>No language-exempt content yet.</p>
-						<p class="empty-hint">
-							Use the "Exempt" button on the <a href="/issues?filter=language">Language Issues</a> page for content that should never flag language issues.
-						</p>
-					</div>
-				{:else}
-					<div class="content-list">
-						<div class="list-header">
-							<span class="col-name">Name</span>
-							<span class="col-type">Type</span>
-							<span class="col-date">Date Added</span>
-							<span class="col-actions">Actions</span>
-						</div>
-						{#each languageExemptData.items as item}
-							<div class="content-item">
-								<span class="col-name item-name">{item.name}</span>
-								<span class="col-type">
-									<span class="type-badge type-{item.media_type.toLowerCase()}">
-										{item.media_type === 'Movie' ? 'Movie' : 'Series'}
-									</span>
-								</span>
-								<span class="col-date">{formatDate(item.created_at)}</span>
-								<span class="col-actions">
-									<button
-										class="btn-remove"
-										onclick={() => removeFromLanguageExemptWhitelist(item)}
-										disabled={removingLanguageExemptIds.has(item.id)}
-										title="Remove from language-exempt list - item may show language issues again"
-									>
-										{#if removingLanguageExemptIds.has(item.id)}
-											<span class="btn-spinner"></span>
-										{:else}
-											Remove
-										{/if}
-									</button>
-								</span>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</section>
+				{/each}
+			</div>
 		{/if}
 	{/if}
 </div>
 
 <style>
-	.page-container {
-		padding: var(--space-6);
-		max-width: 1200px;
+	.whitelist-page {
+		max-width: 640px;
 		margin: 0 auto;
+		padding: var(--space-6);
 	}
 
 	.page-header {
-		margin-bottom: var(--space-8);
+		margin-bottom: var(--space-6);
 	}
 
 	.page-header h1 {
 		font-size: var(--font-size-2xl);
 		font-weight: var(--font-weight-semibold);
 		letter-spacing: -0.02em;
-		color: var(--text-primary);
-		margin: 0 0 var(--space-2) 0;
 	}
 
-	.page-description {
-		color: var(--text-secondary);
-		font-size: var(--font-size-base);
-		margin: 0;
+	/* Tabs */
+	.tabs {
+		display: flex;
+		gap: var(--space-1);
+		border-bottom: 1px solid var(--border);
+		margin-bottom: var(--space-2);
 	}
 
-	.whitelist-section {
-		margin-bottom: var(--space-10);
-	}
-
-	.section-title {
-		font-size: var(--font-size-lg);
-		font-weight: var(--font-weight-semibold);
-		color: var(--text-primary);
-		margin: 0 0 var(--space-1) 0;
-	}
-
-	.section-description {
-		color: var(--text-secondary);
+	.tab {
+		padding: var(--space-2) var(--space-3);
 		font-size: var(--font-size-sm);
-		margin: 0 0 var(--space-4) 0;
-	}
-
-	.loading-container {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		min-height: 200px;
-		gap: var(--space-4);
-	}
-
-	.spinner {
-		width: 2rem;
-		height: 2rem;
-		border: 3px solid var(--border);
-		border-top-color: var(--accent);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.loading-container p {
+		font-weight: var(--font-weight-medium);
 		color: var(--text-secondary);
-		font-size: var(--font-size-base);
-	}
-
-	.error-container {
-		padding: var(--space-8);
-		background: var(--bg-secondary);
-		border: 1px solid var(--danger);
-		border-radius: var(--radius-lg);
-		text-align: center;
-	}
-
-	.error-message {
-		color: var(--danger);
-		margin: 0;
-	}
-
-	.summary-bar {
+		background: transparent;
+		border: none;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		cursor: pointer;
+		transition: all var(--transition-fast);
 		display: flex;
-		gap: var(--space-8);
-		padding: var(--space-4) var(--space-6);
-		background: var(--bg-secondary);
-		border-radius: var(--radius-lg);
-		border: 1px solid var(--border);
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.tab:hover {
+		color: var(--text-primary);
+	}
+
+	.tab.active {
+		color: var(--text-primary);
+		border-bottom-color: var(--accent);
+	}
+
+	.tab-count {
+		background: var(--bg-tertiary);
+		padding: 1px 6px;
+		border-radius: 10px;
+		font-size: var(--font-size-xs);
+		font-family: var(--font-mono);
+	}
+
+	.tab.active .tab-count {
+		background: var(--accent-light);
+		color: var(--accent);
+	}
+
+	.tab-desc {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
 		margin-bottom: var(--space-6);
 	}
 
-	.summary-stat {
+	/* Loading */
+	.loading {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-
-	.stat-label {
-		font-size: var(--font-size-xs);
-		color: var(--text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		font-weight: var(--font-weight-medium);
-	}
-
-	.stat-value {
-		font-size: var(--font-size-xl);
-		font-weight: var(--font-weight-bold);
-		color: var(--text-primary);
-		font-family: var(--font-mono);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.empty-state {
+		justify-content: center;
 		padding: var(--space-12);
-		text-align: center;
-		background: var(--bg-secondary);
-		border-radius: var(--radius-lg);
-		border: 1px solid var(--border);
 	}
 
-	.empty-state p {
-		color: var(--text-secondary);
+	.spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	/* Empty */
+	.empty {
+		text-align: center;
+		padding: var(--space-8);
+		color: var(--text-muted);
+	}
+
+	.empty p {
 		margin: 0 0 var(--space-2) 0;
 	}
 
@@ -616,51 +302,40 @@
 	.empty-hint a {
 		color: var(--accent);
 		text-decoration: none;
-		font-weight: var(--font-weight-medium);
 	}
 
 	.empty-hint a:hover {
 		text-decoration: underline;
 	}
 
-	.content-list {
-		background: var(--bg-secondary);
-		border-radius: var(--radius-lg);
+	/* List */
+	.list {
 		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
 		overflow: hidden;
 	}
 
-	.list-header {
-		display: grid;
-		grid-template-columns: 1fr 5rem 8rem 5rem;
-		gap: var(--space-4);
-		padding: var(--space-3) var(--space-4);
-		background: var(--bg-tertiary);
-		border-bottom: 1px solid var(--border);
-		font-size: var(--font-size-xs);
-		font-weight: var(--font-weight-medium);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-muted);
-	}
-
-	.content-item {
-		display: grid;
-		grid-template-columns: 1fr 5rem 8rem 5rem;
-		gap: var(--space-4);
-		padding: var(--space-3) var(--space-4);
-		border-bottom: 1px solid var(--border);
+	.list-item {
+		display: flex;
 		align-items: center;
-		font-size: var(--font-size-md);
-		transition: background var(--transition-fast);
+		justify-content: space-between;
+		padding: var(--space-3) var(--space-4);
+		border-bottom: 1px solid var(--border);
 	}
 
-	.content-item:last-child {
+	.list-item:last-child {
 		border-bottom: none;
 	}
 
-	.content-item:hover {
+	.list-item:hover {
 		background: var(--bg-hover);
+	}
+
+	.item-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
 	}
 
 	.item-name {
@@ -671,56 +346,29 @@
 		text-overflow: ellipsis;
 	}
 
-	.col-type {
-		text-align: center;
-	}
-
-	.type-badge {
-		display: inline-block;
-		padding: 2px var(--space-2);
-		border-radius: var(--radius-sm);
-		font-size: var(--font-size-xs);
-		font-weight: var(--font-weight-medium);
-	}
-
-	.type-movie {
-		background: var(--info-light);
-		color: var(--info);
-	}
-
-	.type-series {
-		background: rgba(139, 92, 246, 0.1);
-		color: #8b5cf6;
-	}
-
-	.col-date {
-		color: var(--text-secondary);
+	.item-meta {
 		font-size: var(--font-size-sm);
-	}
-
-	.col-actions {
-		text-align: center;
+		color: var(--text-muted);
 	}
 
 	.btn-remove {
-		padding: var(--space-1) var(--space-2);
-		font-size: var(--font-size-xs);
-		font-weight: var(--font-weight-medium);
-		color: var(--danger);
-		background: transparent;
-		border: 1px solid var(--danger);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		transition: all var(--transition-fast);
-		min-width: 4rem;
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		flex-shrink: 0;
 	}
 
 	.btn-remove:hover:not(:disabled) {
-		background: var(--danger);
-		color: white;
+		color: var(--danger);
+		border-color: var(--danger);
 	}
 
 	.btn-remove:disabled {
@@ -728,56 +376,27 @@
 		cursor: not-allowed;
 	}
 
-	.btn-spinner {
-		width: 0.875rem;
-		height: 0.875rem;
+	.btn-spin {
+		width: 12px;
+		height: 12px;
 		border: 2px solid currentColor;
 		border-top-color: transparent;
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
 
-	/* Toast notifications - using global styles */
-
-	@keyframes slideIn {
-		from {
-			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
-	/* Responsive design */
-	@media (max-width: 768px) {
-		.page-container {
+	/* Responsive */
+	@media (max-width: 640px) {
+		.whitelist-page {
 			padding: var(--space-4);
 		}
 
-		.list-header {
-			display: none;
-		}
-
-		.content-item {
-			grid-template-columns: 1fr;
-			gap: var(--space-2);
-			padding: var(--space-4);
-		}
-
-		.col-name {
-			order: 1;
-		}
-
-		.col-type,
-		.col-date {
-			font-size: var(--font-size-sm);
-		}
-
-		.col-actions {
-			order: 2;
-			text-align: left;
+		.tabs {
+			overflow-x: auto;
 		}
 	}
 </style>
