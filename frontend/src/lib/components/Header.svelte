@@ -27,11 +27,11 @@
 					Dashboard
 				</a>
 				<a
-					href="/content/old-unwatched"
+					href="/issues"
 					class="nav-link"
-					class:active={currentPath === '/content/old-unwatched'}
+					class:active={currentPath === '/issues' || currentPath.startsWith('/issues?')}
 				>
-					Old Content
+					Issues
 				</a>
 				<a
 					href="/whitelist"

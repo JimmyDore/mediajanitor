@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist
 from app.models.content import (
+    ContentIssueItem,
+    ContentIssuesResponse,
     ContentSummaryResponse,
     CurrentlyAiringItem,
     CurrentlyAiringResponse,
@@ -472,4 +474,118 @@ async def get_currently_airing(
     return CurrentlyAiringResponse(
         items=[],
         total_count=0,
+    )
+
+
+def get_item_issues(
+    item: CachedMediaItem,
+    whitelisted_ids: set[str],
+) -> list[str]:
+    """Get all issue types that apply to a content item.
+
+    Returns list of issue types: "old", "large", "language", "request"
+    """
+    issues: list[str] = []
+
+    # Check for old/unwatched (exclude whitelisted)
+    if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(item):
+        issues.append("old")
+
+    # Check for large movie
+    if is_large_movie(item):
+        issues.append("large")
+
+    # Language issues - placeholder for US-5.1
+    # issues.append("language") - will be implemented later
+
+    return issues
+
+
+async def get_content_issues(
+    db: AsyncSession,
+    user_id: int,
+    filter_type: str | None = None,
+) -> ContentIssuesResponse:
+    """Get all content with issues for a user.
+
+    Args:
+        db: Database session
+        user_id: User ID from JWT
+        filter_type: Optional filter - "old", "large", "language", "requests"
+
+    Returns items sorted by size (largest first).
+    """
+    # Handle language and requests filters - not yet implemented
+    if filter_type == "language":
+        return ContentIssuesResponse(
+            items=[],
+            total_count=0,
+            total_size_bytes=0,
+            total_size_formatted="0 B",
+        )
+    if filter_type == "requests":
+        return ContentIssuesResponse(
+            items=[],
+            total_count=0,
+            total_size_bytes=0,
+            total_size_formatted="0 B",
+        )
+
+    # Get user's cached media items
+    result = await db.execute(
+        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
+    )
+    all_items = result.scalars().all()
+
+    # Get user's whitelist
+    whitelist_result = await db.execute(
+        select(ContentWhitelist.jellyfin_id).where(ContentWhitelist.user_id == user_id)
+    )
+    whitelisted_ids = set(whitelist_result.scalars().all())
+
+    # Build list of items with issues
+    items_with_issues: list[tuple[CachedMediaItem, list[str]]] = []
+
+    for item in all_items:
+        issues = get_item_issues(item, whitelisted_ids)
+
+        # Skip items with no issues
+        if not issues:
+            continue
+
+        # Apply filter if specified
+        if filter_type == "old" and "old" not in issues:
+            continue
+        if filter_type == "large" and "large" not in issues:
+            continue
+
+        items_with_issues.append((item, issues))
+
+    # Sort by size descending (largest first)
+    items_with_issues.sort(key=lambda x: x[0].size_bytes or 0, reverse=True)
+
+    # Calculate totals
+    total_size_bytes = sum(item.size_bytes or 0 for item, _ in items_with_issues)
+
+    # Convert to response models
+    response_items = [
+        ContentIssueItem(
+            jellyfin_id=item.jellyfin_id,
+            name=item.name,
+            media_type=item.media_type,
+            production_year=item.production_year,
+            size_bytes=item.size_bytes,
+            size_formatted=format_size(item.size_bytes),
+            last_played_date=item.last_played_date,
+            path=item.path,
+            issues=issues,
+        )
+        for item, issues in items_with_issues
+    ]
+
+    return ContentIssuesResponse(
+        items=response_items,
+        total_count=len(response_items),
+        total_size_bytes=total_size_bytes,
+        total_size_formatted=format_size(total_size_bytes),
     )

@@ -2,13 +2,21 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, get_db
-from app.models.content import ContentSummaryResponse, OldUnwatchedResponse
+from app.models.content import (
+    ContentIssuesResponse,
+    ContentSummaryResponse,
+    OldUnwatchedResponse,
+)
 from app.services.auth import get_current_user
-from app.services.content import get_content_summary, get_old_unwatched_content
+from app.services.content import (
+    get_content_issues,
+    get_content_summary,
+    get_old_unwatched_content,
+)
 
 
 router = APIRouter(prefix="/api/content", tags=["content"])
@@ -45,3 +53,26 @@ async def get_old_unwatched(
     Results are sorted by size (largest first).
     """
     return await get_old_unwatched_content(db, current_user.id)
+
+
+@router.get("/issues", response_model=ContentIssuesResponse)
+async def get_issues(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    filter: Annotated[
+        str | None,
+        Query(description="Filter by issue type: old, large, language, requests"),
+    ] = None,
+) -> ContentIssuesResponse:
+    """Get unified list of all content with issues for the current user.
+
+    Supports filtering by issue type:
+    - old: Old/unwatched content (4+ months since last watched)
+    - large: Movies larger than 13GB
+    - language: Content with language issues (not yet implemented)
+    - requests: Unavailable Jellyseerr requests (not yet implemented)
+
+    Each item includes a list of all applicable issues.
+    Results are sorted by size (largest first).
+    """
+    return await get_content_issues(db, current_user.id, filter)

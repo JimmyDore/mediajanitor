@@ -1596,3 +1596,470 @@ class TestInfoEndpoints:
         data2 = response2.json()
         assert data2["total_count"] == 1
         assert data2["items"][0]["title"] == "User 2 Movie"
+
+
+class TestUnifiedIssuesEndpoint:
+    """Test GET /api/content/issues endpoint (US-D.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "issues@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_requires_authentication(self, client: TestClient) -> None:
+        """GET /api/content/issues should require authentication."""
+        response = client.get("/api/content/issues")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_issues(
+        self, client: TestClient
+    ) -> None:
+        """Should return empty list when user has no content with issues."""
+        token = self._get_auth_token(client, "issues-empty@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total_count"] == 0
+        assert data["total_size_bytes"] == 0
+
+    @pytest.mark.asyncio
+    async def test_returns_all_issues_without_filter(
+        self, client: TestClient
+    ) -> None:
+        """Should return all content with issues when no filter specified."""
+        token = self._get_auth_token(client, "issues-all@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Old unwatched movie
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-old",
+                name="Old Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,  # 5GB
+                played=False,
+            )
+            # Large movie (15GB)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large",
+                name="Large Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=15_000_000_000,  # 15GB > 13GB threshold
+                played=True,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return both items
+        assert data["total_count"] == 2
+        jellyfin_ids = [item["jellyfin_id"] for item in data["items"]]
+        assert "movie-old" in jellyfin_ids
+        assert "movie-large" in jellyfin_ids
+
+    @pytest.mark.asyncio
+    async def test_filter_by_old_content(
+        self, client: TestClient
+    ) -> None:
+        """Should filter to only old content when filter=old."""
+        token = self._get_auth_token(client, "issues-old@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Old unwatched movie
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-old-filter",
+                name="Old Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+            )
+            # Large but recently watched movie (not old)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large-recent",
+                name="Large Recent Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=15_000_000_000,
+                played=True,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-old-filter"
+        assert "old" in data["items"][0]["issues"]
+
+    @pytest.mark.asyncio
+    async def test_filter_by_large_movies(
+        self, client: TestClient
+    ) -> None:
+        """Should filter to only large movies when filter=large."""
+        token = self._get_auth_token(client, "issues-large@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Small old movie
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-small-old",
+                name="Small Old Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,  # 5GB
+                played=False,
+            )
+            # Large movie
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large-filter",
+                name="Large Movie",
+                media_type="Movie",
+                size_bytes=16_000_000_000,  # 16GB > 13GB
+                played=True,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-large-filter"
+        assert "large" in data["items"][0]["issues"]
+
+    @pytest.mark.asyncio
+    async def test_item_shows_multiple_issues(
+        self, client: TestClient
+    ) -> None:
+        """Content with multiple issues should show all applicable issue badges."""
+        token = self._get_auth_token(client, "issues-multi@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Old AND large movie
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-old-and-large",
+                name="Old Large Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=20_000_000_000,  # 20GB > 13GB
+                played=False,
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item_data = data["items"][0]
+        assert "old" in item_data["issues"]
+        assert "large" in item_data["issues"]
+
+    @pytest.mark.asyncio
+    async def test_excludes_whitelisted_from_old_issues(
+        self, client: TestClient
+    ) -> None:
+        """Whitelisted content should be excluded from old content issues."""
+        token = self._get_auth_token(client, "issues-wl@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Old movie (will be whitelisted)
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-whitelisted-old",
+                name="Whitelisted Old Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+            )
+            # Old movie (not whitelisted)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-not-whitelisted-old",
+                name="Not Whitelisted Old Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=6_000_000_000,
+                played=False,
+            )
+            # Add whitelist entry
+            whitelist = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-whitelisted-old",
+                name="Whitelisted Old Movie",
+                media_type="Movie",
+            )
+            session.add_all([item1, item2, whitelist])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-not-whitelisted-old"
+
+    @pytest.mark.asyncio
+    async def test_returns_all_required_fields(
+        self, client: TestClient
+    ) -> None:
+        """Each item should have all required fields."""
+        token = self._get_auth_token(client, "issues-fields@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-fields-test",
+                name="Fields Test Movie",
+                media_type="Movie",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/movies/Test/movie.mkv",
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item_data = data["items"][0]
+        # Required fields per acceptance criteria
+        assert "jellyfin_id" in item_data
+        assert "name" in item_data
+        assert "media_type" in item_data
+        assert "production_year" in item_data
+        assert "size_bytes" in item_data
+        assert "size_formatted" in item_data
+        assert "last_played_date" in item_data
+        assert "path" in item_data
+        assert "issues" in item_data  # List of issue types
+        assert isinstance(item_data["issues"], list)
+
+    @pytest.mark.asyncio
+    async def test_sorted_by_size_descending_by_default(
+        self, client: TestClient
+    ) -> None:
+        """Items should be sorted by size (largest first) by default."""
+        token = self._get_auth_token(client, "issues-sort@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-small",
+                name="Small Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=3_000_000_000,  # 3GB
+                played=False,
+            )
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large",
+                name="Large Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=20_000_000_000,  # 20GB
+                played=False,
+            )
+            item3 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-medium",
+                name="Medium Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=8_000_000_000,  # 8GB
+                played=False,
+            )
+            session.add_all([item1, item2, item3])
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should be sorted: large, medium, small
+        assert data["items"][0]["jellyfin_id"] == "movie-large"
+        assert data["items"][1]["jellyfin_id"] == "movie-medium"
+        assert data["items"][2]["jellyfin_id"] == "movie-small"
+
+    @pytest.mark.asyncio
+    async def test_calculates_total_size(
+        self, client: TestClient
+    ) -> None:
+        """Should calculate total size of all items with issues."""
+        token = self._get_auth_token(client, "issues-total@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-1",
+                name="Movie 1",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,  # 10GB
+                played=False,
+            )
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-2",
+                name="Movie 2",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,  # 5GB
+                played=False,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_size_bytes"] == 15_000_000_000
+        assert "total_size_formatted" in data
+
+    @pytest.mark.asyncio
+    async def test_user_isolation(
+        self, client: TestClient
+    ) -> None:
+        """User should only see their own content issues."""
+        token1 = self._get_auth_token(client, "issues-user1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        token2 = self._get_auth_token(client, "issues-user2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        me1 = client.get("/api/auth/me", headers=headers1).json()
+        me2 = client.get("/api/auth/me", headers=headers2).json()
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item1 = CachedMediaItem(
+                user_id=me1["id"],
+                jellyfin_id="user1-movie",
+                name="User 1 Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=10_000_000_000,
+                played=False,
+            )
+            item2 = CachedMediaItem(
+                user_id=me2["id"],
+                jellyfin_id="user2-movie",
+                name="User 2 Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=8_000_000_000,
+                played=False,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response1 = client.get("/api/content/issues", headers=headers1)
+        data1 = response1.json()
+        assert data1["total_count"] == 1
+        assert data1["items"][0]["jellyfin_id"] == "user1-movie"
+
+        response2 = client.get("/api/content/issues", headers=headers2)
+        data2 = response2.json()
+        assert data2["total_count"] == 1
+        assert data2["items"][0]["jellyfin_id"] == "user2-movie"
+
+    @pytest.mark.asyncio
+    async def test_filter_language_returns_empty_placeholder(
+        self, client: TestClient
+    ) -> None:
+        """Language filter should return empty (not implemented yet)."""
+        token = self._get_auth_token(client, "issues-lang@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Language issues not yet implemented (US-5.1)
+        assert data["items"] == []
+
+    @pytest.mark.asyncio
+    async def test_filter_requests_returns_empty_placeholder(
+        self, client: TestClient
+    ) -> None:
+        """Requests filter should return empty (not implemented yet)."""
+        token = self._get_auth_token(client, "issues-req@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Unavailable requests not yet implemented (US-6.1)
+        assert data["items"] == []

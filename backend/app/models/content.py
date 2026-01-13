@@ -120,3 +120,29 @@ class CurrentlyAiringResponse(BaseModel):
 
     items: list[CurrentlyAiringItem]
     total_count: int
+
+
+# US-D.3: Unified Issues View models
+
+
+class ContentIssueItem(BaseModel):
+    """Response model for a single content item with issues."""
+
+    jellyfin_id: str
+    name: str
+    media_type: str  # "Movie" or "Series"
+    production_year: int | None
+    size_bytes: int | None
+    size_formatted: str
+    last_played_date: str | None
+    path: str | None
+    issues: list[str]  # List of issue types: "old", "large", "language", "request"
+
+
+class ContentIssuesResponse(BaseModel):
+    """Response model for unified issues list."""
+
+    items: list[ContentIssueItem]
+    total_count: int
+    total_size_bytes: int
+    total_size_formatted: str

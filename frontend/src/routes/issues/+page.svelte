@@ -1,13 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 
-	// Redirect to unified issues view - backwards compatibility
-	onMount(() => {
-		goto('/issues?filter=old', { replaceState: true });
-	});
-
-	interface OldUnwatchedItem {
+	interface ContentIssueItem {
 		jellyfin_id: string;
 		name: string;
 		media_type: string;
@@ -16,20 +12,44 @@
 		size_formatted: string;
 		last_played_date: string | null;
 		path: string | null;
+		issues: string[];
 	}
 
-	interface OldUnwatchedResponse {
-		items: OldUnwatchedItem[];
+	interface ContentIssuesResponse {
+		items: ContentIssueItem[];
 		total_count: number;
 		total_size_bytes: number;
 		total_size_formatted: string;
 	}
 
+	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
+	type SortField = 'name' | 'size' | 'date' | 'issues';
+	type SortOrder = 'asc' | 'desc';
+
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let data = $state<OldUnwatchedResponse | null>(null);
+	let data = $state<ContentIssuesResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let protectingIds = $state<Set<string>>(new Set());
+	let activeFilter = $state<FilterType>('all');
+	let sortField = $state<SortField>('size');
+	let sortOrder = $state<SortOrder>('desc');
+
+	// Initialize filter from URL
+	$effect(() => {
+		const urlFilter = $page.url.searchParams.get('filter');
+		if (urlFilter && ['all', 'old', 'large', 'language', 'requests'].includes(urlFilter)) {
+			activeFilter = urlFilter as FilterType;
+		}
+	});
+
+	const filterLabels: Record<FilterType, string> = {
+		all: 'All',
+		old: 'Old',
+		large: 'Large',
+		language: 'Language',
+		requests: 'Requests'
+	};
 
 	function formatPath(path: string | null): string {
 		if (!path) return '';
@@ -40,12 +60,9 @@
 		return path;
 	}
 
-	function formatLastWatched(lastPlayed: string | null, played: boolean): string {
-		if (!lastPlayed && !played) {
-			return 'Never watched';
-		}
+	function formatLastWatched(lastPlayed: string | null): string {
 		if (!lastPlayed) {
-			return 'Watched (no date available)';
+			return 'Never watched';
 		}
 		try {
 			const date = new Date(lastPlayed);
@@ -67,8 +84,7 @@
 		}
 	}
 
-	// Check if item was never watched based on last_played_date
-	function wasNeverWatched(item: OldUnwatchedItem): boolean {
+	function wasNeverWatched(item: ContentIssueItem): boolean {
 		return !item.last_played_date;
 	}
 
@@ -79,14 +95,13 @@
 		}, 3000);
 	}
 
-	async function protectContent(item: OldUnwatchedItem) {
+	async function protectContent(item: ContentIssueItem) {
 		const token = localStorage.getItem('access_token');
 		if (!token) {
 			showToast('Not authenticated', 'error');
 			return;
 		}
 
-		// Add to protecting set to show loading state
 		protectingIds = new Set([...protectingIds, item.jellyfin_id]);
 
 		try {
@@ -136,7 +151,6 @@
 		} catch (e) {
 			showToast(e instanceof Error ? e.message : 'Failed to protect content', 'error');
 		} finally {
-			// Remove from protecting set
 			const newSet = new Set(protectingIds);
 			newSet.delete(item.jellyfin_id);
 			protectingIds = newSet;
@@ -155,7 +169,9 @@
 		return unitIndex === 0 ? `${Math.round(size)} ${units[unitIndex]}` : `${size.toFixed(1)} ${units[unitIndex]}`;
 	}
 
-	async function fetchOldUnwatchedContent() {
+	async function fetchIssues(filter: FilterType) {
+		loading = true;
+		error = null;
 		try {
 			const token = localStorage.getItem('access_token');
 			if (!token) {
@@ -163,7 +179,8 @@
 				return;
 			}
 
-			const response = await fetch('/api/content/old-unwatched', {
+			const filterParam = filter === 'all' ? '' : `?filter=${filter}`;
+			const response = await fetch(`/api/content/issues${filterParam}`, {
 				headers: { Authorization: `Bearer ${token}` }
 			});
 
@@ -174,25 +191,94 @@
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				error = errorData.detail || 'Failed to fetch content';
+				error = errorData.detail || 'Failed to fetch issues';
 				return;
 			}
 
 			data = await response.json();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch content';
+			error = e instanceof Error ? e.message : 'Failed to fetch issues';
 		} finally {
 			loading = false;
 		}
 	}
 
+	function setFilter(filter: FilterType) {
+		activeFilter = filter;
+		const url = filter === 'all' ? '/issues' : `/issues?filter=${filter}`;
+		goto(url, { replaceState: true });
+		fetchIssues(filter);
+	}
+
+	function toggleSort(field: SortField) {
+		if (sortField === field) {
+			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortField = field;
+			sortOrder = field === 'name' ? 'asc' : 'desc';
+		}
+	}
+
+	function getSortedItems(items: ContentIssueItem[]): ContentIssueItem[] {
+		return [...items].sort((a, b) => {
+			let comparison = 0;
+			switch (sortField) {
+				case 'name':
+					comparison = a.name.localeCompare(b.name);
+					break;
+				case 'size':
+					comparison = (a.size_bytes || 0) - (b.size_bytes || 0);
+					break;
+				case 'date':
+					const dateA = a.last_played_date ? new Date(a.last_played_date).getTime() : 0;
+					const dateB = b.last_played_date ? new Date(b.last_played_date).getTime() : 0;
+					comparison = dateA - dateB;
+					break;
+				case 'issues':
+					comparison = a.issues.length - b.issues.length;
+					break;
+			}
+			return sortOrder === 'asc' ? comparison : -comparison;
+		});
+	}
+
+	function getIssueBadgeClass(issue: string): string {
+		switch (issue) {
+			case 'old':
+				return 'badge-old';
+			case 'large':
+				return 'badge-large';
+			case 'language':
+				return 'badge-language';
+			case 'request':
+				return 'badge-request';
+			default:
+				return '';
+		}
+	}
+
+	function getIssueLabel(issue: string): string {
+		switch (issue) {
+			case 'old':
+				return 'Old';
+			case 'large':
+				return 'Large';
+			case 'language':
+				return 'Language';
+			case 'request':
+				return 'Request';
+			default:
+				return issue;
+		}
+	}
+
 	onMount(() => {
-		fetchOldUnwatchedContent();
+		fetchIssues(activeFilter);
 	});
 </script>
 
 <svelte:head>
-	<title>Old Content - Media Janitor</title>
+	<title>Issues - Media Janitor</title>
 </svelte:head>
 
 {#if toast}
@@ -203,16 +289,29 @@
 
 <div class="page-container">
 	<div class="page-header">
-		<h1>Old/Unwatched Content</h1>
+		<h1>Content Issues</h1>
 		<p class="page-description">
-			Content not watched in 4+ months or never watched (if added 3+ months ago)
+			View and manage content with issues across your library
 		</p>
+	</div>
+
+	<!-- Filter Tabs -->
+	<div class="filter-tabs">
+		{#each Object.entries(filterLabels) as [filter, label]}
+			<button
+				class="filter-tab"
+				class:active={activeFilter === filter}
+				onclick={() => setFilter(filter as FilterType)}
+			>
+				{label}
+			</button>
+		{/each}
 	</div>
 
 	{#if loading}
 		<div class="loading-container">
 			<div class="spinner" aria-label="Loading"></div>
-			<p>Loading content...</p>
+			<p>Loading issues...</p>
 		</div>
 	{:else if error}
 		<div class="error-container">
@@ -232,24 +331,33 @@
 
 		{#if data.items.length === 0}
 			<div class="empty-state">
-				<p>All your content has been watched recently!</p>
+				<p>No issues found{activeFilter !== 'all' ? ` with filter "${filterLabels[activeFilter]}"` : ''}!</p>
 			</div>
 		{:else}
 			<div class="content-list">
 				<div class="list-header">
 					<span class="col-rank">#</span>
-					<span class="col-name">Name</span>
+					<button class="col-name sortable" onclick={() => toggleSort('name')}>
+						Name {sortField === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+					</button>
 					<span class="col-type">Type</span>
-					<span class="col-year">Year</span>
-					<span class="col-size">Size</span>
-					<span class="col-status">Last Watched</span>
+					<span class="col-issues">Issues</span>
+					<button class="col-size sortable" onclick={() => toggleSort('size')}>
+						Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+					</button>
+					<button class="col-status sortable" onclick={() => toggleSort('date')}>
+						Last Watched {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+					</button>
 					<span class="col-actions">Actions</span>
 				</div>
-				{#each data.items as item, index}
+				{#each getSortedItems(data.items) as item, index}
 					<div class="content-item">
 						<span class="col-rank">{index + 1}</span>
 						<div class="col-name">
 							<span class="item-name">{item.name}</span>
+							{#if item.production_year}
+								<span class="item-year">({item.production_year})</span>
+							{/if}
 							{#if item.path}
 								<span class="item-path">{formatPath(item.path)}</span>
 							{/if}
@@ -259,24 +367,30 @@
 								{item.media_type === 'Movie' ? 'Movie' : 'Series'}
 							</span>
 						</span>
-						<span class="col-year">{item.production_year || '-'}</span>
+						<span class="col-issues">
+							{#each item.issues as issue}
+								<span class="issue-badge {getIssueBadgeClass(issue)}">{getIssueLabel(issue)}</span>
+							{/each}
+						</span>
 						<span class="col-size">{item.size_formatted}</span>
 						<span class="col-status" class:never-watched={wasNeverWatched(item)}>
-							{formatLastWatched(item.last_played_date, !!item.last_played_date)}
+							{formatLastWatched(item.last_played_date)}
 						</span>
 						<span class="col-actions">
-							<button
-								class="btn-protect"
-								onclick={() => protectContent(item)}
-								disabled={protectingIds.has(item.jellyfin_id)}
-								title="Add to whitelist - protects from deletion suggestions"
-							>
-								{#if protectingIds.has(item.jellyfin_id)}
-									<span class="btn-spinner"></span>
-								{:else}
-									Protect
-								{/if}
-							</button>
+							{#if item.issues.includes('old')}
+								<button
+									class="btn-protect"
+									onclick={() => protectContent(item)}
+									disabled={protectingIds.has(item.jellyfin_id)}
+									title="Add to whitelist - protects from deletion suggestions"
+								>
+									{#if protectingIds.has(item.jellyfin_id)}
+										<span class="btn-spinner"></span>
+									{:else}
+										Protect
+									{/if}
+								</button>
+							{/if}
 						</span>
 					</div>
 				{/each}
@@ -287,11 +401,13 @@
 
 <style>
 	.page-container {
-		padding: 0;
+		padding: 1.5rem;
+		max-width: 1200px;
+		margin: 0 auto;
 	}
 
 	.page-header {
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.page-header h1 {
@@ -305,6 +421,41 @@
 		color: var(--text-secondary);
 		font-size: 0.875rem;
 		margin: 0;
+	}
+
+	/* Filter Tabs */
+	.filter-tabs {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+		padding: 0.25rem;
+		background: var(--bg-secondary);
+		border-radius: 0.5rem;
+		border: 1px solid var(--border);
+		flex-wrap: wrap;
+	}
+
+	.filter-tab {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-secondary);
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.filter-tab:hover {
+		color: var(--text-primary);
+		background: var(--bg-hover);
+	}
+
+	.filter-tab.active {
+		color: var(--accent);
+		background: var(--bg-primary);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 	}
 
 	.loading-container {
@@ -400,7 +551,7 @@
 
 	.list-header {
 		display: grid;
-		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem 5rem;
+		grid-template-columns: 3rem 1fr 5rem 8rem 5rem 8rem 5rem;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
 		background: var(--bg-tertiary, var(--bg-secondary));
@@ -412,9 +563,26 @@
 		color: var(--text-muted);
 	}
 
+	.sortable {
+		cursor: pointer;
+		background: transparent;
+		border: none;
+		font-size: inherit;
+		font-weight: inherit;
+		text-transform: inherit;
+		letter-spacing: inherit;
+		color: inherit;
+		padding: 0;
+		text-align: inherit;
+	}
+
+	.sortable:hover {
+		color: var(--text-primary);
+	}
+
 	.content-item {
 		display: grid;
-		grid-template-columns: 3rem 1fr 5rem 4rem 5rem 8rem 5rem;
+		grid-template-columns: 3rem 1fr 5rem 8rem 5rem 8rem 5rem;
 		gap: 1rem;
 		padding: 0.75rem 1rem;
 		border-bottom: 1px solid var(--border);
@@ -450,6 +618,12 @@
 		text-overflow: ellipsis;
 	}
 
+	.item-year {
+		font-weight: 400;
+		color: var(--text-secondary);
+		margin-left: 0.25rem;
+	}
+
 	.item-path {
 		font-size: 0.75rem;
 		color: var(--text-muted);
@@ -480,9 +654,39 @@
 		color: rgb(168, 85, 247);
 	}
 
-	.col-year {
-		color: var(--text-secondary);
-		text-align: center;
+	.col-issues {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.issue-badge {
+		display: inline-block;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+	}
+
+	.badge-old {
+		background: rgba(239, 68, 68, 0.1);
+		color: #ef4444;
+	}
+
+	.badge-large {
+		background: rgba(245, 158, 11, 0.1);
+		color: #f59e0b;
+	}
+
+	.badge-language {
+		background: rgba(59, 130, 246, 0.1);
+		color: #3b82f6;
+	}
+
+	.badge-request {
+		background: rgba(139, 92, 246, 0.1);
+		color: #8b5cf6;
 	}
 
 	.col-size {
@@ -573,7 +777,22 @@
 	}
 
 	/* Responsive design */
-	@media (max-width: 768px) {
+	@media (max-width: 900px) {
+		.list-header {
+			grid-template-columns: 1fr 5rem 6rem 5rem;
+		}
+
+		.content-item {
+			grid-template-columns: 1fr 5rem 6rem 5rem;
+		}
+
+		.col-rank,
+		.col-status {
+			display: none;
+		}
+	}
+
+	@media (max-width: 640px) {
 		.list-header {
 			display: none;
 		}
@@ -593,7 +812,7 @@
 		}
 
 		.col-type,
-		.col-year,
+		.col-issues,
 		.col-size,
 		.col-status {
 			font-size: 0.75rem;
@@ -602,6 +821,16 @@
 		.col-actions {
 			order: 2;
 			text-align: left;
+		}
+
+		.filter-tabs {
+			flex-wrap: wrap;
+		}
+
+		.filter-tab {
+			flex: 1;
+			text-align: center;
+			min-width: 60px;
 		}
 	}
 </style>
