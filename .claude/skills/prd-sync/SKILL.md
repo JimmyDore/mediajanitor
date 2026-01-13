@@ -1,3 +1,8 @@
+---
+name: prd-sync
+description: Sync completion status from prd.json back to PRD.md checkboxes
+---
+
 # PRD Sync Skill
 
 Sync completion status from prd.json back to PRD.md, keeping the human-readable document up-to-date.

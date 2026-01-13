@@ -1,3 +1,8 @@
+---
+name: improve-claude-md
+description: Extract learnings from current session and update CLAUDE.md patterns
+---
+
 # Improve CLAUDE.md Skill
 
 Extract learnings from the current session and update CLAUDE.md.

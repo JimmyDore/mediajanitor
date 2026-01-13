@@ -1,3 +1,8 @@
+---
+name: ralph-init
+description: Convert PRD.md to machine-readable prd.json for Ralph execution
+---
+
 # Ralph Init Skill
 
 Convert PRD.md to prd.json for machine-readable task tracking.

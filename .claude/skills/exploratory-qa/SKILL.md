@@ -1,3 +1,8 @@
+---
+name: exploratory-qa
+description: Periodic review of application for cross-cutting concerns and SUGGESTIONS.md updates
+---
+
 # Exploratory QA Skill
 
 Perform a periodic review of the application and update SUGGESTIONS.md with observations.

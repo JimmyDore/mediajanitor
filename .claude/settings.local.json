@@ -52,7 +52,12 @@
       "Bash(uv run mypy:*)",
       "mcp__puppeteer__puppeteer_evaluate",
       "Bash(xxd:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebSearch",
+      "WebFetch(domain:alexop.dev)",
+      "Skill(prd-sync)",
+      "Skill(improve-claude-md)",
+      "Skill(exploratory-qa)"
     ]
   },
   "enableAllProjectMcpServers": true,

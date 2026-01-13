@@ -1,3 +1,8 @@
+---
+name: prd
+description: Create well-structured PRD with right-sized user stories and acceptance criteria
+---
+
 # PRD Creation Skill
 
 Generate well-structured Product Requirements Documents with right-sized user stories.
