@@ -384,3 +384,208 @@ class TestJellyseerrSettings:
         data = response.json()
         assert data["server_url"] is None
         assert data["api_key_configured"] is False
+
+
+class TestAnalysisPreferences:
+    """Tests for analysis preferences endpoints (thresholds)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "prefs@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_get_analysis_preferences_defaults(self, client: TestClient) -> None:
+        """Test retrieving analysis preferences returns defaults when not configured."""
+        token = self._get_auth_token(client)
+
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["old_content_months"] == 4
+        assert data["min_age_months"] == 3
+        assert data["large_movie_size_gb"] == 13
+
+    def test_get_analysis_preferences_requires_auth(self, client: TestClient) -> None:
+        """Test that getting analysis preferences requires authentication."""
+        response = client.get("/api/settings/analysis")
+        assert response.status_code == 401
+
+    def test_save_analysis_preferences_success(self, client: TestClient) -> None:
+        """Test successful save of analysis preferences."""
+        token = self._get_auth_token(client, "prefs_save@example.com")
+
+        response = client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 6,
+                "min_age_months": 2,
+                "large_movie_size_gb": 15,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+
+    def test_save_analysis_preferences_requires_auth(self, client: TestClient) -> None:
+        """Test that saving analysis preferences requires authentication."""
+        response = client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 6,
+                "min_age_months": 2,
+                "large_movie_size_gb": 15,
+            },
+        )
+        assert response.status_code == 401
+
+    def test_saved_analysis_preferences_are_returned(self, client: TestClient) -> None:
+        """Test that saved analysis preferences are returned on GET."""
+        token = self._get_auth_token(client, "prefs_verify@example.com")
+
+        # Save custom preferences
+        client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 8,
+                "min_age_months": 1,
+                "large_movie_size_gb": 20,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Verify they are returned
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["old_content_months"] == 8
+        assert data["min_age_months"] == 1
+        assert data["large_movie_size_gb"] == 20
+
+    def test_analysis_preferences_per_user_isolation(self, client: TestClient) -> None:
+        """Test that users can only see their own analysis preferences."""
+        # Create first user and save preferences
+        token1 = self._get_auth_token(client, "prefs_user1@example.com")
+
+        client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 12,
+                "min_age_months": 6,
+                "large_movie_size_gb": 25,
+            },
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+
+        # Create second user - should get defaults, not first user's settings
+        token2 = self._get_auth_token(client, "prefs_user2@example.com")
+
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Second user should get defaults, not first user's settings
+        assert data["old_content_months"] == 4
+        assert data["min_age_months"] == 3
+        assert data["large_movie_size_gb"] == 13
+
+    def test_reset_analysis_preferences(self, client: TestClient) -> None:
+        """Test resetting analysis preferences to defaults."""
+        token = self._get_auth_token(client, "prefs_reset@example.com")
+
+        # First save custom preferences
+        client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 10,
+                "min_age_months": 5,
+                "large_movie_size_gb": 18,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Reset to defaults
+        response = client.delete(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify defaults are returned
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        data = response.json()
+        assert data["old_content_months"] == 4
+        assert data["min_age_months"] == 3
+        assert data["large_movie_size_gb"] == 13
+
+    def test_save_analysis_preferences_partial_update(self, client: TestClient) -> None:
+        """Test that partial update only changes specified fields."""
+        token = self._get_auth_token(client, "prefs_partial@example.com")
+
+        # Save only one preference
+        response = client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": 10,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify: only old_content_months changed, others remain default
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        data = response.json()
+        assert data["old_content_months"] == 10
+        assert data["min_age_months"] == 3  # Default
+        assert data["large_movie_size_gb"] == 13  # Default
+
+    def test_save_analysis_preferences_validates_values(self, client: TestClient) -> None:
+        """Test that analysis preferences validates input values."""
+        token = self._get_auth_token(client, "prefs_validate@example.com")
+
+        # Test negative value
+        response = client.post(
+            "/api/settings/analysis",
+            json={
+                "old_content_months": -1,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+        # Test zero value for size threshold
+        response = client.post(
+            "/api/settings/analysis",
+            json={
+                "large_movie_size_gb": 0,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422

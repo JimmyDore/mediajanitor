@@ -25,6 +25,19 @@
 	let hasJellyseerrConfigured = $state(false);
 	let currentJellyseerrUrl = $state<string | null>(null);
 
+	// Analysis preferences state
+	let oldContentMonths = $state(4);
+	let minAgeMonths = $state(3);
+	let largeMovieSizeGb = $state(13);
+	let analysisError = $state<string | null>(null);
+	let analysisSuccess = $state<string | null>(null);
+	let isAnalysisLoading = $state(false);
+
+	// Default values for reset
+	const DEFAULT_OLD_CONTENT_MONTHS = 4;
+	const DEFAULT_MIN_AGE_MONTHS = 3;
+	const DEFAULT_LARGE_MOVIE_SIZE_GB = 13;
+
 	onMount(async () => {
 		await loadCurrentSettings();
 	});
@@ -59,6 +72,18 @@
 				if (data.server_url) {
 					jellyseerrUrl = data.server_url;
 				}
+			}
+
+			// Load analysis preferences
+			const analysisResponse = await fetch('/api/settings/analysis', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (analysisResponse.ok) {
+				const data = await analysisResponse.json();
+				oldContentMonths = data.old_content_months;
+				minAgeMonths = data.min_age_months;
+				largeMovieSizeGb = data.large_movie_size_gb;
 			}
 		} catch (e) {
 			console.error('Failed to load settings:', e);
@@ -141,6 +166,71 @@
 		}
 	}
 
+	async function handleAnalysisSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		analysisError = null;
+		analysisSuccess = null;
+		isAnalysisLoading = true;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/analysis', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					old_content_months: oldContentMonths,
+					min_age_months: minAgeMonths,
+					large_movie_size_gb: largeMovieSizeGb
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save preferences');
+			}
+
+			analysisSuccess = data.message || 'Preferences saved successfully!';
+		} catch (e) {
+			analysisError = e instanceof Error ? e.message : 'Failed to save preferences';
+		} finally {
+			isAnalysisLoading = false;
+		}
+	}
+
+	async function handleResetAnalysis() {
+		analysisError = null;
+		analysisSuccess = null;
+		isAnalysisLoading = true;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/analysis', {
+				method: 'DELETE',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to reset preferences');
+			}
+
+			// Reset to default values
+			oldContentMonths = DEFAULT_OLD_CONTENT_MONTHS;
+			minAgeMonths = DEFAULT_MIN_AGE_MONTHS;
+			largeMovieSizeGb = DEFAULT_LARGE_MOVIE_SIZE_GB;
+
+			analysisSuccess = 'Preferences reset to defaults!';
+		} catch (e) {
+			analysisError = e instanceof Error ? e.message : 'Failed to reset preferences';
+		} finally {
+			isAnalysisLoading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -299,6 +389,84 @@
 						Connect to Jellyseerr
 					{/if}
 				</button>
+			</form>
+		</section>
+
+		<section class="settings-section">
+			<h2>Analysis Preferences</h2>
+			<p class="section-description">
+				Customize thresholds for content analysis.
+			</p>
+
+			<form onsubmit={handleAnalysisSubmit} class="settings-form">
+				{#if analysisError}
+					<div class="message error-message" role="alert">
+						{analysisError}
+					</div>
+				{/if}
+
+				{#if analysisSuccess}
+					<div class="message success-message" role="status">
+						{analysisSuccess}
+					</div>
+				{/if}
+
+				<div class="form-group">
+					<label for="old-content-months">Old Content Threshold (months)</label>
+					<input
+						type="number"
+						id="old-content-months"
+						bind:value={oldContentMonths}
+						min="1"
+						max="24"
+						required
+					/>
+					<span class="hint">Flag content not watched in this many months (default: 4)</span>
+				</div>
+
+				<div class="form-group">
+					<label for="min-age-months">Minimum Age (months)</label>
+					<input
+						type="number"
+						id="min-age-months"
+						bind:value={minAgeMonths}
+						min="0"
+						max="12"
+						required
+					/>
+					<span class="hint">Don't flag recently added content (default: 3)</span>
+				</div>
+
+				<div class="form-group">
+					<label for="large-movie-size">Large Movie Size (GB)</label>
+					<input
+						type="number"
+						id="large-movie-size"
+						bind:value={largeMovieSizeGb}
+						min="1"
+						max="100"
+						required
+					/>
+					<span class="hint">Movies larger than this are flagged (default: 13)</span>
+				</div>
+
+				<div class="button-row">
+					<button type="submit" disabled={isAnalysisLoading} class="submit-button">
+						{#if isAnalysisLoading}
+							Saving...
+						{:else}
+							Save Preferences
+						{/if}
+					</button>
+					<button
+						type="button"
+						onclick={handleResetAnalysis}
+						disabled={isAnalysisLoading}
+						class="reset-button"
+					>
+						Reset to Defaults
+					</button>
+				</div>
 			</form>
 		</section>
 	{/if}
@@ -464,5 +632,54 @@
 	.submit-button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
+	}
+
+	.button-row {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-top: 0.5rem;
+	}
+
+	.button-row .submit-button {
+		flex: 1;
+		min-width: 150px;
+		margin-top: 0;
+	}
+
+	.reset-button {
+		flex: 1;
+		min-width: 150px;
+		padding: 0.875rem 1.5rem;
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			background 0.2s,
+			border-color 0.2s;
+	}
+
+	.reset-button:hover:not(:disabled) {
+		background: var(--bg-primary);
+		border-color: var(--text-secondary);
+	}
+
+	.reset-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	input[type='number'] {
+		-moz-appearance: textfield;
+	}
+
+	input[type='number']::-webkit-outer-spin-button,
+	input[type='number']::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
 	}
 </style>

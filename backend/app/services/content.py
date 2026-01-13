@@ -1,5 +1,6 @@
 """Content analysis service for filtering old/unwatched content."""
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
@@ -15,7 +16,17 @@ class LanguageCheckResult(TypedDict):
     has_french_subs: bool
     missing_languages: list[str]
 
-from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist
+
+@dataclass
+class UserThresholds:
+    """User's analysis thresholds."""
+
+    old_content_months: int
+    min_age_months: int
+    large_movie_size_gb: int
+
+
+from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist, UserSettings
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
@@ -47,6 +58,32 @@ RECENT_RELEASE_MONTHS_CUTOFF = 3  # Don't flag content released < 3 months ago
 # Jellyseerr status codes
 # 0 = Unknown, 1 = Pending, 2 = Approved, 3 = Processing, 4 = Partially Available, 5 = Available
 UNAVAILABLE_STATUS_CODES = {0, 1, 2, 4}  # Status codes for unavailable requests
+
+
+async def get_user_thresholds(db: AsyncSession, user_id: int) -> UserThresholds:
+    """Get user's analysis thresholds, falling back to defaults if not configured."""
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+
+    return UserThresholds(
+        old_content_months=(
+            settings.old_content_months
+            if settings and settings.old_content_months is not None
+            else OLD_CONTENT_MONTHS_CUTOFF
+        ),
+        min_age_months=(
+            settings.min_age_months
+            if settings and settings.min_age_months is not None
+            else MIN_AGE_MONTHS
+        ),
+        large_movie_size_gb=(
+            settings.large_movie_size_gb
+            if settings and settings.large_movie_size_gb is not None
+            else LARGE_MOVIE_SIZE_THRESHOLD_GB
+        ),
+    )
 
 
 def format_size(size_bytes: int | None) -> str:
@@ -137,6 +174,9 @@ async def get_old_unwatched_content(
 
     Returns items sorted by size (largest first).
     """
+    # Get user's thresholds
+    thresholds = await get_user_thresholds(db, user_id)
+
     # Get user's cached media items
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -156,8 +196,12 @@ async def get_old_unwatched_content(
         if item.jellyfin_id in whitelisted_ids:
             continue
 
-        # Check if old/unwatched
-        if is_old_or_unwatched(item):
+        # Check if old/unwatched using user's thresholds
+        if is_old_or_unwatched(
+            item,
+            months_cutoff=thresholds.old_content_months,
+            min_age_months=thresholds.min_age_months,
+        ):
             filtered_items.append(item)
 
     # Sort by size descending (largest first)
@@ -488,12 +532,19 @@ async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
     return set(result.scalars().all())
 
 
-def is_large_movie(item: CachedMediaItem) -> bool:
-    """Check if an item is a large movie (>=13GB).
+def is_large_movie(
+    item: CachedMediaItem,
+    threshold_gb: int = LARGE_MOVIE_SIZE_THRESHOLD_GB,
+) -> bool:
+    """Check if an item is a large movie.
+
+    Args:
+        item: The media item to check
+        threshold_gb: Size threshold in GB (default: 13)
 
     Returns True if:
     - Item is a Movie (not Series)
-    - Size meets or exceeds LARGE_MOVIE_SIZE_THRESHOLD_GB
+    - Size meets or exceeds threshold_gb
 
     Note: Uses >= to match original_script.py list_large_movies() behavior.
     """
@@ -503,7 +554,7 @@ def is_large_movie(item: CachedMediaItem) -> bool:
     if item.size_bytes is None:
         return False
 
-    threshold_bytes = LARGE_MOVIE_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024  # 13GB in bytes
+    threshold_bytes = threshold_gb * 1024 * 1024 * 1024
     return item.size_bytes >= threshold_bytes
 
 
@@ -624,10 +675,13 @@ async def get_content_summary(
 
     Returns counts for:
     - old_content: Old/unwatched content (excludes whitelisted)
-    - large_movies: Movies larger than 13GB
-    - language_issues: Content with language issues (placeholder - 0)
-    - unavailable_requests: Unavailable Jellyseerr requests (placeholder - 0)
+    - large_movies: Movies larger than threshold
+    - language_issues: Content with language issues
+    - unavailable_requests: Unavailable Jellyseerr requests
     """
+    # Get user's thresholds
+    thresholds = await get_user_thresholds(db, user_id)
+
     # Get user's cached media items
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -645,7 +699,11 @@ async def get_content_summary(
     for item in all_items:
         if item.jellyfin_id in whitelisted_ids:
             continue
-        if is_old_or_unwatched(item):
+        if is_old_or_unwatched(
+            item,
+            months_cutoff=thresholds.old_content_months,
+            min_age_months=thresholds.min_age_months,
+        ):
             old_content_items.append(item)
 
     old_content_size = sum(item.size_bytes or 0 for item in old_content_items)
@@ -653,7 +711,7 @@ async def get_content_summary(
     # Calculate large movies
     large_movies_items: list[CachedMediaItem] = []
     for item in all_items:
-        if is_large_movie(item):
+        if is_large_movie(item, threshold_gb=thresholds.large_movie_size_gb):
             large_movies_items.append(item)
 
     large_movies_size = sum(item.size_bytes or 0 for item in large_movies_items)
@@ -845,6 +903,7 @@ def get_item_issues(
     whitelisted_ids: set[str],
     french_only_ids: set[str] | None = None,
     language_exempt_ids: set[str] | None = None,
+    thresholds: UserThresholds | None = None,
 ) -> tuple[list[str], list[str]]:
     """Get all issue types that apply to a content item.
 
@@ -853,6 +912,7 @@ def get_item_issues(
         whitelisted_ids: Set of jellyfin_ids in content whitelist
         french_only_ids: Set of jellyfin_ids in french-only whitelist
         language_exempt_ids: Set of jellyfin_ids exempt from ALL language checks
+        thresholds: User's custom thresholds (uses defaults if None)
 
     Returns tuple of:
     - list of issue types: "old", "large", "language", "request"
@@ -861,12 +921,19 @@ def get_item_issues(
     issues: list[str] = []
     language_issues_detail: list[str] = []
 
+    # Use defaults if thresholds not provided
+    old_months = thresholds.old_content_months if thresholds else OLD_CONTENT_MONTHS_CUTOFF
+    min_age = thresholds.min_age_months if thresholds else MIN_AGE_MONTHS
+    large_size = thresholds.large_movie_size_gb if thresholds else LARGE_MOVIE_SIZE_THRESHOLD_GB
+
     # Check for old/unwatched (exclude whitelisted)
-    if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(item):
+    if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(
+        item, months_cutoff=old_months, min_age_months=min_age
+    ):
         issues.append("old")
 
     # Check for large movie
-    if is_large_movie(item):
+    if is_large_movie(item, threshold_gb=large_size):
         issues.append("large")
 
     # Check for language issues (skip if language-exempt, respect french-only whitelist)
@@ -894,6 +961,9 @@ async def get_content_issues(
 
     Returns items sorted by size (largest first).
     """
+    # Get user's thresholds
+    thresholds = await get_user_thresholds(db, user_id)
+
     # Get user's cached media items
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -918,7 +988,7 @@ async def get_content_issues(
 
     for item in all_items:
         issues, language_issues_detail = get_item_issues(
-            item, whitelisted_ids, french_only_ids, language_exempt_ids
+            item, whitelisted_ids, french_only_ids, language_exempt_ids, thresholds
         )
 
         # Skip items with no issues

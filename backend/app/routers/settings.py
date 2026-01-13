@@ -3,10 +3,13 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import User, get_db
+from app.database import User, UserSettings, get_db
 from app.models.settings import (
+    AnalysisPreferencesCreate,
+    AnalysisPreferencesResponse,
     JellyfinSettingsCreate,
     JellyfinSettingsResponse,
     JellyseerrSettingsCreate,
@@ -24,6 +27,11 @@ from app.services.jellyseerr import (
     save_jellyseerr_settings,
     validate_jellyseerr_connection,
 )
+
+# Default values for analysis preferences
+DEFAULT_OLD_CONTENT_MONTHS = 4
+DEFAULT_MIN_AGE_MONTHS = 3
+DEFAULT_LARGE_MOVIE_SIZE_GB = 13
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -123,4 +131,106 @@ async def get_jellyseerr_config(
     return JellyseerrSettingsResponse(
         server_url=None,
         api_key_configured=False,
+    )
+
+
+# Analysis Preferences Endpoints
+
+
+async def _get_or_create_user_settings(
+    db: AsyncSession, user_id: int
+) -> UserSettings:
+    """Get existing user settings or create new one with defaults."""
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        settings = UserSettings(user_id=user_id)
+        db.add(settings)
+        await db.flush()
+
+    return settings
+
+
+@router.get("/analysis", response_model=AnalysisPreferencesResponse)
+async def get_analysis_preferences(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AnalysisPreferencesResponse:
+    """Get analysis preferences (thresholds) for the user.
+
+    Returns defaults if not configured.
+    """
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    # Return user values or defaults
+    return AnalysisPreferencesResponse(
+        old_content_months=(
+            settings.old_content_months
+            if settings and settings.old_content_months is not None
+            else DEFAULT_OLD_CONTENT_MONTHS
+        ),
+        min_age_months=(
+            settings.min_age_months
+            if settings and settings.min_age_months is not None
+            else DEFAULT_MIN_AGE_MONTHS
+        ),
+        large_movie_size_gb=(
+            settings.large_movie_size_gb
+            if settings and settings.large_movie_size_gb is not None
+            else DEFAULT_LARGE_MOVIE_SIZE_GB
+        ),
+    )
+
+
+@router.post("/analysis", response_model=SettingsSaveResponse)
+async def save_analysis_preferences(
+    prefs: AnalysisPreferencesCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save analysis preferences (thresholds) for the user.
+
+    Supports partial updates - only provided fields are updated.
+    """
+    settings = await _get_or_create_user_settings(db, current_user.id)
+
+    # Only update fields that were provided
+    if prefs.old_content_months is not None:
+        settings.old_content_months = prefs.old_content_months
+    if prefs.min_age_months is not None:
+        settings.min_age_months = prefs.min_age_months
+    if prefs.large_movie_size_gb is not None:
+        settings.large_movie_size_gb = prefs.large_movie_size_gb
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Analysis preferences saved successfully.",
+    )
+
+
+@router.delete("/analysis", response_model=SettingsSaveResponse)
+async def reset_analysis_preferences(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Reset analysis preferences to defaults."""
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if settings:
+        settings.old_content_months = None
+        settings.min_age_months = None
+        settings.large_movie_size_gb = None
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Analysis preferences reset to defaults.",
     )

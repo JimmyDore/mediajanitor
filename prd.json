@@ -581,8 +581,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Analysis Preferences section in settings page, backend service uses user thresholds, 176 backend tests + 93 frontend tests pass"
     },
     {
       "id": "US-M.1",

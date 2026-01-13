@@ -46,6 +46,10 @@ class UserSettings(Base):
     # Jellyseerr settings (API key is encrypted)
     jellyseerr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     jellyseerr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Analysis preferences (thresholds)
+    old_content_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_age_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    large_movie_size_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
