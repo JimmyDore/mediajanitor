@@ -65,202 +65,233 @@
 	<title>Currently Airing - Media Janitor</title>
 </svelte:head>
 
-<div class="page-container">
-	<div class="page-header">
-		<h1>Currently Airing</h1>
-		<p class="page-description">TV series with in-progress seasons</p>
-	</div>
+<div class="page">
+	<header class="page-header">
+		<div class="header-main">
+			<h1>Currently Airing</h1>
+			{#if data && !loading}
+				<span class="header-stats">{data.total_count} series</span>
+			{/if}
+		</div>
+	</header>
+
+	<p class="page-subtitle">TV series with in-progress seasons</p>
 
 	{#if loading}
-		<div class="loading">Loading...</div>
+		<div class="loading">
+			<span class="spinner"></span>
+		</div>
 	{:else if error}
-		<div class="error">
-			<p>{error}</p>
-		</div>
+		<div class="error-box">{error}</div>
 	{:else if data}
-		<div class="summary-bar">
-			<span class="summary-count">{data.total_count} series</span>
-		</div>
-
 		{#if data.items.length === 0}
-			<div class="empty-state">
-				<p>No currently airing series found.</p>
-				<p class="hint">This feature will show series with episodes still to air.</p>
-				<a href="/" class="back-link">Back to Dashboard</a>
-			</div>
+			<div class="empty">No currently airing series found</div>
 		{:else}
-			<div class="content-list">
-				{#each data.items as item, index}
-					<div class="content-item">
-						<span class="item-number">{index + 1}</span>
-						<div class="item-info">
-							<span class="item-title">{item.title}</span>
-							<div class="item-meta">
-								<span class="airing-badge">
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-										<path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM9 10l7 4-7 4z"/>
-									</svg>
-									Currently Airing
-								</span>
-								{#if item.in_progress_seasons.length > 0}
-									<span class="season-progress">{formatSeasonProgress(item.in_progress_seasons)}</span>
-								{/if}
-							</div>
-						</div>
-					</div>
-				{/each}
+			<div class="table-container">
+				<table class="data-table">
+					<thead>
+						<tr>
+							<th class="col-title">Title</th>
+							<th class="col-progress">Progress</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.items as item}
+							<tr>
+								<td class="col-title">
+									<span class="item-title">{item.title}</span>
+								</td>
+								<td class="col-progress">
+									{#if item.in_progress_seasons.length > 0}
+										<div class="season-list">
+											{#each item.in_progress_seasons as season}
+												<span class="season-badge">
+													S{season.season_number}
+													<span class="season-progress">{season.episodes_aired}/{season.episode_count}</span>
+												</span>
+											{/each}
+										</div>
+									{:else}
+										<span class="no-data">-</span>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{/if}
 	{/if}
 </div>
 
 <style>
-	.page-container {
-		padding: 1.5rem;
-		max-width: 1000px;
+	.page {
+		max-width: 800px;
 		margin: 0 auto;
+		padding: var(--space-6);
 	}
 
 	.page-header {
-		margin-bottom: 1.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: var(--space-2);
+	}
+
+	.header-main {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-3);
 	}
 
 	.page-header h1 {
-		font-size: 1.75rem;
-		font-weight: 600;
-		margin-bottom: 0.25rem;
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: -0.02em;
 	}
 
-	.page-description {
+	.header-stats {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
+	.page-subtitle {
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
-		font-size: 0.875rem;
-		margin: 0;
+		margin-bottom: var(--space-6);
 	}
 
+	/* Loading & Error */
 	.loading {
-		padding: 2rem;
-		text-align: center;
-		color: var(--text-secondary);
+		display: flex;
+		justify-content: center;
+		padding: var(--space-12);
 	}
 
-	.error {
-		padding: 2rem;
-		background: var(--bg-secondary);
+	.spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.error-box {
+		padding: var(--space-4);
+		background: var(--danger-light);
 		border: 1px solid var(--danger);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		color: var(--danger);
 	}
 
-	.summary-bar {
-		display: flex;
-		justify-content: flex-start;
-		padding: 0.75rem 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.summary-count {
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
-	.empty-state {
-		padding: 3rem;
+	.empty {
+		padding: var(--space-8);
 		text-align: center;
-		background: var(--bg-secondary);
+		color: var(--text-muted);
+	}
+
+	/* Table */
+	.table-container {
 		border: 1px solid var(--border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
+		overflow: hidden;
 	}
 
-	.empty-state p {
-		color: var(--text-secondary);
-		margin-bottom: 0.5rem;
+	.data-table {
+		width: 100%;
+		border-collapse: collapse;
 	}
 
-	.empty-state .hint {
-		font-size: 0.875rem;
-		margin-bottom: 1rem;
+	.data-table th,
+	.data-table td {
+		padding: var(--space-3) var(--space-4);
+		text-align: left;
 	}
 
-	.back-link {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.back-link:hover {
-		text-decoration: underline;
-	}
-
-	.content-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.content-item {
-		display: flex;
-		align-items: flex-start;
-		gap: 1rem;
-		padding: 1rem;
+	.data-table th {
 		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		transition: background-color 0.2s ease;
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-muted);
+		border-bottom: 1px solid var(--border);
 	}
 
-	.content-item:hover {
+	.data-table tr {
+		border-bottom: 1px solid var(--border);
+	}
+
+	.data-table tr:last-child {
+		border-bottom: none;
+	}
+
+	.data-table tbody tr:hover {
 		background: var(--bg-hover);
 	}
 
-	.item-number {
-		color: var(--text-secondary);
-		font-size: 0.875rem;
-		min-width: 2rem;
-		text-align: right;
-	}
-
-	.item-info {
-		flex: 1;
+	/* Columns */
+	.col-title {
+		width: 50%;
 	}
 
 	.item-title {
-		font-weight: 500;
-		display: block;
-		margin-bottom: 0.25rem;
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
 	}
 
-	.item-meta {
+	.col-progress {
+		width: 50%;
+	}
+
+	.season-list {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.75rem;
-		align-items: center;
-		font-size: 0.875rem;
-		color: var(--text-secondary);
+		gap: var(--space-2);
 	}
 
-	.airing-badge {
+	.season-badge {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		padding: 0.125rem 0.5rem;
-		background: rgba(20, 184, 166, 0.1);
-		color: #14b8a6;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		gap: var(--space-1);
+		padding: 2px 8px;
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		background: var(--accent-light);
+		color: var(--accent);
+		border-radius: var(--radius-sm);
 	}
 
 	.season-progress {
-		color: var(--text-secondary);
+		font-family: var(--font-mono);
+		font-size: var(--font-size-xs);
+		opacity: 0.8;
 	}
 
+	.no-data {
+		color: var(--text-muted);
+	}
+
+	/* Responsive */
 	@media (max-width: 640px) {
-		.item-meta {
+		.page {
+			padding: var(--space-4);
+		}
+
+		.data-table th,
+		.data-table td {
+			padding: var(--space-2) var(--space-3);
+		}
+
+		.season-list {
 			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.25rem;
+			gap: var(--space-1);
 		}
 	}
 </style>

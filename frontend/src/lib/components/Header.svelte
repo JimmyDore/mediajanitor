@@ -2,14 +2,26 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores';
 
+	let showUserMenu = $state(false);
+
 	function handleLogout() {
 		auth.logout();
 		window.location.href = '/login';
 	}
 
+	function toggleUserMenu() {
+		showUserMenu = !showUserMenu;
+	}
+
+	function closeUserMenu() {
+		showUserMenu = false;
+	}
+
 	// Determine current route for active state
 	let currentPath = $derived($page.url.pathname);
 </script>
+
+<svelte:window onclick={closeUserMenu} />
 
 <header class="header">
 	<div class="header-container">
@@ -47,9 +59,35 @@
 				>
 					Settings
 				</a>
-				<button onclick={handleLogout} class="logout-btn">
-					Log out
-				</button>
+
+				<div class="user-menu-container">
+					<button
+						class="user-btn"
+						onclick={(e) => { e.stopPropagation(); toggleUserMenu(); }}
+						aria-expanded={showUserMenu}
+						aria-haspopup="true"
+					>
+						<span class="user-avatar">{$auth.user.email.charAt(0).toUpperCase()}</span>
+					</button>
+
+					{#if showUserMenu}
+						<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+						<div class="user-dropdown" onclick={(e) => e.stopPropagation()}>
+							<div class="user-info">
+								<span class="user-email">{$auth.user.email}</span>
+							</div>
+							<div class="dropdown-divider"></div>
+							<button onclick={handleLogout} class="dropdown-item dropdown-item-danger">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+									<polyline points="16 17 21 12 16 7"/>
+									<line x1="21" y1="12" x2="9" y2="12"/>
+								</svg>
+								Sign out
+							</button>
+						</div>
+					{/if}
+				</div>
 			</nav>
 		{/if}
 	</div>
@@ -114,22 +152,89 @@
 		background: var(--accent-light);
 	}
 
-	.logout-btn {
+	/* User menu */
+	.user-menu-container {
+		position: relative;
 		margin-left: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		background: transparent;
-		color: var(--text-secondary);
+	}
+
+	.user-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: var(--bg-hover);
 		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
+		border-radius: 50%;
 		cursor: pointer;
-		font-size: var(--font-size-base);
-		font-weight: var(--font-weight-medium);
 		transition: all var(--transition-fast);
 	}
 
-	.logout-btn:hover {
+	.user-btn:hover {
+		border-color: var(--text-muted);
+	}
+
+	.user-avatar {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-secondary);
+	}
+
+	.user-dropdown {
+		position: absolute;
+		top: calc(100% + var(--space-2));
+		right: 0;
+		min-width: 200px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 200;
+		overflow: hidden;
+	}
+
+	.user-info {
+		padding: var(--space-3) var(--space-4);
+	}
+
+	.user-email {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		word-break: break-all;
+	}
+
+	.dropdown-divider {
+		height: 1px;
+		background: var(--border);
+	}
+
+	.dropdown-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		padding: var(--space-3) var(--space-4);
+		background: transparent;
+		border: none;
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		text-align: left;
+	}
+
+	.dropdown-item:hover {
+		background: var(--bg-hover);
+	}
+
+	.dropdown-item-danger {
 		color: var(--danger);
-		border-color: var(--danger);
+	}
+
+	.dropdown-item-danger:hover {
 		background: var(--danger-light);
 	}
 
@@ -139,11 +244,6 @@
 		}
 
 		.nav-link {
-			padding: var(--space-2);
-			font-size: var(--font-size-sm);
-		}
-
-		.logout-btn {
 			padding: var(--space-2);
 			font-size: var(--font-size-sm);
 		}

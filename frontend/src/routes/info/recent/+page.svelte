@@ -24,38 +24,35 @@
 	let groupedData = $state<GroupedItems[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let toastMessage = $state<string | null>(null);
-	let toastType = $state<'success' | 'error'>('success');
+	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 
-	function formatDateLong(isoString: string): string {
+	function formatDateShort(isoString: string): string {
 		const date = new Date(isoString);
+		const today = new Date();
+		const yesterday = new Date(today);
+		yesterday.setDate(yesterday.getDate() - 1);
+
+		if (date.toDateString() === today.toDateString()) return 'Today';
+		if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+
 		return date.toLocaleDateString(undefined, {
-			weekday: 'long',
-			year: 'numeric',
-			month: 'long',
+			weekday: 'short',
+			month: 'short',
 			day: 'numeric'
 		});
 	}
 
 	function getDateKey(isoString: string): string {
 		const date = new Date(isoString);
-		// Use local date components to match toLocaleDateString behavior
 		const year = date.getFullYear();
 		const month = String(date.getMonth() + 1).padStart(2, '0');
 		const day = String(date.getDate()).padStart(2, '0');
 		return `${year}-${month}-${day}`;
 	}
 
-	function formatMediaType(type: string): string {
-		return type === 'tv' ? 'TV' : type.charAt(0).toUpperCase() + type.slice(1);
-	}
-
 	function showToast(message: string, type: 'success' | 'error') {
-		toastMessage = message;
-		toastType = type;
-		setTimeout(() => {
-			toastMessage = null;
-		}, 5000);
+		toast = { message, type };
+		setTimeout(() => toast = null, 3000);
 	}
 
 	function groupItemsByDate(items: RecentlyAvailableItem[]): GroupedItems[] {
@@ -69,12 +66,11 @@
 			groups.get(dateKey)!.push(item);
 		}
 
-		// Convert to array and sort by date descending (newest first)
 		return Array.from(groups.entries())
 			.sort((a, b) => b[0].localeCompare(a[0]))
 			.map(([date, items]) => ({
 				date,
-				dateFormatted: formatDateLong(items[0].availability_date),
+				dateFormatted: formatDateShort(items[0].availability_date),
 				items
 			}));
 	}
@@ -82,7 +78,6 @@
 	async function copyList() {
 		if (!data?.items.length) return;
 
-		// Group by date for the copy format
 		const lines: string[] = [];
 		for (const group of groupedData) {
 			lines.push(`${group.dateFormatted}:`);
@@ -93,13 +88,13 @@
 			lines.push('');
 		}
 
-		const text = `Recently Available Content (${data.total_count} items):\n\n${lines.join('\n')}`;
+		const text = `Recently Available (${data.total_count} items):\n\n${lines.join('\n')}`;
 
 		try {
 			await navigator.clipboard.writeText(text);
-			showToast('Copied to clipboard!', 'success');
+			showToast('Copied to clipboard', 'success');
 		} catch {
-			showToast('Failed to copy to clipboard', 'error');
+			showToast('Failed to copy', 'error');
 		}
 	}
 
@@ -141,294 +136,277 @@
 	<title>Recently Available - Media Janitor</title>
 </svelte:head>
 
-{#if toastMessage}
-	<div class="toast toast-{toastType}" role="alert">
-		{toastMessage}
-	</div>
+{#if toast}
+	<div class="toast toast-{toast.type}" role="alert">{toast.message}</div>
 {/if}
 
-<div class="page-container">
-	<div class="page-header">
-		<div class="header-text">
+<div class="page">
+	<header class="page-header">
+		<div class="header-main">
 			<h1>Recently Available</h1>
-			<p class="page-description">Content that became available in the past 7 days</p>
+			{#if data && !loading}
+				<span class="header-stats">{data.total_count} item{data.total_count !== 1 ? 's' : ''}</span>
+			{/if}
 		</div>
 		{#if data && data.total_count > 0}
-			<button class="copy-button" onclick={copyList} aria-label="Copy list">
-				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-					<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+			<button class="copy-btn" onclick={copyList}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+					<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
 				</svg>
-				Copy List
+				Copy
 			</button>
 		{/if}
-	</div>
+	</header>
+
+	<p class="page-subtitle">Content that became available in the past 7 days</p>
 
 	{#if loading}
-		<div class="loading">Loading...</div>
+		<div class="loading">
+			<span class="spinner"></span>
+		</div>
 	{:else if error}
-		<div class="error">
-			<p>{error}</p>
-		</div>
+		<div class="error-box">{error}</div>
 	{:else if data}
-		<div class="summary-bar">
-			<span class="summary-count">{data.total_count} item{data.total_count !== 1 ? 's' : ''}</span>
-		</div>
-
 		{#if data.items.length === 0}
-			<div class="empty-state">
-				<p>No content became available in the past 7 days.</p>
-				<a href="/" class="back-link">Back to Dashboard</a>
-			</div>
+			<div class="empty">No content became available in the past 7 days</div>
 		{:else}
-			<div class="grouped-content">
-				{#each groupedData as group}
-					<div class="date-group">
-						<h2 class="date-header">{group.dateFormatted}</h2>
-						<div class="content-list">
-							{#each group.items as item}
-								<div class="content-item">
-									<div class="item-info">
+			<div class="table-container">
+				<table class="data-table">
+					<thead>
+						<tr>
+							<th class="col-date">Date</th>
+							<th class="col-title">Title</th>
+							<th class="col-type">Type</th>
+							<th class="col-requester">Requested by</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each groupedData as group, groupIndex}
+							{#each group.items as item, itemIndex}
+								<tr>
+									{#if itemIndex === 0}
+										<td class="col-date" rowspan={group.items.length}>
+											<span class="date-label">{group.dateFormatted}</span>
+										</td>
+									{/if}
+									<td class="col-title">
 										<span class="item-title">{item.title}</span>
-										<div class="item-meta">
-											<span class="media-type-badge {item.media_type}">{formatMediaType(item.media_type)}</span>
-											{#if item.requested_by}
-												<span class="item-requester">Requested by {item.requested_by}</span>
-											{/if}
-										</div>
-									</div>
-								</div>
+									</td>
+									<td class="col-type">
+										<span class="type-badge type-{item.media_type}">
+											{item.media_type === 'tv' ? 'TV' : 'Movie'}
+										</span>
+									</td>
+									<td class="col-requester">
+										{item.requested_by || '-'}
+									</td>
+								</tr>
 							{/each}
-						</div>
-					</div>
-				{/each}
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{/if}
 	{/if}
 </div>
 
 <style>
-	.page-container {
-		padding: 1.5rem;
-		max-width: 1000px;
+	.page {
+		max-width: 900px;
 		margin: 0 auto;
+		padding: var(--space-6);
 	}
 
 	.page-header {
 		display: flex;
+		align-items: center;
 		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 1.5rem;
-		flex-wrap: wrap;
-		gap: 1rem;
+		margin-bottom: var(--space-2);
 	}
 
-	.header-text h1 {
-		font-size: 1.75rem;
-		font-weight: 600;
-		margin-bottom: 0.25rem;
+	.header-main {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-3);
 	}
 
-	.page-description {
+	.page-header h1 {
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: -0.02em;
+	}
+
+	.header-stats {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
+	.page-subtitle {
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
-		font-size: 0.875rem;
-		margin: 0;
+		margin-bottom: var(--space-6);
 	}
 
-	.copy-button {
-		padding: 0.5rem 1rem;
-		background: var(--accent);
-		color: white;
-		border: none;
-		border-radius: 0.375rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
+	.copy-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		transition: background-color 0.2s ease;
-	}
-
-	.copy-button:hover {
-		background: var(--accent-hover, #4f46e5);
-	}
-
-	.loading {
-		padding: 2rem;
-		text-align: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		background: transparent;
 		color: var(--text-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		cursor: pointer;
+		transition: all var(--transition-fast);
 	}
 
-	.error {
-		padding: 2rem;
-		background: var(--bg-secondary);
+	.copy-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+		border-color: var(--text-muted);
+	}
+
+	/* Loading & Error */
+	.loading {
+		display: flex;
+		justify-content: center;
+		padding: var(--space-12);
+	}
+
+	.spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.error-box {
+		padding: var(--space-4);
+		background: var(--danger-light);
 		border: 1px solid var(--danger);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		color: var(--danger);
 	}
 
-	.summary-bar {
-		display: flex;
-		justify-content: flex-start;
-		padding: 0.75rem 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.summary-count {
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
-	.empty-state {
-		padding: 3rem;
+	.empty {
+		padding: var(--space-8);
 		text-align: center;
-		background: var(--bg-secondary);
+		color: var(--text-muted);
+	}
+
+	/* Table */
+	.table-container {
 		border: 1px solid var(--border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
+		overflow: hidden;
 	}
 
-	.empty-state p {
-		color: var(--text-secondary);
-		margin-bottom: 1rem;
+	.data-table {
+		width: 100%;
+		border-collapse: collapse;
 	}
 
-	.back-link {
-		color: var(--accent);
-		text-decoration: none;
+	.data-table th,
+	.data-table td {
+		padding: var(--space-3) var(--space-4);
+		text-align: left;
 	}
 
-	.back-link:hover {
-		text-decoration: underline;
-	}
-
-	.grouped-content {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.date-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.date-header {
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--text-primary);
-		padding: 0.5rem 0;
+	.data-table th {
+		background: var(--bg-secondary);
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-muted);
 		border-bottom: 1px solid var(--border);
-		margin: 0;
 	}
 
-	.content-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+	.data-table tr {
+		border-bottom: 1px solid var(--border);
 	}
 
-	.content-item {
-		display: flex;
-		align-items: flex-start;
-		gap: 1rem;
-		padding: 0.75rem 1rem;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: 0.5rem;
-		transition: background-color 0.2s ease;
+	.data-table tr:last-child {
+		border-bottom: none;
 	}
 
-	.content-item:hover {
+	.data-table tbody tr:hover {
 		background: var(--bg-hover);
 	}
 
-	.item-info {
-		flex: 1;
+	/* Columns */
+	.col-date {
+		width: 100px;
+		vertical-align: top;
+		border-right: 1px solid var(--border);
+	}
+
+	.date-label {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+	}
+
+	.col-title {
+		width: 45%;
 	}
 
 	.item-title {
-		font-weight: 500;
-		display: block;
-		margin-bottom: 0.25rem;
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
 	}
 
-	.item-meta {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-		align-items: center;
-		font-size: 0.875rem;
+	.col-type {
+		width: 80px;
+	}
+
+	.type-badge {
+		display: inline-block;
+		padding: 2px 6px;
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		border-radius: var(--radius-sm);
+	}
+
+	.type-badge.type-movie {
+		background: var(--info-light);
+		color: var(--info);
+	}
+
+	.type-badge.type-tv {
+		background: var(--success-light);
+		color: var(--success);
+	}
+
+	.col-requester {
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 
-	.media-type-badge {
-		padding: 0.125rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-	}
-
-	.media-type-badge.movie {
-		background: rgba(59, 130, 246, 0.1);
-		color: #3b82f6;
-	}
-
-	.media-type-badge.tv {
-		background: rgba(16, 185, 129, 0.1);
-		color: #10b981;
-	}
-
-	.item-requester {
-		color: var(--text-secondary);
-	}
-
-	/* Toast notifications */
-	.toast {
-		position: fixed;
-		top: 1rem;
-		right: 1rem;
-		padding: 1rem 1.5rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		z-index: 1000;
-		animation: slideIn 0.3s ease;
-	}
-
-	.toast-success {
-		background: var(--success, #22c55e);
-		color: white;
-	}
-
-	.toast-error {
-		background: var(--danger, #ef4444);
-		color: white;
-	}
-
-	@keyframes slideIn {
-		from {
-			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
+	/* Responsive */
 	@media (max-width: 640px) {
-		.page-header {
-			flex-direction: column;
+		.page {
+			padding: var(--space-4);
 		}
 
-		.item-meta {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.25rem;
+		.col-requester {
+			display: none;
+		}
+
+		.data-table th,
+		.data-table td {
+			padding: var(--space-2) var(--space-3);
 		}
 	}
 </style>
