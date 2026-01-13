@@ -585,6 +585,27 @@
       "notes": "Completed 2026-01-13 - Analysis Preferences section in settings page, backend service uses user thresholds, 176 backend tests + 93 frontend tests pass"
     },
     {
+      "id": "US-UI.1",
+      "title": "Design System Refinement",
+      "story": "As a user, I want a polished, consistent interface, so that the app feels professional and is easy to scan",
+      "acceptanceCriteria": [
+        "Typography: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)",
+        "Spacing: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)",
+        "Border Radius: Standardize to 4/6/8px system",
+        "Colors: Reduce decorative color, use gray structure + accent for actions only",
+        "Cards: Consistent padding (16px), border-only depth, no heavy shadows",
+        "Buttons: Unified styling with 150ms transitions",
+        "Data Display: Monospace font with tabular-nums for numbers/sizes/dates",
+        "Dark Mode: Adjust borders to 10-15% white opacity, desaturate status colors",
+        "Navigation: Consistent styling with current page indicator",
+        "Typecheck passes",
+        "Visual review in browser (light + dark mode)"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
       "id": "US-M.1",
       "title": "Landing Page Hero",
       "story": "As a visitor, I want to see an attractive landing page, so that I understand the value and sign up",
