@@ -479,58 +479,64 @@ Transform the dashboard from a simple status page into a unified library health 
 
 ### User Stories
 
-#### US-D.1: Dashboard Summary Cards
+#### US-D.1: Dashboard Summary Cards ✅
 **As a** user
 **I want** to see summary cards for each issue type on my dashboard
 **So that** I can quickly understand my library's health status
 
 **Acceptance Criteria:**
-- [ ] Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests
-- [ ] Each card displays: count of items, total size (where applicable)
-- [ ] Cards are clickable → navigate to `/issues?filter=<type>`
-- [ ] Cards show loading skeleton while data loads
-- [ ] Cards show "0 issues" gracefully when no problems exist
-- [ ] API endpoint `GET /api/content/summary` returns counts for all issue types
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests
+- [x] Each card displays: count of items, total size (where applicable)
+- [x] Cards are clickable → navigate to `/issues?filter=<type>`
+- [x] Cards show loading skeleton while data loads
+- [x] Cards show "0 issues" gracefully when no problems exist
+- [x] API endpoint `GET /api/content/summary` returns counts for all issue types
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-13 - 4 summary cards with counts, sizes, icons, click navigation to /issues?filter=<type>
 
 ---
 
-#### US-D.2: Dashboard Info Section
+#### US-D.2: Dashboard Info Section ✅
 **As a** user
 **I want** to see informational content (recently available, airing series)
 **So that** I can stay informed about my library without these being "problems"
 
 **Acceptance Criteria:**
-- [ ] Separate "Info" section below issue cards
-- [ ] Two cards: Recently Available (past 7 days), Currently Airing
-- [ ] Cards show item count
-- [ ] Click → dedicated simple list view for each
-- [ ] Visually distinct from issue cards (different color/style)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Separate "Info" section below issue cards
+- [x] Two cards: Recently Available (past 7 days), Currently Airing
+- [x] Cards show item count
+- [x] Click → dedicated simple list view for each
+- [x] Visually distinct from issue cards (different color/style)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-13 - Info section with 2 cards (Recently Available, Currently Airing), /info/recent and /info/airing list views. Also cleaned up E2E tests (79 -> 20) and updated testing documentation.
 
 ---
 
-#### US-D.3: Unified Issues View
+#### US-D.3: Unified Issues View ✅
 **As a** user
 **I want** a single view showing all content with issues
 **So that** I can see everything in one place and filter by issue type
 
 **Acceptance Criteria:**
-- [ ] New route `/issues` with unified table/list
-- [ ] Filter tabs: All, Old, Large, Language, Requests
-- [ ] URL supports filter param: `/issues?filter=old`
-- [ ] Each row shows all applicable issue badges (content can have multiple)
-- [ ] Sortable by: name, size, date, issue count
-- [ ] Actions column with contextual buttons (Protect, Mark French-only, etc.)
-- [ ] Total count and size displayed at top
-- [ ] Replaces old `/content/old-unwatched` route (redirect for backwards compat)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] New route `/issues` with unified table/list
+- [x] Filter tabs: All, Old, Large, Language, Requests
+- [x] URL supports filter param: `/issues?filter=old`
+- [x] Each row shows all applicable issue badges (content can have multiple)
+- [x] Sortable by: name, size, date, issue count
+- [x] Actions column with contextual buttons (Protect, Mark French-only, etc.)
+- [x] Total count and size displayed at top
+- [x] Replaces old `/content/old-unwatched` route (redirect for backwards compat)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-13 - Unified issues view with filter tabs, sortable columns, Protect button. Integration tests pass.
 
 ---
 
@@ -961,7 +967,7 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ## Checklist Summary
 
-### Completed ✅ (16 stories)
+### Completed ✅ (19 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -978,11 +984,11 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-3.1: View Old Unwatched Content
 - [x] US-3.2: Protect Content from Deletion
 - [x] US-3.3: Manage Content Whitelist
+- [x] US-D.1: Dashboard Summary Cards
+- [x] US-D.2: Dashboard Info Section
+- [x] US-D.3: Unified Issues View
 
-### Next Up - Dashboard Redesign (5 stories) **← START HERE**
-- [ ] US-D.1: Dashboard Summary Cards
-- [ ] US-D.2: Dashboard Info Section
-- [ ] US-D.3: Unified Issues View
+### Next Up - Dashboard Redesign (2 stories) **← START HERE**
 - [ ] US-D.4: Multi-Issue Content Support
 - [ ] US-D.5: Navigation Update
 

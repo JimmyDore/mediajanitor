@@ -103,7 +103,8 @@ plex-dashboard/
 ├── .claude/
 │   └── skills/
 │       ├── prd.md         # /prd skill - PRD creation
-│       └── ralph-init.md  # /ralph-init skill - PRD to JSON
+│       ├── ralph-init.md  # /ralph-init skill - PRD to JSON
+│       └── prd-sync.md    # /prd-sync skill - Sync prd.json to PRD.md
 ├── docker-compose.yml     # Local development
 ├── .env.example           # Environment template
 │
@@ -157,6 +158,11 @@ Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
    - Location: `.claude/skills/ralph-init.md`
    - Creates machine-readable task tracking
    - Validates story sizing and dependencies
+
+3. **`/prd-sync`** - Sync prd.json back to PRD.md
+   - Location: `.claude/skills/prd-sync.md`
+   - Updates checkbox status and notes in PRD.md
+   - Keeps human-readable doc in sync after Ralph completes stories
 
 ### Ralph Loop (Autonomous execution)
 
