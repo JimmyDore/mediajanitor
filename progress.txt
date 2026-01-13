@@ -583,10 +583,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-6.1] add unavailable requests backend service
 
+### 2026-01-13: US-V.1 - Validate Old Content Filtering Logic
+- Compared original_script.py filter_old_or_unwatched_items() with app's is_old_or_unwatched()
+- Found bug: min_age_months was being applied to ALL items instead of only unplayed items
+- Original script logic:
+  - For UNPLAYED items: Only include if added > min_age_months ago
+  - For PLAYED items: Check last_played_date regardless of when added
+- App bug: Was returning False for recently added items (< min_age) even if played long ago
+- Fixed is_old_or_unwatched() to match original script:
+  - item_age_ok flag for min_age check
+  - Unplayed items: return item_age_ok (applies min_age)
+  - Played items: check last_played_date (min_age does NOT apply)
+- Added test: test_min_age_only_applies_to_unplayed_items
+- 164 backend tests pass, mypy clean
+- Files changed: services/content.py, tests/test_content.py, prd.json
+- Commits:
+  - fix(content): [US-V.1] apply min_age_months only to unplayed items
+
 ## Current Status
 
-**Phase**: Epic 6 - Jellyseerr Requests (In Progress)
-**Next US**: US-6.2 - Currently Airing Series (INFO)
+**Phase**: Epic V - Validation Against Original Script (In Progress)
+**Next US**: US-V.2 - Validate Large Movies Detection
 
 ## Notes
 
