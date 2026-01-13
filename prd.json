@@ -285,49 +285,142 @@
       "notes": "Completed 2026-01-13 - Whitelist page with list, Remove button, and navigation link verified in Docker"
     },
     {
-      "id": "US-4.1",
-      "title": "View Large Movies",
-      "story": "As a user, I want to see movies larger than 13GB, so that I can re-download them in lower quality",
+      "id": "US-D.1",
+      "title": "Dashboard Summary Cards",
+      "story": "As a user, I want to see summary cards for each issue type on my dashboard, so that I can quickly understand my library's health status",
       "acceptanceCriteria": [
-        "Refer to original_script.py function: list_large_movies",
-        "Page shows movies exceeding 13GB threshold (reads from cached DB, not live API)",
-        "Each item shows: name, year, size (formatted), watched status, file path",
-        "List sorted by size (largest first)",
-        "Total count and total size displayed at top",
+        "Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests",
+        "Each card displays: count of items, total size (where applicable)",
+        "Cards are clickable -> navigate to /issues?filter=<type>",
+        "Cards show loading skeleton while data loads",
+        "Cards show 0 issues gracefully when no problems exist",
+        "API endpoint GET /api/content/summary returns counts for all issue types",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 50,
+      "priority": 43,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-5.1",
-      "title": "View Content with Language Issues",
-      "story": "As a user, I want to see content missing French or English audio, so that I can re-download proper versions",
+      "id": "US-D.2",
+      "title": "Dashboard Info Section",
+      "story": "As a user, I want to see informational content (recently available, airing series), so that I can stay informed about my library without these being problems",
       "acceptanceCriteria": [
-        "Refer to original_script.py functions: check_audio_languages, list_recent_items_language_check",
-        "Page shows content with language problems (reads from cached DB, not live API)",
-        "Each item shows: name, type, year, issue type (missing EN audio, missing FR audio, missing FR subs)",
-        "For series: expandable to show which episodes have issues",
-        "Filter dropdown by issue type",
-        "Content in language exemption whitelist is excluded",
+        "Separate Info section below issue cards",
+        "Two cards: Recently Available (past 7 days), Currently Airing",
+        "Cards show item count",
+        "Click -> dedicated simple list view for each",
+        "Visually distinct from issue cards (different color/style)",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 55,
+      "priority": 44,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-D.3",
+      "title": "Unified Issues View",
+      "story": "As a user, I want a single view showing all content with issues, so that I can see everything in one place and filter by issue type",
+      "acceptanceCriteria": [
+        "New route /issues with unified table/list",
+        "Filter tabs: All, Old, Large, Language, Requests",
+        "URL supports filter param: /issues?filter=old",
+        "Each row shows all applicable issue badges (content can have multiple)",
+        "Sortable by: name, size, date, issue count",
+        "Actions column with contextual buttons (Protect, Mark French-only, etc.)",
+        "Total count and size displayed at top",
+        "Replaces old /content/old-unwatched route (redirect for backwards compat)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-D.4",
+      "title": "Multi-Issue Content Support",
+      "story": "As a user, I want to see when content has multiple issues, so that I can prioritize cleaning up the worst offenders",
+      "acceptanceCriteria": [
+        "API endpoint returns all issue types for each content item",
+        "Frontend displays multiple badges per row (e.g., Old + Large)",
+        "Can filter to show multiple issues only",
+        "Sorting by issue count puts worst offenders first",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-D.5",
+      "title": "Navigation Update",
+      "story": "As a user, I want the navigation to reflect the new architecture, so that I can easily access the Issues view",
+      "acceptanceCriteria": [
+        "Navigation shows: Dashboard | Issues | Whitelist | Settings",
+        "Issues link goes to /issues",
+        "Old Content nav item removed (redirects to /issues?filter=old)",
+        "Current page highlighted correctly",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-4.1",
+      "title": "Large Movies Backend Service",
+      "story": "As a user, I want to identify movies larger than 13GB, so that I can re-download them in lower quality",
+      "acceptanceCriteria": [
+        "Refer to original_script.py function: list_large_movies",
+        "Backend service get_large_movies() identifies movies exceeding 13GB (reads from cached DB)",
+        "Large movies marked with 'large' issue type in content response",
+        "/api/content/summary endpoint includes large_movies count and total_size",
+        "/api/content/issues?filter=large returns only large movies",
+        "Each item includes: name, year, size (bytes), watched status, file path",
+        "Results sorted by size (largest first)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "UI display handled by unified issues view (US-D.3)"
+    },
+    {
+      "id": "US-5.1",
+      "title": "Language Issues Backend Service",
+      "story": "As a user, I want to identify content missing French or English audio, so that I can re-download proper versions",
+      "acceptanceCriteria": [
+        "Refer to original_script.py functions: check_audio_languages, list_recent_items_language_check",
+        "Backend service get_language_issues() identifies content with language problems (reads from cached DB)",
+        "Content marked with 'language' issue type in response",
+        "/api/content/summary endpoint includes language_issues count",
+        "/api/content/issues?filter=language returns only items with language issues",
+        "Each item includes: name, type, year, specific issue (missing_en_audio, missing_fr_audio, missing_fr_subs)",
+        "For series: episode-level issues aggregated at series level",
+        "Content in language exemption whitelist is excluded",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "UI display handled by unified issues view (US-D.3). Episode details shown in expandable row."
     },
     {
       "id": "US-5.2",
       "title": "Mark Content as French-Only",
       "story": "As a user, I want to mark French films as not needing English audio, so that they don't appear as language issues",
       "acceptanceCriteria": [
-        "Mark as French-only button on items flagged for missing EN audio",
-        "Creates entry in user's french-only whitelist (user_id FK)",
+        "Mark as French-only button appears in unified issues view actions for items with missing EN audio",
+        "POST /api/whitelist/french-only creates entry (user_id FK)",
         "Item no longer flagged for missing English audio",
         "Can be managed in whitelist page",
         "Typecheck passes",
@@ -343,9 +436,9 @@
       "title": "Exempt Content from Language Checks",
       "story": "As a user, I want to completely exempt content from language checks, so that special cases don't show as issues",
       "acceptanceCriteria": [
-        "Exempt from checks button on language issue items",
-        "Creates entry in user's language-exempt whitelist (user_id FK)",
-        "Item no longer appears in language issues list",
+        "Exempt from checks button appears in unified issues view actions for language issues",
+        "POST /api/whitelist/language-exempt creates entry (user_id FK)",
+        "Item no longer appears in language issues",
         "Can be managed in whitelist page",
         "Typecheck passes",
         "Unit tests pass",
@@ -357,55 +450,63 @@
     },
     {
       "id": "US-6.1",
-      "title": "View Unavailable Requests",
-      "story": "As a user, I want to see Jellyseerr requests that aren't available, so that I can manually find them",
+      "title": "Unavailable Requests Backend Service",
+      "story": "As a user, I want to identify Jellyseerr requests that aren't available, so that I can manually find them",
       "acceptanceCriteria": [
         "Refer to original_script.py functions: fetch_jellyseer_requests, get_jellyseer_unavailable_requests, analyze_jellyseer_requests",
-        "Page shows requests with unavailable/pending status (reads from cached DB, not live API)",
-        "Each item shows: title, type (movie/TV), requested by, request date",
-        "For TV: shows which seasons are requested but missing",
+        "Backend service get_unavailable_requests() identifies unavailable/pending requests (reads from cached DB)",
+        "Requests marked with 'request' issue type in response",
+        "/api/content/summary endpoint includes unavailable_requests count",
+        "/api/content/issues?filter=requests returns only unavailable requests",
+        "Each item includes: title, type (movie/TV), requested by, request date",
+        "For TV: includes which seasons are requested but missing",
         "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
+        "Unit tests pass"
       ],
       "priority": 60,
       "passes": false,
-      "notes": ""
+      "notes": "UI display handled by unified issues view (US-D.3)"
     },
     {
       "id": "US-6.2",
-      "title": "View Currently Airing Series",
+      "title": "Currently Airing Series (INFO)",
       "story": "As a user, I want to see series that are currently airing, so that I know new episodes are coming",
       "acceptanceCriteria": [
         "Refer to original_script.py function: analyze_tv_series_seasons (in_progress_seasons)",
-        "Section/page shows in-progress series (reads from cached DB)",
+        "Backend service get_currently_airing() returns in-progress series (reads from cached DB)",
+        "/api/content/summary endpoint includes currently_airing count",
+        "Dedicated simple list view at /info/airing",
         "Each item shows: title, current season, episodes aired vs total",
         "Sorted by next air date",
+        "Accessed from dashboard Info section card",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
       "priority": 61,
       "passes": false,
-      "notes": ""
+      "notes": "INFO feature - displayed in dedicated simple list view, not unified issues"
     },
     {
       "id": "US-6.3",
-      "title": "View Recently Available Content",
+      "title": "Recently Available Content (INFO)",
       "story": "As a user, I want to see what became available this week, so that I can notify my friends",
       "acceptanceCriteria": [
         "Refer to original_script.py function: get_jellyseer_recently_available_requests",
-        "Page shows content that became available in past 7 days (reads from cached DB)",
+        "Backend service get_recently_available() returns content from past 7 days (reads from cached DB)",
+        "/api/content/summary endpoint includes recently_available count",
+        "Dedicated simple list view at /info/recent",
         "Grouped by date (newest first)",
         "Each item shows: title, type, availability date",
         "Copy list button for sharing (plain text format)",
+        "Accessed from dashboard Info section card",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
       "priority": 62,
       "passes": false,
-      "notes": ""
+      "notes": "INFO feature - displayed in dedicated simple list view, not unified issues"
     },
     {
       "id": "US-8.1",

@@ -24,6 +24,46 @@ A SaaS web application that helps media server owners manage their Plex/Jellyfin
 - **Full-stack user stories**: Each story delivers end-to-end value (API + UI).
 - **Read-only v1**: Dashboard displays insights; users take actions in Jellyfin/Sonarr/Radarr directly.
 
+### Dashboard & Issues Architecture
+
+Instead of one tab per feature (Old Content, Large Movies, Language Issues, etc.), the app uses a **unified dashboard + issues system**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         DASHBOARD                                │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ Old Content  │ │ Large Movies │ │   Language   │   ISSUES    │
+│  │    221       │ │      18      │ │     34       │   (click    │
+│  │   741 GB     │ │   312 GB     │ │              │    card)    │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│  ┌──────────────┐                                               │
+│  │ Unavailable  │                                               │
+│  │  Requests    │                                               │
+│  └──────────────┘                                               │
+│  ───────────────────────────────────────────────────────────    │
+│  ┌──────────────┐ ┌──────────────┐                              │
+│  │  Recently    │ │   Airing     │   INFO (not problems)        │
+│  │  Available   │ │   Series     │                              │
+│  └──────────────┘ └──────────────┘                              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ Click card → Unified Issues View
+┌─────────────────────────────────────────────────────────────────┐
+│  Filters: [All] [Old] [Large] [Language] [Requests]             │
+│  │ Name              │ Type  │ Size   │ Issues           │ Act  │
+│  │ Spider-Man        │ Movie │ 12.4GB │ 🕐 Old 📦 Large  │ ... │
+│  │ LOTR: Two Towers  │ Movie │ 11.3GB │ 🕐 Old 📦 Large  │ ... │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Feature categorization:**
+- **ISSUES** (problems to resolve): Old Content, Large Movies, Language Problems, Unavailable Requests
+- **INFO** (informational): Recently Available, Currently Airing Series
+
+**Navigation:** `Dashboard | Issues | Whitelist | Settings`
+
+Content items can have **multiple issues** (e.g., both Old AND Large), shown as badges in the unified view.
+
 ---
 
 ## Epic 0: Foundation & Deployment
@@ -158,52 +198,52 @@ Allow users to connect their external services (Jellyfin, Jellyseerr) and set up
 
 ---
 
-#### US-2.1.5: Backend Cleanup
+#### US-2.1.5: Backend Cleanup ✅
 **As a** developer
 **I want** to remove premature code that was created but not needed
 **So that** the codebase only contains code for completed stories
 
 **Acceptance Criteria:**
-- [ ] Delete unused Pydantic models: `models/content.py`, `models/jellyseerr.py`, `models/whitelist.py`
-- [ ] Update `models/__init__.py` to only export `user.py` and `settings.py` models
-- [ ] Remove premature SQLAlchemy tables from `database.py`: `WhitelistContent`, `WhitelistFrenchOnly`, `WhitelistFrenchSubsOnly`, `WhitelistLanguageExempt`, `WhitelistEpisodeExempt`, `AppSettings`
-- [ ] Run `uv run pytest` - all tests pass
-- [ ] Run `uv run mypy app` - no type errors
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Delete unused Pydantic models: `models/content.py`, `models/jellyseerr.py`, `models/whitelist.py`
+- [x] Update `models/__init__.py` to only export `user.py` and `settings.py` models
+- [x] Remove premature SQLAlchemy tables from `database.py`: `WhitelistContent`, `WhitelistFrenchOnly`, `WhitelistFrenchSubsOnly`, `WhitelistLanguageExempt`, `WhitelistEpisodeExempt`, `AppSettings`
+- [x] Run `uv run pytest` - all tests pass
+- [x] Run `uv run mypy app` - no type errors
+- [x] Typecheck passes
+- [x] Unit tests pass
 
 ---
 
-#### US-2.2: Configure Jellyseerr Connection
+#### US-2.2: Configure Jellyseerr Connection ✅
 **As a** user
 **I want** to input my Jellyseerr API key and URL
 **So that** the app can fetch my requests data
 
 **Acceptance Criteria:**
-- [ ] Settings page shows Jellyseerr section below Jellyfin
-- [ ] Form fields for Jellyseerr URL and API key
-- [ ] Backend validates connection by calling Jellyseerr API
-- [ ] Credentials stored encrypted in database (using existing encryption service)
-- [ ] Toast notification shows "Jellyseerr connected" on success or error message on failure
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Settings page shows Jellyseerr section below Jellyfin
+- [x] Form fields for Jellyseerr URL and API key
+- [x] Backend validates connection by calling Jellyseerr API
+- [x] Credentials stored encrypted in database (using existing encryption service)
+- [x] Toast notification shows "Jellyseerr connected" on success or error message on failure
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 ---
 
-#### US-2.3: Navigation Header
+#### US-2.3: Navigation Header ✅
 **As a** user
 **I want** a consistent navigation header across all pages
 **So that** I can easily move between dashboard, settings, and log out
 
 **Acceptance Criteria:**
-- [ ] Header component with app logo/name on the left
-- [ ] User menu on the right with: Settings link, Logout button
-- [ ] Header appears on dashboard, settings, and all authenticated pages
-- [ ] Current page highlighted in navigation
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Header component with app logo/name on the left
+- [x] User menu on the right with: Settings link, Logout button
+- [x] Header appears on dashboard, settings, and all authenticated pages
+- [x] Current page highlighted in navigation
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 ### Non-Goals
 - Breadcrumb navigation (see SUGGESTIONS.md)
@@ -227,62 +267,64 @@ Keep dashboard data fresh through automatic and manual sync mechanisms.
 
 ### User Stories
 
-#### US-7.1: Automatic Daily Data Sync
+#### US-7.1: Automatic Daily Data Sync ✅
 **As a** user
 **I want** my data to refresh automatically every day
 **So that** the dashboard is always up-to-date
 
 **Acceptance Criteria:**
-- [ ] **Refer to `original_script.py` functions: `setup_jellyfin_client`, `fetch_jellyseer_requests`, `aggregate_all_user_data`, `get_movies_and_shows_for_user`**
-- [ ] **Use API keys from `backend/.env` file for testing** (JELLYFIN_API_KEY, JELLYFIN_SERVER_URL, JELLYSEERR_API_KEY, JELLYSEERR_BASE_URL)
-- [ ] **All cached data is tied to a user_id** - each user's sync is independent
-- [ ] Background task can be triggered manually (for testing) or scheduled daily
-- [ ] Uses the user's own stored API keys (from UserSettings) to fetch their data
-- [ ] Fetches data from Jellyfin API: all movies/series with UserData, MediaSources
-- [ ] Fetches data from Jellyseerr API: all requests with status
-- [ ] Stores raw results in database cache tables with `user_id` FK (e.g., `cached_media_items`, `cached_jellyseerr_requests`)
-- [ ] Dashboard shows "Last synced: [timestamp]" for the current user
-- [ ] Failed syncs logged but don't crash the app
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] **Refer to `original_script.py` functions: `setup_jellyfin_client`, `fetch_jellyseer_requests`, `aggregate_all_user_data`, `get_movies_and_shows_for_user`**
+- [x] **Use API keys from `backend/.env` file for testing** (JELLYFIN_API_KEY, JELLYFIN_SERVER_URL, JELLYSEERR_API_KEY, JELLYSEERR_BASE_URL)
+- [x] **All cached data is tied to a user_id** - each user's sync is independent
+- [x] Background task can be triggered manually (for testing) or scheduled daily
+- [x] Uses the user's own stored API keys (from UserSettings) to fetch their data
+- [x] Fetches data from Jellyfin API: all movies/series with UserData, MediaSources
+- [x] Fetches data from Jellyseerr API: all requests with status
+- [x] Stores raw results in database cache tables with `user_id` FK (e.g., `cached_media_items`, `cached_jellyseerr_requests`)
+- [x] Dashboard shows "Last synced: [timestamp]" for the current user
+- [x] Failed syncs logged but don't crash the app
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Missing daily scheduler - see SUGGESTIONS.md [P1]
 
 ---
 
-#### US-7.1.5: Local Integration Test for Sync
+#### US-7.1.5: Local Integration Test for Sync ✅
 **As a** developer
 **I want** to verify the sync service works with real Jellyfin/Jellyseerr APIs locally
 **So that** I can confirm data is fetched and cached correctly before deploying
 
 **Acceptance Criteria:**
-- [ ] Run `docker-compose up` locally
-- [ ] Register/login with credentials from `.env.example` (APP_USER_EMAIL, APP_USER_PASSWORD)
-- [ ] Configure Jellyfin settings via Settings UI (user's real Jellyfin server)
-- [ ] Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)
-- [ ] Trigger sync via `curl -X POST http://localhost:8080/api/sync` with JWT token
-- [ ] Verify `cached_media_items` table has data (query via SQLite or check /api/sync/status)
-- [ ] Verify `cached_jellyseerr_requests` table has data
-- [ ] Verify `GET /api/sync/status` returns correct counts (media_items_count > 0, requests_count > 0)
-- [ ] Dashboard displays "Last synced" timestamp after sync
-- [ ] Document any issues found in SUGGESTIONS.md
+- [x] Run `docker-compose up` locally
+- [x] Register/login with credentials from `.env.example` (APP_USER_EMAIL, APP_USER_PASSWORD)
+- [x] Configure Jellyfin settings via Settings UI (user's real Jellyfin server)
+- [x] Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)
+- [x] Trigger sync via `curl -X POST http://localhost:8080/api/sync` with JWT token
+- [x] Verify `cached_media_items` table has data (query via SQLite or check /api/sync/status)
+- [x] Verify `cached_jellyseerr_requests` table has data
+- [x] Verify `GET /api/sync/status` returns correct counts (media_items_count > 0, requests_count > 0)
+- [x] Dashboard displays "Last synced" timestamp after sync
+- [x] Document any issues found in SUGGESTIONS.md
 
-**Note:** This is a manual integration test, not automated. Must be run before marking US-7.1 as truly complete.
+**Result:** Verified 324 media items, 244 requests synced successfully.
 
 ---
 
-#### US-7.2: Manual Data Refresh
+#### US-7.2: Manual Data Refresh ✅
 **As a** user
 **I want** to manually trigger a data refresh
 **So that** I can see changes immediately
 
 **Acceptance Criteria:**
-- [ ] "Refresh" button on dashboard header
-- [ ] Button shows loading spinner during refresh
-- [ ] Data updates on page after refresh completes
-- [ ] Rate limited: max 1 refresh per 5 minutes per user
-- [ ] Toast notification shows result (success or rate limit message)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] "Refresh" button on dashboard header
+- [x] Button shows loading spinner during refresh
+- [x] Data updates on page after refresh completes
+- [x] Rate limited: max 1 refresh per 5 minutes per user
+- [x] Toast notification shows result (success or rate limit message)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 ### Non-Goals
 - Real-time websocket updates
@@ -345,56 +387,58 @@ Help users identify content that hasn't been watched in a configurable period, a
 
 ### User Stories
 
-#### US-3.1: View Old Unwatched Content
+#### US-3.1: View Old Unwatched Content ✅
 **As a** user
 **I want** to see a list of content not watched in 4+ months
 **So that** I can decide what to delete
 
 **Acceptance Criteria:**
-- [ ] **Refer to `original_script.py` functions: `filter_old_or_unwatched_items`, `list_old_or_unwatched_content`**
-- [ ] Dashboard page shows list of old/unwatched movies and series (reads from **current user's** cached DB, not live API)
-- [ ] API endpoint filters by `user_id` from JWT token
-- [ ] Each item shows: name, type (movie/series), year, size (formatted), last watched date, file path
-- [ ] List sorted by size (largest first)
-- [ ] Total count and total size displayed at top
-- [ ] Content in user's whitelist is excluded from results
-- [ ] Uses hardcoded threshold: 4 months, min age: 3 months
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] **Refer to `original_script.py` functions: `filter_old_or_unwatched_items`, `list_old_or_unwatched_content`**
+- [x] Dashboard page shows list of old/unwatched movies and series (reads from **current user's** cached DB, not live API)
+- [x] API endpoint filters by `user_id` from JWT token
+- [x] Each item shows: name, type (movie/series), year, size (formatted), last watched date, file path
+- [x] List sorted by size (largest first)
+- [x] Total count and total size displayed at top
+- [x] Content in user's whitelist is excluded from results
+- [x] Uses hardcoded threshold: 4 months, min age: 3 months
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Result:** 221 items totaling 741.3 GB verified.
 
 ---
 
-#### US-3.2: Protect Content from Deletion
+#### US-3.2: Protect Content from Deletion ✅
 **As a** user
 **I want** to add content to a whitelist
 **So that** it won't appear in the "to delete" list
 
 **Acceptance Criteria:**
-- [ ] "Protect" button on each content item in old content list
-- [ ] Clicking creates whitelist entry linked to current user (user_id foreign key)
-- [ ] Protected item immediately disappears from old content list
-- [ ] Toast notification confirms "Added to whitelist"
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] "Protect" button on each content item in old content list
+- [x] Clicking creates whitelist entry linked to current user (user_id foreign key)
+- [x] Protected item immediately disappears from old content list
+- [x] Toast notification confirms "Added to whitelist"
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 ---
 
-#### US-3.3: Manage Content Whitelist
+#### US-3.3: Manage Content Whitelist ✅
 **As a** user
 **I want** to view and edit my content whitelist
 **So that** I can remove protection from items
 
 **Acceptance Criteria:**
-- [ ] Whitelist page accessible from settings or navigation
-- [ ] Shows all items in user's content whitelist
-- [ ] Each item shows: name, date added
-- [ ] "Remove" button to unprotect items
-- [ ] Removing item makes it appear again in old content list (if still old)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Whitelist page accessible from settings or navigation
+- [x] Shows all items in user's content whitelist
+- [x] Each item shows: name, date added
+- [x] "Remove" button to unprotect items
+- [x] Removing item makes it appear again in old content list (if still old)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 ### Non-Goals
 - Direct deletion from dashboard (requires Radarr/Sonarr - see SUGGESTIONS.md)
@@ -422,10 +466,132 @@ Response UserData structure:
 
 ---
 
+## Epic D: Dashboard Redesign
+
+### Overview
+Transform the dashboard from a simple status page into a unified library health center. Replace the "one tab per feature" approach with summary cards that link to a unified issues view.
+
+### Goals
+- Provide at-a-glance library health via summary cards
+- Unify all issue types into a single filterable view
+- Support content with multiple issues (e.g., both old AND large)
+- Separate "problems" from "informational" content
+
+### User Stories
+
+#### US-D.1: Dashboard Summary Cards
+**As a** user
+**I want** to see summary cards for each issue type on my dashboard
+**So that** I can quickly understand my library's health status
+
+**Acceptance Criteria:**
+- [ ] Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests
+- [ ] Each card displays: count of items, total size (where applicable)
+- [ ] Cards are clickable → navigate to `/issues?filter=<type>`
+- [ ] Cards show loading skeleton while data loads
+- [ ] Cards show "0 issues" gracefully when no problems exist
+- [ ] API endpoint `GET /api/content/summary` returns counts for all issue types
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+#### US-D.2: Dashboard Info Section
+**As a** user
+**I want** to see informational content (recently available, airing series)
+**So that** I can stay informed about my library without these being "problems"
+
+**Acceptance Criteria:**
+- [ ] Separate "Info" section below issue cards
+- [ ] Two cards: Recently Available (past 7 days), Currently Airing
+- [ ] Cards show item count
+- [ ] Click → dedicated simple list view for each
+- [ ] Visually distinct from issue cards (different color/style)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+#### US-D.3: Unified Issues View
+**As a** user
+**I want** a single view showing all content with issues
+**So that** I can see everything in one place and filter by issue type
+
+**Acceptance Criteria:**
+- [ ] New route `/issues` with unified table/list
+- [ ] Filter tabs: All, Old, Large, Language, Requests
+- [ ] URL supports filter param: `/issues?filter=old`
+- [ ] Each row shows all applicable issue badges (content can have multiple)
+- [ ] Sortable by: name, size, date, issue count
+- [ ] Actions column with contextual buttons (Protect, Mark French-only, etc.)
+- [ ] Total count and size displayed at top
+- [ ] Replaces old `/content/old-unwatched` route (redirect for backwards compat)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+#### US-D.4: Multi-Issue Content Support
+**As a** user
+**I want** to see when content has multiple issues
+**So that** I can prioritize cleaning up the worst offenders
+
+**Acceptance Criteria:**
+- [ ] API endpoint returns all issue types for each content item
+- [ ] Frontend displays multiple badges per row (e.g., "🕐 Old 📦 Large")
+- [ ] Can filter to show "multiple issues only"
+- [ ] Sorting by "issue count" puts worst offenders first
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-D.5: Navigation Update
+**As a** user
+**I want** the navigation to reflect the new architecture
+**So that** I can easily access the Issues view
+
+**Acceptance Criteria:**
+- [ ] Navigation shows: Dashboard | Issues | Whitelist | Settings
+- [ ] "Issues" link goes to `/issues`
+- [ ] "Old Content" nav item removed (redirects to `/issues?filter=old`)
+- [ ] Current page highlighted correctly
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+### Non-Goals
+- Health score percentage (keeping it simple with counts)
+- Collapsible info section
+- Real-time updates via WebSocket
+
+### Technical Considerations
+- New API endpoint: `GET /api/content/summary` returning:
+  ```json
+  {
+    "old_content": { "count": 221, "total_size_bytes": 795750400000 },
+    "large_movies": { "count": 18, "total_size_bytes": 335007744000 },
+    "language_issues": { "count": 34 },
+    "unavailable_requests": { "count": 12 },
+    "recently_available": { "count": 15 },
+    "currently_airing": { "count": 8 }
+  }
+  ```
+- Unified issues endpoint: `GET /api/content/issues?filter=all|old|large|language|requests`
+- Reuse existing content analysis logic from Epic 3, 4, 5
+- Issue badges stored as enum: `old`, `large`, `language`, `request`
+
+---
+
 ## Epic 4: Large Movies
 
 ### Overview
 Identify movies that consume excessive storage, allowing users to re-download in lower quality.
+
+**Integration Note:** Large movies are displayed in the **unified issues view** (Epic D), not a separate page. This epic focuses on the backend service.
 
 ### Goals
 - Flag movies above size threshold (default: 13GB)
@@ -433,24 +599,28 @@ Identify movies that consume excessive storage, allowing users to re-download in
 
 ### User Stories
 
-#### US-4.1: View Large Movies
+#### US-4.1: Large Movies Backend Service
 **As a** user
-**I want** to see movies larger than 13GB
+**I want** to identify movies larger than 13GB
 **So that** I can re-download them in lower quality
 
 **Acceptance Criteria:**
 - [ ] **Refer to `original_script.py` function: `list_large_movies`**
-- [ ] Page shows movies exceeding 13GB threshold (reads from cached DB, not live API)
-- [ ] Each item shows: name, year, size (formatted), watched status, file path
-- [ ] List sorted by size (largest first)
-- [ ] Total count and total size displayed at top
+- [ ] Backend service `get_large_movies()` identifies movies exceeding 13GB (reads from cached DB)
+- [ ] Large movies marked with `large` issue type in content response
+- [ ] `/api/content/summary` endpoint includes `large_movies` count and total_size
+- [ ] `/api/content/issues?filter=large` returns only large movies
+- [ ] Each item includes: name, year, size (bytes), watched status, file path
+- [ ] Results sorted by size (largest first)
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+
+**Note:** UI display handled by unified issues view (US-D.3)
 
 ### Non-Goals
 - Configurable threshold in v1 (see US-8.1)
 - Automatic re-download triggers
+- Separate dedicated page (use unified issues view)
 
 ### Technical Considerations
 **Jellyfin API (from original_script.py):**
@@ -465,6 +635,8 @@ Identify movies that consume excessive storage, allowing users to re-download in
 ### Overview
 Identify content with language problems (missing French/English audio or subtitles).
 
+**Integration Note:** Language issues are displayed in the **unified issues view** (Epic D), not a separate page. This epic focuses on the backend service and whitelist actions.
+
 ### Goals
 - Flag content missing required languages
 - Support whitelists for French-only content and exemptions
@@ -472,21 +644,24 @@ Identify content with language problems (missing French/English audio or subtitl
 
 ### User Stories
 
-#### US-5.1: View Content with Language Issues
+#### US-5.1: Language Issues Backend Service
 **As a** user
-**I want** to see content missing French or English audio
+**I want** to identify content missing French or English audio
 **So that** I can re-download proper versions
 
 **Acceptance Criteria:**
 - [ ] **Refer to `original_script.py` functions: `check_audio_languages`, `list_recent_items_language_check`**
-- [ ] Page shows content with language problems (reads from cached DB, not live API)
-- [ ] Each item shows: name, type, year, issue type (missing EN audio, missing FR audio, missing FR subs)
-- [ ] For series: expandable to show which episodes have issues
-- [ ] Filter dropdown by issue type
+- [ ] Backend service `get_language_issues()` identifies content with language problems (reads from cached DB)
+- [ ] Content marked with `language` issue type in response
+- [ ] `/api/content/summary` endpoint includes `language_issues` count
+- [ ] `/api/content/issues?filter=language` returns only items with language issues
+- [ ] Each item includes: name, type, year, specific issue (missing_en_audio, missing_fr_audio, missing_fr_subs)
+- [ ] For series: episode-level issues aggregated at series level
 - [ ] Content in language exemption whitelist is excluded
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+
+**Note:** UI display handled by unified issues view (US-D.3). Episode details shown in expandable row.
 
 ---
 
@@ -496,8 +671,8 @@ Identify content with language problems (missing French/English audio or subtitl
 **So that** they don't appear as language issues
 
 **Acceptance Criteria:**
-- [ ] "Mark as French-only" button on items flagged for missing EN audio
-- [ ] Creates entry in user's french-only whitelist (user_id FK)
+- [ ] "Mark as French-only" button appears in unified issues view actions for items with missing EN audio
+- [ ] `POST /api/whitelist/french-only` creates entry (user_id FK)
 - [ ] Item no longer flagged for missing English audio
 - [ ] Can be managed in whitelist page
 - [ ] Typecheck passes
@@ -512,9 +687,9 @@ Identify content with language problems (missing French/English audio or subtitl
 **So that** special cases don't show as issues
 
 **Acceptance Criteria:**
-- [ ] "Exempt from checks" button on language issue items
-- [ ] Creates entry in user's language-exempt whitelist (user_id FK)
-- [ ] Item no longer appears in language issues list
+- [ ] "Exempt from checks" button appears in unified issues view actions for language issues
+- [ ] `POST /api/whitelist/language-exempt` creates entry (user_id FK)
+- [ ] Item no longer appears in language issues
 - [ ] Can be managed in whitelist page
 - [ ] Typecheck passes
 - [ ] Unit tests pass
@@ -523,6 +698,7 @@ Identify content with language problems (missing French/English audio or subtitl
 ### Non-Goals
 - Automatic language detection/correction
 - Episode-level exemptions in v1
+- Separate dedicated page (use unified issues view)
 
 ### Technical Considerations
 **Jellyfin API (from original_script.py):**
@@ -547,56 +723,74 @@ Params: UserId, Fields='MediaSources'
 ### Overview
 Display information about media requests from Jellyseerr.
 
+**Integration Note:** This epic has two categories:
+- **ISSUE (US-6.1):** Unavailable requests are problems → displayed in **unified issues view**
+- **INFO (US-6.2, US-6.3):** Airing series and recently available are informational → displayed in **dashboard info section** with dedicated simple views
+
 ### Goals
-- Show unavailable/pending requests
-- Track currently airing series
-- Display recently available content
+- Show unavailable/pending requests (as issues)
+- Track currently airing series (informational)
+- Display recently available content (informational)
 
 ### User Stories
 
-#### US-6.1: View Unavailable Requests
+#### US-6.1: Unavailable Requests Backend Service
 **As a** user
-**I want** to see Jellyseerr requests that aren't available
+**I want** to identify Jellyseerr requests that aren't available
 **So that** I can manually find them
 
 **Acceptance Criteria:**
 - [ ] **Refer to `original_script.py` functions: `fetch_jellyseer_requests`, `get_jellyseer_unavailable_requests`, `analyze_jellyseer_requests`**
-- [ ] Page shows requests with unavailable/pending status (reads from cached DB, not live API)
-- [ ] Each item shows: title, type (movie/TV), requested by, request date
-- [ ] For TV: shows which seasons are requested but missing
+- [ ] Backend service `get_unavailable_requests()` identifies unavailable/pending requests (reads from cached DB)
+- [ ] Requests marked with `request` issue type in response
+- [ ] `/api/content/summary` endpoint includes `unavailable_requests` count
+- [ ] `/api/content/issues?filter=requests` returns only unavailable requests
+- [ ] Each item includes: title, type (movie/TV), requested by, request date
+- [ ] For TV: includes which seasons are requested but missing
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+
+**Note:** UI display handled by unified issues view (US-D.3)
 
 ---
 
-#### US-6.2: View Currently Airing Series
+#### US-6.2: Currently Airing Series (INFO)
 **As a** user
 **I want** to see series that are currently airing
 **So that** I know new episodes are coming
 
+**Type:** INFO feature (not an issue)
+
 **Acceptance Criteria:**
 - [ ] **Refer to `original_script.py` function: `analyze_tv_series_seasons` (in_progress_seasons)**
-- [ ] Section/page shows in-progress series (reads from cached DB)
+- [ ] Backend service `get_currently_airing()` returns in-progress series (reads from cached DB)
+- [ ] `/api/content/summary` endpoint includes `currently_airing` count
+- [ ] Dedicated simple list view at `/info/airing`
 - [ ] Each item shows: title, current season, episodes aired vs total
 - [ ] Sorted by next air date
+- [ ] Accessed from dashboard Info section card
 - [ ] Typecheck passes
 - [ ] Unit tests pass
 - [ ] Verify in browser using browser tools
 
 ---
 
-#### US-6.3: View Recently Available Content
+#### US-6.3: Recently Available Content (INFO)
 **As a** user
 **I want** to see what became available this week
 **So that** I can notify my friends
 
+**Type:** INFO feature (not an issue)
+
 **Acceptance Criteria:**
 - [ ] **Refer to `original_script.py` function: `get_jellyseer_recently_available_requests`**
-- [ ] Page shows content that became available in past 7 days (reads from cached DB)
+- [ ] Backend service `get_recently_available()` returns content from past 7 days (reads from cached DB)
+- [ ] `/api/content/summary` endpoint includes `recently_available` count
+- [ ] Dedicated simple list view at `/info/recent`
 - [ ] Grouped by date (newest first)
 - [ ] Each item shows: title, type, availability date
 - [ ] "Copy list" button for sharing (plain text format)
+- [ ] Accessed from dashboard Info section card
 - [ ] Typecheck passes
 - [ ] Unit tests pass
 - [ ] Verify in browser using browser tools
@@ -604,6 +798,7 @@ Display information about media requests from Jellyseerr.
 ### Non-Goals
 - Webhook notifications
 - Integration with Discord/Telegram
+- Separate pages for unavailable requests (use unified issues view)
 
 ### Technical Considerations
 **Jellyseerr API (from original_script.py):**
@@ -766,7 +961,7 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ## Checklist Summary
 
-### Completed ✅
+### Completed ✅ (16 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -774,23 +969,33 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-1.2: User Login
 - [x] US-1.3: Protected Routes
 - [x] US-2.1: Configure Jellyfin Connection
+- [x] US-2.1.5: Backend Cleanup
+- [x] US-2.2: Configure Jellyseerr Connection
+- [x] US-2.3: Navigation Header
+- [x] US-7.1: Automatic Daily Data Sync
+- [x] US-7.1.5: Local Integration Test for Sync
+- [x] US-7.2: Manual Data Refresh
+- [x] US-3.1: View Old Unwatched Content
+- [x] US-3.2: Protect Content from Deletion
+- [x] US-3.3: Manage Content Whitelist
 
-### In Progress / Next (REORDERED: Sync before dashboard pages)
-- [ ] US-2.1.5: Backend Cleanup
-- [ ] US-2.2: Configure Jellyseerr Connection
-- [ ] US-2.3: Navigation Header
-- [ ] **US-7.1: Automatic Daily Data Sync** ← MOVED UP (must cache data before pages)
-- [ ] **US-7.2: Manual Data Refresh** ← MOVED UP
-- [ ] US-3.1: View Old Unwatched Content (reads from cached DB)
-- [ ] US-3.2: Protect Content from Deletion
-- [ ] US-3.3: Manage Content Whitelist
-- [ ] US-4.1: View Large Movies (reads from cached DB)
-- [ ] US-5.1: View Content with Language Issues (reads from cached DB)
+### Next Up - Dashboard Redesign (5 stories) **← START HERE**
+- [ ] US-D.1: Dashboard Summary Cards
+- [ ] US-D.2: Dashboard Info Section
+- [ ] US-D.3: Unified Issues View
+- [ ] US-D.4: Multi-Issue Content Support
+- [ ] US-D.5: Navigation Update
+
+### Next Up - Issue Type Features (7 stories)
+- [ ] US-4.1: View Large Movies (feeds into unified issues)
+- [ ] US-5.1: View Content with Language Issues (feeds into unified issues)
 - [ ] US-5.2: Mark Content as French-Only
 - [ ] US-5.3: Exempt Content from Language Checks
-- [ ] US-6.1: View Unavailable Requests (reads from cached DB)
-- [ ] US-6.2: View Currently Airing Series (reads from cached DB)
-- [ ] US-6.3: View Recently Available Content (reads from cached DB)
+- [ ] US-6.1: View Unavailable Requests (feeds into unified issues)
+- [ ] US-6.2: View Currently Airing Series (info section)
+- [ ] US-6.3: View Recently Available Content (info section)
+
+### Later (6 stories)
 - [ ] US-8.1: Configure Thresholds
 - [ ] US-M.1: Landing Page Hero
 - [ ] US-M.2: Feature Highlights
