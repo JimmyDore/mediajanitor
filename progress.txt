@@ -479,10 +479,30 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - docs: [US-4.1] mark large movies backend service complete
 
+### 2026-01-13: US-5.1 - Language Issues Backend Service
+- Implemented language issues detection:
+  - LanguageCheckResult TypedDict for type-safe return values
+  - check_audio_languages() analyzes MediaSources for audio/subtitle tracks
+  - has_language_issues() returns true if missing EN or FR audio
+  - get_language_issues_list() returns specific issues (missing_en_audio, missing_fr_audio)
+- Language code variants supported: eng/en/english, fre/fr/fra/french
+- Updated get_item_issues() to include 'language' issue type
+- Updated get_content_summary() to include language_issues count and size
+- Updated get_content_issues() to handle filter=language
+- ContentIssueItem model extended with language_issues field
+- Verified in Docker: 78 items with language issues (311.3 GB)
+  - Items show specific missing languages
+  - Items can have multiple issues (e.g., old + language)
+- 7 new tests for language issues detection
+- 140 backend tests pass, mypy typecheck clean
+- Files changed: models/content.py, services/content.py, tests/test_content.py
+- Commits:
+  - feat(content): [US-5.1] add language issues detection
+
 ## Current Status
 
-**Phase**: Epic 4 - Large Movies (Complete)
-**Next US**: US-5.1 - Language Issues Backend Service
+**Phase**: Epic 5 - Language Issues (In Progress)
+**Next US**: US-5.2 - Mark Content as French-Only
 
 ## Notes
 
