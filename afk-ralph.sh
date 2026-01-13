@@ -3,7 +3,7 @@
 # AFK Ralph - Autonomous loop mode
 # Usage: ./afk-ralph.sh [-q|--qa-first] <iterations>
 
-RETRY_WAIT_SECONDS=600  # 10 minutes
+RETRY_WAIT_SECONDS=60  # 1 minute
 QA_FIRST=false
 LOGFILE="ralph-output.log"
 

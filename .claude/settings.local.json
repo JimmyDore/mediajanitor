@@ -58,7 +58,11 @@
       "Skill(prd-sync)",
       "Skill(improve-claude-md)",
       "Skill(exploratory-qa)",
-      "Bash(docker-compose ps:*)"
+      "Bash(docker-compose ps:*)",
+      "Skill(prd)",
+      "Bash(ls:*)",
+      "Skill(original-script)",
+      "Skill(ralph-init)"
     ]
   },
   "enableAllProjectMcpServers": true,
