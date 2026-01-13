@@ -563,10 +563,30 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(whitelist): [US-5.3] add language-exempt whitelist for language issues
 
+### 2026-01-13: US-6.1 - Unavailable Requests Backend Service
+- Implemented unavailable requests detection based on original_script.py:
+  - is_unavailable_request(): Checks status codes 0, 1, 2, 4 (not 3=Processing or 5=Available)
+  - _should_include_request(): Filters out future releases and recent releases (< 3 months old)
+  - _get_missing_seasons(): Extracts missing season numbers for TV shows
+  - get_unavailable_requests(): Returns list of UnavailableRequestItem sorted by request date
+  - get_unavailable_requests_count(): Returns count for summary endpoint
+- Updated /api/content/summary to include real unavailable_requests count (was placeholder)
+- Updated /api/content/issues?filter=requests to return UnavailableRequestsResponse
+- Created new Pydantic models:
+  - UnavailableRequestItem: jellyseerr_id, title, media_type, requested_by, request_date, issues, missing_seasons
+  - UnavailableRequestsResponse: items, total_count, total_size_bytes (0 for requests)
+- Verified in Docker: 26 unavailable requests found in test data
+- Backend tests: 7 new tests for unavailable requests functionality
+- Integration test: Updated placeholder test to verify real functionality
+- 163 backend tests pass, mypy clean, 16 integration tests pass
+- Files changed: models/content.py, routers/content.py, services/content.py, tests/test_content.py, tests/test_integration.py
+- Commits:
+  - feat(content): [US-6.1] add unavailable requests backend service
+
 ## Current Status
 
 **Phase**: Epic 6 - Jellyseerr Requests (In Progress)
-**Next US**: US-6.1 - Unavailable Requests Backend Service
+**Next US**: US-6.2 - Currently Airing Series (INFO)
 
 ## Notes
 

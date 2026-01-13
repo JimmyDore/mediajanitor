@@ -28,6 +28,7 @@ from app.models.content import (
     OldUnwatchedResponse,
     RecentlyAvailableItem,
     RecentlyAvailableResponse,
+    UnavailableRequestItem,
     WhitelistItem,
     WhitelistListResponse,
 )
@@ -37,6 +38,15 @@ from app.models.content import (
 OLD_CONTENT_MONTHS_CUTOFF = 4  # Content not watched in 4+ months
 MIN_AGE_MONTHS = 3  # Don't flag content added recently
 LARGE_MOVIE_SIZE_THRESHOLD_GB = 13  # Movies larger than 13GB
+
+# Unavailable requests configuration (from original script)
+FILTER_FUTURE_RELEASES = True  # Filter out content not yet released
+FILTER_RECENT_RELEASES = True  # Filter out content released recently
+RECENT_RELEASE_MONTHS_CUTOFF = 3  # Don't flag content released < 3 months ago
+
+# Jellyseerr status codes
+# 0 = Unknown, 1 = Pending, 2 = Approved, 3 = Processing, 4 = Partially Available, 5 = Available
+UNAVAILABLE_STATUS_CODES = {0, 1, 2, 4}  # Status codes for unavailable requests
 
 
 def format_size(size_bytes: int | None) -> str:
@@ -659,8 +669,8 @@ async def get_content_summary(
 
     language_issues_size = sum(item.size_bytes or 0 for item in language_issues_items)
 
-    # Unavailable requests placeholder (implemented in US-6.1)
-    unavailable_requests_count = 0
+    # Unavailable requests count (US-6.1)
+    unavailable_requests_count = await get_unavailable_requests_count(db, user_id)
 
     return ContentSummaryResponse(
         old_content=IssueCategorySummary(
@@ -877,15 +887,6 @@ async def get_content_issues(
 
     Returns items sorted by size (largest first).
     """
-    # Handle requests filter - not yet implemented
-    if filter_type == "requests":
-        return ContentIssuesResponse(
-            items=[],
-            total_count=0,
-            total_size_bytes=0,
-            total_size_formatted="0 B",
-        )
-
     # Get user's cached media items
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -958,3 +959,191 @@ async def get_content_issues(
         total_size_bytes=total_size_bytes,
         total_size_formatted=format_size(total_size_bytes),
     )
+
+
+# US-6.1: Unavailable Requests functions
+
+
+def _parse_release_date(date_str: str | None) -> datetime | None:
+    """Parse release date string to datetime object.
+
+    Handles both ISO format with time and simple date format.
+    """
+    if not date_str:
+        return None
+
+    try:
+        # Try ISO format with time
+        if "T" in date_str:
+            if date_str.endswith("Z"):
+                date_str = date_str[:-1] + "+00:00"
+            return datetime.fromisoformat(date_str)
+        else:
+            # Simple date format (YYYY-MM-DD)
+            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _get_request_release_date(request: CachedJellyseerrRequest) -> str | None:
+    """Get release date from a Jellyseerr request."""
+    raw_data = request.raw_data or {}
+    media: dict[str, Any] = raw_data.get("media", {})
+
+    # For movies, use releaseDate
+    if request.media_type == "movie":
+        release_date: str | None = media.get("releaseDate")
+        return release_date
+    # For TV, use firstAirDate
+    elif request.media_type == "tv":
+        first_air_date: str | None = media.get("firstAirDate")
+        return first_air_date
+
+    return None
+
+
+def _should_include_request(request: CachedJellyseerrRequest) -> bool:
+    """Check if a request should be included in unavailable list.
+
+    Filters out:
+    - Future releases (not yet released)
+    - Recent releases (released less than 3 months ago)
+    """
+    release_date_str = _get_request_release_date(request)
+    if not release_date_str:
+        # No release date - include by default (safer approach)
+        return True
+
+    release_date = _parse_release_date(release_date_str)
+    if not release_date:
+        return True
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    release_date_only = release_date.date()
+
+    # Filter future releases
+    if FILTER_FUTURE_RELEASES and release_date_only > today:
+        return False
+
+    # Filter recent releases
+    if FILTER_RECENT_RELEASES:
+        cutoff_date = today - timedelta(days=RECENT_RELEASE_MONTHS_CUTOFF * 30)
+        if release_date_only > cutoff_date:
+            return False
+
+    return True
+
+
+def _get_missing_seasons(request: CachedJellyseerrRequest) -> list[int]:
+    """Get list of missing season numbers for a TV request.
+
+    Missing means status is not 5 (Available).
+    """
+    if request.media_type != "tv":
+        return []
+
+    raw_data = request.raw_data or {}
+    seasons = raw_data.get("seasons", [])
+
+    missing = []
+    for season in seasons:
+        season_num = season.get("seasonNumber")
+        season_status = season.get("status", 0)
+
+        # Season is missing if not Available (status 5)
+        if season_num is not None and season_status != 5:
+            missing.append(season_num)
+
+    return sorted(missing)
+
+
+def is_unavailable_request(request: CachedJellyseerrRequest) -> bool:
+    """Check if a request is unavailable.
+
+    A request is unavailable if:
+    - Status is 0 (Unknown), 1 (Pending), 2 (Approved), or 4 (Partially Available)
+    - NOT status 3 (Processing) or 5 (Available)
+    - Release date is not in the future
+    - Release date is not too recent (< 3 months)
+    """
+    if request.status not in UNAVAILABLE_STATUS_CODES:
+        return False
+
+    return _should_include_request(request)
+
+
+async def get_unavailable_requests_count(
+    db: AsyncSession,
+    user_id: int,
+) -> int:
+    """Get count of unavailable requests for summary."""
+    result = await db.execute(
+        select(CachedJellyseerrRequest).where(
+            CachedJellyseerrRequest.user_id == user_id
+        )
+    )
+    all_requests = result.scalars().all()
+
+    count = 0
+    for request in all_requests:
+        if is_unavailable_request(request):
+            count += 1
+
+    return count
+
+
+async def get_unavailable_requests(
+    db: AsyncSession,
+    user_id: int,
+) -> list[UnavailableRequestItem]:
+    """Get all unavailable requests for a user.
+
+    Returns items sorted by request date (newest first).
+    """
+    result = await db.execute(
+        select(CachedJellyseerrRequest).where(
+            CachedJellyseerrRequest.user_id == user_id
+        )
+    )
+    all_requests = result.scalars().all()
+
+    unavailable_items: list[tuple[datetime | None, UnavailableRequestItem]] = []
+
+    for request in all_requests:
+        if not is_unavailable_request(request):
+            continue
+
+        # Get request date for sorting
+        request_date_str = request.created_at_source
+        raw_data = request.raw_data or {}
+        if not request_date_str:
+            request_date_str = raw_data.get("createdAt")
+
+        request_date = _parse_release_date(request_date_str)
+
+        # Get missing seasons for TV shows
+        missing_seasons = _get_missing_seasons(request) if request.media_type == "tv" else None
+
+        # Get title - try stored title first, then raw_data media object
+        title = request.title
+        if not title:
+            media = raw_data.get("media", {})
+            title = media.get("title") or media.get("name") or media.get("originalTitle") or "Unknown"
+
+        item = UnavailableRequestItem(
+            jellyseerr_id=request.jellyseerr_id,
+            title=title,
+            media_type=request.media_type,
+            requested_by=request.requested_by,
+            request_date=request_date_str,
+            issues=["request"],
+            missing_seasons=missing_seasons if missing_seasons else None,
+        )
+
+        unavailable_items.append((request_date, item))
+
+    # Sort by request date descending (newest first)
+    unavailable_items.sort(key=lambda x: x[0] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    return [item for _, item in unavailable_items]

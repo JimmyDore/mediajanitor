@@ -1,6 +1,6 @@
 """Content analysis API endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Union
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +10,14 @@ from app.models.content import (
     ContentIssuesResponse,
     ContentSummaryResponse,
     OldUnwatchedResponse,
+    UnavailableRequestsResponse,
 )
 from app.services.auth import get_current_user
 from app.services.content import (
     get_content_issues,
     get_content_summary,
     get_old_unwatched_content,
+    get_unavailable_requests,
 )
 
 
@@ -55,7 +57,7 @@ async def get_old_unwatched(
     return await get_old_unwatched_content(db, current_user.id)
 
 
-@router.get("/issues", response_model=ContentIssuesResponse)
+@router.get("/issues", response_model=Union[ContentIssuesResponse, UnavailableRequestsResponse])
 async def get_issues(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -63,17 +65,25 @@ async def get_issues(
         str | None,
         Query(description="Filter by issue type: old, large, language, requests, multi"),
     ] = None,
-) -> ContentIssuesResponse:
+) -> Union[ContentIssuesResponse, UnavailableRequestsResponse]:
     """Get unified list of all content with issues for the current user.
 
     Supports filtering by issue type:
     - old: Old/unwatched content (4+ months since last watched)
     - large: Movies larger than 13GB
-    - language: Content with language issues (not yet implemented)
-    - requests: Unavailable Jellyseerr requests (not yet implemented)
+    - language: Content with language issues
+    - requests: Unavailable Jellyseerr requests
     - multi: Content with 2+ issues (worst offenders)
 
     Each item includes a list of all applicable issues.
-    Results are sorted by size (largest first).
+    Results are sorted by size (largest first) for content, by request date for requests.
     """
+    # Requests filter returns a different response type
+    if filter == "requests":
+        items = await get_unavailable_requests(db, current_user.id)
+        return UnavailableRequestsResponse(
+            items=items,
+            total_count=len(items),
+        )
+
     return await get_content_issues(db, current_user.id, filter)

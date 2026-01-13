@@ -147,3 +147,27 @@ class ContentIssuesResponse(BaseModel):
     total_count: int
     total_size_bytes: int
     total_size_formatted: str
+
+
+# US-6.1: Unavailable Requests models
+
+
+class UnavailableRequestItem(BaseModel):
+    """Response model for a single unavailable Jellyseerr request."""
+
+    jellyseerr_id: int
+    title: str
+    media_type: str  # "movie" or "tv"
+    requested_by: str | None = None
+    request_date: str | None = None
+    issues: list[str]  # ["request"]
+    missing_seasons: list[int] | None = None  # For TV shows only
+
+
+class UnavailableRequestsResponse(BaseModel):
+    """Response model for unavailable requests list."""
+
+    items: list[UnavailableRequestItem]
+    total_count: int
+    total_size_bytes: int = 0  # Requests don't have size
+    total_size_formatted: str = "0 B"

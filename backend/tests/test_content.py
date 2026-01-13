@@ -3085,3 +3085,374 @@ class TestLanguageExemptWhitelist:
         # Should have 'old' issue but NOT 'language' issue
         assert "old" in data["items"][0]["issues"]
         assert "language" not in data["items"][0]["issues"]
+
+
+class TestUnavailableRequests:
+    """Test unavailable Jellyseerr requests (US-6.1)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "requests@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_unavailable_requests_count(
+        self, client: TestClient
+    ) -> None:
+        """Summary should include count of unavailable requests."""
+        token = self._get_auth_token(client, "summary-requests@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # Unavailable request (status 1 = Pending)
+            pending = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=1001,
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,  # Pending
+                title="Pending Movie",
+                requested_by="user1",
+                raw_data={"media": {"title": "Pending Movie", "releaseDate": "2023-01-15"}},
+            )
+            # Available request (status 5 = Available) - should NOT count
+            available = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=1002,
+                tmdb_id=67890,
+                media_type="movie",
+                status=5,  # Available
+                title="Available Movie",
+                requested_by="user2",
+                raw_data={"media": {"title": "Available Movie"}},
+            )
+            session.add_all([pending, available])
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["unavailable_requests"]["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_unavailable_requests_includes_different_status_codes(
+        self, client: TestClient
+    ) -> None:
+        """Unavailable requests include status 0 (Unknown), 1 (Pending), 2 (Approved), 4 (Partially Available)."""
+        token = self._get_auth_token(client, "statuses@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 0 = Unknown
+            req_unknown = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2001,
+                media_type="movie",
+                status=0,
+                title="Unknown Status Movie",
+                raw_data={"media": {"title": "Unknown Status Movie", "releaseDate": "2022-06-01"}},
+            )
+            # Status 1 = Pending
+            req_pending = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2002,
+                media_type="movie",
+                status=1,
+                title="Pending Movie",
+                raw_data={"media": {"title": "Pending Movie", "releaseDate": "2023-01-15"}},
+            )
+            # Status 2 = Approved (but not downloading yet)
+            req_approved = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2003,
+                media_type="tv",
+                status=2,
+                title="Approved Series",
+                raw_data={"media": {"title": "Approved Series", "releaseDate": "2021-09-01"}},
+            )
+            # Status 3 = Processing - should NOT be unavailable
+            req_processing = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2004,
+                media_type="movie",
+                status=3,
+                title="Processing Movie",
+                raw_data={"media": {"title": "Processing Movie"}},
+            )
+            # Status 4 = Partially Available
+            req_partial = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2005,
+                media_type="tv",
+                status=4,
+                title="Partial Series",
+                raw_data={"media": {"title": "Partial Series", "releaseDate": "2020-05-01"}},
+            )
+            # Status 5 = Available - should NOT be unavailable
+            req_available = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2006,
+                media_type="movie",
+                status=5,
+                title="Available Movie",
+                raw_data={"media": {"title": "Available Movie"}},
+            )
+            session.add_all([req_unknown, req_pending, req_approved, req_processing, req_partial, req_available])
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Should count status 0, 1, 2, 4 = 4 requests
+        assert data["unavailable_requests"]["count"] == 4
+
+    @pytest.mark.asyncio
+    async def test_issues_filter_requests_returns_unavailable_requests(
+        self, client: TestClient
+    ) -> None:
+        """Filter=requests should return only unavailable Jellyseerr requests."""
+        token = self._get_auth_token(client, "filter-requests@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # Unavailable request
+            unavailable = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3001,
+                tmdb_id=11111,
+                media_type="movie",
+                status=1,
+                title="Unavailable Movie",
+                requested_by="testuser",
+                created_at_source="2024-01-15T10:00:00Z",
+                raw_data={"media": {"title": "Unavailable Movie", "releaseDate": "2023-06-01"}},
+            )
+            # Available request - should NOT appear
+            available = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3002,
+                media_type="movie",
+                status=5,
+                title="Available Movie",
+                raw_data={"media": {"title": "Available Movie"}},
+            )
+            session.add_all([unavailable, available])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Unavailable Movie"
+        assert data["items"][0]["jellyseerr_id"] == 3001
+        assert data["items"][0]["media_type"] == "movie"
+        assert "request" in data["items"][0]["issues"]
+
+    @pytest.mark.asyncio
+    async def test_unavailable_request_item_includes_required_fields(
+        self, client: TestClient
+    ) -> None:
+        """Unavailable request items should include title, type, requested_by, request_date."""
+        token = self._get_auth_token(client, "fields@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=4001,
+                tmdb_id=22222,
+                media_type="movie",
+                status=1,
+                title="Test Movie Request",
+                requested_by="JohnDoe",
+                created_at_source="2024-02-20T15:30:00Z",
+                raw_data={
+                    "media": {"title": "Test Movie Request", "releaseDate": "2023-03-15"},
+                    "requestedBy": {"displayName": "JohnDoe"},
+                    "createdAt": "2024-02-20T15:30:00Z",
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["title"] == "Test Movie Request"
+        assert item["media_type"] == "movie"
+        assert item["requested_by"] == "JohnDoe"
+        assert item["request_date"] == "2024-02-20T15:30:00Z"
+
+    @pytest.mark.asyncio
+    async def test_tv_request_includes_missing_seasons_info(
+        self, client: TestClient
+    ) -> None:
+        """TV requests should include which seasons are requested but missing."""
+        token = self._get_auth_token(client, "tv-seasons@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # TV request with seasons info
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=5001,
+                tmdb_id=33333,
+                media_type="tv",
+                status=4,  # Partially Available
+                title="Test TV Series",
+                requested_by="JaneDoe",
+                created_at_source="2024-03-10T12:00:00Z",
+                raw_data={
+                    "media": {"title": "Test TV Series", "firstAirDate": "2022-01-01"},
+                    "requestedBy": {"displayName": "JaneDoe"},
+                    "createdAt": "2024-03-10T12:00:00Z",
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5},  # Available
+                        {"seasonNumber": 2, "status": 1},  # Pending (missing)
+                        {"seasonNumber": 3, "status": 1},  # Pending (missing)
+                    ],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["title"] == "Test TV Series"
+        assert item["media_type"] == "tv"
+        # Should include info about missing seasons
+        assert "missing_seasons" in item
+        assert 2 in item["missing_seasons"]
+        assert 3 in item["missing_seasons"]
+        assert 1 not in item["missing_seasons"]  # Season 1 is available
+
+    @pytest.mark.asyncio
+    async def test_unavailable_requests_filters_future_releases(
+        self, client: TestClient
+    ) -> None:
+        """Unavailable requests with future release dates should be excluded."""
+        token = self._get_auth_token(client, "future@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+        from datetime import datetime, timedelta
+
+        future_date = (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
+        past_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Future release - should NOT appear
+            future_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6001,
+                media_type="movie",
+                status=1,
+                title="Future Movie",
+                raw_data={"media": {"title": "Future Movie", "releaseDate": future_date}},
+            )
+            # Past release - should appear
+            past_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6002,
+                media_type="movie",
+                status=1,
+                title="Past Movie",
+                raw_data={"media": {"title": "Past Movie", "releaseDate": past_date}},
+            )
+            session.add_all([future_request, past_request])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Only past release should appear
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Past Movie"
+
+    @pytest.mark.asyncio
+    async def test_unavailable_requests_filters_recent_releases(
+        self, client: TestClient
+    ) -> None:
+        """Unavailable requests released less than 3 months ago should be excluded."""
+        token = self._get_auth_token(client, "recent-release@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+        from datetime import datetime, timedelta
+
+        # Release date 1 month ago (recent - should be filtered)
+        recent_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        # Release date 6 months ago (old enough)
+        old_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Recent release - should NOT appear (too recent)
+            recent_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7001,
+                media_type="movie",
+                status=1,
+                title="Recent Release Movie",
+                raw_data={"media": {"title": "Recent Release Movie", "releaseDate": recent_date}},
+            )
+            # Old release - should appear
+            old_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7002,
+                media_type="movie",
+                status=1,
+                title="Old Release Movie",
+                raw_data={"media": {"title": "Old Release Movie", "releaseDate": old_date}},
+            )
+            session.add_all([recent_request, old_request])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Only old release should appear
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Old Release Movie"
