@@ -453,10 +453,22 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(issues): [US-D.4] add multi-issue content support
 
+### 2026-01-13: US-D.5 - Navigation Update
+- Verified navigation shows: Dashboard | Issues | Whitelist | Settings
+- Fixed active state detection for Issues link (was using `.startsWith('/issues?')` which doesn't work since pathname excludes query params)
+- Verified redirect from /content/old-unwatched to /issues?filter=old works
+- All acceptance criteria verified in browser:
+  - Navigation links work correctly
+  - Issues link highlighted on /issues and /issues?filter=*
+  - Dashboard, Whitelist, Settings links highlight on their respective pages
+- Files changed: Header.svelte, prd.json
+- Commits:
+  - feat(nav): [US-D.5] fix navigation active state for Issues page
+
 ## Current Status
 
-**Phase**: Epic D - Dashboard (In Progress)
-**Next US**: US-D.5 - Navigation Update
+**Phase**: Epic D - Dashboard (Complete)
+**Next US**: US-4.1 - Large Movies Backend Service
 
 ## Notes
 
