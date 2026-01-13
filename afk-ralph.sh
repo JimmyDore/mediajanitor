@@ -34,15 +34,7 @@ If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>." 2>&1 |
     echo "--- Integration Review (iteration $i) ---"
     echo ""
 
-    claude --permission-mode acceptEdits -p "@PRD.md @SUGGESTIONS.md @CLAUDE.md \
-    Perform an integration review of the application: \
-    1. Review all implemented features for consistency \
-    2. Check for missing cross-cutting concerns (navigation, error handling, auth guards) \
-    3. Verify UI coherence across pages using browser tools \
-    4. Look for security gaps, performance issues, accessibility problems \
-    5. Update SUGGESTIONS.md with any new observations (mark priority [P1]/[P2]/[P3]) \
-    6. If there are [P1] items, add a note at the top of SUGGESTIONS.md: '## ACTION NEEDED: Review P1 items for PRD promotion' \
-    Do NOT implement anything. Only observe, document, and commit SUGGESTIONS.md updates."
+    claude --permission-mode acceptEdits -p "/exploratory-qa"
   fi
 
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then

@@ -29,13 +29,7 @@
 11. Update prd.json: set `passes: true` for completed story
 12. Commit: `feat(scope): [US-X.X] description`
 13. Append to progress.txt (date, story ID, files changed, learnings)
-14. Update CLAUDE.md with discovered patterns
-15. Review broader context and add observations to SUGGESTIONS.md:
-    - Missing UI elements (navigation, headers, footers)?
-    - Patterns to extract (components, utilities, hooks)?
-    - Security or performance concerns?
-    - Database schema improvements?
-    Mark items [P1]/[P2]/[P3]. P1 needs human review for PRD promotion.
+14. Run /improve-claude-md to capture any new learnings for CLAUDE.md
 
 If all stories have `passes: true`, output <promise>COMPLETE</promise>.
 
