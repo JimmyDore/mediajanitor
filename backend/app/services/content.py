@@ -7,12 +7,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CachedMediaItem, ContentWhitelist
-from app.models.content import OldUnwatchedItem, OldUnwatchedResponse, WhitelistItem, WhitelistListResponse
+from app.models.content import (
+    ContentSummaryResponse,
+    IssueCategorySummary,
+    OldUnwatchedItem,
+    OldUnwatchedResponse,
+    WhitelistItem,
+    WhitelistListResponse,
+)
 
 
 # Hardcoded thresholds per acceptance criteria
 OLD_CONTENT_MONTHS_CUTOFF = 4  # Content not watched in 4+ months
 MIN_AGE_MONTHS = 3  # Don't flag content added recently
+LARGE_MOVIE_SIZE_THRESHOLD_GB = 13  # Movies larger than 13GB
 
 
 def format_size(size_bytes: int | None) -> str:
@@ -236,3 +244,90 @@ async def remove_from_whitelist(
 
     await db.delete(entry)
     return True
+
+
+def is_large_movie(item: CachedMediaItem) -> bool:
+    """Check if an item is a large movie (>13GB).
+
+    Returns True if:
+    - Item is a Movie (not Series)
+    - Size exceeds LARGE_MOVIE_SIZE_THRESHOLD_GB
+    """
+    if item.media_type != "Movie":
+        return False
+
+    if item.size_bytes is None:
+        return False
+
+    threshold_bytes = LARGE_MOVIE_SIZE_THRESHOLD_GB * 1024 * 1024 * 1024  # 13GB in bytes
+    return item.size_bytes > threshold_bytes
+
+
+async def get_content_summary(
+    db: AsyncSession,
+    user_id: int,
+) -> ContentSummaryResponse:
+    """Get summary counts for all issue types for a user.
+
+    Returns counts for:
+    - old_content: Old/unwatched content (excludes whitelisted)
+    - large_movies: Movies larger than 13GB
+    - language_issues: Content with language issues (placeholder - 0)
+    - unavailable_requests: Unavailable Jellyseerr requests (placeholder - 0)
+    """
+    # Get user's cached media items
+    result = await db.execute(
+        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
+    )
+    all_items = result.scalars().all()
+
+    # Get user's whitelist
+    whitelist_result = await db.execute(
+        select(ContentWhitelist.jellyfin_id).where(ContentWhitelist.user_id == user_id)
+    )
+    whitelisted_ids = set(whitelist_result.scalars().all())
+
+    # Calculate old content (excluding whitelisted)
+    old_content_items: list[CachedMediaItem] = []
+    for item in all_items:
+        if item.jellyfin_id in whitelisted_ids:
+            continue
+        if is_old_or_unwatched(item):
+            old_content_items.append(item)
+
+    old_content_size = sum(item.size_bytes or 0 for item in old_content_items)
+
+    # Calculate large movies
+    large_movies_items: list[CachedMediaItem] = []
+    for item in all_items:
+        if is_large_movie(item):
+            large_movies_items.append(item)
+
+    large_movies_size = sum(item.size_bytes or 0 for item in large_movies_items)
+
+    # Language issues and unavailable requests are placeholders (implemented in US-5.1 and US-6.1)
+    language_issues_count = 0
+    unavailable_requests_count = 0
+
+    return ContentSummaryResponse(
+        old_content=IssueCategorySummary(
+            count=len(old_content_items),
+            total_size_bytes=old_content_size,
+            total_size_formatted=format_size(old_content_size) if old_content_size > 0 else "0 B",
+        ),
+        large_movies=IssueCategorySummary(
+            count=len(large_movies_items),
+            total_size_bytes=large_movies_size,
+            total_size_formatted=format_size(large_movies_size) if large_movies_size > 0 else "0 B",
+        ),
+        language_issues=IssueCategorySummary(
+            count=language_issues_count,
+            total_size_bytes=0,
+            total_size_formatted="0 B",
+        ),
+        unavailable_requests=IssueCategorySummary(
+            count=unavailable_requests_count,
+            total_size_bytes=0,
+            total_size_formatted="0 B",
+        ),
+    )

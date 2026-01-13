@@ -62,3 +62,20 @@ class WhitelistRemoveResponse(BaseModel):
     """Response model for successful whitelist removal."""
 
     message: str
+
+
+class IssueCategorySummary(BaseModel):
+    """Summary for a single issue category."""
+
+    count: int
+    total_size_bytes: int = 0
+    total_size_formatted: str = "0 B"
+
+
+class ContentSummaryResponse(BaseModel):
+    """Response model for content summary with counts for all issue types."""
+
+    old_content: IssueCategorySummary
+    large_movies: IssueCategorySummary
+    language_issues: IssueCategorySummary
+    unavailable_requests: IssueCategorySummary

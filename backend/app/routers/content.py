@@ -6,12 +6,28 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, get_db
-from app.models.content import OldUnwatchedResponse
+from app.models.content import ContentSummaryResponse, OldUnwatchedResponse
 from app.services.auth import get_current_user
-from app.services.content import get_old_unwatched_content
+from app.services.content import get_content_summary, get_old_unwatched_content
 
 
 router = APIRouter(prefix="/api/content", tags=["content"])
+
+
+@router.get("/summary", response_model=ContentSummaryResponse)
+async def get_summary(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContentSummaryResponse:
+    """Get summary counts for all issue types.
+
+    Returns counts for:
+    - old_content: Old/unwatched content count and total size
+    - large_movies: Large movies (>13GB) count and total size
+    - language_issues: Content with language issues (placeholder)
+    - unavailable_requests: Unavailable Jellyseerr requests (placeholder)
+    """
+    return await get_content_summary(db, current_user.id)
 
 
 @router.get("/old-unwatched", response_model=OldUnwatchedResponse)
