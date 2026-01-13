@@ -1086,6 +1086,24 @@ Address P1/P2 issues from SUGGESTIONS.md: page title inconsistency, missing favi
 - [ ] Typecheck passes
 - [ ] Unit tests pass
 
+---
+
+#### US-9.4: Add IMDB/TMDB Links to Content Items
+**As a** user
+**I want** to click on a movie/series title to open IMDB or TMDB
+**So that** I can quickly lookup more information about the content
+
+**Acceptance Criteria:**
+- [ ] Each content item in Issues view has clickable TMDB link icon
+- [ ] Link opens in new tab: `https://www.themoviedb.org/{movie|tv}/{tmdb_id}`
+- [ ] For Jellyseerr requests: use existing `tmdb_id` from `cached_jellyseerr_requests`
+- [ ] For Jellyfin media: extract TMDB ID from `ProviderIds` in raw_data (or add to sync if not present)
+- [ ] Fallback: if no TMDB ID available, hide the link icon
+- [ ] Optional: add IMDB link too if `ImdbId` is available in ProviderIds
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
 ### Non-Goals
 - Custom branding per user
 - Dynamic favicon
@@ -1094,6 +1112,12 @@ Address P1/P2 issues from SUGGESTIONS.md: page title inconsistency, missing favi
 - Update `<svelte:head><title>` in login/register pages
 - Create `frontend/static/` folder with favicon
 - Add production URL to `backend/app/main.py` CORS origins
+- **For US-9.4**: Jellyfin API returns `ProviderIds` in item responses:
+  ```json
+  "ProviderIds": { "Tmdb": "12345", "Imdb": "tt1234567" }
+  ```
+  - Add `ProviderIds` to sync fields if not already in raw_data
+  - Frontend displays link icon with `target="_blank"`
 
 ---
 
@@ -1345,10 +1369,11 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-8.1: Configure Thresholds
 - [x] US-UI.1: Design System Refinement
 
-### Next Up - Infrastructure & Polish (3 stories) **← START HERE**
+### Next Up - Infrastructure & Polish (4 stories) **← START HERE**
 - [ ] US-9.1: Fix Page Titles
 - [ ] US-9.2: Add Favicon
 - [ ] US-9.3: Add CORS Production URL
+- [ ] US-9.4: Add IMDB/TMDB Links to Content Items
 
 ### Automatic Sync Scheduler (2 stories)
 - [ ] US-10.1: Add Celery Infrastructure

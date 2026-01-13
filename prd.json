@@ -651,6 +651,25 @@
       "notes": ""
     },
     {
+      "id": "US-9.4",
+      "title": "Add IMDB/TMDB Links to Content Items",
+      "story": "As a user, I want to click on a movie/series title to open IMDB or TMDB, so that I can quickly lookup more information about the content",
+      "acceptanceCriteria": [
+        "Each content item in Issues view has clickable TMDB link icon",
+        "Link opens in new tab: https://www.themoviedb.org/{movie|tv}/{tmdb_id}",
+        "For Jellyseerr requests: use existing tmdb_id from cached_jellyseerr_requests",
+        "For Jellyfin media: extract TMDB ID from ProviderIds in raw_data (or add to sync if not present)",
+        "Fallback: if no TMDB ID available, hide the link icon",
+        "Optional: add IMDB link too if ImdbId is available in ProviderIds",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": ""
+    },
+    {
       "id": "US-10.1",
       "title": "Add Celery Infrastructure",
       "story": "As a developer, I want Celery configured with Redis, so that we can run background tasks reliably",
