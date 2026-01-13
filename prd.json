@@ -562,8 +562,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "INFO feature - displayed in dedicated simple list view, not unified issues"
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Items grouped by date with headers, copy list includes grouped format, 3 items verified in browser"
     },
     {
       "id": "US-8.1",

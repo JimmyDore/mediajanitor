@@ -14,20 +14,36 @@
 		total_count: number;
 	}
 
+	interface GroupedItems {
+		date: string;
+		dateFormatted: string;
+		items: RecentlyAvailableItem[];
+	}
+
 	let data = $state<RecentlyAvailableResponse | null>(null);
+	let groupedData = $state<GroupedItems[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let toastMessage = $state<string | null>(null);
 	let toastType = $state<'success' | 'error'>('success');
 
-	function formatDate(isoString: string): string {
+	function formatDateLong(isoString: string): string {
 		const date = new Date(isoString);
 		return date.toLocaleDateString(undefined, {
-			weekday: 'short',
+			weekday: 'long',
 			year: 'numeric',
-			month: 'short',
+			month: 'long',
 			day: 'numeric'
 		});
+	}
+
+	function getDateKey(isoString: string): string {
+		const date = new Date(isoString);
+		// Use local date components to match toLocaleDateString behavior
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
 	}
 
 	function formatMediaType(type: string): string {
@@ -42,13 +58,40 @@
 		}, 5000);
 	}
 
+	function groupItemsByDate(items: RecentlyAvailableItem[]): GroupedItems[] {
+		const groups: Map<string, RecentlyAvailableItem[]> = new Map();
+
+		for (const item of items) {
+			const dateKey = getDateKey(item.availability_date);
+			if (!groups.has(dateKey)) {
+				groups.set(dateKey, []);
+			}
+			groups.get(dateKey)!.push(item);
+		}
+
+		// Convert to array and sort by date descending (newest first)
+		return Array.from(groups.entries())
+			.sort((a, b) => b[0].localeCompare(a[0]))
+			.map(([date, items]) => ({
+				date,
+				dateFormatted: formatDateLong(items[0].availability_date),
+				items
+			}));
+	}
+
 	async function copyList() {
 		if (!data?.items.length) return;
 
-		const lines = data.items.map((item) => {
-			const type = item.media_type === 'tv' ? 'TV' : 'Movie';
-			return `- ${item.title} (${type})`;
-		});
+		// Group by date for the copy format
+		const lines: string[] = [];
+		for (const group of groupedData) {
+			lines.push(`${group.dateFormatted}:`);
+			for (const item of group.items) {
+				const type = item.media_type === 'tv' ? 'TV' : 'Movie';
+				lines.push(`  - ${item.title} (${type})`);
+			}
+			lines.push('');
+		}
 
 		const text = `Recently Available Content (${data.total_count} items):\n\n${lines.join('\n')}`;
 
@@ -83,7 +126,9 @@
 				return;
 			}
 
-			data = await response.json();
+			const result: RecentlyAvailableResponse = await response.json();
+			data = result;
+			groupedData = groupItemsByDate(result.items);
 		} catch {
 			error = 'Failed to load data';
 		} finally {
@@ -135,19 +180,24 @@
 				<a href="/" class="back-link">Back to Dashboard</a>
 			</div>
 		{:else}
-			<div class="content-list">
-				{#each data.items as item, index}
-					<div class="content-item">
-						<span class="item-number">{index + 1}</span>
-						<div class="item-info">
-							<span class="item-title">{item.title}</span>
-							<div class="item-meta">
-								<span class="media-type-badge {item.media_type}">{formatMediaType(item.media_type)}</span>
-								<span class="item-date">{formatDate(item.availability_date)}</span>
-								{#if item.requested_by}
-									<span class="item-requester">Requested by {item.requested_by}</span>
-								{/if}
-							</div>
+			<div class="grouped-content">
+				{#each groupedData as group}
+					<div class="date-group">
+						<h2 class="date-header">{group.dateFormatted}</h2>
+						<div class="content-list">
+							{#each group.items as item}
+								<div class="content-item">
+									<div class="item-info">
+										<span class="item-title">{item.title}</span>
+										<div class="item-meta">
+											<span class="media-type-badge {item.media_type}">{formatMediaType(item.media_type)}</span>
+											{#if item.requested_by}
+												<span class="item-requester">Requested by {item.requested_by}</span>
+											{/if}
+										</div>
+									</div>
+								</div>
+							{/each}
 						</div>
 					</div>
 				{/each}
@@ -254,6 +304,27 @@
 		text-decoration: underline;
 	}
 
+	.grouped-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.date-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.date-header {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--border);
+		margin: 0;
+	}
+
 	.content-list {
 		display: flex;
 		flex-direction: column;
@@ -264,7 +335,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 1rem;
-		padding: 1rem;
+		padding: 0.75rem 1rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
 		border-radius: 0.5rem;
@@ -273,13 +344,6 @@
 
 	.content-item:hover {
 		background: var(--bg-hover);
-	}
-
-	.item-number {
-		color: var(--text-secondary);
-		font-size: 0.875rem;
-		min-width: 2rem;
-		text-align: right;
 	}
 
 	.item-info {
@@ -316,10 +380,6 @@
 	.media-type-badge.tv {
 		background: rgba(16, 185, 129, 0.1);
 		color: #10b981;
-	}
-
-	.item-date {
-		color: var(--text-secondary);
 	}
 
 	.item-requester {
