@@ -1,87 +1,114 @@
 #!/bin/bash
 
 # AFK Ralph - Autonomous loop mode
-# Usage: ./afk-ralph.sh <iterations>
+# Usage: ./afk-ralph.sh [-q|--qa-first] <iterations>
 
 RETRY_WAIT_SECONDS=600  # 10 minutes
+QA_FIRST=false
+LOGFILE="ralph-output.log"
 
-# Run claude command with unlimited retries on credit/rate limit errors
+# Prompts
+QA_PROMPT="Use /exploratory-qa skill to review the application for cross-cutting concerns"
+RALPH_PROMPT="@prompt.md
+If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>."
+
+# --- Helper functions ---
+
+section_header() {
+  echo ""
+  echo "--- $1 ---"
+  echo ""
+}
+
+wait_and_retry() {
+  local reason="$1"
+  echo ""
+  echo "$reason"
+  echo "   Waiting 10 minutes before retry... ($(date))"
+  sleep $RETRY_WAIT_SECONDS
+  echo "🔄 Retrying..."
+}
+
 run_claude_with_retry() {
   local prompt="$1"
-  local iteration_log="$2"
 
   while true; do
-    # Run claude and capture exit code
-    # Using a temp file to capture full output for error detection
     local temp_output=$(mktemp)
 
-    claude --permission-mode acceptEdits --output-format stream-json --verbose -p "$prompt" 2>&1 | tee -a "$iteration_log" | tee "$temp_output" | jq -r --unbuffered '
-      select(.type == "assistant" and .message.content != null) |
-      .message.content[] |
-      select(.type == "text") |
-      .text // empty
-    ' 2>/dev/null
+    # Note: Using text output (not stream-json) to support MCP tools like Puppeteer
+    claude --permission-mode acceptEdits --output-format text --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output"
 
     local exit_code=${PIPESTATUS[0]}
     local output=$(cat "$temp_output")
     rm -f "$temp_output"
 
-    # Check for credit/rate limit errors
     if [ $exit_code -ne 0 ]; then
       if echo "$output" | grep -qi -E "(credit|rate.?limit|quota|limit.*reached|too.?many.?requests)"; then
-        echo ""
-        echo "⏳ Credit/rate limit detected. Waiting 10 minutes before retry..."
-        echo "   Time: $(date)"
-        echo ""
-        sleep $RETRY_WAIT_SECONDS
-        echo "🔄 Retrying..."
-        continue
+        wait_and_retry "⏳ Credit/rate limit detected."
       else
-        echo ""
-        echo "⚠️  Claude command failed with exit code $exit_code"
-        echo "   Waiting 10 minutes before retry..."
-        sleep $RETRY_WAIT_SECONDS
-        echo "🔄 Retrying..."
-        continue
+        wait_and_retry "⚠️  Claude command failed with exit code $exit_code"
       fi
+      continue
     fi
 
-    # Success - exit the retry loop
     break
   done
 }
 
+run_qa() {
+  local label="${1:-Exploratory QA}"
+  section_header "$label"
+  run_claude_with_retry "$QA_PROMPT"
+}
+
+run_ralph() {
+  run_claude_with_retry "$RALPH_PROMPT"
+}
+
+# --- Parse options ---
+
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -q|--qa-first)
+      QA_FIRST=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
+
 if [ -z "$1" ]; then
-  echo "Usage: $0 <iterations>"
+  echo "Usage: $0 [-q|--qa-first] <iterations>"
+  echo "  -q, --qa-first  Run exploratory QA before starting iterations"
   echo "Example: $0 20"
+  echo "Example: $0 -q 10"
   exit 1
 fi
 
-echo "Starting AFK Ralph with $1 iterations..."
+ITERATIONS="$1"
+
+# --- Main ---
+
+echo "Starting AFK Ralph with $ITERATIONS iterations..."
+[ "$QA_FIRST" = true ] && echo "  (with initial exploratory QA)"
 echo "=========================================="
 
-logfile="ralph-output.log"
+[ "$QA_FIRST" = true ] && run_qa "Initial Exploratory QA"
 
-for ((i=1; i<=$1; i++)); do
-  echo ""
-  echo "--- Iteration $i of $1 ---"
-  echo ""
-
-  run_claude_with_retry "@prompt.md
-If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>." "$logfile"
-
-  result=$(tail -100 "$logfile")
+for ((i=1; i<=$ITERATIONS; i++)); do
+  section_header "Iteration $i of $ITERATIONS"
+  run_ralph
 
   # Integration review every 3 iterations
   if (( i % 3 == 0 )); then
-    echo ""
-    echo "--- Integration Review (iteration $i) ---"
-    echo ""
-
-    run_claude_with_retry "Use /exploratory-qa skill to review the application for cross-cutting concerns" "$logfile"
+    run_qa "Integration Review (iteration $i)"
   fi
 
-  if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
+  # Check for completion
+  if tail -100 "$LOGFILE" | grep -q "<promise>COMPLETE</promise>"; then
     echo ""
     echo "=========================================="
     echo "PRD complete after $i iterations!"
@@ -92,5 +119,5 @@ done
 
 echo ""
 echo "=========================================="
-echo "Completed $1 iterations. Check progress.txt for status."
+echo "Completed $ITERATIONS iterations. Check progress.txt for status."
 echo "=========================================="
