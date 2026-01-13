@@ -156,6 +156,69 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["jellyfin_id"] == "movie-old-watched"
 
     @pytest.mark.asyncio
+    async def test_min_age_only_applies_to_unplayed_items(
+        self, client: TestClient
+    ) -> None:
+        """min_age_months should ONLY apply to unplayed items.
+
+        Bug fix: Original script applies min_age check only to never-watched items.
+        Played items should be checked against last_played_date regardless of when added.
+        """
+        token = self._get_auth_token(client, "minagefix@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Recently added date (1 month ago - within min_age window)
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            # Old watched date (5 months ago - outside months_cutoff window)
+            old_watched_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+
+            # Item 1: Added recently, PLAYED long ago -> SHOULD appear
+            # min_age check should NOT apply to played items
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-recent-add-old-watch",
+                name="Recent Add Old Watch Movie",
+                media_type="Movie",
+                production_year=2021,
+                date_created=recent_date,
+                path="/media/movies/Recent Add Old Watch",
+                size_bytes=10_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=old_watched_date,
+            )
+            # Item 2: Added recently, NOT played -> should NOT appear (min_age applies)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-recent-add-unplayed",
+                name="Recent Add Unplayed Movie",
+                media_type="Movie",
+                production_year=2023,
+                date_created=recent_date,
+                path="/media/movies/Recent Add Unplayed",
+                size_bytes=8_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=None,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/old-unwatched", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only item1 should appear:
+        # - item1 is played (min_age doesn't apply), last_played > 4 months ago -> appears
+        # - item2 is unplayed AND recently added -> min_age applies, doesn't appear
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-recent-add-old-watch"
+
+    @pytest.mark.asyncio
     async def test_excludes_whitelisted_content(
         self, client: TestClient
     ) -> None:

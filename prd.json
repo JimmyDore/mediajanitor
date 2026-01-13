@@ -483,8 +483,8 @@
         "Unit tests pass"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": "Use /original-script skill. Substring whitelist matching is a HACK - do NOT implement. Focus on filtering logic only."
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Fixed bug: min_age_months was being applied to ALL items instead of only unplayed items. Original script only applies min_age check to never-watched content. Added test to verify fix."
     },
     {
       "id": "US-V.2",
