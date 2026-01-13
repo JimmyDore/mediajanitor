@@ -62,7 +62,12 @@
       "Skill(prd)",
       "Bash(ls:*)",
       "Skill(original-script)",
-      "Skill(ralph-init)"
+      "Skill(ralph-init)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "Skill(ux-expert)"
     ]
   },
   "enableAllProjectMcpServers": true,

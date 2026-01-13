@@ -738,10 +738,19 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - style(ui): [US-UI.1] implement design system refinement
 
+### 2026-01-14: US-9.1 - Fix Page Titles
+- Updated page titles for consistent branding:
+  - Login page: 'Log In - Media Janitor' → 'Login | Media Janitor'
+  - Register page: 'Sign Up - Media Janitor' → 'Register | Media Janitor'
+- 93 frontend tests pass, typecheck clean
+- Files changed: login/+page.svelte, register/+page.svelte
+- Commits:
+  - style(ui): [US-9.1] fix page titles for consistent branding
+
 ## Current Status
 
-**Phase**: Epic 9 - Marketing (In Progress)
-**Next US**: US-M.1 - Landing Page Hero
+**Phase**: Polish & Infrastructure (In Progress)
+**Next US**: US-9.2 - Add Favicon
 
 ## Notes
 
