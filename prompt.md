@@ -29,7 +29,7 @@
 11. Update prd.json: set `passes: true` for completed story
 12. Commit: `feat(scope): [US-X.X] description`
 13. Append to progress.txt (date, story ID, files changed, learnings)
-14. Run /improve-claude-md to capture any new learnings for CLAUDE.md
+14. Use /improve-claude-md skill to capture any new learnings for CLAUDE.md
 
 If all stories have `passes: true`, output <promise>COMPLETE</promise>.
 

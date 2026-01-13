@@ -102,9 +102,11 @@ plex-dashboard/
 ├── afk-ralph.sh           # Autonomous loop Ralph script
 ├── .claude/
 │   └── skills/
-│       ├── prd.md         # /prd skill - PRD creation
-│       ├── ralph-init.md  # /ralph-init skill - PRD to JSON
-│       └── prd-sync.md    # /prd-sync skill - Sync prd.json to PRD.md
+│       ├── prd/SKILL.md           # /prd skill - PRD creation
+│       ├── ralph-init/SKILL.md    # /ralph-init skill - PRD to JSON
+│       ├── prd-sync/SKILL.md      # /prd-sync skill - Sync prd.json to PRD.md
+│       ├── improve-claude-md/SKILL.md  # /improve-claude-md skill - Extract learnings
+│       └── exploratory-qa/SKILL.md     # /exploratory-qa skill - Periodic QA review
 ├── docker-compose.yml     # Local development
 ├── .env.example           # Environment template
 │
@@ -150,19 +152,29 @@ Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
 ### Skills (Human-driven, before Ralph)
 
 1. **`/prd`** - Create well-structured PRD with right-sized stories
-   - Location: `.claude/skills/prd.md`
+   - Location: `.claude/skills/prd/SKILL.md`
    - Ensures stories fit in one context window
    - Adds verifiable acceptance criteria
 
 2. **`/ralph-init`** - Convert PRD.md to prd.json
-   - Location: `.claude/skills/ralph-init.md`
+   - Location: `.claude/skills/ralph-init/SKILL.md`
    - Creates machine-readable task tracking
    - Validates story sizing and dependencies
 
 3. **`/prd-sync`** - Sync prd.json back to PRD.md
-   - Location: `.claude/skills/prd-sync.md`
+   - Location: `.claude/skills/prd-sync/SKILL.md`
    - Updates checkbox status and notes in PRD.md
    - Keeps human-readable doc in sync after Ralph completes stories
+
+4. **`/improve-claude-md`** - Extract learnings from current session
+   - Location: `.claude/skills/improve-claude-md/SKILL.md`
+   - Captures new patterns for CLAUDE.md
+   - Called after completing implementation work
+
+5. **`/exploratory-qa`** - Periodic QA review
+   - Location: `.claude/skills/exploratory-qa/SKILL.md`
+   - Reviews app for cross-cutting concerns
+   - Updates SUGGESTIONS.md with observations
 
 ### Ralph Loop (Autonomous execution)
 

@@ -34,7 +34,7 @@ If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>." 2>&1 |
     echo "--- Integration Review (iteration $i) ---"
     echo ""
 
-    claude --permission-mode acceptEdits -p "/exploratory-qa"
+    claude --permission-mode acceptEdits -p "Use /exploratory-qa skill to review the application for cross-cutting concerns"
   fi
 
   if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
