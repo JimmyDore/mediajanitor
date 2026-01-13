@@ -26,6 +26,7 @@ The hardest part? **Writing a good PRD.** If you get that right, execution becom
 ## The Workflow
 
 ![Ralph Workflow](./ralph-workflow.png)
+*Diagram from [snarktank/ralph](https://snarktank.github.io/ralph/)*
 
 There are two phases: what **you** do, and what **Ralph** does autonomously.
 
