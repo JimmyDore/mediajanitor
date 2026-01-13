@@ -600,10 +600,25 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - fix(content): [US-V.1] apply min_age_months only to unplayed items
 
+### 2026-01-13: US-V.2 - Validate Large Movies Detection
+- Compared original_script.py list_large_movies() with app's is_large_movie()
+- Validated both return 0 large movies (user's library has no movies >= 13GB)
+- Largest movie: Spider-Man: Across the Spider-Verse at 12.43 GB
+- Fixed minor bug: changed > to >= to match original script behavior
+  - Original script: `if item_size >= size_threshold_bytes`
+  - App (before fix): `item.size_bytes > threshold_bytes`
+  - App (after fix): `item.size_bytes >= threshold_bytes`
+- Added test for exact threshold boundary condition (test_large_movies_includes_exactly_threshold)
+- Added validation test suite (test_large_movies_validation.py)
+- 167 backend tests pass, mypy clean, 84 frontend tests pass
+- Files changed: services/content.py, tests/test_content.py, tests/test_large_movies_validation.py, prd.json
+- Commits:
+  - fix(content): [US-V.2] use >= operator for large movies threshold
+
 ## Current Status
 
 **Phase**: Epic V - Validation Against Original Script (In Progress)
-**Next US**: US-V.2 - Validate Large Movies Detection
+**Next US**: US-V.3 - Validate Language Issues Detection
 
 ## Notes
 
