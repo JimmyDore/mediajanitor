@@ -521,8 +521,8 @@
         "Unit tests pass"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": "Use /original-script skill. Account for french-only and language-exempt whitelists when comparing."
+      "passes": true,
+      "notes": "Completed 2026-01-13 - App count: 76 items (287.8 GB). Original script would have fewer due to hardcoded allowlists (LANGUAGE_CHECK_ALLOWLIST, FRENCH_ONLY_ALLOWLIST, FRENCH_SUBS_ONLY_ALLOWLIST). This difference is by design - app uses per-user DB whitelists (starts empty). Language codes verified: eng/en/english for English, fre/fr/french/fra for French - matches original script exactly."
     },
     {
       "id": "US-V.4",

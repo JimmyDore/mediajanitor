@@ -615,10 +615,29 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - fix(content): [US-V.2] use >= operator for large movies threshold
 
+### 2026-01-13: US-V.3 - Validate Language Issues Detection
+- Compared original_script.py check_audio_languages() with app's check_audio_languages()
+- App count: 76 items (287.8 GB)
+- Original script would report fewer items due to hardcoded allowlists:
+  - LANGUAGE_CHECK_ALLOWLIST (~17 items) - globally exempt from language checking
+  - FRENCH_ONLY_ALLOWLIST (~100 items) - doesn't need English audio
+  - FRENCH_SUBS_ONLY_ALLOWLIST (~5 items) - only needs French subtitles
+- This difference is BY DESIGN for multi-user SaaS:
+  - App uses per-user DB whitelists (starts empty)
+  - Original script uses hardcoded allowlists specific to one user's library
+- Verified language codes match original script EXACTLY:
+  - English: eng, en, english
+  - French: fre, fr, french, fra
+- No bugs found - implementation is correct
+- 167 backend tests pass, mypy clean
+- Files changed: prd.json
+- Commits:
+  - docs: [US-V.3] mark language issues validation complete
+
 ## Current Status
 
 **Phase**: Epic V - Validation Against Original Script (In Progress)
-**Next US**: US-V.3 - Validate Language Issues Detection
+**Next US**: US-V.4 - Validate Unavailable Requests Detection
 
 ## Notes
 
