@@ -239,3 +239,180 @@ describe('Whitelist API Integration (US-3.3)', () => {
 		});
 	});
 });
+
+describe('French-Only Whitelist API Integration (US-5.2)', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	describe('POST /api/whitelist/french-only', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/french-only', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'French Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts POST with valid auth and returns 201', async () => {
+			const successResponse = {
+				message: 'Added to french-only whitelist',
+				jellyfin_id: 'movie-123',
+				name: 'French Movie'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/french-only', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'French Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(201);
+
+			const data = await response.json();
+			expect(data.message).toContain('french-only');
+		});
+
+		it('returns 409 when item already in french-only whitelist', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ detail: 'Item already in french-only whitelist' })
+			});
+
+			const response = await fetch('/api/whitelist/french-only', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'French Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(409);
+		});
+	});
+
+	describe('GET /api/whitelist/french-only', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/french-only');
+
+			expect(response.status).toBe(401);
+		});
+
+		it('returns list of french-only whitelist items', async () => {
+			const frenchOnlyResponse = {
+				items: [
+					{
+						id: 1,
+						jellyfin_id: 'movie-fr-1',
+						name: 'Un Film Français',
+						media_type: 'Movie',
+						created_at: '2024-01-15T10:30:00Z'
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(frenchOnlyResponse)
+			});
+
+			const response = await fetch('/api/whitelist/french-only', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.total_count).toBe(1);
+			expect(data.items[0].name).toBe('Un Film Français');
+		});
+	});
+
+	describe('DELETE /api/whitelist/french-only/{id}', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/french-only/1', {
+				method: 'DELETE'
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts DELETE with valid auth and returns 200', async () => {
+			const successResponse = {
+				message: 'Removed from french-only whitelist'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/french-only/1', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(200);
+
+			const data = await response.json();
+			expect(data.message).toContain('french-only');
+		});
+
+		it('returns 404 for non-existent item', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 404,
+				json: () => Promise.resolve({ detail: 'Whitelist entry not found' })
+			});
+
+			const response = await fetch('/api/whitelist/french-only/99999', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.status).toBe(404);
+		});
+	});
+});

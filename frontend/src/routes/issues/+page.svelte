@@ -13,6 +13,7 @@
 		last_played_date: string | null;
 		path: string | null;
 		issues: string[];
+		language_issues: string[] | null;
 	}
 
 	interface ContentIssuesResponse {
@@ -31,6 +32,7 @@
 	let data = $state<ContentIssuesResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let protectingIds = $state<Set<string>>(new Set());
+	let frenchOnlyIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
@@ -156,6 +158,85 @@
 			newSet.delete(item.jellyfin_id);
 			protectingIds = newSet;
 		}
+	}
+
+	async function markAsFrenchOnly(item: ContentIssueItem) {
+		const token = localStorage.getItem('access_token');
+		if (!token) {
+			showToast('Not authenticated', 'error');
+			return;
+		}
+
+		frenchOnlyIds = new Set([...frenchOnlyIds, item.jellyfin_id]);
+
+		try {
+			const response = await fetch('/api/whitelist/french-only', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					jellyfin_id: item.jellyfin_id,
+					name: item.name,
+					media_type: item.media_type
+				})
+			});
+
+			if (response.status === 401) {
+				showToast('Session expired. Please log in again.', 'error');
+				return;
+			}
+
+			if (response.status === 409) {
+				showToast('Already marked as French-only', 'error');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Failed to mark as French-only', 'error');
+				return;
+			}
+
+			// Remove item from the list if it only had missing_en_audio issue
+			// If it also has missing_fr_audio, it stays but without the EN issue
+			if (data) {
+				const currentItem = data.items.find((i) => i.jellyfin_id === item.jellyfin_id);
+				if (currentItem) {
+					const hasOnlyEnglishIssue =
+						currentItem.language_issues?.length === 1 &&
+						currentItem.language_issues[0] === 'missing_en_audio';
+
+					if (hasOnlyEnglishIssue && currentItem.issues.length === 1) {
+						// Only had language issue and only missing EN - remove completely
+						const removedSize = currentItem.size_bytes || 0;
+						data = {
+							...data,
+							items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+							total_count: data.total_count - 1,
+							total_size_bytes: data.total_size_bytes - removedSize,
+							total_size_formatted: formatSize(data.total_size_bytes - removedSize)
+						};
+					} else {
+						// Has other issues - just refresh to get updated state
+						await fetchIssues(activeFilter);
+					}
+				}
+			}
+
+			showToast('Marked as French-only', 'success');
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : 'Failed to mark as French-only', 'error');
+		} finally {
+			const newSet = new Set(frenchOnlyIds);
+			newSet.delete(item.jellyfin_id);
+			frenchOnlyIds = newSet;
+		}
+	}
+
+	function hasMissingEnglishAudio(item: ContentIssueItem): boolean {
+		return item.language_issues?.includes('missing_en_audio') ?? false;
 	}
 
 	function formatSize(sizeBytes: number): string {
@@ -391,6 +472,20 @@
 										<span class="btn-spinner"></span>
 									{:else}
 										Protect
+									{/if}
+								</button>
+							{/if}
+							{#if hasMissingEnglishAudio(item)}
+								<button
+									class="btn-french-only"
+									onclick={() => markAsFrenchOnly(item)}
+									disabled={frenchOnlyIds.has(item.jellyfin_id)}
+									title="Mark as French-only - excludes from missing English audio checks"
+								>
+									{#if frenchOnlyIds.has(item.jellyfin_id)}
+										<span class="btn-spinner"></span>
+									{:else}
+										FR Only
 									{/if}
 								</button>
 							{/if}
@@ -708,6 +803,10 @@
 
 	.col-actions {
 		text-align: center;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		justify-content: center;
 	}
 
 	.btn-protect {
@@ -732,6 +831,32 @@
 	}
 
 	.btn-protect:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.btn-french-only {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #8b5cf6;
+		background: transparent;
+		border: 1px solid #8b5cf6;
+		border-radius: 0.25rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		min-width: 4rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-french-only:hover:not(:disabled) {
+		background: #8b5cf6;
+		color: white;
+	}
+
+	.btn-french-only:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}

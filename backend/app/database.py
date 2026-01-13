@@ -111,6 +111,21 @@ class ContentWhitelist(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class FrenchOnlyWhitelist(Base):
+    """User's whitelist for content that only needs French audio (no English required)."""
+
+    __tablename__ = "french_only_whitelist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    jellyfin_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "Movie" or "Series"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class SyncStatus(Base):
     """Track sync status per user."""
 

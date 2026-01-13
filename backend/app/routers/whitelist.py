@@ -13,7 +13,14 @@ from app.models.content import (
     WhitelistRemoveResponse,
 )
 from app.services.auth import get_current_user
-from app.services.content import add_to_whitelist, get_whitelist, remove_from_whitelist
+from app.services.content import (
+    add_to_whitelist,
+    get_whitelist,
+    remove_from_whitelist,
+    add_to_french_only_whitelist,
+    get_french_only_whitelist,
+    remove_from_french_only_whitelist,
+)
 
 
 router = APIRouter(prefix="/api/whitelist", tags=["whitelist"])
@@ -82,3 +89,75 @@ async def remove_content_from_whitelist(
         )
 
     return WhitelistRemoveResponse(message="Removed from whitelist")
+
+
+# French-Only Whitelist endpoints (US-5.2)
+
+
+@router.get("/french-only", response_model=WhitelistListResponse)
+async def list_french_only_whitelist(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistListResponse:
+    """Get all items in the user's french-only whitelist.
+
+    Items in this whitelist are exempt from missing English audio checks.
+    """
+    return await get_french_only_whitelist(db=db, user_id=current_user.id)
+
+
+@router.post("/french-only", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+async def add_to_french_only(
+    request: WhitelistAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistAddResponse:
+    """Add content to the user's french-only whitelist.
+
+    Items in this whitelist are exempt from missing English audio checks.
+    Use this for French-language films that don't need English audio.
+    """
+    try:
+        await add_to_french_only_whitelist(
+            db=db,
+            user_id=current_user.id,
+            jellyfin_id=request.jellyfin_id,
+            name=request.name,
+            media_type=request.media_type,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    return WhitelistAddResponse(
+        message="Added to french-only whitelist",
+        jellyfin_id=request.jellyfin_id,
+        name=request.name,
+    )
+
+
+@router.delete("/french-only/{whitelist_id}", response_model=WhitelistRemoveResponse)
+async def remove_from_french_only(
+    whitelist_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistRemoveResponse:
+    """Remove an item from the user's french-only whitelist.
+
+    After removal, the content may reappear in language issues if it's missing English audio.
+    """
+    removed = await remove_from_french_only_whitelist(
+        db=db,
+        user_id=current_user.id,
+        whitelist_id=whitelist_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Whitelist entry not found",
+        )
+
+    return WhitelistRemoveResponse(message="Removed from french-only whitelist")

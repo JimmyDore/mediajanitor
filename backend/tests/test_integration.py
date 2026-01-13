@@ -138,8 +138,8 @@ class TestIntegrationContentIssues:
             for item in data["items"]:
                 assert "large" in item["issues"], f"Item {item['name']} missing 'large' issue"
 
-    def test_issues_endpoint_filter_language_placeholder(self, auth_headers):
-        """Test GET /api/content/issues?filter=language returns empty (placeholder)."""
+    def test_issues_endpoint_filter_language(self, auth_headers):
+        """Test GET /api/content/issues?filter=language returns items with language issues."""
         with httpx.Client(base_url=BASE_URL) as client:
             response = client.get(
                 "/api/content/issues",
@@ -150,9 +150,11 @@ class TestIntegrationContentIssues:
             assert response.status_code == 200
             data = response.json()
 
-            # Language issues not yet implemented
-            assert data["items"] == []
-            assert data["total_count"] == 0
+            # All items should have 'language' in their issues list
+            for item in data["items"]:
+                assert "language" in item["issues"], f"Item {item['name']} missing 'language' issue"
+                # Should have language_issues detail
+                assert item.get("language_issues") is not None, f"Item {item['name']} missing language_issues"
 
     def test_issues_endpoint_filter_requests_placeholder(self, auth_headers):
         """Test GET /api/content/issues?filter=requests returns empty (placeholder)."""

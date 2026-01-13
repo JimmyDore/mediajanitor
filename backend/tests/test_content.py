@@ -2600,3 +2600,247 @@ class TestLanguageIssues:
         # Should have both old and language issues
         assert "old" in item_data["issues"]
         assert "language" in item_data["issues"]
+
+
+class TestFrenchOnlyWhitelist:
+    """Test French-Only whitelist functionality (US-5.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "fronly@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def _create_movie_with_audio(
+        self,
+        jellyfin_id: str,
+        name: str,
+        audio_languages: list[str],
+    ) -> dict:
+        """Create raw_data for a movie with specific audio tracks."""
+        media_streams = []
+        for i, lang in enumerate(audio_languages):
+            media_streams.append({
+                "Type": "Audio",
+                "Language": lang,
+                "Index": i,
+            })
+        return {
+            "Id": jellyfin_id,
+            "Name": name,
+            "Type": "Movie",
+            "MediaSources": [{
+                "MediaStreams": media_streams,
+            }],
+        }
+
+    def test_add_to_french_only_requires_auth(self, client: TestClient) -> None:
+        """POST /api/whitelist/french-only should require authentication."""
+        response = client.post(
+            "/api/whitelist/french-only",
+            json={"jellyfin_id": "test", "name": "Test", "media_type": "Movie"},
+        )
+        assert response.status_code == 401
+
+    def test_add_to_french_only_creates_entry(self, client: TestClient) -> None:
+        """Should create french-only whitelist entry."""
+        token = self._get_auth_token(client, "fronly-add@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/french-only",
+            json={
+                "jellyfin_id": "french-movie-1",
+                "name": "Un Film Français",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["jellyfin_id"] == "french-movie-1"
+        assert data["name"] == "Un Film Français"
+
+    def test_add_duplicate_returns_conflict(self, client: TestClient) -> None:
+        """Adding same item twice should return 409 conflict."""
+        token = self._get_auth_token(client, "fronly-dup@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time - should succeed
+        client.post(
+            "/api/whitelist/french-only",
+            json={
+                "jellyfin_id": "french-dup",
+                "name": "Duplicate Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Add second time - should fail
+        response = client.post(
+            "/api/whitelist/french-only",
+            json={
+                "jellyfin_id": "french-dup",
+                "name": "Duplicate Film",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 409
+
+    def test_get_french_only_whitelist(self, client: TestClient) -> None:
+        """Should return list of french-only whitelist items."""
+        token = self._get_auth_token(client, "fronly-list@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add some items
+        client.post(
+            "/api/whitelist/french-only",
+            json={"jellyfin_id": "fr1", "name": "Film 1", "media_type": "Movie"},
+            headers=headers,
+        )
+        client.post(
+            "/api/whitelist/french-only",
+            json={"jellyfin_id": "fr2", "name": "Film 2", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        response = client.get("/api/whitelist/french-only", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+
+    def test_delete_from_french_only(self, client: TestClient) -> None:
+        """Should remove item from french-only whitelist."""
+        token = self._get_auth_token(client, "fronly-del@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add an item
+        client.post(
+            "/api/whitelist/french-only",
+            json={"jellyfin_id": "fr-del", "name": "To Delete", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        # Get the list to find the ID
+        list_response = client.get("/api/whitelist/french-only", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete it
+        response = client.delete(f"/api/whitelist/french-only/{item_id}", headers=headers)
+        assert response.status_code == 200
+
+        # Verify it's gone
+        list_response = client.get("/api/whitelist/french-only", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_french_only_excludes_missing_en_audio_issue(
+        self, client: TestClient
+    ) -> None:
+        """Items in french-only whitelist should not have missing_en_audio issue."""
+        token = self._get_auth_token(client, "fronly-exclude@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a French-only movie (only French audio)
+        async with TestingAsyncSessionLocal() as session:
+            raw_data = self._create_movie_with_audio(
+                "french-only-movie",
+                "Un Film Français",
+                ["fre"],  # Only French audio - would normally flag missing EN
+            )
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="french-only-movie",
+                name="Un Film Français",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data=raw_data,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Without whitelist, should have language issue
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert "missing_en_audio" in data["items"][0]["language_issues"]
+
+        # Add to french-only whitelist
+        client.post(
+            "/api/whitelist/french-only",
+            json={
+                "jellyfin_id": "french-only-movie",
+                "name": "Un Film Français",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Now should NOT have missing_en_audio issue (still might have missing_fr_audio if applicable)
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Item should no longer appear in language issues
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_french_only_still_flags_missing_french_audio(
+        self, client: TestClient
+    ) -> None:
+        """French-only items should still flag missing French audio."""
+        token = self._get_auth_token(client, "fronly-french@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a movie with only English audio (wrong for French-only!)
+        async with TestingAsyncSessionLocal() as session:
+            raw_data = self._create_movie_with_audio(
+                "wrongly-english-movie",
+                "Wrong Audio",
+                ["eng"],  # Only English audio - French-only should still need FR!
+            )
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="wrongly-english-movie",
+                name="Wrong Audio",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data=raw_data,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Add to french-only whitelist
+        client.post(
+            "/api/whitelist/french-only",
+            json={
+                "jellyfin_id": "wrongly-english-movie",
+                "name": "Wrong Audio",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should still have missing_fr_audio issue
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert "missing_fr_audio" in data["items"][0]["language_issues"]
+        # Should NOT have missing_en_audio (exempted by french-only)
+        assert "missing_en_audio" not in data["items"][0]["language_issues"]
