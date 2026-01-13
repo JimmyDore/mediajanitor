@@ -372,8 +372,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Navigation shows Dashboard | Issues | Whitelist | Settings with correct active states"
     },
     {
       "id": "US-4.1",

@@ -29,7 +29,7 @@
 				<a
 					href="/issues"
 					class="nav-link"
-					class:active={currentPath === '/issues' || currentPath.startsWith('/issues?')}
+					class:active={currentPath === '/issues' || currentPath.startsWith('/issues/')}
 				>
 					Issues
 				</a>
