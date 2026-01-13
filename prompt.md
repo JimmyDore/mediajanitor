@@ -14,7 +14,10 @@
    - Typecheck: `cd backend && uv run mypy app/`
 5. If backend changed, verify in Docker:
    - `docker-compose up --build -d`
-   - Wait 10s, test via curl
+   - Wait 10s for startup
+   - Run integration tests: `cd backend && uv run pytest tests/test_integration.py -v`
+   - If new feature, add relevant integration test to `tests/test_integration.py`
+   - Quick curl QA (optional): Read credentials from .env.example, login, test endpoint
    - Check logs: `docker-compose logs backend`
    - If errors, fix and repeat from step 3
 6. If UI changed with API calls, write frontend unit tests (vitest)

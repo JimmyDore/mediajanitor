@@ -57,7 +57,8 @@
       "WebFetch(domain:alexop.dev)",
       "Skill(prd-sync)",
       "Skill(improve-claude-md)",
-      "Skill(exploratory-qa)"
+      "Skill(exploratory-qa)",
+      "Bash(docker-compose ps:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

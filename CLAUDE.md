@@ -310,19 +310,22 @@ This account has Jellyfin and Jellyseerr already configured in the app settings.
 # 1. Start local environment
 docker-compose up -d
 
-# 2. Login to get JWT token
+# 2. Read credentials from .env.example
+APP_USER_EMAIL=$(grep '^APP_USER_EMAIL=' .env.example | cut -d'=' -f2)
+APP_USER_PASSWORD=$(grep '^APP_USER_PASSWORD=' .env.example | cut -d'=' -f2)
+
+# 3. Login to get JWT token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"<APP_USER_EMAIL>","password":"<APP_USER_PASSWORD>"}' \
+  -d "{\"email\":\"$APP_USER_EMAIL\",\"password\":\"$APP_USER_PASSWORD\"}" \
   | jq -r '.access_token')
 
-# 3. Trigger sync
-curl -X POST http://localhost:8080/api/sync \
-  -H "Authorization: Bearer $TOKEN"
+# 4. Verify token was obtained
+echo "Token: $TOKEN"
 
-# 4. Check sync status
-curl http://localhost:8080/api/sync/status \
-  -H "Authorization: Bearer $TOKEN"
+# 5. Test authenticated endpoints
+curl -s http://localhost:8080/api/sync/status \
+  -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 ### Frontend (SvelteKit + Svelte 5)
@@ -347,6 +350,13 @@ npm run test:e2e:ui         # Interactive mode
 ### Testing Strategy (Testing Pyramid)
 
 **Target ratio: 70% unit tests, 20% integration, 10% E2E**
+
+**Note on "Integration Tests":**
+- **Python integration tests**: `cd backend && uv run pytest tests/test_integration.py -v`
+  - Uses httpx to call real Docker endpoints
+  - Create new tests here for features that need real API verification
+- **Manual curl QA**: Quick sanity checks after Docker is running
+- Credentials are hardcoded in `test_integration.py` (from `.env.example`)
 
 1. **Backend Unit Tests** (pytest): Test API endpoints, services, database operations
    - Location: `backend/tests/`
