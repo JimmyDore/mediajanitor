@@ -693,19 +693,21 @@ Identify content with language problems (missing French/English audio or subtitl
 
 ---
 
-#### US-5.3: Exempt Content from Language Checks
+#### US-5.3: Exempt Content from Language Checks ✅
 **As a** user
 **I want** to completely exempt content from language checks
 **So that** special cases don't show as issues
 
 **Acceptance Criteria:**
-- [ ] "Exempt from checks" button appears in unified issues view actions for language issues
-- [ ] `POST /api/whitelist/language-exempt` creates entry (user_id FK)
-- [ ] Item no longer appears in language issues
-- [ ] Can be managed in whitelist page
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] "Exempt from checks" button appears in unified issues view actions for language issues
+- [x] `POST /api/whitelist/language-exempt` creates entry (user_id FK)
+- [x] Item no longer appears in language issues
+- [x] Can be managed in whitelist page
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-13 - Exempt button on issues page, Language-Exempt section on whitelist page, 154 backend tests + 84 frontend tests pass
 
 ### Non-Goals
 - Automatic language detection/correction
@@ -746,23 +748,23 @@ Display information about media requests from Jellyseerr.
 
 ### User Stories
 
-#### US-6.1: Unavailable Requests Backend Service
+#### US-6.1: Unavailable Requests Backend Service ✅
 **As a** user
 **I want** to identify Jellyseerr requests that aren't available
 **So that** I can manually find them
 
 **Acceptance Criteria:**
-- [ ] **Refer to `original_script.py` functions: `fetch_jellyseer_requests`, `get_jellyseer_unavailable_requests`, `analyze_jellyseer_requests`**
-- [ ] Backend service `get_unavailable_requests()` identifies unavailable/pending requests (reads from cached DB)
-- [ ] Requests marked with `request` issue type in response
-- [ ] `/api/content/summary` endpoint includes `unavailable_requests` count
-- [ ] `/api/content/issues?filter=requests` returns only unavailable requests
-- [ ] Each item includes: title, type (movie/TV), requested by, request date
-- [ ] For TV: includes which seasons are requested but missing
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] **Refer to `original_script.py` functions: `fetch_jellyseer_requests`, `get_jellyseer_unavailable_requests`, `analyze_jellyseer_requests`**
+- [x] Backend service `get_unavailable_requests()` identifies unavailable/pending requests (reads from cached DB)
+- [x] Requests marked with `request` issue type in response
+- [x] `/api/content/summary` endpoint includes `unavailable_requests` count
+- [x] `/api/content/issues?filter=requests` returns only unavailable requests
+- [x] Each item includes: title, type (movie/TV), requested by, request date
+- [x] For TV: includes which seasons are requested but missing
+- [x] Typecheck passes
+- [x] Unit tests pass
 
-**Note:** UI display handled by unified issues view (US-D.3)
+**Note:** Completed 2026-01-13 - 26 unavailable requests found in test data. Filters future/recent releases per original script.
 
 ---
 
@@ -973,7 +975,7 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ## Checklist Summary
 
-### Completed ✅ (24 stories)
+### Completed ✅ (26 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -998,10 +1000,10 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-4.1: Large Movies Backend Service
 - [x] US-5.1: Language Issues Backend Service
 - [x] US-5.2: Mark Content as French-Only
+- [x] US-5.3: Exempt Content from Language Checks
+- [x] US-6.1: Unavailable Requests Backend Service
 
-### Next Up - Language & Requests (4 stories) **← START HERE**
-- [ ] US-5.3: Exempt Content from Language Checks
-- [ ] US-6.1: View Unavailable Requests (feeds into unified issues)
+### Next Up - Info Features (2 stories) **← START HERE**
 - [ ] US-6.2: View Currently Airing Series (info section)
 - [ ] US-6.3: View Recently Available Content (info section)
 
