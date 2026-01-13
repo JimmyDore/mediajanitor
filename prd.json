@@ -411,8 +411,8 @@
         "Unit tests pass"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": "UI display handled by unified issues view (US-D.3). Episode details shown in expandable row."
+      "passes": true,
+      "notes": "Completed 2026-01-13 - check_audio_languages() in content service, 78 items with language issues in Docker test. Series episode-level aggregation and whitelist exclusion deferred to US-5.2/US-5.3"
     },
     {
       "id": "US-5.2",

@@ -137,6 +137,7 @@ class ContentIssueItem(BaseModel):
     last_played_date: str | None
     path: str | None
     issues: list[str]  # List of issue types: "old", "large", "language", "request"
+    language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
 
 
 class ContentIssuesResponse(BaseModel):

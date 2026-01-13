@@ -1,10 +1,19 @@
 """Content analysis service for filtering old/unwatched content."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class LanguageCheckResult(TypedDict):
+    """Type for check_audio_languages return value."""
+
+    has_english: bool
+    has_french: bool
+    has_french_subs: bool
+    missing_languages: list[str]
 
 from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist
 from app.models.content import (
@@ -270,6 +279,88 @@ def is_large_movie(item: CachedMediaItem) -> bool:
     return item.size_bytes > threshold_bytes
 
 
+# Language code variants recognized by the system
+ENGLISH_CODES = {"eng", "en", "english"}
+FRENCH_CODES = {"fre", "fr", "french", "fra"}
+
+
+def check_audio_languages(item: CachedMediaItem) -> LanguageCheckResult:
+    """Check if item has English and French audio tracks.
+
+    Based on original_script.py:check_audio_languages
+
+    Returns dict with:
+    - has_english: bool
+    - has_french: bool
+    - has_french_subs: bool
+    - missing_languages: list[str] - specific issues found
+    """
+    result: LanguageCheckResult = {
+        "has_english": False,
+        "has_french": False,
+        "has_french_subs": False,
+        "missing_languages": [],
+    }
+
+    raw_data = item.raw_data
+    if not raw_data:
+        # No raw data - can't check languages, assume OK
+        result["has_english"] = True
+        result["has_french"] = True
+        return result
+
+    media_sources = raw_data.get("MediaSources", [])
+    if not media_sources:
+        # No media sources - can't check, assume OK
+        result["has_english"] = True
+        result["has_french"] = True
+        return result
+
+    # Get the first media source
+    media_source = media_sources[0]
+    media_streams = media_source.get("MediaStreams", [])
+
+    for stream in media_streams:
+        stream_type = stream.get("Type", "").lower()
+        language = stream.get("Language", "unknown").lower()
+
+        if stream_type == "audio":
+            if language in ENGLISH_CODES:
+                result["has_english"] = True
+            if language in FRENCH_CODES:
+                result["has_french"] = True
+
+        elif stream_type == "subtitle":
+            if language in FRENCH_CODES:
+                result["has_french_subs"] = True
+
+    # Determine what's missing
+    if not result["has_english"]:
+        result["missing_languages"].append("missing_en_audio")
+    if not result["has_french"]:
+        result["missing_languages"].append("missing_fr_audio")
+
+    return result
+
+
+def has_language_issues(item: CachedMediaItem) -> bool:
+    """Check if an item has language issues (missing EN or FR audio).
+
+    Returns True if the item is missing English or French audio.
+    """
+    lang_check = check_audio_languages(item)
+    return not lang_check["has_english"] or not lang_check["has_french"]
+
+
+def get_language_issues_list(item: CachedMediaItem) -> list[str]:
+    """Get list of specific language issues for an item.
+
+    Returns list like ["missing_en_audio", "missing_fr_audio"]
+    """
+    lang_check = check_audio_languages(item)
+    return lang_check["missing_languages"]
+
+
 async def get_content_summary(
     db: AsyncSession,
     user_id: int,
@@ -312,8 +403,15 @@ async def get_content_summary(
 
     large_movies_size = sum(item.size_bytes or 0 for item in large_movies_items)
 
-    # Language issues and unavailable requests are placeholders (implemented in US-5.1 and US-6.1)
-    language_issues_count = 0
+    # Calculate language issues
+    language_issues_items: list[CachedMediaItem] = []
+    for item in all_items:
+        if has_language_issues(item):
+            language_issues_items.append(item)
+
+    language_issues_size = sum(item.size_bytes or 0 for item in language_issues_items)
+
+    # Unavailable requests placeholder (implemented in US-6.1)
     unavailable_requests_count = 0
 
     return ContentSummaryResponse(
@@ -328,9 +426,9 @@ async def get_content_summary(
             total_size_formatted=format_size(large_movies_size) if large_movies_size > 0 else "0 B",
         ),
         language_issues=IssueCategorySummary(
-            count=language_issues_count,
-            total_size_bytes=0,
-            total_size_formatted="0 B",
+            count=len(language_issues_items),
+            total_size_bytes=language_issues_size,
+            total_size_formatted=format_size(language_issues_size) if language_issues_size > 0 else "0 B",
         ),
         unavailable_requests=IssueCategorySummary(
             count=unavailable_requests_count,
@@ -480,12 +578,15 @@ async def get_currently_airing(
 def get_item_issues(
     item: CachedMediaItem,
     whitelisted_ids: set[str],
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     """Get all issue types that apply to a content item.
 
-    Returns list of issue types: "old", "large", "language", "request"
+    Returns tuple of:
+    - list of issue types: "old", "large", "language", "request"
+    - list of specific language issues: "missing_en_audio", "missing_fr_audio", etc.
     """
     issues: list[str] = []
+    language_issues_detail: list[str] = []
 
     # Check for old/unwatched (exclude whitelisted)
     if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(item):
@@ -495,10 +596,12 @@ def get_item_issues(
     if is_large_movie(item):
         issues.append("large")
 
-    # Language issues - placeholder for US-5.1
-    # issues.append("language") - will be implemented later
+    # Check for language issues
+    if has_language_issues(item):
+        issues.append("language")
+        language_issues_detail = get_language_issues_list(item)
 
-    return issues
+    return issues, language_issues_detail
 
 
 async def get_content_issues(
@@ -515,14 +618,7 @@ async def get_content_issues(
 
     Returns items sorted by size (largest first).
     """
-    # Handle language and requests filters - not yet implemented
-    if filter_type == "language":
-        return ContentIssuesResponse(
-            items=[],
-            total_count=0,
-            total_size_bytes=0,
-            total_size_formatted="0 B",
-        )
+    # Handle requests filter - not yet implemented
     if filter_type == "requests":
         return ContentIssuesResponse(
             items=[],
@@ -544,10 +640,11 @@ async def get_content_issues(
     whitelisted_ids = set(whitelist_result.scalars().all())
 
     # Build list of items with issues
-    items_with_issues: list[tuple[CachedMediaItem, list[str]]] = []
+    # Store tuple of (item, issues_list, language_issues_detail)
+    items_with_issues: list[tuple[CachedMediaItem, list[str], list[str]]] = []
 
     for item in all_items:
-        issues = get_item_issues(item, whitelisted_ids)
+        issues, language_issues_detail = get_item_issues(item, whitelisted_ids)
 
         # Skip items with no issues
         if not issues:
@@ -558,16 +655,18 @@ async def get_content_issues(
             continue
         if filter_type == "large" and "large" not in issues:
             continue
+        if filter_type == "language" and "language" not in issues:
+            continue
         if filter_type == "multi" and len(issues) < 2:
             continue
 
-        items_with_issues.append((item, issues))
+        items_with_issues.append((item, issues, language_issues_detail))
 
     # Sort by size descending (largest first)
     items_with_issues.sort(key=lambda x: x[0].size_bytes or 0, reverse=True)
 
     # Calculate totals
-    total_size_bytes = sum(item.size_bytes or 0 for item, _ in items_with_issues)
+    total_size_bytes = sum(item.size_bytes or 0 for item, _, _ in items_with_issues)
 
     # Convert to response models
     response_items = [
@@ -581,8 +680,9 @@ async def get_content_issues(
             last_played_date=item.last_played_date,
             path=item.path,
             issues=issues,
+            language_issues=language_issues_detail if language_issues_detail else None,
         )
-        for item, issues in items_with_issues
+        for item, issues, language_issues_detail in items_with_issues
     ]
 
     return ContentIssuesResponse(
