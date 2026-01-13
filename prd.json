@@ -541,8 +541,8 @@
         "Unit tests pass"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "Use /original-script skill. No whitelist involved - counts should match exactly."
+      "passes": true,
+      "notes": "Completed 2026-01-13 - App count: 26 unavailable requests. Fixed bug: titles were showing as 'Unknown' because Jellyseerr /api/v1/request endpoint doesn't include titles. Added fetch_media_title() to sync.py to fetch titles from /api/v1/movie/{id} or /api/v1/tv/{id}. Known difference: original script does complex TV series season analysis (excludes 'complete for released seasons'), app uses simpler status-based filtering. Documented in SUGGESTIONS.md [P2]."
     },
     {
       "id": "US-6.3",

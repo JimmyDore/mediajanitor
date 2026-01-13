@@ -79,6 +79,36 @@ async def fetch_jellyfin_media(
         raise
 
 
+async def fetch_media_title(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    tmdb_id: int,
+    media_type: str,
+) -> str | None:
+    """
+    Fetch title for a movie or TV show from Jellyseerr API.
+
+    The /api/v1/request endpoint doesn't include titles, so we need to
+    fetch from /api/v1/movie/{id} or /api/v1/tv/{id}.
+    """
+    endpoint = "movie" if media_type == "movie" else "tv"
+    try:
+        response = await client.get(
+            f"{server_url}/api/v1/{endpoint}/{tmdb_id}",
+            headers={"X-Api-Key": api_key},
+            params={"language": "en"},
+        )
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        # Movies have 'title', TV shows have 'name'
+        title: str | None = data.get("title") or data.get("name") or data.get("originalTitle")
+        return title
+    except Exception as e:
+        logger.debug(f"Failed to fetch title for {media_type} {tmdb_id}: {e}")
+        return None
+
+
 async def fetch_jellyseerr_requests(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
@@ -86,6 +116,7 @@ async def fetch_jellyseerr_requests(
     Fetch all requests from Jellyseerr API with pagination.
 
     Based on original_script.py:fetch_jellyseer_requests
+    Also fetches titles from movie/tv endpoints since request API doesn't include them.
     """
     server_url = server_url.rstrip("/")
 
@@ -122,6 +153,23 @@ async def fetch_jellyseerr_requests(
 
                 if page > 100:  # Safety limit
                     break
+
+            # Fetch titles for each request (the /api/v1/request endpoint doesn't include them)
+            title_cache: dict[tuple[str, int], str | None] = {}
+            for req in all_requests:
+                media = req.get("media", {})
+                tmdb_id = media.get("tmdbId")
+                media_type = media.get("mediaType", "unknown")
+
+                if tmdb_id and media_type in ("movie", "tv"):
+                    cache_key = (media_type, tmdb_id)
+                    if cache_key not in title_cache:
+                        title = await fetch_media_title(
+                            client, server_url, api_key, tmdb_id, media_type
+                        )
+                        title_cache[cache_key] = title
+                    # Store title in media object for later caching
+                    media["_fetched_title"] = title_cache[cache_key]
 
             logger.info(f"Fetched {len(all_requests)} requests from Jellyseerr")
             return all_requests
@@ -200,13 +248,16 @@ async def cache_jellyseerr_requests(
         media = req.get("media", {})
         requested_by = req.get("requestedBy", {})
 
+        # Use _fetched_title (from separate API call) or fallback to media fields
+        title = media.get("_fetched_title") or media.get("title") or media.get("name")
+
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,
             jellyseerr_id=req.get("id", 0),
             tmdb_id=media.get("tmdbId"),
             media_type=media.get("mediaType", "unknown"),
             status=req.get("status", 0),
-            title=media.get("title") or media.get("name"),
+            title=title,
             requested_by=requested_by.get("displayName"),
             created_at_source=req.get("createdAt"),
             raw_data=req,

@@ -634,10 +634,31 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - docs: [US-V.3] mark language issues validation complete
 
+### 2026-01-13: US-V.4 - Validate Unavailable Requests Detection
+- Compared original_script.py analyze_jellyseer_requests() with app's get_unavailable_requests()
+- App count: 26 unavailable requests
+- Fixed bug: Titles were showing as "Unknown" in unavailable requests
+  - Root cause: Jellyseerr /api/v1/request endpoint doesn't include titles in response
+  - Original script makes additional API calls to /api/v1/movie/{id} or /api/v1/tv/{id}
+  - Fixed by adding fetch_media_title() to sync.py to fetch titles during sync
+  - Titles now cached with title field populated
+- Known difference (documented in SUGGESTIONS.md [P2]):
+  - Original script does complex TV series season-by-season analysis with TMDB API
+  - Excludes series that are "complete for released seasons" (only missing future seasons)
+  - Tracks "currently airing" shows separately
+  - App uses simpler status-based filtering (status in {0, 1, 2, 4})
+  - App may show more TV requests than original script as a result
+- Verified status codes match: both use status 0, 1, 2, 4 as unavailable
+- Verified FILTER_FUTURE_RELEASES and FILTER_RECENT_RELEASES logic matches
+- 167 backend tests pass, mypy clean
+- Files changed: app/services/sync.py, SUGGESTIONS.md, prd.json
+- Commits:
+  - fix(sync): [US-V.4] fetch titles from Jellyseerr during sync
+
 ## Current Status
 
-**Phase**: Epic V - Validation Against Original Script (In Progress)
-**Next US**: US-V.4 - Validate Unavailable Requests Detection
+**Phase**: Epic V - Validation Against Original Script (Complete)
+**Next US**: US-6.3 - Recently Available Content (INFO)
 
 ## Notes
 

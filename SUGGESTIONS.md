@@ -12,6 +12,7 @@ P1 items should be reviewed and manually added to PRD.md if deemed necessary.
 The following P1 items were identified during integration reviews:
 - **[P1] Page title inconsistency** - Login/Register pages use "Plex Dashboard" but app is named "Media Janitor" (Dashboard/Settings/Old Content pages are correct)
 - **[P1] No automatic scheduler for daily sync** - US-7.1 "Automatic Daily Data Sync" has no automatic component (only manual trigger exists)
+- **[P1] Temporary whitelisting** - Allow whitelisting an item for a specific duration (e.g., 3 months, 6 months, 1 year) instead of permanently. Item automatically returns to issues list when the whitelist expires. Useful for seasonal content or temporary exceptions.
 
 **Resolved since last review:**
 - ~~Manual sync button missing~~ - Dashboard now has "Refresh" button (US-7.2 completed)
@@ -30,7 +31,8 @@ The following P1 items were identified during integration reviews:
 - [P3] Navigation header could show user email or avatar for better UX
 
 ## Data/Sync
-- [P2] **Bug: "Unknown" titles in Recently Available** - Jellyseerr request sync (`sync.py:209`) extracts `media.title` but the API response may not include titles. Items show "Unknown" on `/info/recent`. Need to fetch title from TMDB or store it from request submission. Affects US-6.3.
+- ~~[P2] **Bug: "Unknown" titles in Recently Available**~~ - FIXED in US-V.4. Now fetches titles from `/api/v1/movie/{id}` or `/api/v1/tv/{id}` endpoints during sync.
+- [P2] **TV Series season analysis not implemented** - Original script does complex TMDB-based season analysis to exclude TV series that are "complete for released seasons" (only missing future seasons) and track "currently airing" shows separately. App uses simpler status-based filtering which may include more TV requests than original script. This is a known simplification. Full implementation would require TMDB API calls per TV series.
 
 ## Architecture
 - [P1] US-7.1 delivered sync service but NO scheduler - "Automatic Daily Data Sync" has no automatic component. Need APScheduler, Celery Beat, or system cron to trigger `/api/sync` for all users daily.
@@ -92,10 +94,11 @@ The following P1 items were identified during integration reviews:
 ### Key Issues Found
 1. **P1**: Page titles say "Plex Dashboard" on login/register (should be "Media Janitor")
 2. **P1**: No automatic daily sync scheduler exists
-3. **P2**: "Unknown" titles in Recently Available - Jellyseerr sync missing titles
+3. ~~**P2**: "Unknown" titles in Recently Available~~ - FIXED in US-V.4
 4. **P2**: Missing favicon causes 404
 5. **P2**: CORS needs production URL
 6. **P2**: Auth endpoints have no rate limiting
+7. **P2**: TV series season analysis not implemented (app may show more TV requests than original script)
 
 ### Pages Verified
 - `/login` - Works, but wrong page title
