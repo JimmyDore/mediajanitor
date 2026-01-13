@@ -391,8 +391,8 @@
         "Unit tests pass"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "UI display handled by unified issues view (US-D.3)"
+      "passes": true,
+      "notes": "Completed 2026-01-13 - is_large_movie() in content service, 13GB threshold, integrated with summary and issues endpoints"
     },
     {
       "id": "US-5.1",
