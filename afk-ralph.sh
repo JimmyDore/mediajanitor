@@ -31,12 +31,19 @@ wait_and_retry() {
 
 run_claude_with_retry() {
   local prompt="$1"
+  local use_streaming="${2:-true}"
 
   while true; do
     local temp_output=$(mktemp)
 
-    # Note: Using text output (not stream-json) to support MCP tools like Puppeteer
-    claude --permission-mode acceptEdits --output-format text --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output"
+    # QA uses text output to support MCP tools like Puppeteer
+    # Ralph runs use streaming for better performance
+    local output_format="stream-json"
+    if [ "$use_streaming" = false ]; then
+      output_format="text"
+    fi
+
+    claude --permission-mode acceptEdits --output-format "$output_format" --verbose -p "$prompt" 2>&1 | tee -a "$LOGFILE" | tee "$temp_output"
 
     local exit_code=${PIPESTATUS[0]}
     local output=$(cat "$temp_output")
@@ -58,7 +65,7 @@ run_claude_with_retry() {
 run_qa() {
   local label="${1:-Exploratory QA}"
   section_header "$label"
-  run_claude_with_retry "$QA_PROMPT"
+  run_claude_with_retry "$QA_PROMPT" false
 }
 
 run_ralph() {
