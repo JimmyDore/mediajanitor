@@ -439,10 +439,24 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(issues): [US-D.3] add unified issues view with filter tabs
 
+### 2026-01-13: US-D.4 - Multi-Issue Content Support
+- Added filter=multi to /api/content/issues endpoint
+  - Filters to only show items with 2+ issues (worst offenders)
+  - Respects whitelist (whitelisted items don't have "old" issue)
+- Extended frontend issues page with:
+  - Multi-Issue filter tab in filter bar
+  - Sortable Issues column header (click to sort by issue count)
+  - URL param support: /issues?filter=multi
+- Backend tests: 4 new tests for multi-issue filtering
+- Verified in Docker: Multi-issue filter works correctly (0 items since no movies are both old AND large)
+- Files changed: routers/content.py, services/content.py, test_content.py, issues/+page.svelte, prd.json
+- Commits:
+  - feat(issues): [US-D.4] add multi-issue content support
+
 ## Current Status
 
 **Phase**: Epic D - Dashboard (In Progress)
-**Next US**: US-D.4 - Multi-Issue Content Support
+**Next US**: US-D.5 - Navigation Update
 
 ## Notes
 
