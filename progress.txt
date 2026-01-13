@@ -381,10 +381,38 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(dashboard): [US-D.1] add summary cards with issue counts
 
+### 2026-01-13: US-D.2 - Dashboard Info Section
+- Added Info section below Issues with two cards:
+  - Recently Available: Content available in past 7 days
+  - Currently Airing: Series with in-progress seasons (placeholder)
+- Backend:
+  - GET /api/info/recent - Returns recently available content sorted by date
+  - GET /api/info/airing - Returns currently airing series (placeholder)
+  - Extended /api/content/summary with recently_available and currently_airing counts
+  - New models: InfoCategorySummary, RecentlyAvailableItem, CurrentlyAiringItem
+- Frontend:
+  - Info section with green-themed cards (distinct from red/yellow issues)
+  - List views at /info/recent and /info/airing with item details
+  - Copy to clipboard functionality on recent page
+- E2E Test Cleanup (major refactor):
+  - Reduced E2E tests from 79 to 20 (75% reduction)
+  - Deleted flaky tests: sync.spec.ts, old-unwatched.spec.ts, whitelist.spec.ts, dashboard-summary.spec.ts
+  - Consolidated header.spec.ts (11 → 3 tests), settings.spec.ts (6 → 2 tests)
+  - E2E now runs in 4 seconds (was 11 minutes)
+- Documentation updates:
+  - prompt.md: E2E tests only for new routes (smoke tests)
+  - CLAUDE.md: Testing pyramid guidance (70% unit, 20% integration, 10% E2E)
+- Backend tests: 10 new tests for info endpoints
+- Frontend tests: 9 new tests for info API integration
+- Verified in Docker: Both info endpoints work correctly
+- Files changed: models/content.py, services/content.py, routers/info.py, main.py, +page.svelte, info/recent/+page.svelte, info/airing/+page.svelte, info.test.ts, header.spec.ts, settings.spec.ts, prompt.md, CLAUDE.md
+- Commits:
+  - feat(dashboard): [US-D.2] add info section with recently available and currently airing
+
 ## Current Status
 
 **Phase**: Epic D - Dashboard (In Progress)
-**Next US**: US-D.2 - Dashboard Info Section
+**Next US**: US-D.3 - Unified Issues View
 
 ## Notes
 

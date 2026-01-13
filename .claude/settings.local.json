@@ -49,7 +49,10 @@
       "mcp__puppeteer__puppeteer_wait_for_request_finished",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:api.github.com)",
-      "Bash(uv run mypy:*)"
+      "Bash(uv run mypy:*)",
+      "mcp__puppeteer__puppeteer_evaluate",
+      "Bash(xxd:*)",
+      "Bash(npm run build:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

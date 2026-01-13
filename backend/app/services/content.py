@@ -6,12 +6,17 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import CachedMediaItem, ContentWhitelist
+from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist
 from app.models.content import (
     ContentSummaryResponse,
+    CurrentlyAiringItem,
+    CurrentlyAiringResponse,
+    InfoCategorySummary,
     IssueCategorySummary,
     OldUnwatchedItem,
     OldUnwatchedResponse,
+    RecentlyAvailableItem,
+    RecentlyAvailableResponse,
     WhitelistItem,
     WhitelistListResponse,
 )
@@ -330,4 +335,141 @@ async def get_content_summary(
             total_size_bytes=0,
             total_size_formatted="0 B",
         ),
+        # Info categories
+        recently_available=InfoCategorySummary(
+            count=await get_recently_available_count(db, user_id),
+        ),
+        currently_airing=InfoCategorySummary(
+            count=0,  # Placeholder - will be implemented in US-6.2
+        ),
+    )
+
+
+# Constants for info endpoints
+RECENT_ITEMS_DAYS_BACK = 7  # Content available in past 7 days
+
+
+async def get_recently_available_count(
+    db: AsyncSession,
+    user_id: int,
+) -> int:
+    """Get count of recently available content for summary."""
+    result = await db.execute(
+        select(CachedJellyseerrRequest).where(
+            CachedJellyseerrRequest.user_id == user_id
+        )
+    )
+    all_requests = result.scalars().all()
+
+    now = datetime.now(timezone.utc)
+    cutoff_date = now - timedelta(days=RECENT_ITEMS_DAYS_BACK)
+
+    count = 0
+    for request in all_requests:
+        # Only count available (4 or 5 status)
+        if request.status not in [4, 5]:
+            continue
+
+        # Get availability date from raw_data
+        availability_date = _get_availability_date(request)
+        if not availability_date:
+            continue
+
+        if availability_date >= cutoff_date:
+            count += 1
+
+    return count
+
+
+def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
+    """Extract availability date from a Jellyseerr request.
+
+    Looks for mediaAddedAt in raw_data, falls back to modifiedAt or createdAt.
+    """
+    raw_data = request.raw_data or {}
+    media = raw_data.get("media", {})
+
+    # Try mediaAddedAt first (most accurate for when content became available)
+    date_str = media.get("mediaAddedAt")
+    if not date_str:
+        # Fallback to modifiedAt
+        date_str = raw_data.get("modifiedAt")
+    if not date_str:
+        # Final fallback to created_at_source
+        date_str = request.created_at_source
+
+    if not date_str:
+        return None
+
+    return parse_jellyfin_datetime(date_str)
+
+
+async def get_recently_available(
+    db: AsyncSession,
+    user_id: int,
+) -> RecentlyAvailableResponse:
+    """Get content that became available in the past 7 days.
+
+    Returns items sorted by date, newest first.
+    """
+    result = await db.execute(
+        select(CachedJellyseerrRequest).where(
+            CachedJellyseerrRequest.user_id == user_id
+        )
+    )
+    all_requests = result.scalars().all()
+
+    now = datetime.now(timezone.utc)
+    cutoff_date = now - timedelta(days=RECENT_ITEMS_DAYS_BACK)
+
+    recent_items: list[tuple[datetime, CachedJellyseerrRequest]] = []
+
+    for request in all_requests:
+        # Only count available (4 or 5 status)
+        if request.status not in [4, 5]:
+            continue
+
+        # Get availability date from raw_data
+        availability_date = _get_availability_date(request)
+        if not availability_date:
+            continue
+
+        if availability_date >= cutoff_date:
+            recent_items.append((availability_date, request))
+
+    # Sort by date descending (newest first)
+    recent_items.sort(key=lambda x: x[0], reverse=True)
+
+    # Convert to response models
+    response_items = [
+        RecentlyAvailableItem(
+            jellyseerr_id=request.jellyseerr_id,
+            title=request.title or "Unknown",
+            media_type=request.media_type,
+            availability_date=availability_date.isoformat(),
+            requested_by=request.requested_by,
+        )
+        for availability_date, request in recent_items
+    ]
+
+    return RecentlyAvailableResponse(
+        items=response_items,
+        total_count=len(response_items),
+    )
+
+
+async def get_currently_airing(
+    db: AsyncSession,
+    user_id: int,
+) -> CurrentlyAiringResponse:
+    """Get series that are currently airing (have in-progress seasons).
+
+    Returns items sorted by next air date.
+    Note: This is a placeholder implementation - full implementation in US-6.2.
+    """
+    # Placeholder - return empty list for now
+    # Full implementation will analyze raw_data for in_progress_seasons
+    return CurrentlyAiringResponse(
+        items=[],
+        total_count=0,
     )

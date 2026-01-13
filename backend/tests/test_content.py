@@ -1260,3 +1260,339 @@ class TestContentSummary:
 
         # Unavailable requests will be implemented in US-6.1, for now return 0
         assert data["unavailable_requests"]["count"] == 0
+
+
+class TestInfoEndpoints:
+    """Test info endpoints for US-D.2 - Dashboard Info Section."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "info@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_recently_available_requires_authentication(self, client: TestClient) -> None:
+        """GET /api/info/recent should require authentication."""
+        response = client.get("/api/info/recent")
+        assert response.status_code == 401
+
+    def test_currently_airing_requires_authentication(self, client: TestClient) -> None:
+        """GET /api/info/airing should require authentication."""
+        response = client.get("/api/info/airing")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_recently_available_returns_empty_list_when_no_data(
+        self, client: TestClient
+    ) -> None:
+        """Should return empty list when no recently available content exists."""
+        token = self._get_auth_token(client, "recent-empty@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_currently_airing_returns_empty_list_when_no_data(
+        self, client: TestClient
+    ) -> None:
+        """Should return empty list when no currently airing series exist."""
+        token = self._get_auth_token(client, "airing-empty@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/info/airing", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_recently_available_returns_content_from_past_7_days(
+        self, client: TestClient
+    ) -> None:
+        """Should return content that became available in the past 7 days."""
+        from app.database import CachedJellyseerrRequest
+
+        token = self._get_auth_token(client, "recent-7days@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Request available 3 days ago (should appear)
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            recent_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=1001,
+                tmdb_id=12345,
+                media_type="movie",
+                status=5,  # Available
+                title="Recently Available Movie",
+                requested_by="test_user",
+                created_at_source=recent_date,
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            # Request available 10 days ago (should NOT appear)
+            old_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+            old_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=1002,
+                tmdb_id=12346,
+                media_type="movie",
+                status=5,  # Available
+                title="Old Available Movie",
+                requested_by="test_user",
+                created_at_source=old_date,
+                raw_data={"media": {"mediaAddedAt": old_date}},
+            )
+            session.add_all([recent_request, old_request])
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Recently Available Movie"
+
+    @pytest.mark.asyncio
+    async def test_recently_available_only_shows_available_status(
+        self, client: TestClient
+    ) -> None:
+        """Should only return requests with status 4 (Partially Available) or 5 (Available)."""
+        from app.database import CachedJellyseerrRequest
+
+        token = self._get_auth_token(client, "recent-status@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            # Available request (should appear)
+            available_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2001,
+                tmdb_id=22345,
+                media_type="movie",
+                status=5,  # Available
+                title="Available Movie",
+                requested_by="test_user",
+                created_at_source=recent_date,
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            # Pending request (should NOT appear)
+            pending_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2002,
+                tmdb_id=22346,
+                media_type="movie",
+                status=2,  # Pending
+                title="Pending Movie",
+                requested_by="test_user",
+                created_at_source=recent_date,
+                raw_data={},
+            )
+            session.add_all([available_request, pending_request])
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Available Movie"
+
+    @pytest.mark.asyncio
+    async def test_recently_available_returns_required_fields(
+        self, client: TestClient
+    ) -> None:
+        """Each item should have: title, type, availability_date."""
+        from app.database import CachedJellyseerrRequest
+
+        token = self._get_auth_token(client, "recent-fields@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3001,
+                tmdb_id=32345,
+                media_type="movie",
+                status=5,
+                title="Field Test Movie",
+                requested_by="test_user",
+                created_at_source=recent_date,
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert "title" in item
+        assert "media_type" in item
+        assert "availability_date" in item
+
+    @pytest.mark.asyncio
+    async def test_recently_available_grouped_by_date(
+        self, client: TestClient
+    ) -> None:
+        """Items should be sorted by date, newest first."""
+        from app.database import CachedJellyseerrRequest
+
+        token = self._get_auth_token(client, "recent-sorted@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Item from 1 day ago
+            day1 = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            # Item from 3 days ago
+            day3 = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            # Item from 5 days ago
+            day5 = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+
+            req1 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=4001,
+                media_type="movie",
+                status=5,
+                title="Day 1 Movie",
+                raw_data={"media": {"mediaAddedAt": day1}},
+            )
+            req2 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=4002,
+                media_type="movie",
+                status=5,
+                title="Day 3 Movie",
+                raw_data={"media": {"mediaAddedAt": day3}},
+            )
+            req3 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=4003,
+                media_type="movie",
+                status=5,
+                title="Day 5 Movie",
+                raw_data={"media": {"mediaAddedAt": day5}},
+            )
+            session.add_all([req3, req1, req2])  # Add in non-sorted order
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should be sorted newest first
+        assert data["items"][0]["title"] == "Day 1 Movie"
+        assert data["items"][1]["title"] == "Day 3 Movie"
+        assert data["items"][2]["title"] == "Day 5 Movie"
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_info_counts(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/content/summary should include recently_available and currently_airing counts."""
+        from app.database import CachedJellyseerrRequest
+
+        token = self._get_auth_token(client, "summary-info@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Add recent available request
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=5001,
+                media_type="movie",
+                status=5,
+                title="Recent Movie",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Summary should include info counts
+        assert "recently_available" in data
+        assert data["recently_available"]["count"] == 1
+        assert "currently_airing" in data
+        # Currently airing is placeholder for now
+        assert data["currently_airing"]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_user_isolation_for_recently_available(
+        self, client: TestClient
+    ) -> None:
+        """Users should only see their own recently available content."""
+        from app.database import CachedJellyseerrRequest
+
+        token1 = self._get_auth_token(client, "recent-user1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        token2 = self._get_auth_token(client, "recent-user2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        me1 = client.get("/api/auth/me", headers=headers1).json()
+        me2 = client.get("/api/auth/me", headers=headers2).json()
+
+        async with TestingAsyncSessionLocal() as session:
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            # User 1's request
+            req1 = CachedJellyseerrRequest(
+                user_id=me1["id"],
+                jellyseerr_id=6001,
+                media_type="movie",
+                status=5,
+                title="User 1 Movie",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            # User 2's request
+            req2 = CachedJellyseerrRequest(
+                user_id=me2["id"],
+                jellyseerr_id=6002,
+                media_type="movie",
+                status=5,
+                title="User 2 Movie",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add_all([req1, req2])
+            await session.commit()
+
+        # User 1 should only see their movie
+        response1 = client.get("/api/info/recent", headers=headers1)
+        data1 = response1.json()
+        assert data1["total_count"] == 1
+        assert data1["items"][0]["title"] == "User 1 Movie"
+
+        # User 2 should only see their movie
+        response2 = client.get("/api/info/recent", headers=headers2)
+        data2 = response2.json()
+        assert data2["total_count"] == 1
+        assert data2["items"][0]["title"] == "User 2 Movie"

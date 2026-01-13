@@ -26,11 +26,17 @@
 		total_size_formatted: string;
 	}
 
+	interface InfoCategorySummary {
+		count: number;
+	}
+
 	interface ContentSummary {
 		old_content: IssueCategorySummary;
 		large_movies: IssueCategorySummary;
 		language_issues: IssueCategorySummary;
 		unavailable_requests: IssueCategorySummary;
+		recently_available: InfoCategorySummary;
+		currently_airing: InfoCategorySummary;
 	}
 
 	let syncStatus = $state<SyncStatus | null>(null);
@@ -138,6 +144,10 @@
 
 	function navigateToIssues(filter: string) {
 		goto(`/issues?filter=${filter}`);
+	}
+
+	function navigateToInfo(type: string) {
+		goto(`/info/${type}`);
 	}
 
 	onMount(async () => {
@@ -306,6 +316,62 @@
 				</button>
 			</div>
 		</section>
+
+		<!-- Info Section -->
+		<section class="info-section">
+			<h2 class="section-title">Info</h2>
+			<div class="info-cards">
+				<!-- Recently Available Card -->
+				<button
+					class="info-card"
+					onclick={() => navigateToInfo('recent')}
+					aria-label="View recently available content"
+				>
+					{#if summaryLoading}
+						<div class="card-skeleton">
+							<div class="skeleton-line short"></div>
+							<div class="skeleton-line long"></div>
+						</div>
+					{:else}
+						<div class="card-icon recent">
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+								<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+							</svg>
+						</div>
+						<div class="card-content">
+							<span class="card-label">Recently Available</span>
+							<span class="card-count">{contentSummary?.recently_available?.count ?? 0}</span>
+							<span class="card-subtitle">Past 7 days</span>
+						</div>
+					{/if}
+				</button>
+
+				<!-- Currently Airing Card -->
+				<button
+					class="info-card"
+					onclick={() => navigateToInfo('airing')}
+					aria-label="View currently airing series"
+				>
+					{#if summaryLoading}
+						<div class="card-skeleton">
+							<div class="skeleton-line short"></div>
+							<div class="skeleton-line long"></div>
+						</div>
+					{:else}
+						<div class="card-icon airing">
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+								<path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM9 10l7 4-7 4z"/>
+							</svg>
+						</div>
+						<div class="card-content">
+							<span class="card-label">Currently Airing</span>
+							<span class="card-count">{contentSummary?.currently_airing?.count ?? 0}</span>
+							<span class="card-subtitle">In-progress series</span>
+						</div>
+					{/if}
+				</button>
+			</div>
+		</section>
 	{/if}
 </div>
 
@@ -407,6 +473,46 @@
 		margin-bottom: 2rem;
 	}
 
+	/* Info Section - distinct from issues */
+	.info-section {
+		margin-bottom: 2rem;
+	}
+
+	.info-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 1rem;
+		max-width: 520px; /* Limit to 2 cards */
+	}
+
+	.info-card {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1.25rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-left: 4px solid #10b981; /* Green accent border for info cards */
+		border-radius: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-align: left;
+		width: 100%;
+	}
+
+	.info-card:hover {
+		border-color: #10b981;
+		background: var(--bg-hover);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+
+	.card-subtitle {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		margin-top: 0.125rem;
+	}
+
 	.section-title {
 		font-size: 1.125rem;
 		font-weight: 600;
@@ -469,6 +575,17 @@
 	.card-icon.requests {
 		background: rgba(139, 92, 246, 0.1);
 		color: #8b5cf6;
+	}
+
+	/* Info card icons - green/teal theme to distinguish from issues */
+	.card-icon.recent {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
+	}
+
+	.card-icon.airing {
+		background: rgba(20, 184, 166, 0.1);
+		color: #14b8a6;
 	}
 
 	.card-content {

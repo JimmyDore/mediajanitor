@@ -72,10 +72,51 @@ class IssueCategorySummary(BaseModel):
     total_size_formatted: str = "0 B"
 
 
+class InfoCategorySummary(BaseModel):
+    """Summary for a single info category (not an issue)."""
+
+    count: int
+
+
 class ContentSummaryResponse(BaseModel):
-    """Response model for content summary with counts for all issue types."""
+    """Response model for content summary with counts for all issue types and info."""
 
     old_content: IssueCategorySummary
     large_movies: IssueCategorySummary
     language_issues: IssueCategorySummary
     unavailable_requests: IssueCategorySummary
+    # Info categories (not issues)
+    recently_available: InfoCategorySummary
+    currently_airing: InfoCategorySummary
+
+
+class RecentlyAvailableItem(BaseModel):
+    """Response model for a single recently available content item."""
+
+    jellyseerr_id: int
+    title: str
+    media_type: str  # "movie" or "tv"
+    availability_date: str
+    requested_by: str | None = None
+
+
+class RecentlyAvailableResponse(BaseModel):
+    """Response model for recently available content list."""
+
+    items: list[RecentlyAvailableItem]
+    total_count: int
+
+
+class CurrentlyAiringItem(BaseModel):
+    """Response model for a single currently airing series."""
+
+    jellyseerr_id: int
+    title: str
+    in_progress_seasons: list[dict[str, int | str]]
+
+
+class CurrentlyAiringResponse(BaseModel):
+    """Response model for currently airing series list."""
+
+    items: list[CurrentlyAiringItem]
+    total_count: int

@@ -1,6 +1,6 @@
 # Ralph Task Prompt
 
-@prd.json @progress.txt @CLAUDE.md @SUGGESTIONS.md
+@prd.json @progress.txt @CLAUDE.md
 
 ## Execution Loop
 
@@ -21,8 +21,10 @@
 7. Run frontend quality checks:
    - Unit tests: `cd frontend && npm run test`
    - Typecheck: `cd frontend && npm run check`
-8. If UI changed, write minimal E2E tests (Playwright)
-9. Run E2E tests: `cd frontend && npm run test:e2e`
+8. E2E tests: ONLY write for NEW routes/pages (smoke test that page loads)
+   - Do NOT write E2E for: form validation, API responses, loading states, toasts
+   - These belong in unit tests (vitest), not E2E
+9. Run E2E tests: `cd frontend && npm run test:e2e` (should be < 30 tests)
 10. If UI changed and browser tools available, visually verify
 11. Update prd.json: set `passes: true` for completed story
 12. Commit: `feat(scope): [US-X.X] description`

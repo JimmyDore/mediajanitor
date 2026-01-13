@@ -75,4 +75,4 @@ Thumbs.db
 *.sqlite3
 
 to_remove.txt
-.specstory/ralph-output.log
+.specstory/

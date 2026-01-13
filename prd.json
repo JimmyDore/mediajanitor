@@ -318,8 +318,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Info section with 2 cards (Recently Available, Currently Airing), /info/recent and /info/airing list views. Also cleaned up E2E tests (79 -> 20) and updated testing documentation."
     },
     {
       "id": "US-D.3",

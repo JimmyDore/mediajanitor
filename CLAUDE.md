@@ -326,30 +326,34 @@ npm run test:e2e:ui         # Interactive mode
 **CSS Variables**: Defined in `src/app.css` with light/dark mode support
 - Use `--text-primary`, `--bg-primary`, `--accent`, etc.
 
-### Testing Strategy
+### Testing Strategy (Testing Pyramid)
+
+**Target ratio: 70% unit tests, 20% integration, 10% E2E**
 
 1. **Backend Unit Tests** (pytest): Test API endpoints, services, database operations
    - Location: `backend/tests/`
    - Run: `cd backend && uv run pytest`
 
-2. **Frontend Unit Tests** (vitest): Test API contracts and business logic
+2. **Frontend Unit Tests** (vitest): Test API contracts, business logic, UI state
    - Location: `frontend/tests/`
    - Run: `cd frontend && npm run test`
    - **REQUIRED** for any page that makes API calls
    - Pattern: Mock `fetch`, verify request format and response handling
-   - Example: `login.test.ts`, `register.test.ts`
+   - **Test here**: Form validation, API responses, loading states, toasts, error handling
 
-3. **E2E Tests** (Playwright): UI smoke tests only
+3. **E2E Tests** (Playwright): **MINIMAL** smoke tests only (~20 tests max)
    - Location: `frontend/e2e/`
    - Run: `cd frontend && npm run test:e2e`
-   - Test that forms render, can be filled, navigation works
-   - Mock API responses to isolate UI testing
-   - NOT a substitute for unit tests
+   - **ONLY test**: Page loads, navigation works, auth redirects work
+   - **DO NOT test**: Form validation, API responses, loading states, toasts
+   - Keep E2E count LOW - they are slow and flaky
+   - No mock delays (`setTimeout`), no `waitForTimeout()`
 
 **When to write each:**
 - Backend changed → Backend unit tests (always)
 - Frontend API calls added → Frontend unit tests (always)
-- Frontend UI changed → E2E tests (smoke tests only)
+- **New route/page added** → ONE E2E smoke test (page renders)
+- Frontend UI state/validation → Frontend unit tests (NOT E2E)
 
 ## Environment Variables
 
