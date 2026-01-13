@@ -41,10 +41,10 @@ Instead of one tab per feature (Old Content, Large Movies, Language Issues, etc.
 │  │  Requests    │                                               │
 │  └──────────────┘                                               │
 │  ───────────────────────────────────────────────────────────    │
-│  ┌──────────────┐ ┌──────────────┐                              │
-│  │  Recently    │ │   Airing     │   INFO (not problems)        │
-│  │  Available   │ │   Series     │                              │
-│  └──────────────┘ └──────────────┘                              │
+│  ┌──────────────┐                                               │
+│  │  Recently    │   INFO (not problems)                         │
+│  │  Available   │                                               │
+│  └──────────────┘                                               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼ Click card → Unified Issues View
@@ -58,7 +58,7 @@ Instead of one tab per feature (Old Content, Large Movies, Language Issues, etc.
 
 **Feature categorization:**
 - **ISSUES** (problems to resolve): Old Content, Large Movies, Language Problems, Unavailable Requests
-- **INFO** (informational): Recently Available, Currently Airing Series
+- **INFO** (informational): Recently Available
 
 **Navigation:** `Dashboard | Issues | Whitelist | Settings`
 
@@ -501,20 +501,20 @@ Transform the dashboard from a simple status page into a unified library health 
 
 #### US-D.2: Dashboard Info Section ✅
 **As a** user
-**I want** to see informational content (recently available, airing series)
+**I want** to see informational content (recently available)
 **So that** I can stay informed about my library without these being "problems"
 
 **Acceptance Criteria:**
 - [x] Separate "Info" section below issue cards
-- [x] Two cards: Recently Available (past 7 days), Currently Airing
-- [x] Cards show item count
-- [x] Click → dedicated simple list view for each
+- [x] Recently Available card (past 7 days)
+- [x] Card shows item count
+- [x] Click → dedicated simple list view
 - [x] Visually distinct from issue cards (different color/style)
 - [x] Typecheck passes
 - [x] Unit tests pass
 - [x] Verify in browser using browser tools
 
-**Note:** Completed 2026-01-13 - Info section with 2 cards (Recently Available, Currently Airing), /info/recent and /info/airing list views. Also cleaned up E2E tests (79 -> 20) and updated testing documentation.
+**Note:** Completed 2026-01-13 - Info section with Recently Available card, /info/recent list view. Also cleaned up E2E tests (79 -> 20) and updated testing documentation.
 
 ---
 
@@ -586,8 +586,7 @@ Transform the dashboard from a simple status page into a unified library health 
     "large_movies": { "count": 18, "total_size_bytes": 335007744000 },
     "language_issues": { "count": 34 },
     "unavailable_requests": { "count": 12 },
-    "recently_available": { "count": 15 },
-    "currently_airing": { "count": 8 }
+    "recently_available": { "count": 15 }
   }
   ```
 - Unified issues endpoint: `GET /api/content/issues?filter=all|old|large|language|requests`
@@ -739,11 +738,10 @@ Display information about media requests from Jellyseerr.
 
 **Integration Note:** This epic has two categories:
 - **ISSUE (US-6.1):** Unavailable requests are problems → displayed in **unified issues view**
-- **INFO (US-6.2, US-6.3):** Airing series and recently available are informational → displayed in **dashboard info section** with dedicated simple views
+- **INFO (US-6.3):** Recently available is informational → displayed in **dashboard info section** with dedicated simple view
 
 ### Goals
 - Show unavailable/pending requests (as issues)
-- Track currently airing series (informational)
 - Display recently available content (informational)
 
 ### User Stories
@@ -765,27 +763,6 @@ Display information about media requests from Jellyseerr.
 - [x] Unit tests pass
 
 **Note:** Completed 2026-01-13 - 26 unavailable requests found in test data. Filters future/recent releases per original script.
-
----
-
-#### US-6.2: Currently Airing Series (INFO)
-**As a** user
-**I want** to see series that are currently airing
-**So that** I know new episodes are coming
-
-**Type:** INFO feature (not an issue)
-
-**Acceptance Criteria:**
-- [ ] **Refer to `original_script.py` function: `analyze_tv_series_seasons` (in_progress_seasons)**
-- [ ] Backend service `get_currently_airing()` returns in-progress series (reads from cached DB)
-- [ ] `/api/content/summary` endpoint includes `currently_airing` count
-- [ ] Dedicated simple list view at `/info/airing`
-- [ ] Each item shows: title, current season, episodes aired vs total
-- [ ] Sorted by next air date
-- [ ] Accessed from dashboard Info section card
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
 
 ---
 
@@ -840,6 +817,110 @@ GET /api/v1/movie/{tmdbId} or /api/v1/tv/{tmdbId}
 ```
 - Filter unavailable: `status == 5` (unavailable) or `status == 1` (pending)
 - For TV: check which seasons are available via media details
+
+---
+
+## Epic V: Validation Against Original Script
+
+### Overview
+Validate that the app's content analysis features produce correct results by comparing against `original_script.py` (the battle-tested source of truth). Use `/original-script` skill for debugging.
+
+### Goals
+- Verify each content analysis feature matches original script logic
+- Identify and fix any filtering/calculation bugs
+- Ensure counts match when accounting for expected differences
+
+### Important: Whitelist Differences Are BY DESIGN
+
+The original script uses **substring matching** against a hardcoded allowlist (~107 terms protecting ~144 items). This is a **HACK** that does NOT scale for multi-tenant SaaS.
+
+The app correctly uses **exact jellyfin_id matching** against a per-user database whitelist. This difference is **intentional and correct**.
+
+**DO NOT** implement substring matching. When validating, compare only the filtering logic, not whitelist behavior.
+
+### User Stories
+
+#### US-V.1: Validate Old Content Filtering Logic
+**As a** developer
+**I want** to verify the old/unwatched content logic matches the original script
+**So that** I can trust the app produces correct results
+
+**Acceptance Criteria:**
+- [ ] Run `/original-script` snippet for old content, note: total items, old items count, protected count
+- [ ] Run app API `GET /api/content/issues?filter=old`, note: total_count
+- [ ] Expected: app count = original (old items + protected items) since app has empty whitelist
+- [ ] If counts differ (excluding whitelist): investigate `is_old_or_unwatched()` in `content.py`
+- [ ] **Known issue to check**: min_age_months logic - original applies only to unplayed items, verify app does same
+- [ ] Document any bugs found in SUGGESTIONS.md
+- [ ] Fix identified bugs (separate commits per bug)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-V.2: Validate Large Movies Detection
+**As a** developer
+**I want** to verify the large movies detection matches the original script
+**So that** users see the same large movies in both
+
+**Acceptance Criteria:**
+- [ ] Run `/original-script` snippet for large movies, note count
+- [ ] Run app API `GET /api/content/issues?filter=large`, note: total_count
+- [ ] Counts should match (no whitelist involved for large movies)
+- [ ] If counts differ: investigate `is_large_movie()` in `content.py`
+- [ ] Verify threshold is 13GB in both
+- [ ] Document any bugs found in SUGGESTIONS.md
+- [ ] Fix identified bugs
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-V.3: Validate Language Issues Detection
+**As a** developer
+**I want** to verify the language issues detection matches the original script
+**So that** users see the same language problems in both
+
+**Acceptance Criteria:**
+- [ ] Run `/original-script` snippet for language issues, note count
+- [ ] Run app API `GET /api/content/issues?filter=language`, note: total_count
+- [ ] Compare counts (accounting for french-only and language-exempt whitelists)
+- [ ] If counts differ: investigate `check_audio_languages()` in `content.py`
+- [ ] Verify language codes checked: eng/en for English, fre/fra/fr for French
+- [ ] Document any bugs found in SUGGESTIONS.md
+- [ ] Fix identified bugs
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+#### US-V.4: Validate Unavailable Requests Detection
+**As a** developer
+**I want** to verify the unavailable requests detection matches the original script
+**So that** users see the same pending/unavailable requests in both
+
+**Acceptance Criteria:**
+- [ ] Run `/original-script` snippet for unavailable requests, note count
+- [ ] Run app API `GET /api/content/issues?filter=requests`, note: total_count
+- [ ] Counts should match exactly (no whitelist involved)
+- [ ] If counts differ: investigate `get_unavailable_requests()` in `content.py`
+- [ ] Verify status codes: original uses status != 5 (Available)
+- [ ] Verify FILTER_FUTURE_RELEASES and FILTER_RECENT_RELEASES logic matches
+- [ ] Document any bugs found in SUGGESTIONS.md
+- [ ] Fix identified bugs
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Non-Goals
+- Implementing substring whitelist matching (this is a HACK, not a feature)
+- Achieving exact 1:1 parity when whitelist differences exist
+- Validating UI rendering (focus on backend logic only)
+
+### Technical Considerations
+- Use `/original-script` skill for all comparisons
+- Run `export $(cat .env | xargs)` before running original script snippets
+- App must be running locally (`docker-compose up`) for API comparison
+- Trigger sync before comparing: `POST /api/sync` to ensure fresh data
 
 ---
 
@@ -1003,8 +1084,13 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-5.3: Exempt Content from Language Checks
 - [x] US-6.1: Unavailable Requests Backend Service
 
-### Next Up - Info Features (2 stories) **← START HERE**
-- [ ] US-6.2: View Currently Airing Series (info section)
+### Next Up - Validation (4 stories) **← START HERE**
+- [ ] US-V.1: Validate Old Content Filtering Logic
+- [ ] US-V.2: Validate Large Movies Detection
+- [ ] US-V.3: Validate Language Issues Detection
+- [ ] US-V.4: Validate Unavailable Requests Detection
+
+### Info Features (1 story)
 - [ ] US-6.3: View Recently Available Content (info section)
 
 ### Later (6 stories)
