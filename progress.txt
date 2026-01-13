@@ -348,10 +348,43 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-3.3] add manage content whitelist
 
+### 2026-01-13: US-D.1 - Dashboard Summary Cards
+- Created GET /api/content/summary endpoint returning counts for:
+  - old_content: Old/unwatched items with count and total size
+  - large_movies: Movies >13GB with count and total size
+  - language_issues: Placeholder (0) for future Epic 5
+  - unavailable_requests: Placeholder (0) for future Epic 6
+- Extended content models (app/models/content.py) with:
+  - IssueCategorySummary: count, total_size_bytes, total_size_formatted
+  - ContentSummaryResponse: Response with all 4 issue categories
+- Extended content service (app/services/content.py) with:
+  - is_large_movie(): Checks if movie exceeds 13GB threshold
+  - get_content_summary(): Calculates counts for all issue types
+  - LARGE_MOVIE_SIZE_THRESHOLD_GB constant (13GB)
+- Redesigned dashboard page (+page.svelte) with:
+  - Dashboard header with title, welcome message, sync controls
+  - Issues section with 4 summary cards in responsive grid
+  - Each card shows: color-coded icon, label, count, size (where applicable)
+  - Cards clickable -> navigate to /issues?filter=<type>
+  - Loading skeleton while fetching summary data
+  - Cards refresh after sync to show updated counts
+- Card icons with distinct colors:
+  - Old Content: red clock icon
+  - Large Movies: yellow storage icon
+  - Language Issues: blue translate icon
+  - Unavailable Requests: purple alert icon
+- Backend tests: 9 new tests for summary endpoint
+- Frontend tests: 6 new tests for summary API integration
+- E2E tests: 8 new tests for summary cards UI
+- Verified in Docker: All cards display correctly with real data (221 old content, 741.3 GB)
+- Files changed: models/content.py, routers/content.py, services/content.py, +page.svelte, test_content.py, content-summary.test.ts, dashboard-summary.spec.ts
+- Commits:
+  - feat(dashboard): [US-D.1] add summary cards with issue counts
+
 ## Current Status
 
-**Phase**: Epic 4 - Large Movies (In Progress)
-**Next US**: US-4.1 - View Large Movies
+**Phase**: Epic D - Dashboard (In Progress)
+**Next US**: US-D.2 - Dashboard Info Section
 
 ## Notes
 
