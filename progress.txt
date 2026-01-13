@@ -409,10 +409,40 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(dashboard): [US-D.2] add info section with recently available and currently airing
 
+### 2026-01-13: US-D.3 - Unified Issues View
+- Created GET /api/content/issues endpoint with filter param support
+  - Accepts filter: old, large, language, requests
+  - Returns items with issues array containing all applicable issue types
+  - Items sorted by size (largest first) by default
+  - Language and requests filters return empty (placeholder for US-5.1/US-6.1)
+- Added Pydantic models: ContentIssueItem, ContentIssuesResponse
+- Extended content service with:
+  - get_item_issues(): Determines all issues for a content item
+  - get_content_issues(): Returns filtered/sorted issues list
+- Created /issues frontend route with:
+  - Filter tabs: All, Old, Large, Language, Requests
+  - URL filter param support (/issues?filter=old)
+  - Sortable columns (name, size, date, issue count)
+  - Issue badges showing multiple issues per item
+  - Protect button for old content items
+  - Summary bar with total count and size
+  - Responsive design
+- Updated navigation header: Old Content -> Issues
+- Added redirect from /content/old-unwatched to /issues?filter=old
+- Added integration test suite (tests/test_integration.py):
+  - Tests against live Docker instance using .env.example credentials
+  - 14 tests covering auth, issues, summary, sync, whitelist endpoints
+- Backend tests: 13 new tests for issues endpoint
+- Frontend tests: 12 new tests for issues API integration
+- Verified in Docker: All 14 integration tests pass
+- Files changed: models/content.py, routers/content.py, services/content.py, test_content.py, test_integration.py, Header.svelte, old-unwatched/+page.svelte, issues/+page.svelte, issues.test.ts, prd.json
+- Commits:
+  - feat(issues): [US-D.3] add unified issues view with filter tabs
+
 ## Current Status
 
 **Phase**: Epic D - Dashboard (In Progress)
-**Next US**: US-D.3 - Unified Issues View
+**Next US**: US-D.4 - Multi-Issue Content Support
 
 ## Notes
 
