@@ -61,7 +61,7 @@ async def get_issues(
     db: Annotated[AsyncSession, Depends(get_db)],
     filter: Annotated[
         str | None,
-        Query(description="Filter by issue type: old, large, language, requests"),
+        Query(description="Filter by issue type: old, large, language, requests, multi"),
     ] = None,
 ) -> ContentIssuesResponse:
     """Get unified list of all content with issues for the current user.
@@ -71,6 +71,7 @@ async def get_issues(
     - large: Movies larger than 13GB
     - language: Content with language issues (not yet implemented)
     - requests: Unavailable Jellyseerr requests (not yet implemented)
+    - multi: Content with 2+ issues (worst offenders)
 
     Each item includes a list of all applicable issues.
     Results are sorted by size (largest first).

@@ -355,8 +355,8 @@
         "Unit tests pass"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-13 - Added filter=multi to API, Multi-Issue filter tab in frontend, sortable Issues column header"
     },
     {
       "id": "US-D.5",

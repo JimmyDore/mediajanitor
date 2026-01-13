@@ -2063,3 +2063,209 @@ class TestUnifiedIssuesEndpoint:
         data = response.json()
         # Unavailable requests not yet implemented (US-6.1)
         assert data["items"] == []
+
+
+class TestMultiIssueContent:
+    """Test multi-issue content support (US-D.4)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "multi@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_filter_multi_returns_only_items_with_multiple_issues(
+        self, client: TestClient
+    ) -> None:
+        """Should filter to only items with 2+ issues when filter=multi."""
+        token = self._get_auth_token(client, "multi-filter@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Item with only 1 issue (old, small)
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-single-issue",
+                name="Single Issue Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,  # 5GB - not large
+                played=False,
+            )
+            # Item with 2 issues (old AND large)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-multi-issue",
+                name="Multi Issue Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=20_000_000_000,  # 20GB - large
+                played=False,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=multi", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-multi-issue"
+        assert len(data["items"][0]["issues"]) >= 2
+        assert "old" in data["items"][0]["issues"]
+        assert "large" in data["items"][0]["issues"]
+
+    @pytest.mark.asyncio
+    async def test_multi_filter_excludes_whitelisted_from_old_count(
+        self, client: TestClient
+    ) -> None:
+        """Multi filter should respect whitelist - whitelisted items won't have old issue."""
+        token = self._get_auth_token(client, "multi-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Large old movie (would have 2 issues: old + large)
+            # But if whitelisted, only has "large" issue
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-wl-large",
+                name="Whitelisted Large Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=20_000_000_000,  # 20GB - large
+                played=False,
+            )
+            # Add to whitelist
+            whitelist = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-wl-large",
+                name="Whitelisted Large Movie",
+                media_type="Movie",
+            )
+            session.add_all([item, whitelist])
+            await session.commit()
+
+        # With whitelist, item only has "large" issue (not old), so won't appear in multi filter
+        response = client.get("/api/content/issues?filter=multi", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # The whitelisted large movie should NOT appear - it only has 1 issue (large)
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_content_with_all_issues_returned_for_multi(
+        self, client: TestClient
+    ) -> None:
+        """Content with multiple issue types should all be returned."""
+        token = self._get_auth_token(client, "multi-all@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Item 1: old + large
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-old-large",
+                name="Old Large Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=25_000_000_000,  # 25GB
+                played=False,
+            )
+            # Item 2: old only
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-old-only",
+                name="Old Only Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,  # 5GB
+                played=False,
+            )
+            # Item 3: large only (not old - recently watched)
+            item3 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large-only",
+                name="Large Only Movie",
+                media_type="Movie",
+                size_bytes=18_000_000_000,  # 18GB
+                played=True,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+            )
+            session.add_all([item1, item2, item3])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=multi", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only item1 has 2 issues
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-old-large"
+
+    @pytest.mark.asyncio
+    async def test_sort_by_issue_count_in_api(
+        self, client: TestClient
+    ) -> None:
+        """Verifying items are returned, frontend handles issue count sorting."""
+        token = self._get_auth_token(client, "sort-issues@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            # Item with 1 issue (old only)
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-one-issue",
+                name="One Issue Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=3_000_000_000,  # 3GB
+                played=False,
+            )
+            # Item with 2 issues (old + large)
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-two-issues",
+                name="Two Issues Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=20_000_000_000,  # 20GB - also large
+                played=False,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Both items returned with correct issue counts
+        assert data["total_count"] == 2
+        # Find the items by ID
+        item_1_data = next(i for i in data["items"] if i["jellyfin_id"] == "movie-one-issue")
+        item_2_data = next(i for i in data["items"] if i["jellyfin_id"] == "movie-two-issues")
+        assert len(item_1_data["issues"]) == 1
+        assert len(item_2_data["issues"]) == 2

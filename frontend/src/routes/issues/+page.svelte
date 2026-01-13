@@ -22,7 +22,7 @@
 		total_size_formatted: string;
 	}
 
-	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
+	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests' | 'multi';
 	type SortField = 'name' | 'size' | 'date' | 'issues';
 	type SortOrder = 'asc' | 'desc';
 
@@ -38,7 +38,7 @@
 	// Initialize filter from URL
 	$effect(() => {
 		const urlFilter = $page.url.searchParams.get('filter');
-		if (urlFilter && ['all', 'old', 'large', 'language', 'requests'].includes(urlFilter)) {
+		if (urlFilter && ['all', 'old', 'large', 'language', 'requests', 'multi'].includes(urlFilter)) {
 			activeFilter = urlFilter as FilterType;
 		}
 	});
@@ -48,7 +48,8 @@
 		old: 'Old',
 		large: 'Large',
 		language: 'Language',
-		requests: 'Requests'
+		requests: 'Requests',
+		multi: 'Multi-Issue'
 	};
 
 	function formatPath(path: string | null): string {
@@ -341,7 +342,9 @@
 						Name {sortField === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 					</button>
 					<span class="col-type">Type</span>
-					<span class="col-issues">Issues</span>
+					<button class="col-issues sortable" onclick={() => toggleSort('issues')}>
+						Issues {sortField === 'issues' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+					</button>
 					<button class="col-size sortable" onclick={() => toggleSort('size')}>
 						Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 					</button>

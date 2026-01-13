@@ -511,7 +511,7 @@ async def get_content_issues(
     Args:
         db: Database session
         user_id: User ID from JWT
-        filter_type: Optional filter - "old", "large", "language", "requests"
+        filter_type: Optional filter - "old", "large", "language", "requests", "multi"
 
     Returns items sorted by size (largest first).
     """
@@ -557,6 +557,8 @@ async def get_content_issues(
         if filter_type == "old" and "old" not in issues:
             continue
         if filter_type == "large" and "large" not in issues:
+            continue
+        if filter_type == "multi" and len(issues) < 2:
             continue
 
         items_with_issues.append((item, issues))
