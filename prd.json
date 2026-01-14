@@ -955,6 +955,24 @@
       "priority": 305,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-14.1",
+      "title": "In-App FAQ Help Page",
+      "story": "As a user, I want an in-app help page with FAQs, so that I can understand how to use all features without external documentation",
+      "acceptanceCriteria": [
+        "New route /help accessible from navigation header",
+        "FAQ sections covering: Getting Started, Dashboard, Issues, Whitelists, Settings",
+        "Collapsible FAQ items (click question to reveal answer)",
+        "Search/filter functionality to find specific topics",
+        "Help link added to navigation header (question mark icon)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 400,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

@@ -1663,6 +1663,50 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 
 ---
 
+## Epic 14: User Documentation
+
+### Overview
+Provide in-app help documentation in FAQ format to help users understand and use all features effectively.
+
+### Goals
+- Help new users get started quickly
+- Answer common questions about each feature
+- Reduce support burden with self-service documentation
+
+### User Stories
+
+#### US-14.1: In-App FAQ Help Page
+**As a** user
+**I want** an in-app help page with FAQs
+**So that** I can understand how to use all features without external documentation
+
+**Acceptance Criteria:**
+- [ ] New route `/help` accessible from navigation header
+- [ ] FAQ sections covering:
+  - Getting Started (connect Jellyfin/Jellyseerr, first sync)
+  - Dashboard (what each card means, how counts are calculated)
+  - Issues (Old Content, Large Movies, Language Issues, Unavailable Requests)
+  - Whitelists (how to protect content, temporary vs permanent, managing whitelists)
+  - Settings (threshold configuration, what each setting affects)
+- [ ] Collapsible FAQ items (click question to reveal answer)
+- [ ] Search/filter functionality to find specific topics
+- [ ] Help link added to navigation header (question mark icon)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+### Non-Goals
+- API documentation (user docs only)
+- Video tutorials
+- External documentation site
+
+### Technical Considerations
+- Use collapsible `<details>` elements or accordion component
+- FAQ content can be stored in a static JSON/TS file for easy updates
+- Consider adding contextual help links from other pages to relevant FAQ sections
+
+---
+
 ## Checklist Summary
 
 ### Completed ✅ (47 stories)
@@ -1714,7 +1758,7 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 - [x] US-M.4: Trust Section
 - [x] US-M.5: Auth Page CTAs
 
-### Pending (11 stories)
+### Pending (12 stories)
 - [ ] US-D.6: Inline Badge Actions
 - [ ] US-12.1: Add Threshold Help Text
 - [ ] US-12.2: Remove Multi-Issue Tab
@@ -1726,3 +1770,4 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 - [ ] US-13.4: Add Jellyseerr Request Whitelist (Backend)
 - [ ] US-13.5: Add Request Whitelist UI
 - [ ] US-13.6: Setting to Include/Exclude Unreleased Requests
+- [ ] US-14.1: In-App FAQ Help Page
