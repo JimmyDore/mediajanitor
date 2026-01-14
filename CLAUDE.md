@@ -222,27 +222,83 @@ async_engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=Sta
 TestingAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
 
-### Database Migrations (Alembic)
+### Database Migrations (Alembic) - CRITICAL WORKFLOW
 
-**CRITICAL**: Production database schema diverges from models if migrations are missing. This causes 500 errors like `OperationalError: no such column`. The initial schema migration was created AFTER some columns were added to models, so production may be missing columns that exist in the model.
+**⚠️ EVERY database model change MUST have a migration. No exceptions.**
 
-**When to create migrations**: Any time you modify `app/database.py` models (add/remove columns, tables, constraints), you MUST create a migration.
+Production database schema diverges from models if migrations are missing. This causes:
+- 500 errors: `OperationalError: no such column`
+- Docker startup failures: `duplicate column name` (if migration created after column exists)
 
-**Creating a migration**:
-```bash
-cd backend
-uv run alembic revision --autogenerate -m "describe_the_change"
+#### The Correct Workflow (MUST FOLLOW)
+
+**Step 1: Modify the model** in `app/database.py`
+```python
+# Add your new column
+class UserSettings(Base):
+    new_column: Mapped[str | None] = mapped_column(String(100), nullable=True)
 ```
 
-**Review the generated migration** in `backend/alembic/versions/` before committing. Autogenerate is not perfect - check:
+**Step 2: Create migration IMMEDIATELY** (before any Docker runs)
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "add_new_column_to_user_settings"
+```
+
+**Step 3: Review the generated migration** in `backend/alembic/versions/`
 - Column types are correct
 - Nullable settings match your model
-- No unintended changes detected
+- No unintended changes (alembic sometimes detects phantom changes)
 
-**Applying migrations locally**:
+**Step 4: Test migration locally**
 ```bash
 cd backend
 uv run alembic upgrade head
+```
+
+**Step 5: THEN run Docker** (Docker applies migrations on startup)
+```bash
+docker-compose up --build -d
+```
+
+#### Common Mistakes to Avoid
+
+| Mistake | Result | Fix |
+|---------|--------|-----|
+| Add column to model, run Docker, THEN create migration | `duplicate column` error | Delete local DB, recreate migration |
+| Forget to create migration | Works locally (create_all), fails in prod | Create migration before deploying |
+| Create migration but don't commit it | Prod schema mismatch | Always commit migrations with model changes |
+
+#### If You Get "duplicate column" Error
+
+The database already has the column (from a previous run or create_all). Fix:
+```bash
+# Option 1: Reset local database
+rm -f data/plex_dashboard.db
+docker-compose down -v
+docker-compose up --build -d
+
+# Option 2: Stamp to skip the broken migration (if column exists)
+cd backend
+uv run alembic stamp head
+```
+
+#### Migration Commands Reference
+```bash
+# Create new migration
+uv run alembic revision --autogenerate -m "describe_change"
+
+# Apply all pending migrations
+uv run alembic upgrade head
+
+# Check current revision
+uv run alembic current
+
+# View migration history
+uv run alembic history --verbose
+
+# Stamp database (mark as migrated without running)
+uv run alembic stamp head
 ```
 
 **Docker handles migrations automatically**: The entrypoint script runs `alembic upgrade head` before starting the app.
@@ -250,16 +306,9 @@ uv run alembic upgrade head
 **Migration best practices**:
 - One migration per logical change
 - Use descriptive names: `add_expires_at_to_whitelists`, `create_notifications_table`
-- Test migrations on a copy of production data when possible
+- Commit migration file in SAME commit as model change
 - Never edit a migration after it's been applied to production
 - If you need to fix a migration, create a new one
-
-**Resetting local database** (if needed):
-```bash
-# Remove the old database and let migrations recreate it
-rm -f data/plex_dashboard.db
-docker-compose up --build
-```
 
 ### Async/Sync Consistency (CRITICAL)
 
