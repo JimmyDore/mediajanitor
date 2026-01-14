@@ -40,6 +40,15 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            sleep 10
-            curl -f http://localhost:8080/api/hello || exit 1
-            echo "Health check passed!"
+            echo "Waiting for backend to be ready..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:8080/api/hello > /dev/null 2>&1; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              echo "Attempt $i/30 - waiting 5s..."
+              sleep 5
+            done
+            echo "Health check failed after 30 attempts"
+            docker-compose -f ~/mediajanitor/docker-compose.yml logs backend
+            exit 1
