@@ -222,6 +222,43 @@ async_engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=Sta
 TestingAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
 
+### Database Migrations (Alembic)
+
+**When to create migrations**: Any time you modify `app/database.py` models (add/remove columns, tables, constraints), you MUST create a migration.
+
+**Creating a migration**:
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "describe_the_change"
+```
+
+**Review the generated migration** in `backend/alembic/versions/` before committing. Autogenerate is not perfect - check:
+- Column types are correct
+- Nullable settings match your model
+- No unintended changes detected
+
+**Applying migrations locally**:
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
+**Docker handles migrations automatically**: The entrypoint script runs `alembic upgrade head` before starting the app.
+
+**Migration best practices**:
+- One migration per logical change
+- Use descriptive names: `add_expires_at_to_whitelists`, `create_notifications_table`
+- Test migrations on a copy of production data when possible
+- Never edit a migration after it's been applied to production
+- If you need to fix a migration, create a new one
+
+**Resetting local database** (if needed):
+```bash
+# Remove the old database and let migrations recreate it
+rm -f data/plex_dashboard.db
+docker-compose up --build
+```
+
 ### Async/Sync Consistency (CRITICAL)
 
 **Always use async sessions in tests to match production:**
