@@ -1020,10 +1020,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - fix(sync): [US-13.1] extract titles from embedded request data
 
+### 2026-01-14: US-13.2 - Fix Frontend Request Item Display
+- Backend: Unified request/content response to use ContentIssueItem
+- Added requested_by, request_date, missing_seasons fields to model
+- Frontend: Request items now display:
+  - Title correctly (uses name field)
+  - "by {requester}" next to title
+  - Missing seasons for TV shows (S1, S2, S3...)
+  - Request date (e.g. "3mo ago") instead of watched date
+  - Dash for size column (requests have no size)
+  - Working TMDB link for both movies and TV
+- Header changes to "Requested" when filtering by requests
+- Updated 6 tests for new unified response format
+- 201 backend + 126 frontend tests pass, typecheck clean
+- Files changed: backend/app/models/content.py, backend/app/routers/content.py, backend/tests/test_content.py, frontend/src/routes/issues/+page.svelte, prd.json
+- Commits:
+  - feat(ui): [US-13.2] improve request item display in issues view
+
 ## Current Status
 
 **Phase**: Epic 13 - Requests Improvements (In Progress)
-**Total Stories**: 52 stories (46 passes: true, 6 remaining)
+**Total Stories**: 52 stories (47 passes: true, 5 remaining)
 
 ## Notes
 

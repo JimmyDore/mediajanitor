@@ -134,7 +134,7 @@ class ContentIssueItem(BaseModel):
 
     jellyfin_id: str
     name: str
-    media_type: str  # "Movie" or "Series"
+    media_type: str  # "Movie" or "Series" or "movie" or "tv"
     production_year: int | None
     size_bytes: int | None
     size_formatted: str
@@ -144,6 +144,10 @@ class ContentIssueItem(BaseModel):
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
     tmdb_id: str | None = None  # TMDB ID for external links
     imdb_id: str | None = None  # IMDB ID for external links
+    # Request-specific fields (only populated for items with "request" issue)
+    requested_by: str | None = None  # Who requested it
+    request_date: str | None = None  # When it was requested
+    missing_seasons: list[int] | None = None  # For TV shows only - which seasons are missing
 
 
 class ContentIssuesResponse(BaseModel):

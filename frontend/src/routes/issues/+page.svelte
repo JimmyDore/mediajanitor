@@ -16,6 +16,10 @@
 		language_issues: string[] | null;
 		tmdb_id: string | null;
 		imdb_id: string | null;
+		// Request-specific fields
+		requested_by: string | null;
+		request_date: string | null;
+		missing_seasons: number[] | null;
 	}
 
 	interface ContentIssuesResponse {
@@ -131,6 +135,10 @@
 		multi: 'Multi-Issue'
 	};
 
+	function isRequestItem(item: ContentIssueItem): boolean {
+		return item.issues.includes('request');
+	}
+
 	function formatLastWatched(lastPlayed: string | null): string {
 		if (!lastPlayed) return 'Never';
 		try {
@@ -140,6 +148,22 @@
 			if (daysAgo > 365) return `${Math.floor(daysAgo / 365)}y`;
 			if (daysAgo > 30) return `${Math.floor(daysAgo / 30)}mo`;
 			return `${daysAgo}d`;
+		} catch {
+			return '?';
+		}
+	}
+
+	function formatRequestDate(requestDate: string | null): string {
+		if (!requestDate) return '—';
+		try {
+			const date = new Date(requestDate);
+			const now = new Date();
+			const daysAgo = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+			if (daysAgo > 365) return `${Math.floor(daysAgo / 365)}y ago`;
+			if (daysAgo > 30) return `${Math.floor(daysAgo / 30)}mo ago`;
+			if (daysAgo === 0) return 'Today';
+			if (daysAgo === 1) return 'Yesterday';
+			return `${daysAgo}d ago`;
 		} catch {
 			return '?';
 		}
@@ -285,7 +309,8 @@
 
 	function getTmdbUrl(item: ContentIssueItem): string | null {
 		if (!item.tmdb_id) return null;
-		const mediaType = item.media_type === 'Movie' ? 'movie' : 'tv';
+		// Handle both Jellyfin (Movie/Series) and Jellyseerr (movie/tv) media types
+		const mediaType = item.media_type.toLowerCase() === 'movie' ? 'movie' : 'tv';
 		return `https://www.themoviedb.org/${mediaType}/${item.tmdb_id}`;
 	}
 
@@ -352,8 +377,13 @@
 				case 'name': comparison = a.name.localeCompare(b.name); break;
 				case 'size': comparison = (a.size_bytes || 0) - (b.size_bytes || 0); break;
 				case 'date':
-					const dateA = a.last_played_date ? new Date(a.last_played_date).getTime() : 0;
-					const dateB = b.last_played_date ? new Date(b.last_played_date).getTime() : 0;
+					// For requests, use request_date; for content, use last_played_date
+					const dateA = a.request_date
+						? new Date(a.request_date).getTime()
+						: (a.last_played_date ? new Date(a.last_played_date).getTime() : 0);
+					const dateB = b.request_date
+						? new Date(b.request_date).getTime()
+						: (b.last_played_date ? new Date(b.last_played_date).getTime() : 0);
 					comparison = dateA - dateB;
 					break;
 				case 'issues': comparison = a.issues.length - b.issues.length; break;
@@ -429,7 +459,7 @@
 							</th>
 							<th class="col-watched">
 								<button class="sort-btn" onclick={() => toggleSort('date')}>
-									Watched {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									{activeFilter === 'requests' ? 'Requested' : 'Watched'} {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
 						</tr>
@@ -442,6 +472,11 @@
 										<span class="item-name">{item.name}</span>
 										{#if item.production_year}
 											<span class="item-year">{item.production_year}</span>
+										{/if}
+										{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
+											<span class="missing-seasons" title="Missing seasons">
+												S{item.missing_seasons.join(', S')}
+											</span>
 										{/if}
 										<span class="external-links">
 											{#if getTmdbUrl(item)}
@@ -459,6 +494,9 @@
 												</a>
 											{/if}
 										</span>
+										{#if isRequestItem(item) && item.requested_by}
+											<span class="requested-by">by {item.requested_by}</span>
+										{/if}
 									</div>
 								</td>
 								<td class="col-issues">
@@ -528,9 +566,19 @@
 										{/each}
 									</div>
 								</td>
-								<td class="col-size">{item.size_formatted}</td>
-								<td class="col-watched" class:never={!item.last_played_date}>
-									{formatLastWatched(item.last_played_date)}
+								<td class="col-size">
+									{#if isRequestItem(item)}
+										<span class="text-muted">—</span>
+									{:else}
+										{item.size_formatted}
+									{/if}
+								</td>
+								<td class="col-watched" class:never={!isRequestItem(item) && !item.last_played_date}>
+									{#if isRequestItem(item)}
+										{formatRequestDate(item.request_date)}
+									{:else}
+										{formatLastWatched(item.last_played_date)}
+									{/if}
 								</td>
 							</tr>
 						{/each}
@@ -751,6 +799,22 @@
 
 	.item-year {
 		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.missing-seasons {
+		font-size: var(--font-size-xs);
+		color: var(--warning);
+		font-weight: var(--font-weight-medium);
+	}
+
+	.requested-by {
+		font-size: var(--font-size-xs);
+		color: var(--text-muted);
+		font-style: italic;
+	}
+
+	.text-muted {
 		color: var(--text-muted);
 	}
 

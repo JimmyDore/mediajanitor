@@ -883,8 +883,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 301,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Unified request/content response format. Backend converts requests to ContentIssueItem. Frontend shows: title, 'by {requester}', missing seasons (S1, S2...), request date (e.g. '3mo ago'), dash for size, TMDB link. 201 backend + 126 frontend tests pass."
     },
     {
       "id": "US-13.3",

@@ -3409,8 +3409,10 @@ class TestUnavailableRequests:
         assert response.status_code == 200
         data = response.json()
         assert data["total_count"] == 1
-        assert data["items"][0]["title"] == "Unavailable Movie"
-        assert data["items"][0]["jellyseerr_id"] == 3001
+        # Requests now use unified format with 'name' instead of 'title'
+        assert data["items"][0]["name"] == "Unavailable Movie"
+        # jellyfin_id is prefixed with 'request-' for requests
+        assert data["items"][0]["jellyfin_id"] == "request-3001"
         assert data["items"][0]["media_type"] == "movie"
         assert "request" in data["items"][0]["issues"]
 
@@ -3451,7 +3453,8 @@ class TestUnavailableRequests:
         data = response.json()
         assert data["total_count"] == 1
         item = data["items"][0]
-        assert item["title"] == "Test Movie Request"
+        # Requests now use unified format with 'name' instead of 'title'
+        assert item["name"] == "Test Movie Request"
         assert item["media_type"] == "movie"
         assert item["requested_by"] == "JohnDoe"
         assert item["request_date"] == "2024-02-20T15:30:00Z"
@@ -3499,7 +3502,8 @@ class TestUnavailableRequests:
         data = response.json()
         assert data["total_count"] == 1
         item = data["items"][0]
-        assert item["title"] == "Test TV Series"
+        # Requests now use unified format with 'name' instead of 'title'
+        assert item["name"] == "Test TV Series"
         assert item["media_type"] == "tv"
         # Should include info about missing seasons
         assert "missing_seasons" in item
@@ -3551,7 +3555,8 @@ class TestUnavailableRequests:
         data = response.json()
         # Only past release should appear
         assert data["total_count"] == 1
-        assert data["items"][0]["title"] == "Past Movie"
+        # Requests now use unified format with 'name' instead of 'title'
+        assert data["items"][0]["name"] == "Past Movie"
 
     @pytest.mark.asyncio
     async def test_unavailable_requests_filters_recent_releases(
@@ -3599,7 +3604,8 @@ class TestUnavailableRequests:
         data = response.json()
         # Only old release should appear
         assert data["total_count"] == 1
-        assert data["items"][0]["title"] == "Old Release Movie"
+        # Requests now use unified format with 'name' instead of 'title'
+        assert data["items"][0]["name"] == "Old Release Movie"
 
 
 class TestProviderIds:
@@ -3850,7 +3856,8 @@ class TestProviderIds:
 
         assert len(data["items"]) == 1
         item_data = data["items"][0]
-        assert item_data["tmdb_id"] == 55555
+        # tmdb_id is now returned as string in unified format
+        assert item_data["tmdb_id"] == "55555"
 
 
 class TestWhitelistExpirationSchema:
