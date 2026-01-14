@@ -1380,6 +1380,289 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ---
 
+## Epic 12: Issues Page UX Improvements
+
+### Overview
+Fix usability issues on the Issues page and Settings page to improve clarity and fix bugs.
+
+### Goals
+- Make threshold settings self-explanatory
+- Simplify the Issues page by removing the Multi-Issue tab
+- Fix broken external links (TMDB/IMDb)
+- Ensure all content items display external links where data is available
+
+### User Stories
+
+#### US-12.1: Add Threshold Help Text
+**As a** user
+**I want** to understand what each threshold setting does
+**So that** I can configure them correctly
+
+**Acceptance Criteria:**
+- [ ] "Flag content unwatched for" shows help text: "Used by: Old tab"
+- [ ] "Don't flag content newer than" shows help text: "Used by: Old tab (for never-watched items)"
+- [ ] "Flag movies larger than" shows help text: "Used by: Large tab"
+- [ ] Help text appears in subtle gray below each input
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**File:** `frontend/src/routes/settings/+page.svelte`
+
+---
+
+#### US-12.2: Remove Multi-Issue Tab
+**As a** user
+**I want** a simpler Issues page
+**So that** I'm not confused by extra filters
+
+**Acceptance Criteria:**
+- [ ] Multi-Issue tab removed from Issues page filter tabs
+- [ ] URL parameter `?filter=multi` no longer supported (returns all issues or 400)
+- [ ] Backend API documentation updated to remove 'multi' filter option
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte` - Remove 'multi' from FilterType
+- `backend/app/routers/content.py` - Update API docs
+- `backend/app/services/content.py` - Remove multi filter logic
+
+---
+
+#### US-12.3: Fix TMDB Link Media Type
+**As a** user
+**I want** TMDB links to work correctly
+**So that** I can check content details on TMDB
+
+**Acceptance Criteria:**
+- [ ] TMDB links work for Movies (link to `/movie/{id}`)
+- [ ] TMDB links work for TV Shows (link to `/tv/{id}`)
+- [ ] Handle both uppercase ("Movie", "Series") and lowercase ("movie", "tv") media types
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: click TMDB link on Requests tab → correct page opens
+
+**Root cause:** `getTmdbUrl()` checks `item.media_type === 'Movie'` but request items use lowercase "movie".
+
+**File:** `frontend/src/routes/issues/+page.svelte` - Fix `getTmdbUrl()` function
+
+---
+
+#### US-12.4: Fix Missing Request Titles
+**As a** user
+**I want** to see titles for all requested content
+**So that** I know what each request is for
+
+**Acceptance Criteria:**
+- [ ] All items on Requests tab display a title
+- [ ] Fallback chain: title → media.title → media.name → originalTitle → "Unknown"
+- [ ] Verify sync service correctly stores titles from Jellyseerr API
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: Requests tab shows titles for all items
+
+**Investigation needed:** Determine if issue is in sync (data not stored) or in API response (data not returned).
+
+**Files:**
+- `backend/app/services/sync.py` - Verify title extraction in `cache_jellyseerr_requests()`
+- `backend/app/services/content.py` - Verify title returned in `get_unavailable_requests()`
+
+---
+
+#### US-12.5: External Links for All Issue Types
+**As a** user
+**I want** TMDB/IMDb links on all content items
+**So that** I can easily look up any flagged content
+
+**Acceptance Criteria:**
+- [ ] Old tab items show TMDB/IMDb links (where data exists)
+- [ ] Large tab items show TMDB/IMDb links (where data exists)
+- [ ] Language tab items show TMDB/IMDb links (where data exists)
+- [ ] Requests tab items show TMDB/IMDb links (already implemented, just needs fix from US-12.3)
+- [ ] External link icon appears next to title if TMDB or IMDb ID available
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: external links appear on items in all tabs
+
+**Note:** Backend already extracts TMDB/IMDb IDs via `extract_provider_ids()`. Frontend already has `getTmdbUrl()` and `getImdbUrl()` functions. This story ensures links render consistently across all tabs.
+
+**File:** `frontend/src/routes/issues/+page.svelte` - Verify link rendering logic applies to all items
+
+---
+
+### Non-Goals
+- Adding Jellyfin direct links (would require Jellyfin server URL per item)
+- Changing threshold functionality (just improving labels)
+
+### Technical Considerations
+- Media type normalization: Consider standardizing on lowercase in backend to avoid frontend case handling
+- Provider IDs availability: Not all Jellyfin items have TMDB/IMDb IDs in their metadata
+
+---
+
+## Epic 13: Jellyseerr Requests Improvements
+
+### Overview
+Fix bugs and add features to the Jellyseerr unavailable requests display. Currently, titles are missing, there's no way to hide requests, and no release date information is shown.
+
+### Goals
+- Display titles correctly for all unavailable requests
+- Show who requested each item and when it will be released
+- Allow users to hide requests they're intentionally waiting on
+- Provide setting to filter unreleased content
+
+### User Stories
+
+#### US-13.1: Fix Title Extraction in Jellyseerr Sync
+**As a** media server owner
+**I want** to see the titles of unavailable requests
+**So that** I know what content is pending
+
+**Acceptance Criteria:**
+- [ ] Titles display correctly for all unavailable requests
+- [ ] No separate API calls made for title fetching (use embedded data)
+- [ ] Title fallback chain: title → name → originalTitle → originalName → tmdbId
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Root cause:** The sync code makes separate API calls via `fetch_media_title()` which fail silently. Titles ARE included directly in the Jellyseerr `/api/v1/request` response's media object.
+
+**Files:**
+- `backend/app/services/sync.py` - Remove `fetch_media_title()`, update `cache_jellyseerr_requests()`
+
+---
+
+#### US-13.2: Fix Frontend Request Item Display
+**As a** media server owner
+**I want** to see request details including who requested it
+**So that** I can manage requests effectively
+
+**Acceptance Criteria:**
+- [ ] Request items display title correctly (use `title` field, not `name`)
+- [ ] "Requested By" column shows requester name
+- [ ] Missing seasons shown for TV requests
+- [ ] Request date shown (replaces "Watched" column for requests)
+- [ ] Size column hidden for requests (they have no size)
+- [ ] TMDB link works for requests
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Root cause:** Backend returns `UnavailableRequestItem` with `title` field, but frontend `ContentIssueItem` expects `name`. Template uses `item.name` which is undefined for requests.
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte` - Add `UnavailableRequestItem` interface, conditional rendering
+
+---
+
+#### US-13.3: Add Release Date Column to Requests
+**As a** media server owner
+**I want** to see the release date of unavailable requests
+**So that** I know when the content will become available
+
+**Acceptance Criteria:**
+- [ ] "Release Date" column displays in requests table
+- [ ] Date extracted from Jellyseerr response (`media.releaseDate` for movies, `media.firstAirDate` for TV)
+- [ ] Date stored in `CachedJellyseerrRequest` table during sync
+- [ ] Frontend displays date in readable format
+- [ ] Future release dates highlighted visually (e.g., different color or badge)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Database Migration:** Required (add `release_date` column)
+
+**Files:**
+- `backend/app/database.py` - Add `release_date` column to `CachedJellyseerrRequest`
+- `backend/app/services/sync.py` - Extract and store release date during sync
+- `backend/app/models/content.py` - Add `release_date` to `UnavailableRequestItem`
+- `backend/app/services/content.py` - Return release date in response
+- `frontend/src/routes/issues/+page.svelte` - Display release date column
+
+---
+
+#### US-13.4: Add Jellyseerr Request Whitelist (Backend)
+**As a** media server owner
+**I want** to hide specific requests for a duration
+**So that** I don't see requests I'm intentionally waiting on
+
+**Acceptance Criteria:**
+- [ ] New database table `jellyseerr_request_whitelist` with expiration support
+- [ ] API endpoints: POST/GET/DELETE `/api/whitelist/requests`
+- [ ] Whitelisted requests excluded from unavailable list
+- [ ] Expired whitelist entries no longer filter requests
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Database Migration:** Required (add `jellyseerr_request_whitelist` table)
+
+**Files:**
+- `backend/app/database.py` - Add `JellyseerrRequestWhitelist` model
+- `backend/app/routers/whitelist.py` - Add request whitelist endpoints
+- `backend/app/services/content.py` - Add whitelist filtering to `get_unavailable_requests()`
+- `backend/app/models/content.py` - Add `RequestWhitelistAddRequest` model
+
+---
+
+#### US-13.5: Add Request Whitelist UI
+**As a** media server owner
+**I want** to click a button to hide a request
+**So that** I can manage my request list from the UI
+
+**Acceptance Criteria:**
+- [ ] Hide button appears on each request item (eye-slash icon)
+- [ ] Duration picker opens (same as content: permanent, 3/6/12 months, custom)
+- [ ] Hidden request removed from list after confirmation
+- [ ] Loading state shown during API call
+- [ ] Toast notification on success/error
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte` - Add hide button, wire up to whitelist API
+
+---
+
+#### US-13.6: Setting to Include/Exclude Unreleased Requests
+**As a** media server owner
+**I want** to toggle whether unreleased content requests are shown
+**So that** I can focus on requests that should already be available
+
+**Acceptance Criteria:**
+- [ ] New boolean setting `show_unreleased_requests` in UserSettings (default: false)
+- [ ] Settings page shows toggle for "Show unreleased requests"
+- [ ] When false, requests with future release dates are hidden
+- [ ] When true, all requests are shown (with release date visible)
+- [ ] Setting persists in database
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Database Migration:** Required (add `show_unreleased_requests` column to UserSettings)
+
+**Files:**
+- `backend/app/database.py` - Add `show_unreleased_requests` to `UserSettings`
+- `backend/app/services/content.py` - Check setting in `get_unavailable_requests()` filter
+- `backend/app/routers/settings.py` - Add field to settings endpoint
+- `backend/app/models/settings.py` - Add field to settings models
+- `frontend/src/routes/settings/+page.svelte` - Add toggle to settings UI
+
+---
+
+### Non-Goals
+- Automatic request deletion from Jellyseerr (out of scope)
+- Request management (approve/deny) from this app
+- Notifications when requests become available
+
+### Technical Considerations
+- US-13.1 makes US-12.4 obsolete (same fix, more comprehensive)
+- Database migrations should be combined where possible to reduce migration count
+
+---
+
 ## Checklist Summary
 
 ### Completed ✅ (47 stories)
@@ -1431,5 +1714,15 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-M.4: Trust Section
 - [x] US-M.5: Auth Page CTAs
 
-### Pending (1 story)
+### Pending (11 stories)
 - [ ] US-D.6: Inline Badge Actions
+- [ ] US-12.1: Add Threshold Help Text
+- [ ] US-12.2: Remove Multi-Issue Tab
+- [ ] US-12.3: Fix TMDB Link Media Type
+- [ ] US-12.5: External Links for All Issue Types
+- [ ] US-13.1: Fix Title Extraction in Jellyseerr Sync (replaces US-12.4)
+- [ ] US-13.2: Fix Frontend Request Item Display
+- [ ] US-13.3: Add Release Date Column to Requests
+- [ ] US-13.4: Add Jellyseerr Request Whitelist (Backend)
+- [ ] US-13.5: Add Request Whitelist UI
+- [ ] US-13.6: Setting to Include/Exclude Unreleased Requests

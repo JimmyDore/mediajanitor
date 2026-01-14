@@ -851,6 +851,110 @@
       "priority": 204,
       "passes": true,
       "notes": "Completed 2026-01-14 - Register page: 'Get Started Free' headline, 'Create Free Account' button. Login page: clear 'Log In' button, 'Sign up' link. Consistent CSS variables with landing page. 126 frontend tests pass, typecheck clean."
+    },
+    {
+      "id": "US-13.1",
+      "title": "Fix Title Extraction in Jellyseerr Sync",
+      "story": "As a media server owner, I want to see the titles of unavailable requests, so that I know what content is pending",
+      "acceptanceCriteria": [
+        "Titles display correctly for all unavailable requests",
+        "No separate API calls made for title fetching (use embedded data)",
+        "Title fallback chain: title → name → originalTitle → originalName → tmdbId",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 300,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-13.2",
+      "title": "Fix Frontend Request Item Display",
+      "story": "As a media server owner, I want to see request details including who requested it, so that I can manage requests effectively",
+      "acceptanceCriteria": [
+        "Request items display title correctly (use title field, not name)",
+        "Requested By column shows requester name",
+        "Missing seasons shown for TV requests",
+        "Request date shown (replaces Watched column for requests)",
+        "Size column hidden for requests (they have no size)",
+        "TMDB link works for requests",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 301,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-13.3",
+      "title": "Add Release Date Column to Requests",
+      "story": "As a media server owner, I want to see the release date of unavailable requests, so that I know when the content will become available",
+      "acceptanceCriteria": [
+        "Release Date column displays in requests table",
+        "Date extracted from Jellyseerr response (media.releaseDate for movies, media.firstAirDate for TV)",
+        "Date stored in CachedJellyseerrRequest table during sync",
+        "Frontend displays date in readable format",
+        "Future release dates highlighted visually (e.g., different color or badge)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 302,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-13.4",
+      "title": "Add Jellyseerr Request Whitelist (Backend)",
+      "story": "As a media server owner, I want to hide specific requests for a duration, so that I don't see requests I'm intentionally waiting on",
+      "acceptanceCriteria": [
+        "New database table jellyseerr_request_whitelist with expiration support",
+        "API endpoints: POST/GET/DELETE /api/whitelist/requests",
+        "Whitelisted requests excluded from unavailable list",
+        "Expired whitelist entries no longer filter requests",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 303,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-13.5",
+      "title": "Add Request Whitelist UI",
+      "story": "As a media server owner, I want to click a button to hide a request, so that I can manage my request list from the UI",
+      "acceptanceCriteria": [
+        "Hide button appears on each request item (eye-slash icon)",
+        "Duration picker opens (same as content: permanent, 3/6/12 months, custom)",
+        "Hidden request removed from list after confirmation",
+        "Loading state shown during API call",
+        "Toast notification on success/error",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 304,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-13.6",
+      "title": "Setting to Include/Exclude Unreleased Requests",
+      "story": "As a media server owner, I want to toggle whether unreleased content requests are shown, so that I can focus on requests that should already be available",
+      "acceptanceCriteria": [
+        "New boolean setting show_unreleased_requests in UserSettings (default: false)",
+        "Settings page shows toggle for Show unreleased requests",
+        "When false, requests with future release dates are hidden",
+        "When true, all requests are shown (with release date visible)",
+        "Setting persists in database",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 305,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
