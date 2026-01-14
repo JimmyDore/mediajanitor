@@ -75,3 +75,90 @@ def get_decrypted_sonarr_api_key(settings: UserSettings) -> str | None:
     if settings.sonarr_api_key_encrypted:
         return decrypt_value(settings.sonarr_api_key_encrypted)
     return None
+
+
+async def get_sonarr_series_by_tmdb_id(
+    server_url: str, api_key: str, tmdb_id: int
+) -> int | None:
+    """
+    Find a Sonarr series by TMDB ID.
+
+    Sonarr doesn't have a direct TMDB filter, so we fetch all series
+    and search for the matching tmdbId.
+
+    Returns the Sonarr series ID if found, None otherwise.
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/series",
+                headers={"X-Api-Key": api_key},
+            )
+            if response.status_code != 200:
+                return None
+
+            series_list = response.json()
+            for series in series_list:
+                if series.get("tmdbId") == tmdb_id:
+                    series_id = series.get("id")
+                    return int(series_id) if series_id is not None else None
+            return None
+    except (httpx.RequestError, httpx.TimeoutException):
+        return None
+
+
+async def delete_sonarr_series(
+    server_url: str, api_key: str, sonarr_id: int, delete_files: bool = True
+) -> bool:
+    """
+    Delete a series from Sonarr by its Sonarr ID.
+
+    Args:
+        server_url: Sonarr server URL
+        api_key: Sonarr API key
+        sonarr_id: The Sonarr series ID
+        delete_files: Whether to delete files on disk (default: True)
+
+    Returns True if deletion was successful, False otherwise.
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(
+                f"{server_url}/api/v3/series/{sonarr_id}",
+                headers={"X-Api-Key": api_key},
+                params={"deleteFiles": str(delete_files).lower()},
+            )
+            # Sonarr returns 200 on successful deletion
+            return response.status_code == 200
+    except (httpx.RequestError, httpx.TimeoutException):
+        return False
+
+
+async def delete_series_by_tmdb_id(
+    server_url: str, api_key: str, tmdb_id: int, delete_files: bool = True
+) -> tuple[bool, str]:
+    """
+    Delete a series from Sonarr by TMDB ID.
+
+    Args:
+        server_url: Sonarr server URL
+        api_key: Sonarr API key
+        tmdb_id: The TMDB ID of the series
+        delete_files: Whether to delete files on disk (default: True)
+
+    Returns a tuple of (success: bool, message: str).
+    """
+    # First, find the Sonarr series ID
+    sonarr_id = await get_sonarr_series_by_tmdb_id(server_url, api_key, tmdb_id)
+    if sonarr_id is None:
+        return False, f"Series with TMDB ID {tmdb_id} not found in Sonarr"
+
+    # Delete the series
+    success = await delete_sonarr_series(server_url, api_key, sonarr_id, delete_files)
+    if success:
+        return True, "Series deleted successfully from Sonarr"
+    return False, "Failed to delete series from Sonarr"

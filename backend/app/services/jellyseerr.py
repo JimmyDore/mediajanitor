@@ -75,3 +75,35 @@ def get_decrypted_jellyseerr_api_key(settings: UserSettings) -> str | None:
     if settings.jellyseerr_api_key_encrypted:
         return decrypt_value(settings.jellyseerr_api_key_encrypted)
     return None
+
+
+async def delete_jellyseerr_request(
+    server_url: str, api_key: str, request_id: int
+) -> tuple[bool, str]:
+    """
+    Delete a request from Jellyseerr.
+
+    Args:
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+        request_id: The Jellyseerr request ID
+
+    Returns a tuple of (success: bool, message: str).
+    Jellyseerr returns 204 No Content on successful deletion.
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.delete(
+                f"{server_url}/api/v1/request/{request_id}",
+                headers={"X-Api-Key": api_key},
+            )
+            # Jellyseerr returns 204 No Content on success
+            if response.status_code == 204:
+                return True, "Request deleted successfully from Jellyseerr"
+            if response.status_code == 404:
+                return False, f"Request {request_id} not found in Jellyseerr"
+            return False, f"Failed to delete request from Jellyseerr (status: {response.status_code})"
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        return False, f"Failed to connect to Jellyseerr: {str(e)}"

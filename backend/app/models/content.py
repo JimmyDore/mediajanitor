@@ -214,3 +214,31 @@ class RequestWhitelistListResponse(BaseModel):
 
     items: list[RequestWhitelistItem]
     total_count: int
+
+
+# US-15.4, US-15.5, US-15.6: Delete content models
+
+
+class DeleteContentRequest(BaseModel):
+    """Request model for deleting content from Radarr/Sonarr."""
+
+    tmdb_id: int
+    delete_from_arr: bool = True  # Delete from Radarr/Sonarr
+    delete_from_jellyseerr: bool = True  # Also delete Jellyseerr request if exists
+    jellyseerr_request_id: int | None = None  # Optional: specific Jellyseerr request ID to delete
+
+
+class DeleteContentResponse(BaseModel):
+    """Response model for content deletion."""
+
+    success: bool
+    message: str
+    arr_deleted: bool = False  # Whether deleted from Radarr/Sonarr
+    jellyseerr_deleted: bool = False  # Whether deleted from Jellyseerr
+
+
+class DeleteRequestResponse(BaseModel):
+    """Response model for Jellyseerr request deletion."""
+
+    success: bool
+    message: str

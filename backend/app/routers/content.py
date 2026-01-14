@@ -2,14 +2,18 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import User, get_db
+from app.database import CachedJellyseerrRequest, User, UserSettings, get_db
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
     ContentSummaryResponse,
+    DeleteContentRequest,
+    DeleteContentResponse,
+    DeleteRequestResponse,
     OldUnwatchedResponse,
 )
 from app.services.auth import get_current_user
@@ -18,6 +22,18 @@ from app.services.content import (
     get_content_summary,
     get_old_unwatched_content,
     get_unavailable_requests,
+)
+from app.services.jellyseerr import (
+    delete_jellyseerr_request,
+    get_decrypted_jellyseerr_api_key,
+)
+from app.services.radarr import (
+    delete_movie_by_tmdb_id,
+    get_decrypted_radarr_api_key,
+)
+from app.services.sonarr import (
+    delete_series_by_tmdb_id,
+    get_decrypted_sonarr_api_key,
 )
 
 
@@ -110,3 +126,185 @@ async def get_issues(
         )
 
     return await get_content_issues(db, current_user.id, filter)
+
+
+# US-15.4, US-15.5, US-15.6: Delete content endpoints
+
+
+async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
+    """Get user settings from database."""
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+@router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
+async def delete_movie(
+    tmdb_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    delete_request: DeleteContentRequest | None = None,
+) -> DeleteContentResponse:
+    """Delete a movie from Radarr by TMDB ID.
+
+    Optionally also deletes the associated Jellyseerr request.
+    """
+    settings = await _get_user_settings(db, current_user.id)
+
+    if not settings or not settings.radarr_server_url or not settings.radarr_api_key_encrypted:
+        raise HTTPException(
+            status_code=400,
+            detail="Radarr is not configured. Please configure Radarr in Settings.",
+        )
+
+    radarr_api_key = get_decrypted_radarr_api_key(settings)
+    if not radarr_api_key:
+        raise HTTPException(status_code=400, detail="Radarr API key not configured")
+
+    # Delete from Radarr
+    arr_deleted = False
+    arr_message = ""
+    delete_from_arr = delete_request.delete_from_arr if delete_request else True
+
+    if delete_from_arr:
+        success, message = await delete_movie_by_tmdb_id(
+            settings.radarr_server_url, radarr_api_key, tmdb_id
+        )
+        arr_deleted = success
+        arr_message = message
+    else:
+        arr_message = "Skipped Radarr deletion"
+
+    # Optionally delete from Jellyseerr
+    jellyseerr_deleted = False
+    jellyseerr_message = ""
+    delete_from_jellyseerr = delete_request.delete_from_jellyseerr if delete_request else True
+    jellyseerr_request_id = delete_request.jellyseerr_request_id if delete_request else None
+
+    if delete_from_jellyseerr and jellyseerr_request_id:
+        if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+            jellyseerr_api_key = get_decrypted_jellyseerr_api_key(settings)
+            if jellyseerr_api_key:
+                success, message = await delete_jellyseerr_request(
+                    settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_request_id
+                )
+                jellyseerr_deleted = success
+                jellyseerr_message = message
+
+    # Compose response message
+    messages = []
+    if delete_from_arr:
+        messages.append(arr_message)
+    if delete_from_jellyseerr and jellyseerr_request_id:
+        messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
+
+    overall_success = (not delete_from_arr or arr_deleted) and \
+                      (not delete_from_jellyseerr or not jellyseerr_request_id or jellyseerr_deleted)
+
+    return DeleteContentResponse(
+        success=overall_success,
+        message="; ".join(messages) if messages else "No actions performed",
+        arr_deleted=arr_deleted,
+        jellyseerr_deleted=jellyseerr_deleted,
+    )
+
+
+@router.delete("/series/{tmdb_id}", response_model=DeleteContentResponse)
+async def delete_series(
+    tmdb_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    delete_request: DeleteContentRequest | None = None,
+) -> DeleteContentResponse:
+    """Delete a TV series from Sonarr by TMDB ID.
+
+    Optionally also deletes the associated Jellyseerr request.
+    """
+    settings = await _get_user_settings(db, current_user.id)
+
+    if not settings or not settings.sonarr_server_url or not settings.sonarr_api_key_encrypted:
+        raise HTTPException(
+            status_code=400,
+            detail="Sonarr is not configured. Please configure Sonarr in Settings.",
+        )
+
+    sonarr_api_key = get_decrypted_sonarr_api_key(settings)
+    if not sonarr_api_key:
+        raise HTTPException(status_code=400, detail="Sonarr API key not configured")
+
+    # Delete from Sonarr
+    arr_deleted = False
+    arr_message = ""
+    delete_from_arr = delete_request.delete_from_arr if delete_request else True
+
+    if delete_from_arr:
+        success, message = await delete_series_by_tmdb_id(
+            settings.sonarr_server_url, sonarr_api_key, tmdb_id
+        )
+        arr_deleted = success
+        arr_message = message
+    else:
+        arr_message = "Skipped Sonarr deletion"
+
+    # Optionally delete from Jellyseerr
+    jellyseerr_deleted = False
+    jellyseerr_message = ""
+    delete_from_jellyseerr = delete_request.delete_from_jellyseerr if delete_request else True
+    jellyseerr_request_id = delete_request.jellyseerr_request_id if delete_request else None
+
+    if delete_from_jellyseerr and jellyseerr_request_id:
+        if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+            jellyseerr_api_key = get_decrypted_jellyseerr_api_key(settings)
+            if jellyseerr_api_key:
+                success, message = await delete_jellyseerr_request(
+                    settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_request_id
+                )
+                jellyseerr_deleted = success
+                jellyseerr_message = message
+
+    # Compose response message
+    messages = []
+    if delete_from_arr:
+        messages.append(arr_message)
+    if delete_from_jellyseerr and jellyseerr_request_id:
+        messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
+
+    overall_success = (not delete_from_arr or arr_deleted) and \
+                      (not delete_from_jellyseerr or not jellyseerr_request_id or jellyseerr_deleted)
+
+    return DeleteContentResponse(
+        success=overall_success,
+        message="; ".join(messages) if messages else "No actions performed",
+        arr_deleted=arr_deleted,
+        jellyseerr_deleted=jellyseerr_deleted,
+    )
+
+
+@router.delete("/request/{jellyseerr_id}", response_model=DeleteRequestResponse)
+async def delete_request_endpoint(
+    jellyseerr_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DeleteRequestResponse:
+    """Delete a request from Jellyseerr by request ID."""
+    settings = await _get_user_settings(db, current_user.id)
+
+    if not settings or not settings.jellyseerr_server_url or not settings.jellyseerr_api_key_encrypted:
+        raise HTTPException(
+            status_code=400,
+            detail="Jellyseerr is not configured. Please configure Jellyseerr in Settings.",
+        )
+
+    jellyseerr_api_key = get_decrypted_jellyseerr_api_key(settings)
+    if not jellyseerr_api_key:
+        raise HTTPException(status_code=400, detail="Jellyseerr API key not configured")
+
+    success, message = await delete_jellyseerr_request(
+        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_id
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return DeleteRequestResponse(success=True, message=message)

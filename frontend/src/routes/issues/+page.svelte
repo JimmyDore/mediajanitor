@@ -30,6 +30,12 @@
 		total_size_formatted: string;
 	}
 
+	interface SettingsConfigStatus {
+		radarr_configured: boolean;
+		sonarr_configured: boolean;
+		jellyseerr_configured: boolean;
+	}
+
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests' | 'multi';
 	type SortField = 'name' | 'size' | 'date' | 'issues';
 	type SortOrder = 'asc' | 'desc';
@@ -50,9 +56,17 @@
 	let frenchOnlyIds = $state<Set<string>>(new Set());
 	let languageExemptIds = $state<Set<string>>(new Set());
 	let hidingRequestIds = $state<Set<string>>(new Set());
+	let deletingIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
+
+	// Configuration status
+	let configStatus = $state<SettingsConfigStatus>({
+		radarr_configured: false,
+		sonarr_configured: false,
+		jellyseerr_configured: false
+	});
 
 	// Duration picker state
 	let showDurationPicker = $state(false);
@@ -60,6 +74,12 @@
 	let selectedWhitelistType = $state<WhitelistType>('content');
 	let selectedDuration = $state<DurationOption>('permanent');
 	let customDate = $state('');
+
+	// Delete confirmation modal state
+	let showDeleteModal = $state(false);
+	let deleteItem = $state<ContentIssueItem | null>(null);
+	let deleteFromArr = $state(true);
+	let deleteFromJellyseerr = $state(true);
 
 	const durationOptions: { value: DurationOption; label: string }[] = [
 		{ value: 'permanent', label: 'Permanent' },
@@ -101,6 +121,177 @@
 	function closeDurationPicker() {
 		showDurationPicker = false;
 		selectedItem = null;
+	}
+
+	// Delete modal functions
+	function openDeleteModal(item: ContentIssueItem) {
+		deleteItem = item;
+		deleteFromArr = true;
+		deleteFromJellyseerr = true;
+		showDeleteModal = true;
+	}
+
+	function closeDeleteModal() {
+		showDeleteModal = false;
+		deleteItem = null;
+	}
+
+	function isMovieType(mediaType: string): boolean {
+		return mediaType.toLowerCase() === 'movie';
+	}
+
+	function canDeleteFromArr(item: ContentIssueItem): boolean {
+		const isMovie = isMovieType(item.media_type);
+		return isMovie ? configStatus.radarr_configured : configStatus.sonarr_configured;
+	}
+
+	function getArrName(item: ContentIssueItem): string {
+		return isMovieType(item.media_type) ? 'Radarr' : 'Sonarr';
+	}
+
+	async function confirmDelete() {
+		if (!deleteItem || !deleteItem.tmdb_id) return;
+
+		const item = deleteItem;
+		const isMovie = isMovieType(item.media_type);
+		const tmdbId = parseInt(item.tmdb_id as string, 10);
+
+		closeDeleteModal();
+
+		deletingIds = new Set([...deletingIds, item.jellyfin_id]);
+
+		const token = localStorage.getItem('access_token');
+		if (!token) { showToast('Not authenticated', 'error'); return; }
+
+		try {
+			// Determine endpoint and build request body
+			const endpoint = isMovie ? `/api/content/movie/${tmdbId}` : `/api/content/series/${tmdbId}`;
+
+			// Extract jellyseerr_id from request-{id} format if it's a request item
+			let jellyseerrRequestId: number | null = null;
+			if (item.jellyfin_id.startsWith('request-')) {
+				jellyseerrRequestId = parseInt(item.jellyfin_id.replace('request-', ''), 10);
+			}
+
+			const requestBody = {
+				tmdb_id: tmdbId,
+				delete_from_arr: deleteFromArr,
+				delete_from_jellyseerr: deleteFromJellyseerr,
+				jellyseerr_request_id: jellyseerrRequestId
+			};
+
+			const response = await fetch(endpoint, {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify(requestBody)
+			});
+
+			if (response.status === 401) { showToast('Session expired', 'error'); return; }
+			if (response.status === 400) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Deletion failed', 'error');
+				return;
+			}
+			if (!response.ok) { showToast('Deletion failed', 'error'); return; }
+
+			const result = await response.json();
+
+			// Remove item from list on success
+			if (result.success && data) {
+				const removedItem = data.items.find((i) => i.jellyfin_id === item.jellyfin_id);
+				const removedSize = removedItem?.size_bytes || 0;
+				data = {
+					...data,
+					items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+					total_count: data.total_count - 1,
+					total_size_bytes: data.total_size_bytes - removedSize,
+					total_size_formatted: formatSize(data.total_size_bytes - removedSize)
+				};
+				showToast('Deleted successfully', 'success');
+			} else {
+				showToast(result.message || 'Deletion failed', result.success ? 'success' : 'error');
+			}
+		} catch {
+			showToast('Deletion failed', 'error');
+		} finally {
+			const newSet = new Set(deletingIds);
+			newSet.delete(item.jellyfin_id);
+			deletingIds = newSet;
+		}
+	}
+
+	async function deleteRequest(item: ContentIssueItem) {
+		// Extract jellyseerr_id from request-{id} format
+		const jellyseerrIdMatch = item.jellyfin_id.match(/^request-(\d+)$/);
+		if (!jellyseerrIdMatch) {
+			showToast('Invalid request ID', 'error');
+			return;
+		}
+		const jellyseerrId = parseInt(jellyseerrIdMatch[1], 10);
+
+		deletingIds = new Set([...deletingIds, item.jellyfin_id]);
+
+		const token = localStorage.getItem('access_token');
+		if (!token) { showToast('Not authenticated', 'error'); return; }
+
+		try {
+			const response = await fetch(`/api/content/request/${jellyseerrId}`, {
+				method: 'DELETE',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (response.status === 401) { showToast('Session expired', 'error'); return; }
+			if (response.status === 400) {
+				const errorData = await response.json();
+				showToast(errorData.detail || 'Deletion failed', 'error');
+				return;
+			}
+			if (!response.ok) { showToast('Deletion failed', 'error'); return; }
+
+			// Remove item from list on success
+			if (data) {
+				data = {
+					...data,
+					items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+					total_count: data.total_count - 1
+				};
+			}
+			showToast('Request deleted', 'success');
+		} catch {
+			showToast('Deletion failed', 'error');
+		} finally {
+			const newSet = new Set(deletingIds);
+			newSet.delete(item.jellyfin_id);
+			deletingIds = newSet;
+		}
+	}
+
+	async function fetchConfigStatus() {
+		const token = localStorage.getItem('access_token');
+		if (!token) return;
+
+		try {
+			const [radarrRes, sonarrRes, jellyseerrRes] = await Promise.all([
+				fetch('/api/settings/radarr', { headers: { Authorization: `Bearer ${token}` } }),
+				fetch('/api/settings/sonarr', { headers: { Authorization: `Bearer ${token}` } }),
+				fetch('/api/settings/jellyseerr', { headers: { Authorization: `Bearer ${token}` } })
+			]);
+
+			if (radarrRes.ok) {
+				const radarrData = await radarrRes.json();
+				configStatus.radarr_configured = radarrData.api_key_configured;
+			}
+			if (sonarrRes.ok) {
+				const sonarrData = await sonarrRes.json();
+				configStatus.sonarr_configured = sonarrData.api_key_configured;
+			}
+			if (jellyseerrRes.ok) {
+				const jellyseerrData = await jellyseerrRes.json();
+				configStatus.jellyseerr_configured = jellyseerrData.api_key_configured;
+			}
+		} catch {
+			// Silently fail - buttons will be disabled
+		}
 	}
 
 	async function confirmWhitelist() {
@@ -457,7 +648,10 @@
 		});
 	}
 
-	onMount(() => fetchIssues(activeFilter));
+	onMount(() => {
+		fetchIssues(activeFilter);
+		fetchConfigStatus();
+	});
 </script>
 
 <svelte:head>
@@ -530,6 +724,7 @@
 									{activeFilter === 'requests' ? 'Requested' : 'Watched'} {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
+							<th class="col-actions"></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -671,6 +866,43 @@
 										{formatLastWatched(item.last_played_date)}
 									{/if}
 								</td>
+								<td class="col-actions">
+									{#if isRequestItem(item)}
+										<!-- Request items: delete from Jellyseerr only -->
+										<button
+											class="btn-delete"
+											onclick={() => deleteRequest(item)}
+											disabled={deletingIds.has(item.jellyfin_id) || !configStatus.jellyseerr_configured}
+											title={!configStatus.jellyseerr_configured ? 'Jellyseerr not configured' : 'Delete request from Jellyseerr'}
+										>
+											{#if deletingIds.has(item.jellyfin_id)}
+												<span class="btn-spinner"></span>
+											{:else}
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<polyline points="3 6 5 6 21 6"/>
+													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+												</svg>
+											{/if}
+										</button>
+									{:else}
+										<!-- Content items: delete from Radarr/Sonarr -->
+										<button
+											class="btn-delete"
+											onclick={() => openDeleteModal(item)}
+											disabled={deletingIds.has(item.jellyfin_id) || !item.tmdb_id || !canDeleteFromArr(item)}
+											title={!item.tmdb_id ? 'No TMDB ID' : !canDeleteFromArr(item) ? `${getArrName(item)} not configured` : `Delete from ${getArrName(item)}`}
+										>
+											{#if deletingIds.has(item.jellyfin_id)}
+												<span class="btn-spinner"></span>
+											{:else}
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<polyline points="3 6 5 6 21 6"/>
+													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+												</svg>
+											{/if}
+										</button>
+									{/if}
+								</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -724,6 +956,67 @@
 					disabled={selectedDuration === 'custom' && !customDate}
 				>
 					Confirm
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete Confirmation Modal -->
+{#if showDeleteModal && deleteItem}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" onclick={closeDeleteModal} role="presentation">
+		<!-- svelte-ignore a11y_interactive_supports_focus -->
+		<div class="modal delete-modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="delete-modal-title">
+			<h3 id="delete-modal-title">Delete Content</h3>
+			<p class="modal-desc">
+				Are you sure you want to delete <strong>{deleteItem.name}</strong>?
+				This action cannot be undone.
+			</p>
+
+			<div class="delete-options">
+				<label class="delete-option">
+					<input
+						type="checkbox"
+						bind:checked={deleteFromArr}
+						disabled={!canDeleteFromArr(deleteItem)}
+					/>
+					<span class="option-text">
+						Delete from {getArrName(deleteItem)}
+						{#if !canDeleteFromArr(deleteItem)}
+							<span class="option-hint">(not configured)</span>
+						{/if}
+					</span>
+				</label>
+
+				{#if configStatus.jellyseerr_configured}
+					<label class="delete-option">
+						<input
+							type="checkbox"
+							bind:checked={deleteFromJellyseerr}
+						/>
+						<span class="option-text">Delete from Jellyseerr (if request exists)</span>
+					</label>
+				{/if}
+			</div>
+
+			<div class="delete-warning">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+					<line x1="12" y1="9" x2="12" y2="13"/>
+					<line x1="12" y1="17" x2="12.01" y2="17"/>
+				</svg>
+				<span>Files will be permanently deleted from disk</span>
+			</div>
+
+			<div class="modal-actions">
+				<button class="btn-secondary" onclick={closeDeleteModal}>Cancel</button>
+				<button
+					class="btn-danger"
+					onclick={confirmDelete}
+					disabled={!deleteFromArr && !deleteFromJellyseerr}
+				>
+					Delete
 				</button>
 			</div>
 		</div>
@@ -1267,5 +1560,125 @@
 			opacity: 1;
 			transform: translateY(0);
 		}
+	}
+
+	/* Delete Button */
+	.col-actions {
+		width: 48px;
+		text-align: center;
+	}
+
+	.btn-delete {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-delete:hover:not(:disabled) {
+		color: var(--danger);
+		border-color: var(--danger);
+		background: var(--danger-light);
+	}
+
+	.btn-delete:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.btn-spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid currentColor;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	/* Delete Modal */
+	.delete-modal {
+		max-width: 420px;
+	}
+
+	.delete-options {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		margin-bottom: var(--space-4);
+	}
+
+	.delete-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.delete-option:hover {
+		background: var(--bg-hover);
+	}
+
+	.delete-option input {
+		margin: 0;
+		accent-color: var(--accent);
+	}
+
+	.delete-option input:disabled {
+		opacity: 0.5;
+	}
+
+	.option-text {
+		font-size: var(--font-size-sm);
+	}
+
+	.option-hint {
+		color: var(--text-muted);
+		font-size: var(--font-size-xs);
+	}
+
+	.delete-warning {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		background: var(--danger-light);
+		border: 1px solid var(--danger);
+		border-radius: var(--radius-md);
+		color: var(--danger);
+		font-size: var(--font-size-sm);
+		margin-bottom: var(--space-4);
+	}
+
+	.btn-danger {
+		padding: var(--space-2) var(--space-4);
+		background: var(--danger);
+		color: white;
+		border: none;
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-danger:hover:not(:disabled) {
+		background: #b91c1c;
+	}
+
+	.btn-danger:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

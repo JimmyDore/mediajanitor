@@ -52,7 +52,7 @@ async def fetch_jellyfin_media(
                 "UserId": user_id,
                 "IncludeItemTypes": "Movie,Series",
                 "Recursive": "true",
-                "Fields": "DateCreated,DateLastSaved,UserData,Path,Overview,Genres,Studios,People,ProductionYear,DateLastMediaAdded,MediaSources",
+                "Fields": "DateCreated,DateLastSaved,UserData,Path,Overview,Genres,Studios,People,ProductionYear,DateLastMediaAdded,MediaSources,ProviderIds",
                 "SortBy": "SortName",
                 "SortOrder": "Ascending",
                 "StartIndex": 0,
