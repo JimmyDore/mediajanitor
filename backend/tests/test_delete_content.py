@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import TestingAsyncSessionLocal
+
 
 class TestDeleteMovie:
     """Tests for DELETE /api/content/movie/{tmdb_id} endpoint."""
@@ -510,3 +512,363 @@ class TestDeleteServiceFunctions:
         )
         assert success is False
         assert "not found" in message.lower()
+
+
+class TestJellyseerrRequestLookupByTmdbId:
+    """Tests for US-15.10: Lookup Jellyseerr request by TMDB ID when deleting content."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "lookup_tmdb@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def _get_user_id(self, client: TestClient, token: str) -> int:
+        """Helper to get user ID from token."""
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return response.json()["id"]
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    async def test_delete_movie_looks_up_jellyseerr_request_by_tmdb_id(
+        self,
+        mock_delete_request: AsyncMock,
+        mock_delete_movie: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_radarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that delete movie looks up Jellyseerr request by TMDB ID when no request ID provided."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
+        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_validate_radarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "lookup_movie_tmdb@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Radarr and Jellyseerr
+        client.post(
+            "/api/settings/radarr",
+            json={"server_url": "https://radarr.example.com", "api_key": "radarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request for this TMDB ID
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=999,
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,
+                title="Test Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete movie WITHOUT providing jellyseerr_request_id but WITH delete_from_jellyseerr=true
+        response = client.request(
+            "DELETE",
+            "/api/content/movie/12345",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 12345,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+                # Note: NO jellyseerr_request_id provided - should be looked up
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is True
+        # Verify the lookup was used - mock should have been called with request ID 999
+        mock_delete_request.assert_called_once()
+        call_args = mock_delete_request.call_args
+        # The third positional arg is the jellyseerr_id
+        assert call_args[0][2] == 999
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    async def test_delete_series_looks_up_jellyseerr_request_by_tmdb_id(
+        self,
+        mock_delete_request: AsyncMock,
+        mock_delete_series: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that delete series looks up Jellyseerr request by TMDB ID when no request ID provided."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
+        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_validate_sonarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "lookup_series_tmdb@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr and Jellyseerr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request for this TMDB ID
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=888,
+                tmdb_id=67890,
+                media_type="tv",
+                status=1,
+                title="Test Series",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete series WITHOUT providing jellyseerr_request_id
+        response = client.request(
+            "DELETE",
+            "/api/content/series/67890",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 67890,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is True
+        mock_delete_request.assert_called_once()
+        call_args = mock_delete_request.call_args
+        assert call_args[0][2] == 888
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    async def test_delete_movie_no_jellyseerr_request_found_skips_gracefully(
+        self,
+        mock_delete_request: AsyncMock,
+        mock_delete_movie: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_radarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that when no matching Jellyseerr request found, deletion skips gracefully."""
+        mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
+        mock_validate_radarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "lookup_not_found@example.com")
+
+        # Setup Radarr and Jellyseerr
+        client.post(
+            "/api/settings/radarr",
+            json={"server_url": "https://radarr.example.com", "api_key": "radarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Delete movie with no matching request in cache
+        response = client.request(
+            "DELETE",
+            "/api/content/movie/99999",  # No cached request for this TMDB ID
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 99999,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True  # Still success since movie was deleted
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is False  # No request to delete
+        # Delete request should NOT have been called
+        mock_delete_request.assert_not_called()
+        assert "no request found" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    async def test_delete_movie_skips_lookup_when_jellyseerr_unchecked(
+        self,
+        mock_delete_request: AsyncMock,
+        mock_delete_movie: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_radarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that lookup is skipped when delete_from_jellyseerr=false."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
+        mock_validate_radarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "skip_lookup@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Radarr
+        client.post(
+            "/api/settings/radarr",
+            json={"server_url": "https://radarr.example.com", "api_key": "radarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=777,
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,
+                title="Test Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete movie with delete_from_jellyseerr=false
+        response = client.request(
+            "DELETE",
+            "/api/content/movie/12345",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 12345,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": False,  # Unchecked - should NOT lookup
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is False
+        # Delete request should NOT have been called
+        mock_delete_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    async def test_delete_movie_uses_provided_request_id_over_lookup(
+        self,
+        mock_delete_request: AsyncMock,
+        mock_delete_movie: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_radarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that explicitly provided jellyseerr_request_id is used, not looked up."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
+        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_validate_radarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "explicit_request_id@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Radarr and Jellyseerr
+        client.post(
+            "/api/settings/radarr",
+            json={"server_url": "https://radarr.example.com", "api_key": "radarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request with different ID
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=111,  # This would be looked up
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,
+                title="Test Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete movie WITH explicit jellyseerr_request_id
+        response = client.request(
+            "DELETE",
+            "/api/content/movie/12345",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 12345,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+                "jellyseerr_request_id": 222,  # Explicit ID, different from cached
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["jellyseerr_deleted"] is True
+        # Should use the provided ID (222), not the cached one (111)
+        mock_delete_request.assert_called_once()
+        call_args = mock_delete_request.call_args
+        assert call_args[0][2] == 222

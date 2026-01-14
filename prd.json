@@ -17,8 +17,8 @@
         "Unit tests pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Root Cause: Backend only deletes from Jellyseerr when jellyseerr_request_id is provided. File: backend/app/routers/content.py"
+      "passes": true,
+      "notes": "Implemented _lookup_jellyseerr_request_by_tmdb() helper function. Both delete_movie and delete_series endpoints now look up Jellyseerr request by TMDB ID when no explicit request ID is provided. 5 new unit tests added."
     },
     {
       "id": "US-12.1",
