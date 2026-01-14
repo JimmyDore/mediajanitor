@@ -34,8 +34,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "File: frontend/src/routes/settings/+page.svelte"
+      "passes": true,
+      "notes": "Added threshold-label-group wrapper and threshold-help class for subtle gray help text below each threshold input."
     },
     {
       "id": "US-12.2",

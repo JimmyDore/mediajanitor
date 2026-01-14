@@ -763,7 +763,10 @@
 				{/if}
 
 				<div class="threshold-row">
-					<label for="old-content">Flag content unwatched for</label>
+					<div class="threshold-label-group">
+						<label for="old-content">Flag content unwatched for</label>
+						<span class="threshold-help">Used by: Old tab</span>
+					</div>
 					<div class="threshold-input">
 						<input
 							type="number"
@@ -778,7 +781,10 @@
 				</div>
 
 				<div class="threshold-row">
-					<label for="min-age">Don't flag content newer than</label>
+					<div class="threshold-label-group">
+						<label for="min-age">Don't flag content newer than</label>
+						<span class="threshold-help">Used by: Old tab (for never-watched items)</span>
+					</div>
 					<div class="threshold-input">
 						<input
 							type="number"
@@ -793,7 +799,10 @@
 				</div>
 
 				<div class="threshold-row">
-					<label for="large-size">Flag movies larger than</label>
+					<div class="threshold-label-group">
+						<label for="large-size">Flag movies larger than</label>
+						<span class="threshold-help">Used by: Large tab</span>
+					</div>
 					<div class="threshold-input">
 						<input
 							type="number"
@@ -1082,6 +1091,17 @@
 	.threshold-row label {
 		font-size: var(--font-size-md);
 		color: var(--text-primary);
+	}
+
+	.threshold-label-group {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.threshold-help {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
 	}
 
 	.threshold-input {
