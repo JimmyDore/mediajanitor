@@ -573,6 +573,26 @@ Transform the dashboard from a simple status page into a unified library health 
 
 **Note:** Completed 2026-01-13 - Navigation shows Dashboard | Issues | Whitelist | Settings with correct active states
 
+---
+
+#### US-D.6: Inline Badge Actions
+**As a** user
+**I want** action buttons attached directly to issue badges
+**So that** I know exactly which problem each action resolves
+
+**Acceptance Criteria:**
+- [ ] OLD badge shows inline dismiss/shield button to protect from deletion
+- [ ] LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)
+- [ ] LARGE badge shows info tooltip on hover: "Re-download in lower quality from Radarr/Sonarr"
+- [ ] REQUEST badge shows info tooltip on hover: "Check status in Jellyseerr"
+- [ ] Clicking inline action behaves same as current buttons (calls same API endpoints)
+- [ ] Action buttons show tooltip on hover: "Protect from deletion", "Mark French-only", "Exempt from language checks"
+- [ ] Remove separate Actions column from table
+- [ ] Loading state shown on badge action while API call in progress
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
 ### Non-Goals
 - Health score percentage (keeping it simple with counts)
 - Collapsible info section
@@ -1050,59 +1070,67 @@ Address P1/P2 issues from SUGGESTIONS.md: page title inconsistency, missing favi
 
 ### User Stories
 
-#### US-9.1: Fix Page Titles
+#### US-9.1: Fix Page Titles ✅
 **As a** user
 **I want** consistent branding across all pages
 **So that** the app feels professional and cohesive
 
 **Acceptance Criteria:**
-- [ ] Login page title is "Login | Media Janitor"
-- [ ] Register page title is "Register | Media Janitor"
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Login page title is "Login | Media Janitor"
+- [x] Register page title is "Register | Media Janitor"
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Updated page titles from 'Log In/Sign Up - Media Janitor' to 'Login/Register | Media Janitor'
 
 ---
 
-#### US-9.2: Add Favicon
+#### US-9.2: Add Favicon ✅
 **As a** user
 **I want** a favicon in my browser tab
 **So that** I can easily identify the app among my open tabs
 
 **Acceptance Criteria:**
-- [ ] Favicon displays in browser tab
-- [ ] No 404 for `/favicon.png`
-- [ ] Typecheck passes
+- [x] Favicon displays in browser tab
+- [x] No 404 for `/favicon.png`
+- [x] Typecheck passes
+
+**Note:** Completed 2026-01-14 - Created SVG favicon with broom icon (Media Janitor theme), blue accent color matching app design
 
 ---
 
-#### US-9.3: Add CORS Production URL
+#### US-9.3: Add CORS Production URL ✅
 **As a** developer
 **I want** CORS configured for production
 **So that** the app works on mediajanitor.com
 
 **Acceptance Criteria:**
-- [ ] CORS allows requests from https://mediajanitor.com
-- [ ] Existing localhost origins still work
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] CORS allows requests from https://mediajanitor.com
+- [x] Existing localhost origins still work
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Added https://mediajanitor.com to CORS allowed origins in main.py
 
 ---
 
-#### US-9.4: Add IMDB/TMDB Links to Content Items
+#### US-9.4: Add IMDB/TMDB Links to Content Items ✅
 **As a** user
 **I want** to click on a movie/series title to open IMDB or TMDB
 **So that** I can quickly lookup more information about the content
 
 **Acceptance Criteria:**
-- [ ] Each content item in Issues view has clickable TMDB link icon
-- [ ] Link opens in new tab: `https://www.themoviedb.org/{movie|tv}/{tmdb_id}`
-- [ ] For Jellyseerr requests: use existing `tmdb_id` from `cached_jellyseerr_requests`
-- [ ] For Jellyfin media: extract TMDB ID from `ProviderIds` in raw_data (or add to sync if not present)
-- [ ] Fallback: if no TMDB ID available, hide the link icon
-- [ ] Optional: add IMDB link too if `ImdbId` is available in ProviderIds
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Each content item in Issues view has clickable TMDB link icon
+- [x] Link opens in new tab: `https://www.themoviedb.org/{movie|tv}/{tmdb_id}`
+- [x] For Jellyseerr requests: use existing `tmdb_id` from `cached_jellyseerr_requests`
+- [x] For Jellyfin media: extract TMDB ID from `ProviderIds` in raw_data (or add to sync if not present)
+- [x] Fallback: if no TMDB ID available, hide the link icon
+- [x] Optional: add IMDB link too if `ImdbId` is available in ProviderIds
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Added tmdb_id/imdb_id to ContentIssueItem and UnavailableRequestItem. External link icons (TMDB + IMDB) visible next to item names in Issues view. 172 backend tests pass, 96 frontend tests pass.
 
 ### Non-Goals
 - Custom branding per user
@@ -1133,32 +1161,36 @@ Complete US-7.1 by adding automatic daily sync. Currently only manual sync exist
 
 ### User Stories
 
-#### US-10.1: Add Celery Infrastructure
+#### US-10.1: Add Celery Infrastructure ✅
 **As a** developer
 **I want** Celery configured with Redis
 **So that** we can run background tasks reliably
 
 **Acceptance Criteria:**
-- [ ] Celery app configured with Redis broker
-- [ ] `docker-compose up` starts redis + celery worker services
-- [ ] Can enqueue and execute a test task
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Celery app configured with Redis broker
+- [x] `docker-compose up` starts redis + celery worker services
+- [x] Can enqueue and execute a test task
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Added Celery 5.3+ with Redis 5.0+ broker. Created celery_app.py with configuration and tasks.py with test_task. Updated docker-compose with redis and celery-worker services. 170 backend tests pass, mypy clean.
 
 ---
 
-#### US-10.2: Daily Sync Scheduler
+#### US-10.2: Daily Sync Scheduler ✅
 **As a** user
 **I want** my data to sync automatically every day
 **So that** the dashboard is always up-to-date without manual intervention
 
 **Acceptance Criteria:**
-- [ ] Celery Beat schedules `sync_all_users` task daily at 3 AM UTC
-- [ ] Task iterates all users with configured Jellyfin settings
-- [ ] Each user's sync runs independently (failures don't block others)
-- [ ] Sync status updated in database for each user
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Celery Beat schedules `sync_all_users` task daily at 3 AM UTC
+- [x] Task iterates all users with configured Jellyfin settings
+- [x] Each user's sync runs independently (failures don't block others)
+- [x] Sync status updated in database for each user
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Added Celery Beat schedule for sync_all_users at 3 AM UTC. Created sync_all_users and sync_user tasks. Each user synced independently via separate task. 175 backend tests pass, mypy clean.
 
 ### Non-Goals
 - Per-user configurable schedule
@@ -1184,49 +1216,55 @@ Allow users to whitelist items for a limited time instead of permanently. Useful
 
 ### User Stories
 
-#### US-11.1: Add Expiration to Whitelist Schema
+#### US-11.1: Add Expiration to Whitelist Schema ✅
 **As a** developer
 **I want** whitelist tables to support expiration dates
 **So that** users can create temporary whitelists
 
 **Acceptance Criteria:**
-- [ ] All 3 whitelist tables have nullable `expires_at` column
-- [ ] Existing entries have `expires_at = NULL` (permanent)
-- [ ] API models support optional expiration date
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] All 3 whitelist tables have nullable `expires_at` column
+- [x] Existing entries have `expires_at = NULL` (permanent)
+- [x] API models support optional expiration date
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Added nullable expires_at column to ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist. Updated WhitelistAddRequest and WhitelistItem Pydantic models. 178 backend tests pass, mypy clean.
 
 ---
 
-#### US-11.2: Whitelist Expiration Logic
+#### US-11.2: Whitelist Expiration Logic ✅
 **As a** user
 **I want** expired whitelist entries to stop protecting content
 **So that** items automatically return to issues list when protection expires
 
 **Acceptance Criteria:**
-- [ ] Expired whitelist entries don't exclude items from issues
-- [ ] Non-expired entries still work as before
-- [ ] NULL `expires_at` means permanent (never expires)
-- [ ] API accepts optional `expires_at` when adding to whitelist
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Expired whitelist entries don't exclude items from issues
+- [x] Non-expired entries still work as before
+- [x] NULL `expires_at` means permanent (never expires)
+- [x] API accepts optional `expires_at` when adding to whitelist
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Completed 2026-01-14 - Whitelist queries filter out expired entries (expires_at < now). API saves expires_at from request. GET /api/whitelist/* returns expires_at. 191 backend tests pass, mypy clean.
 
 ---
 
-#### US-11.3: Temporary Whitelist UI
+#### US-11.3: Temporary Whitelist UI ✅
 **As a** user
 **I want** to choose how long to whitelist an item
 **So that** I can set temporary protection for seasonal content
 
 **Acceptance Criteria:**
-- [ ] Default is "Permanent" (no expiration)
-- [ ] Preset duration options: 3 months, 6 months, 1 year
-- [ ] Custom date picker option
-- [ ] Whitelist page shows expiration date or "Permanent"
-- [ ] Expired items show "Expired" badge
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Default is "Permanent" (no expiration)
+- [x] Preset duration options: 3 months, 6 months, 1 year
+- [x] Custom date picker option
+- [x] Whitelist page shows expiration date or "Permanent"
+- [x] Expired items show "Expired" badge
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Duration picker modal on Issues page (Permanent, 3mo, 6mo, 1yr, Custom), Whitelist page shows expiration info with Expired badge. 191 backend tests pass, 102 frontend tests pass, mypy clean.
 
 ### Non-Goals
 - Automatic renewal of expiring whitelists
@@ -1251,80 +1289,90 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ### User Stories
 
-#### US-M.1: Landing Page Hero
+#### US-M.1: Landing Page Hero ✅
 **As a** visitor
 **I want** to see an attractive landing page
 **So that** I understand the value and sign up
 
 **Acceptance Criteria:**
-- [ ] Bold hero section with gradient background (blue→purple)
-- [ ] Tagline: "Keep Your Media Library Clean" (or similar)
-- [ ] Value proposition subtitle explaining the product
-- [ ] Primary CTA button: "Get Started Free" → /register
-- [ ] Secondary link: "Already have an account?" → /login
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Bold hero section with gradient background (blue→purple)
+- [x] Tagline: "Keep Your Media Library Clean" (or similar)
+- [x] Value proposition subtitle explaining the product
+- [x] Primary CTA button: "Get Started Free" → /register
+- [x] Secondary link: "Already have an account?" → /login
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Landing component with gradient hero, tagline, CTAs. 107 frontend tests pass, typecheck clean.
 
 ---
 
-#### US-M.2: Feature Highlights
+#### US-M.2: Feature Highlights ✅
 **As a** visitor
 **I want** to see the main features
 **So that** I understand what the product does
 
 **Acceptance Criteria:**
-- [ ] 4 feature cards in grid layout with icons
-- [ ] Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking
-- [ ] Each card: icon, title (3-4 words), 1-line description
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] 4 feature cards in grid layout with icons
+- [x] Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking
+- [x] Each card: icon, title (3-4 words), 1-line description
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - 4 feature cards with colored icons (red/yellow/blue/purple), 2x2 grid, responsive. 113 frontend tests pass, typecheck clean.
 
 ---
 
-#### US-M.3: Dashboard Preview
+#### US-M.3: Dashboard Preview ✅
 **As a** visitor
 **I want** to see a preview of the dashboard
 **So that** I know what to expect
 
 **Acceptance Criteria:**
-- [ ] Screenshot or mockup of dashboard UI
-- [ ] Device frame around preview (laptop or browser window)
-- [ ] CTA button below: "Try it Free"
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Screenshot or mockup of dashboard UI
+- [x] Device frame around preview (laptop or browser window)
+- [x] CTA button below: "Try it Free"
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Browser chrome frame with colored dots and URL bar, dashboard mockup with 4 issue cards, Try it Free CTA. 116 frontend tests pass, typecheck clean.
 
 ---
 
-#### US-M.4: Trust Section
+#### US-M.4: Trust Section ✅
 **As a** visitor
 **I want** to know my data is secure
 **So that** I feel confident signing up
 
 **Acceptance Criteria:**
-- [ ] Section with security/privacy messaging
-- [ ] Key points: "Your API keys are encrypted", "Connects to YOUR servers", "No data stored on our servers beyond cache"
-- [ ] Optional: shield/lock icon
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Section with security/privacy messaging
+- [x] Key points: "Your API keys are encrypted", "Connects to YOUR servers", "No data stored on our servers beyond cache"
+- [x] Optional: shield/lock icon
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Trust section with shield icon, 3 key security points with checkmarks. 121 frontend tests pass, typecheck clean.
 
 ---
 
-#### US-M.5: Auth Page CTAs
+#### US-M.5: Auth Page CTAs ✅
 **As a** visitor
 **I want** clear calls-to-action on auth pages
 **So that** I convert easily
 
 **Acceptance Criteria:**
-- [ ] Register page: value-focused headline above form
-- [ ] Login page: clear submit button and "Don't have an account?" link
-- [ ] Consistent branding (colors, fonts) with landing page
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Register page: value-focused headline above form
+- [x] Login page: clear submit button and "Don't have an account?" link
+- [x] Consistent branding (colors, fonts) with landing page
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Register page: 'Get Started Free' headline, 'Create Free Account' button. Login page: clear 'Log In' button, 'Sign up' link. Consistent CSS variables with landing page. 126 frontend tests pass, typecheck clean.
 
 ### Non-Goals
 - Pricing page (free tier only for v1)
@@ -1334,7 +1382,7 @@ Create an attractive landing page and auth flow to convert visitors into users.
 
 ## Checklist Summary
 
-### Completed ✅ (33 stories)
+### Completed ✅ (47 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -1368,25 +1416,20 @@ Create an attractive landing page and auth flow to convert visitors into users.
 - [x] US-6.3: Recently Available Content (INFO)
 - [x] US-8.1: Configure Thresholds
 - [x] US-UI.1: Design System Refinement
+- [x] US-9.1: Fix Page Titles
+- [x] US-9.2: Add Favicon
+- [x] US-9.3: Add CORS Production URL
+- [x] US-9.4: Add IMDB/TMDB Links to Content Items
+- [x] US-10.1: Add Celery Infrastructure
+- [x] US-10.2: Daily Sync Scheduler
+- [x] US-11.1: Add Expiration to Whitelist Schema
+- [x] US-11.2: Whitelist Expiration Logic
+- [x] US-11.3: Temporary Whitelist UI
+- [x] US-M.1: Landing Page Hero
+- [x] US-M.2: Feature Highlights
+- [x] US-M.3: Dashboard Preview
+- [x] US-M.4: Trust Section
+- [x] US-M.5: Auth Page CTAs
 
-### Next Up - Infrastructure & Polish (4 stories) **← START HERE**
-- [ ] US-9.1: Fix Page Titles
-- [ ] US-9.2: Add Favicon
-- [ ] US-9.3: Add CORS Production URL
-- [ ] US-9.4: Add IMDB/TMDB Links to Content Items
-
-### Automatic Sync Scheduler (2 stories)
-- [ ] US-10.1: Add Celery Infrastructure
-- [ ] US-10.2: Daily Sync Scheduler
-
-### Temporary Whitelisting (3 stories)
-- [ ] US-11.1: Add Expiration to Whitelist Schema
-- [ ] US-11.2: Whitelist Expiration Logic
-- [ ] US-11.3: Temporary Whitelist UI
-
-### Marketing (5 stories)
-- [ ] US-M.1: Landing Page Hero
-- [ ] US-M.2: Feature Highlights
-- [ ] US-M.3: Dashboard Preview
-- [ ] US-M.4: Trust Section
-- [ ] US-M.5: Auth Page CTAs
+### Pending (1 story)
+- [ ] US-D.6: Inline Badge Actions

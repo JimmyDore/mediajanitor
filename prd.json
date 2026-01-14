@@ -376,6 +376,27 @@
       "notes": "Completed 2026-01-13 - Navigation shows Dashboard | Issues | Whitelist | Settings with correct active states"
     },
     {
+      "id": "US-D.6",
+      "title": "Inline Badge Actions",
+      "story": "As a user, I want action buttons attached directly to issue badges, so that I know exactly which problem each action resolves",
+      "acceptanceCriteria": [
+        "OLD badge shows inline dismiss/shield button to protect from deletion",
+        "LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)",
+        "LARGE badge shows info tooltip on hover: Re-download in lower quality from Radarr/Sonarr",
+        "REQUEST badge shows info tooltip on hover: Check status in Jellyseerr",
+        "Clicking inline action behaves same as current buttons (calls same API endpoints)",
+        "Action buttons show tooltip on hover: Protect from deletion, Mark French-only, Exempt from language checks",
+        "Remove separate Actions column from table",
+        "Loading state shown on badge action while API call in progress",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
       "id": "US-4.1",
       "title": "Large Movies Backend Service",
       "story": "As a user, I want to identify movies larger than 13GB, so that I can re-download them in lower quality",
