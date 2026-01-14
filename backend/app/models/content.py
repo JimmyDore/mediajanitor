@@ -1,5 +1,7 @@
 """Pydantic models for content analysis endpoints."""
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -31,6 +33,7 @@ class WhitelistAddRequest(BaseModel):
     jellyfin_id: str
     name: str
     media_type: str  # "Movie" or "Series"
+    expires_at: datetime | None = None  # NULL = permanent (never expires)
 
 
 class WhitelistAddResponse(BaseModel):
@@ -49,6 +52,7 @@ class WhitelistItem(BaseModel):
     name: str
     media_type: str  # "Movie" or "Series"
     created_at: str
+    expires_at: str | None = None  # ISO format datetime or null for permanent
 
 
 class WhitelistListResponse(BaseModel):

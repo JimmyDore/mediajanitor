@@ -113,6 +113,7 @@ class ContentWhitelist(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "Movie" or "Series"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
 class FrenchOnlyWhitelist(Base):
@@ -128,6 +129,7 @@ class FrenchOnlyWhitelist(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "Movie" or "Series"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
 class LanguageExemptWhitelist(Base):
@@ -143,6 +145,7 @@ class LanguageExemptWhitelist(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "Movie" or "Series"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
 class SyncStatus(Base):

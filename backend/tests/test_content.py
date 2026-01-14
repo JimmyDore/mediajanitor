@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.database import User, CachedMediaItem, ContentWhitelist
+from app.database import (
+    User,
+    CachedMediaItem,
+    ContentWhitelist,
+    FrenchOnlyWhitelist,
+    LanguageExemptWhitelist,
+)
 from tests.conftest import TestingAsyncSessionLocal
 
 
@@ -481,6 +487,35 @@ class TestContentWhitelistModel:
             await session.commit()
             assert entry.id is not None
             assert entry.created_at is not None
+
+    @pytest.mark.asyncio
+    async def test_content_whitelist_has_expires_at_column(self, client: TestClient) -> None:
+        """ContentWhitelist model should have nullable expires_at column."""
+        from datetime import datetime, timezone, timedelta
+        async with TestingAsyncSessionLocal() as session:
+            # Test with expires_at set
+            entry_with_expiry = ContentWhitelist(
+                user_id=1,
+                jellyfin_id="test-expiry-123",
+                name="Temporary Protected",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            )
+            session.add(entry_with_expiry)
+            await session.commit()
+            assert entry_with_expiry.expires_at is not None
+
+            # Test with expires_at None (permanent)
+            entry_permanent = ContentWhitelist(
+                user_id=1,
+                jellyfin_id="test-permanent-123",
+                name="Permanent Protected",
+                media_type="Movie",
+                expires_at=None,
+            )
+            session.add(entry_permanent)
+            await session.commit()
+            assert entry_permanent.expires_at is None
 
 
 class TestAddToContentWhitelist:
@@ -3816,3 +3851,71 @@ class TestProviderIds:
         assert len(data["items"]) == 1
         item_data = data["items"][0]
         assert item_data["tmdb_id"] == 55555
+
+
+class TestWhitelistExpirationSchema:
+    """Test whitelist expires_at column for all whitelist tables (US-11.1)."""
+
+    @pytest.mark.asyncio
+    async def test_french_only_whitelist_has_expires_at_column(
+        self, client: TestClient
+    ) -> None:
+        """FrenchOnlyWhitelist model should have nullable expires_at column."""
+        from datetime import datetime, timezone, timedelta
+
+        async with TestingAsyncSessionLocal() as session:
+            # Test with expires_at set
+            entry_with_expiry = FrenchOnlyWhitelist(
+                user_id=1,
+                jellyfin_id="french-expiry-123",
+                name="Temporary French-Only",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            )
+            session.add(entry_with_expiry)
+            await session.commit()
+            assert entry_with_expiry.expires_at is not None
+
+            # Test with expires_at None (permanent)
+            entry_permanent = FrenchOnlyWhitelist(
+                user_id=1,
+                jellyfin_id="french-permanent-123",
+                name="Permanent French-Only",
+                media_type="Movie",
+                expires_at=None,
+            )
+            session.add(entry_permanent)
+            await session.commit()
+            assert entry_permanent.expires_at is None
+
+    @pytest.mark.asyncio
+    async def test_language_exempt_whitelist_has_expires_at_column(
+        self, client: TestClient
+    ) -> None:
+        """LanguageExemptWhitelist model should have nullable expires_at column."""
+        from datetime import datetime, timezone, timedelta
+
+        async with TestingAsyncSessionLocal() as session:
+            # Test with expires_at set
+            entry_with_expiry = LanguageExemptWhitelist(
+                user_id=1,
+                jellyfin_id="exempt-expiry-123",
+                name="Temporary Exempt",
+                media_type="Series",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=180),
+            )
+            session.add(entry_with_expiry)
+            await session.commit()
+            assert entry_with_expiry.expires_at is not None
+
+            # Test with expires_at None (permanent)
+            entry_permanent = LanguageExemptWhitelist(
+                user_id=1,
+                jellyfin_id="exempt-permanent-123",
+                name="Permanent Exempt",
+                media_type="Series",
+                expires_at=None,
+            )
+            session.add(entry_permanent)
+            await session.commit()
+            assert entry_permanent.expires_at is None
