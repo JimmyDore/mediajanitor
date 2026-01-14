@@ -514,5 +514,128 @@ describe('Unified Issues API Integration', () => {
 			expect(item.media_type).toBe('Series');
 			// TMDB URL for series would use /tv/{id} path (constructed by frontend)
 		});
+
+		it('returns request items with release_date field (US-13.3)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'request-123',
+						name: 'Future Movie',
+						media_type: 'movie',
+						production_year: null,
+						size_bytes: null,
+						size_formatted: '',
+						last_played_date: null,
+						path: null,
+						issues: ['request'],
+						tmdb_id: '99999',
+						imdb_id: null,
+						requested_by: 'user1',
+						request_date: '2026-01-01T10:00:00Z',
+						missing_seasons: null,
+						release_date: '2026-07-15'
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 0,
+				total_size_formatted: '0 B'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=requests', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.release_date).toBe('2026-07-15');
+			expect(item.requested_by).toBe('user1');
+		});
+
+		it('handles request items with null release_date (US-13.3)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'request-456',
+						name: 'Unknown Release Movie',
+						media_type: 'movie',
+						production_year: null,
+						size_bytes: null,
+						size_formatted: '',
+						last_played_date: null,
+						path: null,
+						issues: ['request'],
+						tmdb_id: '88888',
+						imdb_id: null,
+						requested_by: 'user2',
+						request_date: '2026-01-05T10:00:00Z',
+						missing_seasons: null,
+						release_date: null
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 0,
+				total_size_formatted: '0 B'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=requests', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.release_date).toBeNull();
+		});
+
+		it('returns TV request items with firstAirDate as release_date (US-13.3)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'request-789',
+						name: 'New TV Show',
+						media_type: 'tv',
+						production_year: null,
+						size_bytes: null,
+						size_formatted: '',
+						last_played_date: null,
+						path: null,
+						issues: ['request'],
+						tmdb_id: '77777',
+						imdb_id: null,
+						requested_by: 'user3',
+						request_date: '2026-01-10T10:00:00Z',
+						missing_seasons: [1, 2],
+						release_date: '2025-10-01'
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 0,
+				total_size_formatted: '0 B'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=requests', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.release_date).toBe('2025-10-01');
+			expect(item.media_type).toBe('tv');
+			expect(item.missing_seasons).toEqual([1, 2]);
+		});
 	});
 });

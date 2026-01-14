@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database import User, UserSettings, CachedMediaItem, CachedJellyseerrRequest, SyncStatus
-from app.services.sync import extract_title_from_request
+from app.services.sync import extract_title_from_request, extract_release_date_from_request
 from tests.conftest import TestingAsyncSessionLocal
 
 
@@ -109,6 +109,78 @@ class TestExtractTitleFromRequest:
         assert extract_title_from_request(request) == "123"
 
 
+class TestExtractReleaseDateFromRequest:
+    """Test release date extraction from Jellyseerr request data (US-13.3)."""
+
+    def test_extracts_release_date_for_movies(self) -> None:
+        """Movies should use 'releaseDate' field."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "releaseDate": "2026-07-15",
+            }
+        }
+        assert extract_release_date_from_request(request) == "2026-07-15"
+
+    def test_extracts_first_air_date_for_tv(self) -> None:
+        """TV shows should use 'firstAirDate' field."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+                "firstAirDate": "2023-10-01",
+            }
+        }
+        assert extract_release_date_from_request(request) == "2023-10-01"
+
+    def test_returns_none_for_missing_release_date_movie(self) -> None:
+        """Should return None if releaseDate is missing for movie."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+            }
+        }
+        assert extract_release_date_from_request(request) is None
+
+    def test_returns_none_for_missing_first_air_date_tv(self) -> None:
+        """Should return None if firstAirDate is missing for TV."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+            }
+        }
+        assert extract_release_date_from_request(request) is None
+
+    def test_returns_none_for_unknown_media_type(self) -> None:
+        """Should return None if mediaType is unknown."""
+        request = {
+            "media": {
+                "mediaType": "unknown",
+                "releaseDate": "2026-01-01",
+            }
+        }
+        assert extract_release_date_from_request(request) is None
+
+    def test_returns_none_for_empty_media(self) -> None:
+        """Should return None if media object is empty."""
+        request = {"media": {}}
+        assert extract_release_date_from_request(request) is None
+
+    def test_returns_none_for_empty_request(self) -> None:
+        """Should return None for empty request."""
+        assert extract_release_date_from_request({}) is None
+
+    def test_handles_iso_datetime_format(self) -> None:
+        """Should handle ISO datetime format from API."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "releaseDate": "2026-07-15T00:00:00.000Z",
+            }
+        }
+        # Should return as-is (the API returns it this way sometimes)
+        assert extract_release_date_from_request(request) == "2026-07-15T00:00:00.000Z"
+
+
 class TestSyncModels:
     """Test database models for caching."""
 
@@ -153,6 +225,27 @@ class TestSyncModels:
             session.add(request)
             await session.commit()
             assert request.id is not None
+
+    @pytest.mark.asyncio
+    async def test_cached_jellyseerr_request_has_release_date_column(self, client: TestClient) -> None:
+        """CachedJellyseerrRequest should have release_date column (US-13.3)."""
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=1,
+                jellyseerr_id=124,
+                tmdb_id=789,
+                media_type="movie",
+                status=2,
+                title="Future Movie",
+                requested_by="TestUser",
+                created_at_source="2024-01-01T10:00:00Z",
+                release_date="2026-07-15",  # New column
+                raw_data={"full": "request"},
+            )
+            session.add(request)
+            await session.commit()
+            assert request.id is not None
+            assert request.release_date == "2026-07-15"
 
     @pytest.mark.asyncio
     async def test_sync_status_model_exists(self, client: TestClient) -> None:

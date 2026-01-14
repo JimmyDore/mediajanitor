@@ -20,6 +20,7 @@
 		requested_by: string | null;
 		request_date: string | null;
 		missing_seasons: number[] | null;
+		release_date: string | null;  // Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
 	}
 
 	interface ContentIssuesResponse {
@@ -166,6 +167,29 @@
 			return `${daysAgo}d ago`;
 		} catch {
 			return '?';
+		}
+	}
+
+	function formatReleaseDate(releaseDate: string | null): string {
+		if (!releaseDate) return '—';
+		try {
+			const date = new Date(releaseDate);
+			// Format as "Jan 15, 2026"
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		} catch {
+			return '?';
+		}
+	}
+
+	function isFutureRelease(releaseDate: string | null): boolean {
+		if (!releaseDate) return false;
+		try {
+			const date = new Date(releaseDate);
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			return date > today;
+		} catch {
+			return false;
 		}
 	}
 
@@ -457,6 +481,9 @@
 									Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
+							{#if activeFilter === 'requests'}
+								<th class="col-release">Release</th>
+							{/if}
 							<th class="col-watched">
 								<button class="sort-btn" onclick={() => toggleSort('date')}>
 									{activeFilter === 'requests' ? 'Requested' : 'Watched'} {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -573,6 +600,11 @@
 										{item.size_formatted}
 									{/if}
 								</td>
+								{#if activeFilter === 'requests'}
+									<td class="col-release" class:future={isFutureRelease(item.release_date)}>
+										{formatReleaseDate(item.release_date)}
+									</td>
+								{/if}
 								<td class="col-watched" class:never={!isRequestItem(item) && !item.last_played_date}>
 									{#if isRequestItem(item)}
 										{formatRequestDate(item.request_date)}
@@ -783,7 +815,7 @@
 
 	/* Columns */
 	.col-name {
-		width: 45%;
+		width: 40%;
 	}
 
 	.name-cell {
@@ -959,6 +991,19 @@
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	.col-release {
+		width: 12%;
+		font-family: var(--font-mono);
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		text-align: right;
+	}
+
+	.col-release.future {
+		color: var(--warning);
+		font-weight: var(--font-weight-medium);
 	}
 
 	.col-watched {

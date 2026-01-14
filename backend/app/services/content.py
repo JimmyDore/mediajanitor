@@ -1326,6 +1326,7 @@ async def get_unavailable_requests(
             issues=["request"],
             missing_seasons=missing_seasons if missing_seasons else None,
             tmdb_id=request.tmdb_id,
+            release_date=request.release_date,
         )
 
         unavailable_items.append((request_date, item))

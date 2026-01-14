@@ -96,6 +96,7 @@ class CachedJellyseerrRequest(Base):
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     requested_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    release_date: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Movie releaseDate or TV firstAirDate
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

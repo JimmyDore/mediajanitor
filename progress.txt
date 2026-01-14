@@ -1037,10 +1037,28 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-13.2] improve request item display in issues view
 
+### 2026-01-14: US-13.3 - Add Release Date Column to Requests
+- Added release_date column to CachedJellyseerrRequest database table
+- Created Alembic migration for new column
+- Updated sync.py with extract_release_date_from_request() function:
+  - Movies: uses media.releaseDate
+  - TV shows: uses media.firstAirDate
+- Added release_date field to ContentIssueItem and UnavailableRequestItem Pydantic models
+- Frontend: Release column displays on requests filter:
+  - Shows date in readable format (e.g., "Jan 15, 2026")
+  - Future dates highlighted in warning color (--warning)
+  - Column only appears when filter=requests
+- Backend tests: 9 new tests for release date extraction
+- Frontend tests: 3 new tests for release_date field handling
+- 227 backend + 129 frontend tests pass, typecheck clean
+- Files changed: backend/app/database.py, backend/app/services/sync.py, backend/app/services/content.py, backend/app/models/content.py, backend/app/routers/content.py, backend/alembic/versions/*, backend/tests/test_sync.py, backend/tests/test_integration.py, frontend/src/routes/issues/+page.svelte, frontend/tests/issues.test.ts, prd.json
+- Commits:
+  - feat(requests): [US-13.3] add release date column to requests view
+
 ## Current Status
 
 **Phase**: Epic 13 - Requests Improvements (In Progress)
-**Total Stories**: 52 stories (47 passes: true, 5 remaining)
+**Total Stories**: 52 stories (48 passes: true, 4 remaining)
 
 ## Notes
 

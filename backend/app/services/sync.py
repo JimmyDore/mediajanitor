@@ -110,6 +110,27 @@ def extract_title_from_request(req: dict[str, Any]) -> str:
     return "Unknown"
 
 
+def extract_release_date_from_request(req: dict[str, Any]) -> str | None:
+    """
+    Extract release date from a Jellyseerr request using embedded data.
+
+    For movies: uses media.releaseDate
+    For TV shows: uses media.firstAirDate
+
+    Returns date string in format stored by Jellyseerr (typically YYYY-MM-DD).
+    """
+    media = req.get("media", {})
+    media_type = media.get("mediaType", "")
+
+    release_date: str | None = None
+    if media_type == "movie":
+        release_date = media.get("releaseDate")
+    elif media_type == "tv":
+        release_date = media.get("firstAirDate")
+
+    return release_date
+
+
 async def fetch_jellyseerr_requests(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
@@ -237,6 +258,9 @@ async def cache_jellyseerr_requests(
         # Extract title using fallback chain (from embedded data, no extra API calls)
         title = extract_title_from_request(req)
 
+        # Extract release date (movies: releaseDate, TV: firstAirDate)
+        release_date = extract_release_date_from_request(req)
+
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,
             jellyseerr_id=req.get("id", 0),
@@ -246,6 +270,7 @@ async def cache_jellyseerr_requests(
             title=title,
             requested_by=requested_by.get("displayName"),
             created_at_source=req.get("createdAt"),
+            release_date=release_date,
             raw_data=req,
         )
         db.add(cached_request)

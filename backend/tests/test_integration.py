@@ -157,7 +157,11 @@ class TestIntegrationContentIssues:
                 assert item.get("language_issues") is not None, f"Item {item['name']} missing language_issues"
 
     def test_issues_endpoint_filter_requests(self, auth_headers):
-        """Test GET /api/content/issues?filter=requests returns unavailable requests."""
+        """Test GET /api/content/issues?filter=requests returns unavailable requests.
+
+        Note: Requests are converted to the unified ContentIssueItem format,
+        using jellyfin_id='request-{jellyseerr_id}' and name instead of title.
+        """
         with httpx.Client(base_url=BASE_URL) as client:
             response = client.get(
                 "/api/content/issues",
@@ -173,13 +177,16 @@ class TestIntegrationContentIssues:
             assert "total_count" in data
             assert data["total_count"] == len(data["items"])
 
-            # If there are items, verify they have required request fields
+            # If there are items, verify they have required unified format fields
             if data["items"]:
                 item = data["items"][0]
-                required_fields = ["jellyseerr_id", "title", "media_type", "issues"]
+                # Unified format uses jellyfin_id (with request- prefix) and name instead of jellyseerr_id and title
+                required_fields = ["jellyfin_id", "name", "media_type", "issues"]
                 for field in required_fields:
                     assert field in item, f"Missing required field: {field}"
                 assert "request" in item["issues"]
+                # Verify jellyfin_id starts with 'request-' for request items
+                assert item["jellyfin_id"].startswith("request-"), "Request items should have jellyfin_id starting with 'request-'"
 
     def test_issues_items_have_required_fields(self, auth_headers):
         """Test that each issue item has all required fields."""

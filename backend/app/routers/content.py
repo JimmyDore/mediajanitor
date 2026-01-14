@@ -98,6 +98,7 @@ async def get_issues(
                 requested_by=req.requested_by,
                 request_date=req.request_date,
                 missing_seasons=req.missing_seasons,
+                release_date=req.release_date,
             )
             for req in request_items
         ]

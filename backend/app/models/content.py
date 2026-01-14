@@ -148,6 +148,7 @@ class ContentIssueItem(BaseModel):
     requested_by: str | None = None  # Who requested it
     request_date: str | None = None  # When it was requested
     missing_seasons: list[int] | None = None  # For TV shows only - which seasons are missing
+    release_date: str | None = None  # Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
 
 
 class ContentIssuesResponse(BaseModel):
@@ -173,6 +174,7 @@ class UnavailableRequestItem(BaseModel):
     issues: list[str]  # ["request"]
     missing_seasons: list[int] | None = None  # For TV shows only
     tmdb_id: int | None = None  # TMDB ID for external links
+    release_date: str | None = None  # Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
 
 
 class UnavailableRequestsResponse(BaseModel):
