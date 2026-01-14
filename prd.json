@@ -1,7 +1,25 @@
 {
   "project": "Media Janitor",
-  "branchName": "ralph/ux-improvements-and-backlog",
+  "branchName": "ralph/ux-and-delete-fixes",
   "userStories": [
+    {
+      "id": "US-15.10",
+      "title": "Lookup Jellyseerr Request by TMDB ID When Deleting",
+      "story": "As a media server owner, I want Jellyseerr requests to be deleted when I delete content from any tab, so that I don't have orphaned requests after deleting movies/series",
+      "acceptanceCriteria": [
+        "Backend looks up Jellyseerr request by TMDB ID + media_type from cached_jellyseerr_requests table",
+        "Lookup only happens when delete_from_jellyseerr=true AND no jellyseerr_request_id provided",
+        "If user unchecked 'Delete from Jellyseerr' in modal, no lookup or deletion occurs",
+        "If matching request found, delete it from Jellyseerr",
+        "If no matching request exists, skip gracefully (not an error)",
+        "Response message indicates whether Jellyseerr request was found and deleted",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Root Cause: Backend only deletes from Jellyseerr when jellyseerr_request_id is provided. File: backend/app/routers/content.py"
+    },
     {
       "id": "US-12.1",
       "title": "Add Threshold Help Text",
@@ -15,7 +33,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 1,
+      "priority": 10,
       "passes": false,
       "notes": "File: frontend/src/routes/settings/+page.svelte"
     },
@@ -31,7 +49,7 @@
         "Unit tests pass",
         "Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)"
       ],
-      "priority": 2,
+      "priority": 11,
       "passes": false,
       "notes": "Files: frontend/src/routes/issues/+page.svelte, backend/app/routers/content.py, backend/app/services/content.py"
     },
@@ -47,7 +65,7 @@
         "Unit tests pass",
         "Verify in browser: click TMDB link on Requests tab -> correct page opens"
       ],
-      "priority": 3,
+      "priority": 12,
       "passes": false,
       "notes": "Root cause: getTmdbUrl() checks item.media_type === 'Movie' but request items use lowercase 'movie'. File: frontend/src/routes/issues/+page.svelte"
     },
@@ -65,9 +83,26 @@
         "Unit tests pass",
         "Verify in browser: external links appear on items in all tabs"
       ],
-      "priority": 4,
+      "priority": 13,
       "passes": false,
       "notes": "Backend already extracts TMDB/IMDb IDs via extract_provider_ids(). File: frontend/src/routes/issues/+page.svelte"
+    },
+    {
+      "id": "US-12.6",
+      "title": "Fix Watch Status Display",
+      "story": "As a user, I want to see accurate watch status for content items, so that I can make informed decisions about what to delete",
+      "acceptanceCriteria": [
+        "Items that have been watched show relative date (e.g., '3mo ago') or 'Watched' if no date",
+        "Items never watched show 'Never'",
+        "Backend returns 'played' boolean in ContentIssueItem response",
+        "Frontend uses both 'played' and 'last_played_date' to determine display",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: watched items no longer show 'Never'"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Root cause: ContentIssueItem model missing 'played' boolean field. Files: backend/app/models/content.py, backend/app/services/content.py, frontend/src/routes/issues/+page.svelte"
     },
     {
       "id": "US-15.1",
@@ -80,7 +115,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 5,
+      "priority": 20,
       "passes": false,
       "notes": "Root Cause: Frontend passes item.name which may be the fallback TMDB-{id} string. Files: backend/app/routers/whitelist.py, backend/app/services/content.py"
     },
@@ -97,7 +132,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 6,
+      "priority": 21,
       "passes": false,
       "notes": "Root Cause: Layout shows loading for ALL routes. Should only show loading on protected routes. File: frontend/src/routes/+layout.svelte"
     },
@@ -111,115 +146,64 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 7,
+      "priority": 22,
       "passes": false,
       "notes": "Unused exports: contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi. File: frontend/src/lib/api.ts"
     },
     {
-      "id": "US-15.2",
-      "title": "Add Radarr Connection Settings",
-      "story": "As a user, I want to connect my Radarr instance, so that I can delete movies directly from the dashboard",
+      "id": "US-16.1",
+      "title": "Theme Preference Backend",
+      "story": "As a developer, I want a backend endpoint to store theme preference, so that the frontend can persist user's theme choice",
       "acceptanceCriteria": [
-        "Settings page has Radarr section: URL + API Key",
-        "Backend validates connection by calling GET /api/v3/system/status",
-        "Credentials stored encrypted in database",
+        "Add theme_preference column to UserSettings model (enum: light, dark, system)",
+        "Default value is 'system' (follow OS preference)",
+        "Create Alembic migration for the new column",
+        "GET /api/settings/display includes theme_preference field",
+        "POST /api/settings/display accepts theme_preference field",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Files: backend/app/database.py, backend/app/models/settings.py, backend/app/routers/settings.py, backend/alembic/versions/"
+    },
+    {
+      "id": "US-16.2",
+      "title": "Theme Store and Application",
+      "story": "As a user, I want my theme choice to be applied across the app, so that I see consistent light/dark styling",
+      "acceptanceCriteria": [
+        "Create theme store that reads user preference from API",
+        "Apply theme via data-theme attribute on <html> element",
+        "data-theme='light' forces light mode",
+        "data-theme='dark' forces dark mode",
+        "data-theme='system' (or no attribute) follows OS preference",
+        "Theme persists across page navigation",
+        "Theme loads correctly on page refresh",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Files: frontend/src/lib/stores/theme.ts, frontend/src/app.css, frontend/src/routes/+layout.svelte"
+    },
+    {
+      "id": "US-16.3",
+      "title": "Theme Toggle UI in Settings",
+      "story": "As a user, I want a theme selector in settings, so that I can choose between light, dark, or system preference",
+      "acceptanceCriteria": [
+        "Settings page Display section has theme selector",
+        "Three options: Light, Dark, System (default)",
+        "Selector shows current preference",
+        "Changing selection immediately updates the theme",
+        "Saves preference to backend on change",
         "Toast notification on success/error",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 10,
-      "passes": true,
-      "notes": "API: X-Api-Key header, test endpoint: GET /api/v3/system/status. Files: backend/app/database.py, backend/app/routers/settings.py, backend/app/services/radarr.py, frontend/src/routes/settings/+page.svelte"
-    },
-    {
-      "id": "US-15.3",
-      "title": "Add Sonarr Connection Settings",
-      "story": "As a user, I want to connect my Sonarr instance, so that I can delete TV series directly from the dashboard",
-      "acceptanceCriteria": [
-        "Settings page has Sonarr section: URL + API Key",
-        "Backend validates connection by calling GET /api/v3/system/status",
-        "Credentials stored encrypted in database",
-        "Toast notification on success/error",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "API: X-Api-Key header, test endpoint: GET /api/v3/system/status. Files: backend/app/database.py, backend/app/routers/settings.py, backend/app/services/sonarr.py, frontend/src/routes/settings/+page.svelte"
-    },
-    {
-      "id": "US-15.4",
-      "title": "Delete Movie from Radarr",
-      "story": "As a user, I want to delete a movie via the dashboard, so that it's removed from Radarr and Jellyfin automatically",
-      "acceptanceCriteria": [
-        "Backend endpoint to delete movie by TMDB ID",
-        "Finds Radarr movie ID via GET /api/v3/movie?tmdbId={id}",
-        "Deletes via DELETE /api/v3/movie/{id}?deleteFiles=true",
-        "Returns success/error response",
-        "Deleting from Radarr with files auto-deletes from Jellyfin",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 20,
+      "priority": 52,
       "passes": false,
-      "notes": "Depends on US-15.2. Files: backend/app/services/radarr.py, backend/app/routers/content.py"
-    },
-    {
-      "id": "US-15.5",
-      "title": "Delete Series from Sonarr",
-      "story": "As a user, I want to delete a TV series via the dashboard, so that it's removed from Sonarr and Jellyfin automatically",
-      "acceptanceCriteria": [
-        "Backend endpoint to delete series by TMDB ID",
-        "Finds Sonarr series via GET /api/v3/series (iterate to find tmdbId match)",
-        "Deletes via DELETE /api/v3/series/{id}?deleteFiles=true",
-        "Returns success/error response",
-        "Deleting from Sonarr with files auto-deletes from Jellyfin",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 21,
-      "passes": false,
-      "notes": "Depends on US-15.3. Files: backend/app/services/sonarr.py, backend/app/routers/content.py"
-    },
-    {
-      "id": "US-15.6",
-      "title": "Delete Jellyseerr Request",
-      "story": "As a user, I want to delete a request from Jellyseerr, so that it's removed from the requests list",
-      "acceptanceCriteria": [
-        "Backend endpoint to delete request by jellyseerr_id",
-        "Calls DELETE /api/v1/request/{requestId} on Jellyseerr",
-        "Returns success/error response (204 No Content on success)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 22,
-      "passes": false,
-      "notes": "API: X-Api-Key header, response: 204 No Content. Files: backend/app/services/jellyseerr.py, backend/app/routers/content.py"
-    },
-    {
-      "id": "US-15.7",
-      "title": "Delete Content UI",
-      "story": "As a user, I want a delete button on content items, so that I can remove content without leaving the dashboard",
-      "acceptanceCriteria": [
-        "\"Delete\" button appears on content items in Issues view",
-        "Button disabled/greyed if Radarr/Sonarr not configured",
-        "Tooltip explains why disabled when not configured",
-        "Confirmation modal with 2 checkboxes: Delete from Radarr/Sonarr (default checked), Delete from Jellyseerr (default checked)",
-        "Loading state during deletion",
-        "Toast notification on success/error",
-        "Item removed from list after successful deletion",
-        "For Movies: calls Radarr delete",
-        "For Series: calls Sonarr delete",
-        "If request exists: optionally deletes from Jellyseerr",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 30,
-      "passes": false,
-      "notes": "Depends on US-15.4, US-15.5, US-15.6. File: frontend/src/routes/issues/+page.svelte"
+      "notes": "File: frontend/src/routes/settings/+page.svelte"
     }
   ]
 }

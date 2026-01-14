@@ -1494,6 +1494,29 @@ Fix usability issues on the Issues page and Settings page to improve clarity and
 
 ---
 
+#### US-12.6: Fix Watch Status Display
+**As a** user
+**I want** to see accurate watch status for content items
+**So that** I can make informed decisions about what to delete
+
+**Acceptance Criteria:**
+- [ ] Items that have been watched show relative date (e.g., "3mo ago") or "Watched" if no date
+- [ ] Items never watched show "Never"
+- [ ] Backend returns `played` boolean in ContentIssueItem response
+- [ ] Frontend uses both `played` and `last_played_date` to determine display
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: watched items no longer show "Never"
+
+**Root cause:** ContentIssueItem model missing `played` boolean field. Frontend only receives `last_played_date` which is often null even for watched items.
+
+**Files:**
+- `backend/app/models/content.py` - Add `played: bool` to ContentIssueItem
+- `backend/app/services/content.py` - Include `played=item.played` in response
+- `frontend/src/routes/issues/+page.svelte` - Update formatLastWatched() to use both fields
+
+---
+
 ### Non-Goals
 - Adding Jellyfin direct links (would require Jellyfin server URL per item)
 - Changing threshold functionality (just improving labels)
@@ -1723,9 +1746,362 @@ Provide in-app help documentation in FAQ format to help users understand and use
 
 ---
 
+## Epic 15: Backlog
+
+### Overview
+Miscellaneous improvements including bug fixes, delete functionality with Radarr/Sonarr integration, and code cleanup.
+
+### Goals
+- Fix known bugs (hidden requests display, auth loading delay)
+- Enable content deletion directly from dashboard via Radarr/Sonarr
+- Remove unused code
+
+### User Stories
+
+#### US-15.1: Fix Hidden Requests Showing TMDB IDs
+**As a** user
+**I want** hidden requests to show actual movie/show titles
+**So that** I can identify what content I've hidden
+
+**Acceptance Criteria:**
+- [ ] Hidden Requests tab shows actual titles, not "TMDB-123456"
+- [ ] Backend looks up title from `CachedJellyseerrRequest` table when whitelisting
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Root Cause:** Frontend passes `item.name` which may be the fallback `TMDB-{id}` string when real title unavailable.
+
+**Files:**
+- `backend/app/routers/whitelist.py` - Modify POST /api/whitelist/requests to fetch title from DB
+- `backend/app/services/content.py` - Add helper to get request title by jellyseerr_id
+
+---
+
+#### US-15.2: Add Radarr Connection Settings ✅
+**As a** user
+**I want** to connect my Radarr instance
+**So that** I can delete movies directly from the dashboard
+
+**Acceptance Criteria:**
+- [x] Settings page has Radarr section: URL + API Key
+- [x] Backend validates connection by calling `GET /api/v3/system/status`
+- [x] Credentials stored encrypted in database
+- [x] Toast notification on success/error
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**API Reference:**
+- Auth: `X-Api-Key` header
+- Test endpoint: `GET /api/v3/system/status`
+
+**Files:**
+- `backend/app/database.py` - Add `radarr_server_url`, `radarr_api_key_encrypted` to UserSettings
+- `backend/app/routers/settings.py` - Add POST /api/settings/radarr endpoint
+- `backend/app/services/radarr.py` - New service for Radarr API calls
+- `frontend/src/routes/settings/+page.svelte` - Add Radarr form section
+
+**Note:** Completed 2026-01-14
+
+---
+
+#### US-15.3: Add Sonarr Connection Settings ✅
+**As a** user
+**I want** to connect my Sonarr instance
+**So that** I can delete TV series directly from the dashboard
+
+**Acceptance Criteria:**
+- [x] Settings page has Sonarr section: URL + API Key
+- [x] Backend validates connection by calling `GET /api/v3/system/status`
+- [x] Credentials stored encrypted in database
+- [x] Toast notification on success/error
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**API Reference:**
+- Auth: `X-Api-Key` header
+- Test endpoint: `GET /api/v3/system/status`
+
+**Files:**
+- `backend/app/database.py` - Add `sonarr_server_url`, `sonarr_api_key_encrypted` to UserSettings
+- `backend/app/routers/settings.py` - Add POST /api/settings/sonarr endpoint
+- `backend/app/services/sonarr.py` - New service for Sonarr API calls
+- `frontend/src/routes/settings/+page.svelte` - Add Sonarr form section
+
+**Note:** Completed 2026-01-14
+
+---
+
+#### US-15.4: Delete Movie from Radarr ✅
+**As a** user
+**I want** to delete a movie via the dashboard
+**So that** it's removed from Radarr and Jellyfin automatically
+
+**Acceptance Criteria:**
+- [x] Backend endpoint to delete movie by TMDB ID
+- [x] Finds Radarr movie ID via `GET /api/v3/movie?tmdbId={id}`
+- [x] Deletes via `DELETE /api/v3/movie/{id}?deleteFiles=true`
+- [x] Returns success/error response
+- [x] Deleting from Radarr with files auto-deletes from Jellyfin
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Depends on US-15.2 (completed). Files: backend/app/services/radarr.py, backend/app/routers/content.py
+
+**Files:**
+- `backend/app/services/radarr.py` - Add `delete_movie_by_tmdb_id()`
+- `backend/app/routers/content.py` - Add DELETE /api/content/movie/{tmdb_id}
+
+---
+
+#### US-15.5: Delete Series from Sonarr ✅
+**As a** user
+**I want** to delete a TV series via the dashboard
+**So that** it's removed from Sonarr and Jellyfin automatically
+
+**Acceptance Criteria:**
+- [x] Backend endpoint to delete series by TMDB ID
+- [x] Finds Sonarr series via `GET /api/v3/series` (iterate to find tmdbId match)
+- [x] Deletes via `DELETE /api/v3/series/{id}?deleteFiles=true`
+- [x] Returns success/error response
+- [x] Deleting from Sonarr with files auto-deletes from Jellyfin
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Depends on US-15.3 (completed). Files: backend/app/services/sonarr.py, backend/app/routers/content.py
+
+**Files:**
+- `backend/app/services/sonarr.py` - Add `delete_series_by_tmdb_id()`
+- `backend/app/routers/content.py` - Add DELETE /api/content/series/{tmdb_id}
+
+---
+
+#### US-15.6: Delete Jellyseerr Request ✅
+**As a** user
+**I want** to delete a request from Jellyseerr
+**So that** it's removed from the requests list
+
+**Acceptance Criteria:**
+- [x] Backend endpoint to delete request by jellyseerr_id
+- [x] Calls `DELETE /api/v1/request/{requestId}` on Jellyseerr
+- [x] Returns success/error response (204 No Content on success)
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** API: X-Api-Key header, response: 204 No Content. Files: backend/app/services/jellyseerr.py, backend/app/routers/content.py
+
+**API Reference:**
+- Auth: `X-Api-Key` header
+- Response: 204 No Content
+
+**Files:**
+- `backend/app/services/jellyseerr.py` - Add `delete_request()`
+- `backend/app/routers/content.py` - Add DELETE /api/content/request/{jellyseerr_id}
+
+---
+
+#### US-15.7: Delete Content UI ✅
+**As a** user
+**I want** a delete button on content items
+**So that** I can remove content without leaving the dashboard
+
+**Acceptance Criteria:**
+- [x] "Delete" button appears on content items in Issues view
+- [x] Button disabled/greyed if Radarr/Sonarr not configured
+- [x] Tooltip explains why disabled when not configured
+- [x] Confirmation modal with 2 checkboxes:
+  - "Delete from Radarr/Sonarr (removes files)" - default checked
+  - "Delete from Jellyseerr (removes request)" - default checked
+- [x] Loading state during deletion
+- [x] Toast notification on success/error
+- [x] Item removed from list after successful deletion
+- [x] For Movies: calls Radarr delete
+- [x] For Series: calls Sonarr delete
+- [x] If request exists: optionally deletes from Jellyseerr
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Depends on US-15.4, US-15.5, US-15.6. File: frontend/src/routes/issues/+page.svelte
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte` - Add delete button, modal, API calls
+
+---
+
+#### US-15.8: Fix Auth Check Loading Delay
+**As a** user
+**I want** public pages to load instantly
+**So that** I don't see a loading spinner on landing/login/register pages
+
+**Acceptance Criteria:**
+- [ ] Landing page (`/`) renders immediately without loading state
+- [ ] Login page (`/login`) renders immediately without loading state
+- [ ] Register page (`/register`) renders immediately without loading state
+- [ ] Protected routes still show loading while auth check runs
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Root Cause:** Layout shows loading for ALL routes. Should only show loading on protected routes.
+
+**Files:**
+- `frontend/src/routes/+layout.svelte` - Change `{#if $auth.isLoading}` to `{#if $auth.isLoading && !isPublicRoute}`
+
+---
+
+#### US-15.9: Remove Unused api.ts File
+**As a** developer
+**I want** unused code removed
+**So that** the codebase is clean and maintainable
+
+**Acceptance Criteria:**
+- [ ] `frontend/src/lib/api.ts` file deleted
+- [ ] No import errors after deletion
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Unused exports being removed:**
+- `contentApi` (getOldUnwatched, getLargeMovies, deleteContent)
+- `languageApi` (getIssues, triggerCheck)
+- `requestsApi` (getUnavailable, getInProgress, getRecentlyAvailable)
+- `whitelistApi` (getList, addItem, removeItem)
+- `settingsApi` (get, update)
+- `healthApi` (check)
+
+**Files:**
+- `frontend/src/lib/api.ts` - Delete entire file
+
+---
+
+#### US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
+**As a** media server owner
+**I want** Jellyseerr requests to be deleted when I delete content from any tab
+**So that** I don't have orphaned requests after deleting movies/series
+
+**Acceptance Criteria:**
+- [ ] Backend looks up Jellyseerr request by TMDB ID + media_type from `cached_jellyseerr_requests` table
+- [ ] Lookup only happens when `delete_from_jellyseerr=true` AND no `jellyseerr_request_id` provided
+- [ ] If user unchecked "Delete from Jellyseerr" in modal, no lookup or deletion occurs
+- [ ] If matching request found, delete it from Jellyseerr
+- [ ] If no matching request exists, skip gracefully (not an error)
+- [ ] Response message indicates whether Jellyseerr request was found and deleted
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Root Cause:** Backend only deletes from Jellyseerr when `jellyseerr_request_id` is provided. For items from Old/Large/Language tabs (Jellyfin content), this ID is not available. Backend should lookup the request by TMDB ID instead.
+
+**Files:**
+- `backend/app/routers/content.py` - Add helper to lookup request by TMDB ID, update delete_movie and delete_series
+
+### Non-Goals
+- Automatic deletion based on rules
+- Undo functionality for deletions
+- Batch deletion of multiple items
+
+### Technical Considerations
+- **Radarr API:** Auth via `X-Api-Key` header; find movie by `GET /api/v3/movie?tmdbId={id}`; delete via `DELETE /api/v3/movie/{id}?deleteFiles=true`
+- **Sonarr API:** Auth via `X-Api-Key` header; find series by iterating `GET /api/v3/series`; delete via `DELETE /api/v3/series/{id}?deleteFiles=true`
+- **Jellyseerr API:** Auth via `X-Api-Key` header; delete request via `DELETE /api/v1/request/{requestId}`
+- Deleting from Radarr/Sonarr with `deleteFiles=true` auto-removes from Jellyfin
+
+---
+
+## Epic 16: Appearance Settings
+
+### Overview
+Allow users to manually control the application's theme (light/dark mode) instead of relying solely on system preferences. The theme preference is stored in the database and syncs across devices.
+
+### Goals
+- Give users explicit control over light/dark mode
+- Support three options: Light, Dark, and System (follow OS preference)
+- Persist preference in user settings database
+- Apply theme preference across all pages instantly
+
+### User Stories
+
+#### US-16.1: Theme Preference Backend
+**As a** developer
+**I want** a backend endpoint to store theme preference
+**So that** the frontend can persist user's theme choice
+
+**Acceptance Criteria:**
+- [ ] Add `theme_preference` column to `UserSettings` model (enum: `light`, `dark`, `system`)
+- [ ] Default value is `system` (follow OS preference)
+- [ ] Create Alembic migration for the new column
+- [ ] `GET /api/settings/display` includes `theme_preference` field
+- [ ] `POST /api/settings/display` accepts `theme_preference` field
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `backend/app/database.py` - Add `theme_preference` column to UserSettings
+- `backend/app/models/settings.py` - Add `theme_preference` to DisplayPreferences schemas
+- `backend/app/routers/settings.py` - Update display endpoints to handle theme_preference
+- `backend/alembic/versions/` - New migration file
+
+---
+
+#### US-16.2: Theme Store and Application
+**As a** user
+**I want** my theme choice to be applied across the app
+**So that** I see consistent light/dark styling
+
+**Acceptance Criteria:**
+- [ ] Create theme store that reads user preference from API
+- [ ] Apply theme via `data-theme` attribute on `<html>` element
+- [ ] `data-theme="light"` forces light mode
+- [ ] `data-theme="dark"` forces dark mode
+- [ ] `data-theme="system"` (or no attribute) follows OS preference
+- [ ] Theme persists across page navigation
+- [ ] Theme loads correctly on page refresh
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `frontend/src/lib/stores/theme.ts` - New theme store
+- `frontend/src/app.css` - Update CSS to use `[data-theme="light"]` and `[data-theme="dark"]` selectors
+- `frontend/src/routes/+layout.svelte` - Initialize theme store and apply to document
+
+---
+
+#### US-16.3: Theme Toggle UI in Settings
+**As a** user
+**I want** a theme selector in settings
+**So that** I can choose between light, dark, or system preference
+
+**Acceptance Criteria:**
+- [ ] Settings page Display section has theme selector
+- [ ] Three options: Light, Dark, System (default)
+- [ ] Selector shows current preference
+- [ ] Changing selection immediately updates the theme
+- [ ] Saves preference to backend on change
+- [ ] Toast notification on success/error
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Add theme selector to Display section
+
+### Non-Goals
+- Custom color themes beyond light/dark
+- Per-page theme overrides
+- Time-based automatic theme switching
+
+### Technical Considerations
+- **CSS Strategy:** Use CSS custom properties with `[data-theme]` attribute selectors to override the `prefers-color-scheme` media query
+- **Storage:** Theme preference stored in `user_settings` table, same as other display preferences
+- **Initial Load:** On app load, fetch user settings and apply theme before rendering to avoid flash of wrong theme
+- **Unauthenticated Users:** Default to system preference (no API call needed)
+
+---
+
 ## Checklist Summary
 
-### Completed ✅ (55 stories)
+### Completed ✅ (61 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -1781,9 +2157,23 @@ Provide in-app help documentation in FAQ format to help users understand and use
 - [x] US-13.5: Add Request Whitelist UI
 - [x] US-13.6: Setting to Include/Exclude Unreleased Requests
 - [x] US-14.1: In-App FAQ Help Page
+- [x] US-15.2: Add Radarr Connection Settings
+- [x] US-15.3: Add Sonarr Connection Settings
+- [x] US-15.4: Delete Movie from Radarr
+- [x] US-15.5: Delete Series from Sonarr
+- [x] US-15.6: Delete Jellyseerr Request
+- [x] US-15.7: Delete Content UI
 
-### Pending (4 stories)
+### Pending (12 stories)
 - [ ] US-12.1: Add Threshold Help Text
 - [ ] US-12.2: Remove Multi-Issue Tab
 - [ ] US-12.3: Fix TMDB Link Media Type
 - [ ] US-12.5: External Links for All Issue Types
+- [ ] US-12.6: Fix Watch Status Display
+- [ ] US-15.1: Fix Hidden Requests Showing TMDB IDs
+- [ ] US-15.8: Fix Auth Check Loading Delay
+- [ ] US-15.9: Remove Unused api.ts File
+- [ ] US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
+- [ ] US-16.1: Theme Preference Backend
+- [ ] US-16.2: Theme Store and Application
+- [ ] US-16.3: Theme Toggle UI in Settings
