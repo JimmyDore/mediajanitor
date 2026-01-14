@@ -52,6 +52,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=sqlite:///./data/plex_dashboard.db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data  # Share database with backend
+      - celery_beat_data:/app  # Persist beat schedule
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -66,3 +84,4 @@ services:
 
 volumes:
   redis_data:
+  celery_beat_data:

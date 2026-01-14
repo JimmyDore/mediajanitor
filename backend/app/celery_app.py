@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import get_settings
 
@@ -27,4 +28,11 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=30 * 60,  # 30 minutes max per task
     worker_prefetch_multiplier=1,  # One task at a time per worker
+    # Celery Beat schedule for periodic tasks
+    beat_schedule={
+        "sync-all-users-daily": {
+            "task": "sync_all_users",
+            "schedule": crontab(hour=3, minute=0),  # 3 AM UTC daily
+        },
+    },
 )
