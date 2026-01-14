@@ -25,6 +25,11 @@ jobs:
             # Pull latest code
             git pull origin main
 
+            # Clean up old Docker resources to free disk space
+            echo "Cleaning up Docker resources..."
+            docker system prune -f --volumes
+            docker image prune -af --filter "until=24h"
+
             # Rebuild and restart containers
             docker-compose down
             docker-compose build --no-cache
@@ -32,6 +37,7 @@ jobs:
 
             # Show status
             docker-compose ps
+            df -h / | tail -1
 
       - name: Health check
         uses: appleboy/ssh-action@v1.0.3
