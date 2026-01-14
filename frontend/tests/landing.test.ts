@@ -178,4 +178,37 @@ describe('Landing Page', () => {
 			expect(hasShieldIcon).toBe(true);
 		});
 	});
+
+	describe('Auth Page CTAs', () => {
+		it('should have value-focused headline on register page', () => {
+			const headline = 'Get Started Free';
+			const subtitle = 'Keep your media library clean and organized';
+			expect(headline).toBe('Get Started Free');
+			expect(subtitle).toContain('clean');
+		});
+
+		it('should have clear submit button on register page', () => {
+			const buttonText = 'Create Free Account';
+			expect(buttonText).toContain('Free');
+		});
+
+		it('should have clear submit button on login page', () => {
+			const buttonText = 'Log In';
+			expect(buttonText).toBe('Log In');
+		});
+
+		it('should have account link on login page', () => {
+			const linkText = "Don't have an account? Sign up";
+			const linkHref = '/register';
+			expect(linkText).toContain("Don't have an account");
+			expect(linkHref).toBe('/register');
+		});
+
+		it('should have account link on register page', () => {
+			const linkText = 'Already have an account? Log in';
+			const linkHref = '/login';
+			expect(linkText).toContain('Already have an account');
+			expect(linkHref).toBe('/login');
+		});
+	});
 });

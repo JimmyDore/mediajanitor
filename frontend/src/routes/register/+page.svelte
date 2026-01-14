@@ -62,8 +62,8 @@
 <div class="auth-container">
 	<div class="auth-card">
 		<div class="auth-header">
-			<h1>Create Account</h1>
-			<p class="auth-subtitle">Start managing your media library</p>
+			<h1>Get Started Free</h1>
+			<p class="auth-subtitle">Keep your media library clean and organized</p>
 		</div>
 
 		<form onsubmit={handleSubmit} class="auth-form">
@@ -109,7 +109,7 @@
 					<span class="spinner"></span>
 					Creating account...
 				{:else}
-					Sign Up
+					Create Free Account
 				{/if}
 			</button>
 		</form>
