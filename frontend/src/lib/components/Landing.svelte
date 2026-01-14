@@ -231,7 +231,7 @@
 		font-weight: var(--font-weight-medium);
 		color: var(--text-secondary);
 		text-decoration: none;
-		padding: var(--space-2) var(--space-3);
+		padding: var(--space-2) var(--space-4);
 		border-radius: var(--radius-md);
 		transition: all var(--transition-fast);
 	}

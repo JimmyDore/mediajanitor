@@ -4,7 +4,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores';
-	import Header from '$lib/components/Header.svelte';
+	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let { children } = $props();
 
@@ -42,9 +42,9 @@
 		</main>
 	</div>
 {:else}
-	<div class="app">
+	<div class="app" class:with-sidebar={$auth.isAuthenticated}>
 		{#if $auth.isAuthenticated}
-			<Header />
+			<Sidebar />
 		{/if}
 		<main class="content" class:content-centered={!$auth.isAuthenticated}>
 			{@render children()}
@@ -57,6 +57,10 @@
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.app.with-sidebar {
+		margin-left: 220px;
 	}
 
 	.content {
@@ -78,5 +82,13 @@
 		text-align: center;
 		font-size: 1.25rem;
 		color: var(--text-secondary);
+	}
+
+	/* Mobile responsive - remove sidebar margin */
+	@media (max-width: 768px) {
+		.app.with-sidebar {
+			margin-left: 0;
+			padding-top: 60px; /* Space for hamburger button */
+		}
 	}
 </style>
