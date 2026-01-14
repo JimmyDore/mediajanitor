@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores';
 	import { goto } from '$app/navigation';
+	import Landing from '$lib/components/Landing.svelte';
 
 	let error = $state<string | null>(null);
 
@@ -170,17 +171,19 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard - Media Janitor</title>
+	<title>{$auth.isAuthenticated ? 'Dashboard' : 'Media Janitor - Keep Your Media Library Clean'}</title>
 </svelte:head>
 
-{#if toastMessage}
-	<div class="toast toast-{toastType}" role="alert">
-		{toastMessage}
-	</div>
-{/if}
+{#if !$auth.isAuthenticated && !$auth.isLoading}
+	<Landing />
+{:else if $auth.isAuthenticated}
+	{#if toastMessage}
+		<div class="toast toast-{toastType}" role="alert">
+			{toastMessage}
+		</div>
+	{/if}
 
-<div class="dashboard">
-	{#if $auth.isAuthenticated}
+	<div class="dashboard">
 		<header class="page-header">
 			<div class="header-left">
 				<h1>Dashboard</h1>
@@ -204,9 +207,8 @@
 				{/if}
 			</button>
 		</header>
-	{/if}
 
-	{#if error}
+		{#if error}
 		<div class="error-banner">
 			<p>Error: {error}</p>
 		</div>
@@ -267,8 +269,9 @@
 				</button>
 			</div>
 		</section>
-	{/if}
-</div>
+		{/if}
+	</div>
+{/if}
 
 <style>
 	.dashboard {
