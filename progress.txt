@@ -1078,10 +1078,48 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(whitelist): [US-13.4] add Jellyseerr request whitelist backend
 
+### 2026-01-14: US-13.6 - Setting to Include/Exclude Unreleased Requests
+- Added show_unreleased_requests column to UserSettings model (default: false)
+- Created migration: 20260114_191506_fa6f8809cb38_add_show_unreleased_requests_to_user_.py
+- Implemented Display Preferences API:
+  - GET /api/settings/display - Returns display preferences
+  - POST /api/settings/display - Saves display preferences
+- Added Display section to Settings page:
+  - Toggle switch for "Show unreleased requests"
+  - Optimistic update with error rollback
+  - Loading spinner during API call
+- Content service uses setting to filter requests with future release dates
+- Backend tests: 7 new tests for display preferences (TestDisplayPreferences class)
+- Frontend tests: 8 new tests for display preferences API integration
+- 246 backend tests pass, 146 frontend tests pass, 17 integration tests pass
+- Verified in browser: toggle works, setting persists
+- Files changed: database.py, models/settings.py, routers/settings.py, services/content.py, test_settings.py, settings/+page.svelte, settings-display.test.ts, alembic migration
+- Commits:
+  - feat(settings): [US-13.6] add show_unreleased_requests display toggle
+
+### 2026-01-14: US-14.1 - In-App FAQ Help Page
+- Created new route /help with FAQ page component
+- Implemented 5 FAQ sections:
+  - Getting Started (4 FAQs)
+  - Dashboard (3 FAQs)
+  - Issues (5 FAQs)
+  - Whitelists (3 FAQs)
+  - Settings (3 FAQs)
+- Added collapsible FAQ items with expand/collapse animation
+- Implemented search/filter functionality for finding specific topics
+- Added Help link with question mark icon to sidebar navigation
+- Added "Still need help?" contact section with GitHub link
+- Frontend tests: 30 new tests for FAQ structure, search, and expand/collapse
+- 176 frontend tests pass, typecheck passes
+- Verified in browser: FAQ expand works, search filters correctly
+- Files changed: routes/help/+page.svelte, Sidebar.svelte, help.test.ts
+- Commits:
+  - feat(help): [US-14.1] add in-app FAQ help page
+
 ## Current Status
 
-**Phase**: Epic 13 - Requests Improvements (In Progress)
-**Total Stories**: 52 stories (49 passes: true, 3 remaining)
+**Phase**: Epic 14 - Help & Documentation (Complete)
+**Total Stories**: 52 stories (52 passes: true, 0 remaining)
 
 ## Notes
 

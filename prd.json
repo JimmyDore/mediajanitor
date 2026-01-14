@@ -971,8 +971,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 400,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Help page with 5 FAQ sections (18 FAQs total), collapsible items, search filter, Help link in sidebar. 176 frontend tests pass (30 new help tests)."
     }
   ]
 }
