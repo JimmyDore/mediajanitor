@@ -3919,3 +3919,528 @@ class TestWhitelistExpirationSchema:
             session.add(entry_permanent)
             await session.commit()
             assert entry_permanent.expires_at is None
+
+
+class TestWhitelistExpirationLogic:
+    """Test whitelist expiration logic (US-11.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "expire@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_expired_content_whitelist_does_not_protect_content(
+        self, client: TestClient
+    ) -> None:
+        """Content with expired whitelist entry should appear in old content issues."""
+        token = self._get_auth_token(client, "expired-content@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create old unwatched content
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-expired-whitelist",
+                name="Movie With Expired Whitelist",
+                media_type="Movie",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/movies/Expired Whitelist",
+                size_bytes=10_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=None,
+            )
+            session.add(item)
+
+            # Create EXPIRED whitelist entry (expired 1 day ago)
+            expired_whitelist = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-expired-whitelist",
+                name="Movie With Expired Whitelist",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+            session.add(expired_whitelist)
+            await session.commit()
+
+        # Item should appear in issues because whitelist is expired
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-expired-whitelist"
+
+    @pytest.mark.asyncio
+    async def test_non_expired_content_whitelist_protects_content(
+        self, client: TestClient
+    ) -> None:
+        """Content with non-expired whitelist entry should NOT appear in old content issues."""
+        token = self._get_auth_token(client, "non-expired-content@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create old unwatched content
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-valid-whitelist",
+                name="Movie With Valid Whitelist",
+                media_type="Movie",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/movies/Valid Whitelist",
+                size_bytes=10_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=None,
+            )
+            session.add(item)
+
+            # Create NON-expired whitelist entry (expires in 30 days)
+            valid_whitelist = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-valid-whitelist",
+                name="Movie With Valid Whitelist",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            session.add(valid_whitelist)
+            await session.commit()
+
+        # Item should NOT appear in issues because whitelist is valid
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_permanent_content_whitelist_protects_content(
+        self, client: TestClient
+    ) -> None:
+        """Content with NULL expires_at (permanent) should NOT appear in old content issues."""
+        token = self._get_auth_token(client, "permanent-content@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create old unwatched content
+            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-permanent-whitelist",
+                name="Movie With Permanent Whitelist",
+                media_type="Movie",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/movies/Permanent Whitelist",
+                size_bytes=10_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=None,
+            )
+            session.add(item)
+
+            # Create PERMANENT whitelist entry (NULL expires_at)
+            permanent_whitelist = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-permanent-whitelist",
+                name="Movie With Permanent Whitelist",
+                media_type="Movie",
+                expires_at=None,  # Permanent - never expires
+            )
+            session.add(permanent_whitelist)
+            await session.commit()
+
+        # Item should NOT appear in issues because whitelist is permanent
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_api_accepts_expires_at_when_adding_to_content_whitelist(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/whitelist/content should accept optional expires_at field."""
+        token = self._get_auth_token(client, "add-with-expiry@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        response = client.post(
+            "/api/whitelist/content",
+            headers=headers,
+            json={
+                "jellyfin_id": "movie-with-expiry",
+                "name": "Movie With Expiry",
+                "media_type": "Movie",
+                "expires_at": expires_at,
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to whitelist"
+
+        # Verify in database that expires_at was saved
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(ContentWhitelist).where(
+                    ContentWhitelist.user_id == user_id,
+                    ContentWhitelist.jellyfin_id == "movie-with-expiry"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            assert entry is not None
+            assert entry.expires_at is not None
+
+    @pytest.mark.asyncio
+    async def test_expired_french_only_whitelist_does_not_exempt_from_language_check(
+        self, client: TestClient
+    ) -> None:
+        """Content with expired french-only whitelist entry should flag missing English audio."""
+        token = self._get_auth_token(client, "expired-french@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create content missing English audio
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-french-expired",
+                name="French Movie With Expired Whitelist",
+                media_type="Movie",
+                production_year=2020,
+                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                path="/media/movies/French Expired",
+                size_bytes=8_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                raw_data={
+                    "MediaSources": [{
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "fra"},  # Only French audio
+                        ]
+                    }]
+                },
+            )
+            session.add(item)
+
+            # Create EXPIRED french-only whitelist entry
+            expired_french = FrenchOnlyWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-french-expired",
+                name="French Movie With Expired Whitelist",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+            session.add(expired_french)
+            await session.commit()
+
+        # Item should appear in language issues because french-only whitelist is expired
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-french-expired"
+        assert "missing_en_audio" in data["items"][0]["language_issues"]
+
+    @pytest.mark.asyncio
+    async def test_non_expired_french_only_whitelist_exempts_from_english_check(
+        self, client: TestClient
+    ) -> None:
+        """Content with valid french-only whitelist entry should NOT flag missing English audio."""
+        token = self._get_auth_token(client, "valid-french@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create content with both English and French audio
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-french-valid",
+                name="French Movie With Valid Whitelist",
+                media_type="Movie",
+                production_year=2020,
+                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                path="/media/movies/French Valid",
+                size_bytes=8_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                raw_data={
+                    "MediaSources": [{
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "fra"},  # French audio only
+                        ]
+                    }]
+                },
+            )
+            session.add(item)
+
+            # Create VALID french-only whitelist entry (expires in 30 days)
+            valid_french = FrenchOnlyWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-french-valid",
+                name="French Movie With Valid Whitelist",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            session.add(valid_french)
+            await session.commit()
+
+        # Item should NOT appear in language issues because french-only is valid
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_expired_language_exempt_whitelist_does_not_exempt(
+        self, client: TestClient
+    ) -> None:
+        """Content with expired language-exempt entry should flag language issues."""
+        token = self._get_auth_token(client, "expired-exempt@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create content missing languages
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-exempt-expired",
+                name="Movie With Expired Exempt",
+                media_type="Movie",
+                production_year=2020,
+                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                path="/media/movies/Exempt Expired",
+                size_bytes=8_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                raw_data={
+                    "MediaSources": [{
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "jpn"},  # Only Japanese
+                        ]
+                    }]
+                },
+            )
+            session.add(item)
+
+            # Create EXPIRED language-exempt whitelist entry
+            expired_exempt = LanguageExemptWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-exempt-expired",
+                name="Movie With Expired Exempt",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+            session.add(expired_exempt)
+            await session.commit()
+
+        # Item should appear in language issues because language-exempt is expired
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-exempt-expired"
+
+    @pytest.mark.asyncio
+    async def test_non_expired_language_exempt_whitelist_exempts(
+        self, client: TestClient
+    ) -> None:
+        """Content with valid language-exempt entry should NOT flag language issues."""
+        token = self._get_auth_token(client, "valid-exempt@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create content missing languages
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-exempt-valid",
+                name="Movie With Valid Exempt",
+                media_type="Movie",
+                production_year=2020,
+                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                path="/media/movies/Exempt Valid",
+                size_bytes=8_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                raw_data={
+                    "MediaSources": [{
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "jpn"},  # Only Japanese
+                        ]
+                    }]
+                },
+            )
+            session.add(item)
+
+            # Create VALID language-exempt whitelist entry (expires in 30 days)
+            valid_exempt = LanguageExemptWhitelist(
+                user_id=user_id,
+                jellyfin_id="movie-exempt-valid",
+                name="Movie With Valid Exempt",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            session.add(valid_exempt)
+            await session.commit()
+
+        # Item should NOT appear in language issues because language-exempt is valid
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_api_accepts_expires_at_when_adding_to_french_only_whitelist(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/whitelist/french-only should accept optional expires_at field."""
+        token = self._get_auth_token(client, "add-french-expiry@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        response = client.post(
+            "/api/whitelist/french-only",
+            headers=headers,
+            json={
+                "jellyfin_id": "french-movie-expiry",
+                "name": "French Movie With Expiry",
+                "media_type": "Movie",
+                "expires_at": expires_at,
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to french-only whitelist"
+
+        # Verify in database that expires_at was saved
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(FrenchOnlyWhitelist).where(
+                    FrenchOnlyWhitelist.user_id == user_id,
+                    FrenchOnlyWhitelist.jellyfin_id == "french-movie-expiry"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            assert entry is not None
+            assert entry.expires_at is not None
+
+    @pytest.mark.asyncio
+    async def test_api_accepts_expires_at_when_adding_to_language_exempt_whitelist(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/whitelist/language-exempt should accept optional expires_at field."""
+        token = self._get_auth_token(client, "add-exempt-expiry@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=180)).isoformat()
+        response = client.post(
+            "/api/whitelist/language-exempt",
+            headers=headers,
+            json={
+                "jellyfin_id": "exempt-movie-expiry",
+                "name": "Exempt Movie With Expiry",
+                "media_type": "Movie",
+                "expires_at": expires_at,
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to language-exempt whitelist"
+
+        # Verify in database that expires_at was saved
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(LanguageExemptWhitelist).where(
+                    LanguageExemptWhitelist.user_id == user_id,
+                    LanguageExemptWhitelist.jellyfin_id == "exempt-movie-expiry"
+                )
+            )
+            entry = result.scalar_one_or_none()
+            assert entry is not None
+            assert entry.expires_at is not None
+
+    @pytest.mark.asyncio
+    async def test_whitelist_list_includes_expires_at(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/whitelist/content should return expires_at for each item."""
+        token = self._get_auth_token(client, "list-expiry@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create whitelist entries with different expiration settings
+        async with TestingAsyncSessionLocal() as session:
+            # Permanent entry
+            permanent = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="permanent-entry",
+                name="Permanent Entry",
+                media_type="Movie",
+                expires_at=None,
+            )
+            # Entry with expiration
+            with_expiry = ContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="entry-with-expiry",
+                name="Entry With Expiry",
+                media_type="Movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            )
+            session.add_all([permanent, with_expiry])
+            await session.commit()
+
+        response = client.get("/api/whitelist/content", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 2
+        items_by_id = {item["jellyfin_id"]: item for item in data["items"]}
+
+        assert items_by_id["permanent-entry"]["expires_at"] is None
+        assert items_by_id["entry-with-expiry"]["expires_at"] is not None

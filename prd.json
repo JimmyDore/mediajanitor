@@ -728,8 +728,8 @@
         "Unit tests pass"
       ],
       "priority": 121,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Whitelist queries filter out expired entries (expires_at < now). API saves expires_at from request. GET /api/whitelist/* returns expires_at. 191 backend tests pass, mypy clean."
     },
     {
       "id": "US-11.3",

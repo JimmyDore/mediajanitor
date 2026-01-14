@@ -55,6 +55,7 @@ async def add_content_to_whitelist(
             jellyfin_id=request.jellyfin_id,
             name=request.name,
             media_type=request.media_type,
+            expires_at=request.expires_at,
         )
     except ValueError as e:
         raise HTTPException(
@@ -127,6 +128,7 @@ async def add_to_french_only(
             jellyfin_id=request.jellyfin_id,
             name=request.name,
             media_type=request.media_type,
+            expires_at=request.expires_at,
         )
     except ValueError as e:
         raise HTTPException(
@@ -199,6 +201,7 @@ async def add_to_language_exempt(
             jellyfin_id=request.jellyfin_id,
             name=request.name,
             media_type=request.media_type,
+            expires_at=request.expires_at,
         )
     except ValueError as e:
         raise HTTPException(

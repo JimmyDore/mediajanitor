@@ -792,10 +792,117 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-9.4] add TMDB/IMDB links to content items
 
+### 2026-01-14: US-10.1 - Add Celery Infrastructure
+- Added Celery 5.3+ and Redis 5.0+ dependencies to pyproject.toml
+- Created Celery app configuration (app/celery_app.py) with:
+  - Redis broker URL from settings (falls back to redis_url if celery_broker_url not set)
+  - Result backend configuration
+  - JSON serialization for tasks
+  - 30-minute task time limit
+  - UTC timezone
+- Created tasks module (app/tasks.py) with:
+  - test_task(): Simple task that returns status and input value
+  - Type annotation with mypy ignore for untyped decorator
+- Updated config.py with new settings:
+  - redis_url: Default redis://localhost:6379/0
+  - celery_broker_url: Optional override for broker
+  - celery_result_backend: Optional override for backend
+- Updated docker-compose.yml with:
+  - redis service (redis:7-alpine) with healthcheck
+  - celery-worker service running `celery -A app.celery_app worker`
+  - Backend depends on redis service being healthy
+  - Shared data volume between backend and celery-worker
+- Added mypy configuration to ignore Celery module (missing type stubs)
+- Backend tests: 6 new tests for Celery configuration and tasks
+  - test_celery_app_exists: Verifies app is properly configured
+  - test_celery_broker_configured: Verifies Redis broker
+  - test_celery_result_backend_configured: Verifies result backend
+  - test_test_task_exists: Verifies task is registered
+  - test_test_task_can_be_called_synchronously: Direct task call
+  - test_celery_eager_mode_for_testing: Verifies eager mode works
+- 170 backend tests pass, mypy clean
+- Files changed: pyproject.toml, config.py, celery_app.py, tasks.py, docker-compose.yml, test_celery.py
+- Commits:
+  - feat(celery): [US-10.1] add Celery infrastructure with Redis broker
+
+### 2026-01-14: US-10.2 - Daily Sync Scheduler
+- Added Celery Beat schedule for sync_all_users task at 3 AM UTC daily
+- Created sync_all_users task that:
+  - Queries all users with configured Jellyfin settings (jellyfin_server_url and jellyfin_api_key_encrypted not null)
+  - Enqueues sync_user task for each user independently
+  - Returns count of users synced
+- Created sync_user task that:
+  - Runs async sync service using new event loop (Celery is sync)
+  - Handles failures gracefully, logging errors and returning status
+- Added get_configured_user_ids() helper function to query UserSettings
+- Added _run_sync_for_user() async helper for running sync in task context
+- Added celery-beat service to docker-compose.yml:
+  - Uses same backend image with beat command
+  - Persists beat schedule in celery_beat_data volume
+  - Depends on redis and backend services
+- Backend tests: 5 new tests for Beat schedule and sync tasks
+  - test_celery_beat_schedule_exists: Verifies beat_schedule has sync-all-users-daily
+  - test_sync_all_users_schedule_is_daily_3am_utc: Verifies crontab hour=3
+  - test_sync_all_users_task_exists: Verifies task is registered
+  - test_sync_all_users_iterates_configured_users: Verifies task queues sync per user
+  - test_sync_user_task_exists: Verifies sync_user task is registered
+- 175 backend tests pass, mypy clean
+- Files changed: celery_app.py, tasks.py, docker-compose.yml, test_celery.py
+- Commits:
+  - feat(celery): [US-10.2] add daily sync scheduler with Celery Beat
+
+### 2026-01-14: US-11.1 - Add Expiration to Whitelist Schema
+- Added nullable expires_at column to all 3 whitelist tables:
+  - ContentWhitelist: `expires_at: Mapped[datetime | None]`
+  - FrenchOnlyWhitelist: `expires_at: Mapped[datetime | None]`
+  - LanguageExemptWhitelist: `expires_at: Mapped[datetime | None]`
+- Updated Pydantic models:
+  - WhitelistAddRequest: Added optional `expires_at: datetime | None = None`
+  - WhitelistItem: Added `expires_at: str | None = None` for response
+- NULL expires_at means permanent (never expires)
+- Backend tests: 3 new tests for expires_at column on each whitelist table
+- 178 backend tests pass, mypy clean
+- Files changed: database.py, models/content.py, tests/test_content.py
+- Commits:
+  - feat(whitelist): [US-11.1] add expiration support to whitelist schema
+
+### 2026-01-14: US-11.2 - Whitelist Expiration Logic
+- Implemented expiration check in all whitelist queries:
+  - get_old_unwatched_content(): Filters ContentWhitelist by expires_at
+  - get_content_summary(): Filters ContentWhitelist by expires_at
+  - get_content_issues(): Filters ContentWhitelist by expires_at
+  - get_french_only_ids(): Filters FrenchOnlyWhitelist by expires_at
+  - get_language_exempt_ids(): Filters LanguageExemptWhitelist by expires_at
+- Filter logic: `WHERE expires_at IS NULL OR expires_at > NOW()`
+  - NULL = permanent (never expires)
+  - Entries with expires_at in the past are ignored
+- Updated add_to_whitelist functions to accept optional expires_at:
+  - add_to_whitelist(expires_at=None)
+  - add_to_french_only_whitelist(expires_at=None)
+  - add_to_language_exempt_whitelist(expires_at=None)
+- Updated routers to pass expires_at from request to service
+- Updated get_whitelist functions to return expires_at in response
+- Backend tests: 11 new tests for expiration logic
+  - test_expired_content_whitelist_does_not_protect_content
+  - test_non_expired_content_whitelist_protects_content
+  - test_permanent_content_whitelist_protects_content
+  - test_api_accepts_expires_at_when_adding_to_content_whitelist
+  - test_expired_french_only_whitelist_does_not_exempt_from_language_check
+  - test_non_expired_french_only_whitelist_exempts_from_english_check
+  - test_expired_language_exempt_whitelist_does_not_exempt
+  - test_non_expired_language_exempt_whitelist_exempts
+  - test_api_accepts_expires_at_when_adding_to_french_only_whitelist
+  - test_api_accepts_expires_at_when_adding_to_language_exempt_whitelist
+  - test_whitelist_list_includes_expires_at
+- 191 backend tests pass, mypy clean
+- Files changed: content.py, whitelist.py, test_content.py, prd.json
+- Commits:
+  - feat(whitelist): [US-11.2] add whitelist expiration logic
+
 ## Current Status
 
-**Phase**: Polish & Infrastructure (In Progress)
-**Next US**: US-10.1 - Add Celery Infrastructure
+**Phase**: Whitelist Expiration (In Progress)
+**Next US**: US-11.3 - Temporary Whitelist UI
 
 ## Notes
 

@@ -183,9 +183,17 @@ async def get_old_unwatched_content(
     )
     all_items = result.scalars().all()
 
-    # Get user's whitelist
+    # Get user's whitelist (only non-expired entries)
+    from sqlalchemy import or_
+    now = datetime.now(timezone.utc)
     whitelist_result = await db.execute(
-        select(ContentWhitelist.jellyfin_id).where(ContentWhitelist.user_id == user_id)
+        select(ContentWhitelist.jellyfin_id).where(
+            ContentWhitelist.user_id == user_id,
+            or_(
+                ContentWhitelist.expires_at.is_(None),
+                ContentWhitelist.expires_at > now,
+            ),
+        )
     )
     whitelisted_ids = set(whitelist_result.scalars().all())
 
@@ -239,8 +247,17 @@ async def add_to_whitelist(
     jellyfin_id: str,
     name: str,
     media_type: str,
+    expires_at: datetime | None = None,
 ) -> ContentWhitelist:
     """Add content to user's whitelist.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_id: Jellyfin content ID
+        name: Content name
+        media_type: "Movie" or "Series"
+        expires_at: Optional expiration datetime (None = permanent)
 
     Raises ValueError if the content is already in the whitelist.
     """
@@ -261,6 +278,7 @@ async def add_to_whitelist(
         jellyfin_id=jellyfin_id,
         name=name,
         media_type=media_type,
+        expires_at=expires_at,
     )
     db.add(entry)
     await db.flush()  # Get the ID assigned
@@ -286,6 +304,7 @@ async def get_whitelist(
             name=entry.name,
             media_type=entry.media_type,
             created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
         )
         for entry in entries
     ]
@@ -330,10 +349,20 @@ async def add_to_french_only_whitelist(
     jellyfin_id: str,
     name: str,
     media_type: str,
+    expires_at: datetime | None = None,
 ) -> None:
     """Add an item to the user's french-only whitelist.
 
     Items in this whitelist are exempt from missing English audio checks.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_id: Jellyfin content ID
+        name: Content name
+        media_type: "Movie" or "Series"
+        expires_at: Optional expiration datetime (None = permanent)
+
     Raises ValueError if item already exists.
     """
     # Import here to avoid circular imports
@@ -354,6 +383,7 @@ async def add_to_french_only_whitelist(
         jellyfin_id=jellyfin_id,
         name=name,
         media_type=media_type,
+        expires_at=expires_at,
     )
     db.add(entry)
 
@@ -379,6 +409,7 @@ async def get_french_only_whitelist(
             name=entry.name,
             media_type=entry.media_type,
             created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
         )
         for entry in entries
     ]
@@ -416,12 +447,19 @@ async def remove_from_french_only_whitelist(
 
 
 async def get_french_only_ids(db: AsyncSession, user_id: int) -> set[str]:
-    """Get set of jellyfin_ids in user's french-only whitelist."""
+    """Get set of jellyfin_ids in user's french-only whitelist (non-expired only)."""
+    from sqlalchemy import or_
     from app.database import FrenchOnlyWhitelist
 
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(FrenchOnlyWhitelist.jellyfin_id).where(
-            FrenchOnlyWhitelist.user_id == user_id
+            FrenchOnlyWhitelist.user_id == user_id,
+            # Only include non-expired entries (NULL = permanent, or expires_at > now)
+            or_(
+                FrenchOnlyWhitelist.expires_at.is_(None),
+                FrenchOnlyWhitelist.expires_at > now,
+            ),
         )
     )
     return set(result.scalars().all())
@@ -436,10 +474,20 @@ async def add_to_language_exempt_whitelist(
     jellyfin_id: str,
     name: str,
     media_type: str,
+    expires_at: datetime | None = None,
 ) -> None:
     """Add an item to the user's language-exempt whitelist.
 
     Items in this whitelist are exempt from ALL language checks.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_id: Jellyfin content ID
+        name: Content name
+        media_type: "Movie" or "Series"
+        expires_at: Optional expiration datetime (None = permanent)
+
     Raises ValueError if item already exists.
     """
     from app.database import LanguageExemptWhitelist
@@ -459,6 +507,7 @@ async def add_to_language_exempt_whitelist(
         jellyfin_id=jellyfin_id,
         name=name,
         media_type=media_type,
+        expires_at=expires_at,
     )
     db.add(entry)
 
@@ -484,6 +533,7 @@ async def get_language_exempt_whitelist(
             name=entry.name,
             media_type=entry.media_type,
             created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
         )
         for entry in entries
     ]
@@ -521,12 +571,19 @@ async def remove_from_language_exempt_whitelist(
 
 
 async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
-    """Get set of jellyfin_ids in user's language-exempt whitelist."""
+    """Get set of jellyfin_ids in user's language-exempt whitelist (non-expired only)."""
+    from sqlalchemy import or_
     from app.database import LanguageExemptWhitelist
 
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(LanguageExemptWhitelist.jellyfin_id).where(
-            LanguageExemptWhitelist.user_id == user_id
+            LanguageExemptWhitelist.user_id == user_id,
+            # Only include non-expired entries (NULL = permanent, or expires_at > now)
+            or_(
+                LanguageExemptWhitelist.expires_at.is_(None),
+                LanguageExemptWhitelist.expires_at > now,
+            ),
         )
     )
     return set(result.scalars().all())
@@ -688,9 +745,17 @@ async def get_content_summary(
     )
     all_items = result.scalars().all()
 
-    # Get user's whitelist
+    # Get user's whitelist (only non-expired entries)
+    from sqlalchemy import or_
+    now = datetime.now(timezone.utc)
     whitelist_result = await db.execute(
-        select(ContentWhitelist.jellyfin_id).where(ContentWhitelist.user_id == user_id)
+        select(ContentWhitelist.jellyfin_id).where(
+            ContentWhitelist.user_id == user_id,
+            or_(
+                ContentWhitelist.expires_at.is_(None),
+                ContentWhitelist.expires_at > now,
+            ),
+        )
     )
     whitelisted_ids = set(whitelist_result.scalars().all())
 
@@ -994,9 +1059,17 @@ async def get_content_issues(
     )
     all_items = result.scalars().all()
 
-    # Get user's whitelist
+    # Get user's whitelist (only non-expired entries)
+    from sqlalchemy import or_
+    now = datetime.now(timezone.utc)
     whitelist_result = await db.execute(
-        select(ContentWhitelist.jellyfin_id).where(ContentWhitelist.user_id == user_id)
+        select(ContentWhitelist.jellyfin_id).where(
+            ContentWhitelist.user_id == user_id,
+            or_(
+                ContentWhitelist.expires_at.is_(None),
+                ContentWhitelist.expires_at > now,
+            ),
+        )
     )
     whitelisted_ids = set(whitelist_result.scalars().all())
 
