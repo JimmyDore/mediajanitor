@@ -26,8 +26,7 @@ services:
     volumes:
       - ./data:/app/data  # Persist database
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -46,10 +45,8 @@ services:
     volumes:
       - ./data:/app/data  # Share database with backend
     depends_on:
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
+      - redis
+      - backend
     restart: unless-stopped
 
   celery-beat:
@@ -64,10 +61,8 @@ services:
       - ./data:/app/data  # Share database with backend
       - celery_beat_data:/app  # Persist beat schedule
     depends_on:
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
+      - redis
+      - backend
     restart: unless-stopped
 
   frontend:
