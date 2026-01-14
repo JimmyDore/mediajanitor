@@ -993,10 +993,25 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(marketing): [US-M.5] update auth page CTAs
 
+### 2026-01-14: US-D.6 - Inline Badge Actions
+- Moved action buttons inline with issue badges in Issues view:
+  - OLD badge: Shield icon button attached to protect from deletion
+  - LANGUAGE badge: FR button (if missing EN audio) + checkmark button (to exempt)
+  - LARGE badge: Info tooltip on hover (Re-download in lower quality)
+  - REQUEST badge: Info tooltip on hover (Check status in Jellyseerr)
+- Badge groups have connected styling (badge + buttons share border-radius)
+- Removed separate Actions column from table
+- Loading spinner shown on badge action during API calls
+- All actions call same API endpoints as before
+- 126 frontend tests pass, 191 backend tests pass, typecheck clean
+- Files changed: frontend/src/routes/issues/+page.svelte, prd.json
+- Commits:
+  - feat(ui): [US-D.6] add inline badge actions
+
 ## Current Status
 
-**Phase**: ALL STORIES COMPLETE
-**Total Stories**: 44 (all passes: true)
+**Phase**: Epic 13 - Requests Improvements (In Progress)
+**Total Stories**: 52 stories (45 passes: true, 7 remaining)
 
 ## Notes
 

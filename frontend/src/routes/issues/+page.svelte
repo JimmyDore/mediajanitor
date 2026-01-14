@@ -31,6 +31,12 @@
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
 	type WhitelistType = 'content' | 'french-only' | 'language-exempt';
 
+	// Tooltip text for informational badges
+	const badgeTooltips: Record<string, string> = {
+		large: 'Re-download in lower quality from Radarr/Sonarr',
+		request: 'Check status in Jellyseerr'
+	};
+
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let data = $state<ContentIssuesResponse | null>(null);
@@ -411,7 +417,11 @@
 									Name {sortField === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
-							<th class="col-issues">Issues</th>
+							<th class="col-issues">
+								<button class="sort-btn" onclick={() => toggleSort('issues')}>
+									Issues {sortField === 'issues' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+								</button>
+							</th>
 							<th class="col-size">
 								<button class="sort-btn" onclick={() => toggleSort('size')}>
 									Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -422,7 +432,6 @@
 									Watched {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
-							<th class="col-actions"></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -453,61 +462,75 @@
 									</div>
 								</td>
 								<td class="col-issues">
-									{#each item.issues as issue}
-										<span class="badge badge-{issue}">{issue}</span>
-									{/each}
+									<div class="badge-groups">
+										{#each item.issues as issue}
+											{#if issue === 'old'}
+												<!-- OLD badge with inline protect action -->
+												<span class="badge-group">
+													<span class="badge badge-old">old</span>
+													<button
+														class="badge-action"
+														onclick={() => openDurationPicker(item, 'content')}
+														disabled={protectingIds.has(item.jellyfin_id)}
+														title="Protect from deletion"
+													>
+														{#if protectingIds.has(item.jellyfin_id)}
+															<span class="badge-spin"></span>
+														{:else}
+															<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+																<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+															</svg>
+														{/if}
+													</button>
+												</span>
+											{:else if issue === 'language'}
+												<!-- LANGUAGE badge with inline actions -->
+												<span class="badge-group">
+													<span class="badge badge-language">language</span>
+													{#if hasMissingEnglishAudio(item)}
+														<button
+															class="badge-action"
+															onclick={() => openDurationPicker(item, 'french-only')}
+															disabled={frenchOnlyIds.has(item.jellyfin_id)}
+															title="Mark as French-only"
+														>
+															{#if frenchOnlyIds.has(item.jellyfin_id)}
+																<span class="badge-spin"></span>
+															{:else}
+																FR
+															{/if}
+														</button>
+													{/if}
+													<button
+														class="badge-action"
+														onclick={() => openDurationPicker(item, 'language-exempt')}
+														disabled={languageExemptIds.has(item.jellyfin_id)}
+														title="Exempt from language checks"
+													>
+														{#if languageExemptIds.has(item.jellyfin_id)}
+															<span class="badge-spin"></span>
+														{:else}
+															<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+																<polyline points="20 6 9 17 4 12"/>
+															</svg>
+														{/if}
+													</button>
+												</span>
+											{:else if issue === 'large'}
+												<!-- LARGE badge with info tooltip (no action) -->
+												<span class="badge badge-large" title={badgeTooltips.large}>large</span>
+											{:else if issue === 'request'}
+												<!-- REQUEST badge with info tooltip (no action) -->
+												<span class="badge badge-request" title={badgeTooltips.request}>request</span>
+											{:else}
+												<span class="badge badge-{issue}">{issue}</span>
+											{/if}
+										{/each}
+									</div>
 								</td>
 								<td class="col-size">{item.size_formatted}</td>
 								<td class="col-watched" class:never={!item.last_played_date}>
 									{formatLastWatched(item.last_played_date)}
-								</td>
-								<td class="col-actions">
-									{#if item.issues.includes('old')}
-										<button
-											class="action-btn"
-											onclick={() => openDurationPicker(item, 'content')}
-											disabled={protectingIds.has(item.jellyfin_id)}
-											title="Protect from deletion"
-										>
-											{#if protectingIds.has(item.jellyfin_id)}
-												<span class="btn-spin"></span>
-											{:else}
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-												</svg>
-											{/if}
-										</button>
-									{/if}
-									{#if hasMissingEnglishAudio(item)}
-										<button
-											class="action-btn"
-											onclick={() => openDurationPicker(item, 'french-only')}
-											disabled={frenchOnlyIds.has(item.jellyfin_id)}
-											title="Mark as French-only"
-										>
-											{#if frenchOnlyIds.has(item.jellyfin_id)}
-												<span class="btn-spin"></span>
-											{:else}
-												FR
-											{/if}
-										</button>
-									{/if}
-									{#if hasLanguageIssues(item)}
-										<button
-											class="action-btn"
-											onclick={() => openDurationPicker(item, 'language-exempt')}
-											disabled={languageExemptIds.has(item.jellyfin_id)}
-											title="Exempt from language checks"
-										>
-											{#if languageExemptIds.has(item.jellyfin_id)}
-												<span class="btn-spin"></span>
-											{:else}
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<polyline points="20 6 9 17 4 12"/>
-												</svg>
-											{/if}
-										</button>
-									{/if}
 								</td>
 							</tr>
 						{/each}
@@ -712,7 +735,7 @@
 
 	/* Columns */
 	.col-name {
-		width: 40%;
+		width: 45%;
 	}
 
 	.name-cell {
@@ -764,17 +787,36 @@
 	}
 
 	.col-issues {
-		width: 20%;
+		width: 30%;
+	}
+
+	/* Badge groups - container for inline badges with actions */
+	.badge-groups {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.badge-group {
+		display: inline-flex;
+		align-items: center;
+		gap: 0;
 	}
 
 	.badge {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
 		padding: 2px 6px;
 		font-size: var(--font-size-xs);
 		font-weight: var(--font-weight-medium);
 		text-transform: uppercase;
 		border-radius: var(--radius-sm);
-		margin-right: var(--space-1);
+		cursor: default;
+	}
+
+	/* Badges in groups get rounded only on the left */
+	.badge-group .badge {
+		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 	}
 
 	.badge-old {
@@ -785,6 +827,7 @@
 	.badge-large {
 		background: var(--warning-light);
 		color: var(--warning);
+		cursor: help;
 	}
 
 	.badge-language {
@@ -795,10 +838,59 @@
 	.badge-request {
 		background: rgba(139, 92, 246, 0.1);
 		color: #8b5cf6;
+		cursor: help;
+	}
+
+	/* Inline action button attached to badge */
+	.badge-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 22px;
+		height: 20px;
+		padding: 0 4px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-left: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		font-size: 9px;
+		font-weight: var(--font-weight-bold);
+	}
+
+	/* First action button gets straight left edge */
+	.badge-action:first-of-type {
+		border-left: 1px solid var(--border);
+	}
+
+	/* Last action button in group gets rounded right edge */
+	.badge-action:last-child {
+		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+	}
+
+	.badge-action:hover:not(:disabled) {
+		color: var(--text-primary);
+		background: var(--bg-hover);
+		border-color: var(--text-muted);
+	}
+
+	.badge-action:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.badge-spin {
+		width: 10px;
+		height: 10px;
+		border: 1.5px solid currentColor;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
 	.col-size {
-		width: 10%;
+		width: 12%;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
@@ -806,7 +898,7 @@
 	}
 
 	.col-watched {
-		width: 10%;
+		width: 13%;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
@@ -814,48 +906,6 @@
 
 	.col-watched.never {
 		color: var(--warning);
-	}
-
-	.col-actions {
-		width: 15%;
-		text-align: right;
-	}
-
-	.action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		background: transparent;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: all var(--transition-fast);
-		margin-left: var(--space-1);
-		font-size: var(--font-size-xs);
-		font-weight: var(--font-weight-semibold);
-	}
-
-	.action-btn:hover:not(:disabled) {
-		color: var(--text-primary);
-		border-color: var(--text-muted);
-		background: var(--bg-hover);
-	}
-
-	.action-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.btn-spin {
-		width: 12px;
-		height: 12px;
-		border: 2px solid currentColor;
-		border-top-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
 	}
 
 	@keyframes spin {
