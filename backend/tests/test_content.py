@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.database import (
     User,
     CachedMediaItem,
+    CachedJellyseerrRequest,
     ContentWhitelist,
     FrenchOnlyWhitelist,
     LanguageExemptWhitelist,
@@ -4451,3 +4452,338 @@ class TestWhitelistExpirationLogic:
 
         assert items_by_id["permanent-entry"]["expires_at"] is None
         assert items_by_id["entry-with-expiry"]["expires_at"] is not None
+
+
+class TestRequestWhitelist:
+    """Tests for Jellyseerr request whitelist (US-13.4)."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to get auth token for a test user."""
+        password = "testpassword123"
+        # Register
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password},
+        )
+        # Login
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        return login_response.json()["access_token"]
+
+    def test_add_to_request_whitelist(self, client: TestClient) -> None:
+        """POST /api/whitelist/requests should add a request to the whitelist."""
+        token = self._get_auth_token(client, "reqwl-add@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 123, "title": "Test Movie", "media_type": "movie"},
+            headers=headers,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to request whitelist"
+        assert data["name"] == "Test Movie"
+
+    def test_add_duplicate_to_request_whitelist(self, client: TestClient) -> None:
+        """POST /api/whitelist/requests should return 409 for duplicates."""
+        token = self._get_auth_token(client, "reqwl-dup@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time
+        client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 456, "title": "Dup Movie", "media_type": "movie"},
+            headers=headers,
+        )
+
+        # Try to add again
+        response = client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 456, "title": "Dup Movie", "media_type": "movie"},
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert "already in whitelist" in response.json()["detail"]
+
+    def test_get_request_whitelist(self, client: TestClient) -> None:
+        """GET /api/whitelist/requests should return list of whitelisted requests."""
+        token = self._get_auth_token(client, "reqwl-get@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add some requests
+        client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 1001, "title": "Movie One", "media_type": "movie"},
+            headers=headers,
+        )
+        client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 1002, "title": "TV Show Two", "media_type": "tv"},
+            headers=headers,
+        )
+
+        response = client.get("/api/whitelist/requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+        # Check fields are present
+        item = data["items"][0]
+        assert "jellyseerr_id" in item
+        assert "title" in item
+        assert "media_type" in item
+        assert "created_at" in item
+        assert "expires_at" in item
+
+    def test_delete_from_request_whitelist(self, client: TestClient) -> None:
+        """DELETE /api/whitelist/requests/{id} should remove from whitelist."""
+        token = self._get_auth_token(client, "reqwl-del@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add a request
+        client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 2001, "title": "To Delete", "media_type": "movie"},
+            headers=headers,
+        )
+
+        # Get the list to find the ID
+        list_response = client.get("/api/whitelist/requests", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete it
+        response = client.delete(f"/api/whitelist/requests/{item_id}", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["message"] == "Removed from request whitelist"
+
+        # Verify it's gone
+        list_response = client.get("/api/whitelist/requests", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    def test_delete_nonexistent_request_whitelist(self, client: TestClient) -> None:
+        """DELETE /api/whitelist/requests/{id} should return 404 for non-existent."""
+        token = self._get_auth_token(client, "reqwl-404@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.delete("/api/whitelist/requests/99999", headers=headers)
+        assert response.status_code == 404
+
+    def test_add_request_whitelist_with_expiration(self, client: TestClient) -> None:
+        """POST /api/whitelist/requests should accept expires_at."""
+        token = self._get_auth_token(client, "reqwl-exp@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        response = client.post(
+            "/api/whitelist/requests",
+            json={
+                "jellyseerr_id": 3001,
+                "title": "Expiring Request",
+                "media_type": "movie",
+                "expires_at": expires_at,
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 201
+
+        # Verify expiration is stored
+        list_response = client.get("/api/whitelist/requests", headers=headers)
+        item = list_response.json()["items"][0]
+        assert item["expires_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_whitelisted_request_excluded_from_unavailable_list(
+        self, client: TestClient
+    ) -> None:
+        """Whitelisted requests should not appear in unavailable requests list."""
+        token = self._get_auth_token(client, "reqwl-excl@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a cached request that would be unavailable
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=5001,
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,  # Pending - would be unavailable
+                title="Test Unavailable Movie",
+                requested_by="test@example.com",
+                created_at_source="2020-01-01T00:00:00Z",  # Old enough to pass filters
+                release_date="2020-01-01",  # Old enough to pass filters
+            )
+            session.add(request)
+            await session.commit()
+
+        # Without whitelist, should appear in unavailable
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+
+        # Add to whitelist
+        client.post(
+            "/api/whitelist/requests",
+            json={
+                "jellyseerr_id": 5001,
+                "title": "Test Unavailable Movie",
+                "media_type": "movie",
+            },
+            headers=headers,
+        )
+
+        # Should no longer appear
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_expired_whitelist_does_not_exclude_request(
+        self, client: TestClient
+    ) -> None:
+        """Expired whitelist entries should not filter out requests."""
+        token = self._get_auth_token(client, "reqwl-expired@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a cached request that would be unavailable
+        async with TestingAsyncSessionLocal() as session:
+            from app.database import JellyseerrRequestWhitelist
+
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6001,
+                tmdb_id=67890,
+                media_type="movie",
+                status=1,  # Pending - would be unavailable
+                title="Expired Whitelist Movie",
+                requested_by="test@example.com",
+                created_at_source="2020-01-01T00:00:00Z",
+                release_date="2020-01-01",
+            )
+            # Create expired whitelist entry directly in DB
+            whitelist_entry = JellyseerrRequestWhitelist(
+                user_id=user_id,
+                jellyseerr_id=6001,
+                title="Expired Whitelist Movie",
+                media_type="movie",
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # Expired
+            )
+            session.add_all([request, whitelist_entry])
+            await session.commit()
+
+        # Should appear in unavailable (whitelist is expired)
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_non_expired_whitelist_excludes_request(
+        self, client: TestClient
+    ) -> None:
+        """Non-expired whitelist entries should filter out requests."""
+        token = self._get_auth_token(client, "reqwl-valid@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a cached request that would be unavailable
+        async with TestingAsyncSessionLocal() as session:
+            from app.database import JellyseerrRequestWhitelist
+
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7001,
+                tmdb_id=11111,
+                media_type="movie",
+                status=1,  # Pending - would be unavailable
+                title="Valid Whitelist Movie",
+                requested_by="test@example.com",
+                created_at_source="2020-01-01T00:00:00Z",
+                release_date="2020-01-01",
+            )
+            # Create non-expired whitelist entry directly in DB
+            whitelist_entry = JellyseerrRequestWhitelist(
+                user_id=user_id,
+                jellyseerr_id=7001,
+                title="Valid Whitelist Movie",
+                media_type="movie",
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # Not expired
+            )
+            session.add_all([request, whitelist_entry])
+            await session.commit()
+
+        # Should NOT appear in unavailable (whitelist is valid)
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_summary_count_excludes_whitelisted_requests(
+        self, client: TestClient
+    ) -> None:
+        """Content summary unavailable_requests count should exclude whitelisted."""
+        token = self._get_auth_token(client, "reqwl-summary@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create two cached requests that would be unavailable
+        async with TestingAsyncSessionLocal() as session:
+            request1 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=8001,
+                tmdb_id=22222,
+                media_type="movie",
+                status=1,
+                title="Request One",
+                requested_by="test@example.com",
+                created_at_source="2020-01-01T00:00:00Z",
+                release_date="2020-01-01",
+            )
+            request2 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=8002,
+                tmdb_id=33333,
+                media_type="movie",
+                status=1,
+                title="Request Two",
+                requested_by="test@example.com",
+                created_at_source="2020-01-01T00:00:00Z",
+                release_date="2020-01-01",
+            )
+            session.add_all([request1, request2])
+            await session.commit()
+
+        # Should have 2 unavailable
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["unavailable_requests"]["count"] == 2
+
+        # Whitelist one
+        client.post(
+            "/api/whitelist/requests",
+            json={"jellyseerr_id": 8001, "title": "Request One", "media_type": "movie"},
+            headers=headers,
+        )
+
+        # Should have 1 unavailable now
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["unavailable_requests"]["count"] == 1

@@ -149,6 +149,22 @@ class LanguageExemptWhitelist(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
+class JellyseerrRequestWhitelist(Base):
+    """User's whitelist to hide Jellyseerr requests from unavailable list."""
+
+    __tablename__ = "jellyseerr_request_whitelist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    jellyseerr_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "movie" or "tv"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
+
+
 class SyncStatus(Base):
     """Track sync status per user."""
 

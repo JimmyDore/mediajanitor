@@ -39,6 +39,8 @@ from app.models.content import (
     OldUnwatchedResponse,
     RecentlyAvailableItem,
     RecentlyAvailableResponse,
+    RequestWhitelistItem,
+    RequestWhitelistListResponse,
     UnavailableRequestItem,
     WhitelistItem,
     WhitelistListResponse,
@@ -1255,7 +1257,10 @@ async def get_unavailable_requests_count(
     db: AsyncSession,
     user_id: int,
 ) -> int:
-    """Get count of unavailable requests for summary."""
+    """Get count of unavailable requests for summary.
+
+    Excludes whitelisted requests (non-expired only).
+    """
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
             CachedJellyseerrRequest.user_id == user_id
@@ -1263,8 +1268,14 @@ async def get_unavailable_requests_count(
     )
     all_requests = result.scalars().all()
 
+    # Get whitelisted request IDs (non-expired only)
+    whitelisted_ids = await get_request_whitelist_ids(db, user_id)
+
     count = 0
     for request in all_requests:
+        # Skip whitelisted requests
+        if request.jellyseerr_id in whitelisted_ids:
+            continue
         if is_unavailable_request(request):
             count += 1
 
@@ -1278,6 +1289,7 @@ async def get_unavailable_requests(
     """Get all unavailable requests for a user.
 
     Returns items sorted by request date (newest first).
+    Excludes whitelisted requests (non-expired only).
     """
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
@@ -1286,9 +1298,15 @@ async def get_unavailable_requests(
     )
     all_requests = result.scalars().all()
 
+    # Get whitelisted request IDs (non-expired only)
+    whitelisted_ids = await get_request_whitelist_ids(db, user_id)
+
     unavailable_items: list[tuple[datetime | None, UnavailableRequestItem]] = []
 
     for request in all_requests:
+        # Skip whitelisted requests
+        if request.jellyseerr_id in whitelisted_ids:
+            continue
         if not is_unavailable_request(request):
             continue
 
@@ -1335,3 +1353,125 @@ async def get_unavailable_requests(
     unavailable_items.sort(key=lambda x: x[0] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
     return [item for _, item in unavailable_items]
+
+
+# US-13.4: Request Whitelist functions
+
+
+async def add_to_request_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    jellyseerr_id: int,
+    title: str,
+    media_type: str,
+    expires_at: datetime | None = None,
+) -> None:
+    """Add a Jellyseerr request to user's whitelist.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyseerr_id: Jellyseerr request ID
+        title: Request title
+        media_type: "movie" or "tv"
+        expires_at: Optional expiration datetime (None = permanent)
+
+    Raises ValueError if the request is already in the whitelist.
+    """
+    from app.database import JellyseerrRequestWhitelist
+
+    # Check if already whitelisted
+    result = await db.execute(
+        select(JellyseerrRequestWhitelist).where(
+            JellyseerrRequestWhitelist.user_id == user_id,
+            JellyseerrRequestWhitelist.jellyseerr_id == jellyseerr_id,
+        )
+    )
+    if result.scalar_one_or_none():
+        raise ValueError("Request already in whitelist")
+
+    entry = JellyseerrRequestWhitelist(
+        user_id=user_id,
+        jellyseerr_id=jellyseerr_id,
+        title=title,
+        media_type=media_type,
+        expires_at=expires_at,
+    )
+    db.add(entry)
+
+
+async def get_request_whitelist(
+    db: AsyncSession,
+    user_id: int,
+) -> RequestWhitelistListResponse:
+    """Get all items in the user's request whitelist."""
+    from app.database import JellyseerrRequestWhitelist
+
+    result = await db.execute(
+        select(JellyseerrRequestWhitelist)
+        .where(JellyseerrRequestWhitelist.user_id == user_id)
+        .order_by(JellyseerrRequestWhitelist.title)
+    )
+    entries = result.scalars().all()
+
+    items = [
+        RequestWhitelistItem(
+            id=entry.id,
+            jellyseerr_id=entry.jellyseerr_id,
+            title=entry.title,
+            media_type=entry.media_type,
+            created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
+        )
+        for entry in entries
+    ]
+
+    return RequestWhitelistListResponse(
+        items=items,
+        total_count=len(items),
+    )
+
+
+async def remove_from_request_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    whitelist_id: int,
+) -> bool:
+    """Remove an item from the user's request whitelist.
+
+    Returns True if item was found and deleted, False otherwise.
+    """
+    from app.database import JellyseerrRequestWhitelist
+
+    result = await db.execute(
+        select(JellyseerrRequestWhitelist).where(
+            JellyseerrRequestWhitelist.id == whitelist_id,
+            JellyseerrRequestWhitelist.user_id == user_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        return False
+
+    await db.delete(entry)
+    return True
+
+
+async def get_request_whitelist_ids(db: AsyncSession, user_id: int) -> set[int]:
+    """Get set of jellyseerr_ids in user's request whitelist (non-expired only)."""
+    from sqlalchemy import or_
+    from app.database import JellyseerrRequestWhitelist
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(JellyseerrRequestWhitelist.jellyseerr_id).where(
+            JellyseerrRequestWhitelist.user_id == user_id,
+            # Only include non-expired entries (NULL = permanent, or expires_at > now)
+            or_(
+                JellyseerrRequestWhitelist.expires_at.is_(None),
+                JellyseerrRequestWhitelist.expires_at > now,
+            ),
+        )
+    )
+    return set(result.scalars().all())

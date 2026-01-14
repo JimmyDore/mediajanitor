@@ -917,8 +917,8 @@
         "Unit tests pass"
       ],
       "priority": 303,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - JellyseerrRequestWhitelist table, API endpoints, expiration logic. 10 new tests. 222 backend tests pass, mypy clean."
     },
     {
       "id": "US-13.5",

@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, get_db
 from app.models.content import (
+    RequestWhitelistAddRequest,
+    RequestWhitelistListResponse,
     WhitelistAddRequest,
     WhitelistAddResponse,
     WhitelistListResponse,
@@ -23,6 +25,9 @@ from app.services.content import (
     add_to_language_exempt_whitelist,
     get_language_exempt_whitelist,
     remove_from_language_exempt_whitelist,
+    add_to_request_whitelist,
+    get_request_whitelist,
+    remove_from_request_whitelist,
 )
 
 
@@ -239,3 +244,76 @@ async def remove_from_language_exempt(
         )
 
     return WhitelistRemoveResponse(message="Removed from language-exempt whitelist")
+
+
+# Request Whitelist endpoints (US-13.4)
+
+
+@router.get("/requests", response_model=RequestWhitelistListResponse)
+async def list_request_whitelist(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RequestWhitelistListResponse:
+    """Get all items in the user's request whitelist.
+
+    Items in this whitelist are hidden from the unavailable requests list.
+    """
+    return await get_request_whitelist(db=db, user_id=current_user.id)
+
+
+@router.post("/requests", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+async def add_to_requests(
+    request: RequestWhitelistAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistAddResponse:
+    """Add a Jellyseerr request to the user's request whitelist.
+
+    Items in this whitelist are hidden from the unavailable requests list.
+    Use this to hide requests you're intentionally waiting on.
+    """
+    try:
+        await add_to_request_whitelist(
+            db=db,
+            user_id=current_user.id,
+            jellyseerr_id=request.jellyseerr_id,
+            title=request.title,
+            media_type=request.media_type,
+            expires_at=request.expires_at,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    return WhitelistAddResponse(
+        message="Added to request whitelist",
+        jellyfin_id=str(request.jellyseerr_id),  # Reusing existing response model
+        name=request.title,
+    )
+
+
+@router.delete("/requests/{whitelist_id}", response_model=WhitelistRemoveResponse)
+async def remove_from_requests(
+    whitelist_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistRemoveResponse:
+    """Remove an item from the user's request whitelist.
+
+    After removal, the request may reappear in the unavailable requests list.
+    """
+    removed = await remove_from_request_whitelist(
+        db=db,
+        user_id=current_user.id,
+        whitelist_id=whitelist_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Whitelist entry not found",
+        )
+
+    return WhitelistRemoveResponse(message="Removed from request whitelist")

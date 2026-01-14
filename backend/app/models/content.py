@@ -184,3 +184,33 @@ class UnavailableRequestsResponse(BaseModel):
     total_count: int
     total_size_bytes: int = 0  # Requests don't have size
     total_size_formatted: str = "0 B"
+
+
+# US-13.4: Request Whitelist models
+
+
+class RequestWhitelistAddRequest(BaseModel):
+    """Request model for adding a Jellyseerr request to whitelist."""
+
+    jellyseerr_id: int
+    title: str
+    media_type: str  # "movie" or "tv"
+    expires_at: datetime | None = None  # NULL = permanent (never expires)
+
+
+class RequestWhitelistItem(BaseModel):
+    """Response model for a single request whitelist item."""
+
+    id: int
+    jellyseerr_id: int
+    title: str
+    media_type: str  # "movie" or "tv"
+    created_at: str
+    expires_at: str | None = None  # ISO format datetime or null for permanent
+
+
+class RequestWhitelistListResponse(BaseModel):
+    """Response model for request whitelist list."""
+
+    items: list[RequestWhitelistItem]
+    total_count: int

@@ -1055,10 +1055,33 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(requests): [US-13.3] add release date column to requests view
 
+### 2026-01-14: US-13.4 - Add Jellyseerr Request Whitelist (Backend)
+- Created JellyseerrRequestWhitelist database model with expiration support:
+  - id, user_id (FK), jellyseerr_id, title, media_type, created_at, expires_at (nullable)
+- Created Alembic migration for new table
+- Implemented backend service functions:
+  - add_to_request_whitelist(): Creates entry, checks for duplicates
+  - get_request_whitelist(): Returns all entries for user
+  - remove_from_request_whitelist(): Deletes entry by ID
+  - get_request_whitelist_ids(): Returns set of jellyseerr_ids (non-expired only)
+- Implemented API endpoints:
+  - POST /api/whitelist/requests - Add request to whitelist
+  - GET /api/whitelist/requests - List whitelisted requests
+  - DELETE /api/whitelist/requests/{id} - Remove from whitelist
+- Updated get_unavailable_requests() and get_unavailable_requests_count():
+  - Both now exclude whitelisted requests (respects expiration)
+- Backend tests: 10 new tests for request whitelist functionality
+  - API endpoints (add, duplicate, get, delete, 404, expiration)
+  - Integration tests (exclude from list, expired/non-expired, summary count)
+- 222 backend tests pass, mypy clean
+- Files changed: database.py, models/content.py, routers/whitelist.py, services/content.py, test_content.py, alembic migration
+- Commits:
+  - feat(whitelist): [US-13.4] add Jellyseerr request whitelist backend
+
 ## Current Status
 
 **Phase**: Epic 13 - Requests Improvements (In Progress)
-**Total Stories**: 52 stories (48 passes: true, 4 remaining)
+**Total Stories**: 52 stories (49 passes: true, 3 remaining)
 
 ## Notes
 
