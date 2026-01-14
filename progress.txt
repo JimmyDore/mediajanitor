@@ -747,10 +747,55 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - style(ui): [US-9.1] fix page titles for consistent branding
 
+### 2026-01-14: US-9.2 - Add Favicon
+- Created SVG favicon with broom icon (Media Janitor theme)
+- Design:
+  - Blue circular background (#2563eb) matching app accent color
+  - Dark broom handle (#1e293b)
+  - Light blue bristles (#60a5fa, #93c5fd)
+  - White sparkle effects for "clean" visual cue
+- Updated app.html to reference SVG favicon (type="image/svg+xml")
+- Created frontend/static/ directory
+- Typecheck passes
+- Files changed: frontend/static/favicon.svg, frontend/src/app.html
+- Commits:
+  - feat(ui): [US-9.2] add favicon
+
+### 2026-01-14: US-9.3 - Add CORS Production URL
+- Added https://mediajanitor.com to CORS allowed origins in main.py
+- Existing localhost origins (5173, 3000) still work
+- Added unit tests for CORS configuration:
+  - test_cors_allows_localhost: Verifies localhost:5173 origin allowed
+  - test_cors_allows_production_domain: Verifies mediajanitor.com origin allowed
+- 160 backend unit tests pass, mypy clean
+- Files changed: backend/app/main.py, backend/tests/test_main.py
+- Commits:
+  - feat(cors): [US-9.3] add mediajanitor.com to CORS allowed origins
+
+### 2026-01-14: US-9.4 - Add IMDB/TMDB Links to Content Items
+- Added tmdb_id and imdb_id fields to ContentIssueItem Pydantic model
+- Added tmdb_id field to UnavailableRequestItem Pydantic model
+- Created extract_provider_ids() helper function in content.py:
+  - Extracts TMDB and IMDB IDs from Jellyfin's raw_data.ProviderIds
+  - Returns tuple (tmdb_id, imdb_id) as strings or None
+- Updated get_content_issues() to include provider IDs in response
+- Updated get_unavailable_requests() to include tmdb_id from cached data
+- Added external link icons to Issues page frontend:
+  - TMDB link: External link icon (opens themoviedb.org in new tab)
+  - IMDB link: Yellow "IMDb" badge (opens imdb.com in new tab)
+  - Links only shown when ID is available (graceful fallback)
+  - Movies use /movie/{id}, Series use /tv/{id}
+- Backend tests: 6 new tests for provider ID extraction and API responses
+- Frontend tests: 3 new tests for TMDB/IMDB fields in API response
+- 172 backend tests pass, 96 frontend tests pass, mypy clean
+- Files changed: models/content.py, services/content.py, tests/test_content.py, issues/+page.svelte, tests/issues.test.ts
+- Commits:
+  - feat(content): [US-9.4] add TMDB/IMDB links to content items
+
 ## Current Status
 
 **Phase**: Polish & Infrastructure (In Progress)
-**Next US**: US-9.2 - Add Favicon
+**Next US**: US-10.1 - Add Celery Infrastructure
 
 ## Notes
 

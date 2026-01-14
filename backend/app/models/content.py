@@ -138,6 +138,8 @@ class ContentIssueItem(BaseModel):
     path: str | None
     issues: list[str]  # List of issue types: "old", "large", "language", "request"
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
+    tmdb_id: str | None = None  # TMDB ID for external links
+    imdb_id: str | None = None  # IMDB ID for external links
 
 
 class ContentIssuesResponse(BaseModel):
@@ -162,6 +164,7 @@ class UnavailableRequestItem(BaseModel):
     request_date: str | None = None
     issues: list[str]  # ["request"]
     missing_seasons: list[int] | None = None  # For TV shows only
+    tmdb_id: int | None = None  # TMDB ID for external links
 
 
 class UnavailableRequestsResponse(BaseModel):

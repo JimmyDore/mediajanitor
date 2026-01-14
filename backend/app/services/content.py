@@ -898,6 +898,30 @@ async def get_currently_airing(
     )
 
 
+def extract_provider_ids(item: CachedMediaItem) -> tuple[str | None, str | None]:
+    """Extract TMDB and IMDB IDs from a media item's raw_data.
+
+    Jellyfin stores provider IDs in ProviderIds dict with keys like:
+    - "Tmdb": "12345"
+    - "Imdb": "tt1234567"
+
+    Returns:
+        Tuple of (tmdb_id, imdb_id) - strings or None if not present
+    """
+    raw_data = item.raw_data
+    if not raw_data:
+        return None, None
+
+    provider_ids = raw_data.get("ProviderIds", {})
+    if not provider_ids:
+        return None, None
+
+    tmdb_id = provider_ids.get("Tmdb")
+    imdb_id = provider_ids.get("Imdb")
+
+    return tmdb_id, imdb_id
+
+
 def get_item_issues(
     item: CachedMediaItem,
     whitelisted_ids: set[str],
@@ -1014,21 +1038,25 @@ async def get_content_issues(
     total_size_bytes = sum(item.size_bytes or 0 for item, _, _ in items_with_issues)
 
     # Convert to response models
-    response_items = [
-        ContentIssueItem(
-            jellyfin_id=item.jellyfin_id,
-            name=item.name,
-            media_type=item.media_type,
-            production_year=item.production_year,
-            size_bytes=item.size_bytes,
-            size_formatted=format_size(item.size_bytes),
-            last_played_date=item.last_played_date,
-            path=item.path,
-            issues=issues,
-            language_issues=language_issues_detail if language_issues_detail else None,
+    response_items = []
+    for item, issues, language_issues_detail in items_with_issues:
+        tmdb_id, imdb_id = extract_provider_ids(item)
+        response_items.append(
+            ContentIssueItem(
+                jellyfin_id=item.jellyfin_id,
+                name=item.name,
+                media_type=item.media_type,
+                production_year=item.production_year,
+                size_bytes=item.size_bytes,
+                size_formatted=format_size(item.size_bytes),
+                last_played_date=item.last_played_date,
+                path=item.path,
+                issues=issues,
+                language_issues=language_issues_detail if language_issues_detail else None,
+                tmdb_id=tmdb_id,
+                imdb_id=imdb_id,
+            )
         )
-        for item, issues, language_issues_detail in items_with_issues
-    ]
 
     return ContentIssuesResponse(
         items=response_items,
@@ -1216,6 +1244,7 @@ async def get_unavailable_requests(
             request_date=request_date_str,
             issues=["request"],
             missing_seasons=missing_seasons if missing_seasons else None,
+            tmdb_id=request.tmdb_id,
         )
 
         unavailable_items.append((request_date, item))

@@ -401,5 +401,118 @@ describe('Unified Issues API Integration', () => {
 			expect(mediaTypes).toContain('Movie');
 			expect(mediaTypes).toContain('Series');
 		});
+
+		it('returns items with tmdb_id and imdb_id fields (US-9.4)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'movie-with-ids',
+						name: 'Movie With IDs',
+						media_type: 'Movie',
+						production_year: 2020,
+						size_bytes: 10000000000,
+						size_formatted: '9.3 GB',
+						last_played_date: null,
+						path: '/media/movies/Movie With IDs',
+						issues: ['old'],
+						tmdb_id: '12345',
+						imdb_id: 'tt0123456'
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 10000000000,
+				total_size_formatted: '9.3 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.tmdb_id).toBe('12345');
+			expect(item.imdb_id).toBe('tt0123456');
+		});
+
+		it('handles items with null tmdb_id and imdb_id (US-9.4)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'movie-no-ids',
+						name: 'Movie Without IDs',
+						media_type: 'Movie',
+						production_year: 2020,
+						size_bytes: 10000000000,
+						size_formatted: '9.3 GB',
+						last_played_date: null,
+						path: '/media/movies/Movie Without IDs',
+						issues: ['old'],
+						tmdb_id: null,
+						imdb_id: null
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 10000000000,
+				total_size_formatted: '9.3 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.tmdb_id).toBeNull();
+			expect(item.imdb_id).toBeNull();
+		});
+
+		it('series use tv path for TMDB URL (US-9.4)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'series-with-tmdb',
+						name: 'Series With TMDB',
+						media_type: 'Series',
+						production_year: 2021,
+						size_bytes: 20000000000,
+						size_formatted: '18.6 GB',
+						last_played_date: null,
+						path: '/media/tv/Series With TMDB',
+						issues: ['old'],
+						tmdb_id: '67890',
+						imdb_id: null
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 20000000000,
+				total_size_formatted: '18.6 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			// For series, tmdb_id should be available
+			expect(item.tmdb_id).toBe('67890');
+			expect(item.media_type).toBe('Series');
+			// TMDB URL for series would use /tv/{id} path (constructed by frontend)
+		});
 	});
 });

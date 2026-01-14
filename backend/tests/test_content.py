@@ -3565,3 +3565,254 @@ class TestUnavailableRequests:
         # Only old release should appear
         assert data["total_count"] == 1
         assert data["items"][0]["title"] == "Old Release Movie"
+
+
+class TestProviderIds:
+    """Test TMDB/IMDB provider ID extraction (US-9.4)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "provider@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_extract_provider_ids_with_both_ids(
+        self, client: TestClient
+    ) -> None:
+        """Should extract both TMDB and IMDB IDs from raw_data."""
+        from app.services.content import extract_provider_ids
+
+        token = self._get_auth_token(client, "provider-both@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-provider-both",
+                name="Movie With IDs",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data={
+                    "Id": "movie-provider-both",
+                    "ProviderIds": {
+                        "Tmdb": "12345",
+                        "Imdb": "tt0123456",
+                    },
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+            # Refresh item from DB
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.jellyfin_id == "movie-provider-both")
+            )
+            db_item = result.scalar_one()
+
+            tmdb_id, imdb_id = extract_provider_ids(db_item)
+            assert tmdb_id == "12345"
+            assert imdb_id == "tt0123456"
+
+    @pytest.mark.asyncio
+    async def test_extract_provider_ids_with_only_tmdb(
+        self, client: TestClient
+    ) -> None:
+        """Should handle items with only TMDB ID."""
+        from app.services.content import extract_provider_ids
+
+        token = self._get_auth_token(client, "provider-tmdb@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-tmdb-only",
+                name="TMDB Only Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data={
+                    "Id": "movie-tmdb-only",
+                    "ProviderIds": {
+                        "Tmdb": "67890",
+                    },
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.jellyfin_id == "movie-tmdb-only")
+            )
+            db_item = result.scalar_one()
+
+            tmdb_id, imdb_id = extract_provider_ids(db_item)
+            assert tmdb_id == "67890"
+            assert imdb_id is None
+
+    @pytest.mark.asyncio
+    async def test_extract_provider_ids_with_no_ids(
+        self, client: TestClient
+    ) -> None:
+        """Should return None for both when no provider IDs present."""
+        from app.services.content import extract_provider_ids
+
+        token = self._get_auth_token(client, "provider-none@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-no-ids",
+                name="No IDs Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data={
+                    "Id": "movie-no-ids",
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.jellyfin_id == "movie-no-ids")
+            )
+            db_item = result.scalar_one()
+
+            tmdb_id, imdb_id = extract_provider_ids(db_item)
+            assert tmdb_id is None
+            assert imdb_id is None
+
+    @pytest.mark.asyncio
+    async def test_issues_endpoint_includes_provider_ids(
+        self, client: TestClient
+    ) -> None:
+        """Issues endpoint should include tmdb_id and imdb_id in response."""
+        token = self._get_auth_token(client, "provider-api@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-api-ids",
+                name="API Test Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data={
+                    "Id": "movie-api-ids",
+                    "ProviderIds": {
+                        "Tmdb": "99999",
+                        "Imdb": "tt9999999",
+                    },
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 1
+        item_data = data["items"][0]
+        assert item_data["tmdb_id"] == "99999"
+        assert item_data["imdb_id"] == "tt9999999"
+
+    @pytest.mark.asyncio
+    async def test_issues_endpoint_handles_missing_provider_ids(
+        self, client: TestClient
+    ) -> None:
+        """Issues endpoint should handle items without provider IDs gracefully."""
+        token = self._get_auth_token(client, "provider-missing@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-no-provider-ids",
+                name="No Provider IDs Movie",
+                media_type="Movie",
+                date_created=old_date,
+                size_bytes=5_000_000_000,
+                played=False,
+                raw_data={"Id": "movie-no-provider-ids"},
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 1
+        item_data = data["items"][0]
+        assert item_data["tmdb_id"] is None
+        assert item_data["imdb_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_unavailable_requests_includes_tmdb_id(
+        self, client: TestClient
+    ) -> None:
+        """Unavailable requests endpoint should include tmdb_id in response."""
+        token = self._get_auth_token(client, "request-tmdb@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9001,
+                tmdb_id=55555,
+                media_type="movie",
+                status=1,  # Pending
+                title="Requested Movie",
+                raw_data={"media": {"title": "Requested Movie", "releaseDate": "2023-01-15"}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 1
+        item_data = data["items"][0]
+        assert item_data["tmdb_id"] == 55555

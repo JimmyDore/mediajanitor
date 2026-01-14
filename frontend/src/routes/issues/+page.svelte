@@ -14,6 +14,8 @@
 		path: string | null;
 		issues: string[];
 		language_issues: string[] | null;
+		tmdb_id: string | null;
+		imdb_id: string | null;
 	}
 
 	interface ContentIssuesResponse {
@@ -206,6 +208,17 @@
 		return item.issues.includes('language');
 	}
 
+	function getTmdbUrl(item: ContentIssueItem): string | null {
+		if (!item.tmdb_id) return null;
+		const mediaType = item.media_type === 'Movie' ? 'movie' : 'tv';
+		return `https://www.themoviedb.org/${mediaType}/${item.tmdb_id}`;
+	}
+
+	function getImdbUrl(item: ContentIssueItem): string | null {
+		if (!item.imdb_id) return null;
+		return `https://www.imdb.com/title/${item.imdb_id}`;
+	}
+
 	function formatSize(sizeBytes: number): string {
 		if (sizeBytes === 0) return '0 B';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -352,6 +365,22 @@
 										{#if item.production_year}
 											<span class="item-year">{item.production_year}</span>
 										{/if}
+										<span class="external-links">
+											{#if getTmdbUrl(item)}
+												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link" title="View on TMDB">
+													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+														<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+														<polyline points="15 3 21 3 21 9"/>
+														<line x1="10" y1="14" x2="21" y2="3"/>
+													</svg>
+												</a>
+											{/if}
+											{#if getImdbUrl(item)}
+												<a href={getImdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link" title="View on IMDB">
+													<span class="imdb-badge">IMDb</span>
+												</a>
+											{/if}
+										</span>
 									</div>
 								</td>
 								<td class="col-issues">
@@ -581,6 +610,38 @@
 	.item-year {
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
+	}
+
+	.external-links {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		margin-left: var(--space-1);
+	}
+
+	.external-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-muted);
+		opacity: 0.6;
+		transition: all var(--transition-fast);
+		text-decoration: none;
+	}
+
+	.external-link:hover {
+		color: var(--accent);
+		opacity: 1;
+	}
+
+	.imdb-badge {
+		font-size: 9px;
+		font-weight: var(--font-weight-bold);
+		background: #f5c518;
+		color: #000;
+		padding: 1px 3px;
+		border-radius: 2px;
+		letter-spacing: -0.02em;
 	}
 
 	.col-issues {
