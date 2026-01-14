@@ -76,3 +76,6 @@ Thumbs.db
 
 to_remove.txt
 .specstory/
+
+# Claude Code local settings
+.claude/settings.local.json
