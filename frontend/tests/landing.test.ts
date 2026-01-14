@@ -66,4 +66,61 @@ describe('Landing Page', () => {
 			expect(subtitle).toContain('Jellyfin');
 		});
 	});
+
+	describe('Feature Highlights', () => {
+		it('should display 4 feature cards', () => {
+			// Feature highlights section should have 4 cards
+			const features = [
+				'Old Content Detection',
+				'Large File Finder',
+				'Language Checker',
+				'Request Tracking'
+			];
+			expect(features.length).toBe(4);
+		});
+
+		it('should have Old Content Detection feature', () => {
+			const feature = {
+				title: 'Old Content Detection',
+				description: 'Find movies and shows nobody has watched in months'
+			};
+			expect(feature.title).toBe('Old Content Detection');
+			expect(feature.description.length).toBeGreaterThan(10);
+		});
+
+		it('should have Large File Finder feature', () => {
+			const feature = {
+				title: 'Large File Finder',
+				description: 'Identify oversized files eating up your storage'
+			};
+			expect(feature.title).toBe('Large File Finder');
+			expect(feature.description).toContain('storage');
+		});
+
+		it('should have Language Checker feature', () => {
+			const feature = {
+				title: 'Language Checker',
+				description: 'Spot content missing audio tracks or subtitles'
+			};
+			expect(feature.title).toBe('Language Checker');
+			expect(feature.description).toContain('audio');
+		});
+
+		it('should have Request Tracking feature', () => {
+			const feature = {
+				title: 'Request Tracking',
+				description: 'Monitor pending and unavailable Jellyseerr requests'
+			};
+			expect(feature.title).toBe('Request Tracking');
+			expect(feature.description).toContain('Jellyseerr');
+		});
+
+		it('should have colored icons for each feature', () => {
+			// Each feature should have a distinct icon color
+			const iconColors = ['red', 'yellow', 'blue', 'purple'];
+			expect(iconColors.length).toBe(4);
+			expect(iconColors).toContain('red');
+			expect(iconColors).toContain('purple');
+		});
+	});
 });

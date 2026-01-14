@@ -23,6 +23,58 @@
 		<!-- Decorative gradient background -->
 		<div class="hero-gradient" aria-hidden="true"></div>
 	</section>
+
+	<!-- Feature Highlights -->
+	<section class="features">
+		<h2 class="features-title">What Media Janitor Does</h2>
+		<div class="features-grid">
+			<div class="feature-card">
+				<div class="feature-icon feature-icon-red">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"/>
+						<polyline points="12,6 12,12 16,14"/>
+					</svg>
+				</div>
+				<h3 class="feature-title">Old Content Detection</h3>
+				<p class="feature-desc">Find movies and shows nobody has watched in months</p>
+			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon feature-icon-yellow">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+						<polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+						<line x1="12" y1="22.08" x2="12" y2="12"/>
+					</svg>
+				</div>
+				<h3 class="feature-title">Large File Finder</h3>
+				<p class="feature-desc">Identify oversized files eating up your storage</p>
+			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon feature-icon-blue">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+						<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+					</svg>
+				</div>
+				<h3 class="feature-title">Language Checker</h3>
+				<p class="feature-desc">Spot content missing audio tracks or subtitles</p>
+			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon feature-icon-purple">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"/>
+						<line x1="12" y1="8" x2="12" y2="12"/>
+						<line x1="12" y1="16" x2="12.01" y2="16"/>
+					</svg>
+				</div>
+				<h3 class="feature-title">Request Tracking</h3>
+				<p class="feature-desc">Monitor pending and unavailable Jellyseerr requests</p>
+			</div>
+		</div>
+	</section>
 </div>
 
 <style>
@@ -141,5 +193,112 @@
 
 	.hero-login a:hover {
 		text-decoration: underline;
+	}
+
+	/* Features Section */
+	.features {
+		padding: var(--space-12) var(--space-8);
+		background: var(--bg-secondary);
+	}
+
+	.features-title {
+		text-align: center;
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+		margin-bottom: var(--space-10);
+	}
+
+	.features-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--space-6);
+		max-width: 900px;
+		margin: 0 auto;
+	}
+
+	@media (max-width: 640px) {
+		.features-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.feature-card {
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-6);
+		text-align: center;
+		transition: all var(--transition-fast);
+	}
+
+	.feature-card:hover {
+		border-color: var(--accent);
+		transform: translateY(-2px);
+	}
+
+	.feature-icon {
+		width: 48px;
+		height: 48px;
+		border-radius: var(--radius-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto var(--space-4);
+	}
+
+	.feature-icon-red {
+		background: rgba(220, 38, 38, 0.1);
+		color: #dc2626;
+	}
+
+	.feature-icon-yellow {
+		background: rgba(202, 138, 4, 0.1);
+		color: #ca8a04;
+	}
+
+	.feature-icon-blue {
+		background: rgba(37, 99, 235, 0.1);
+		color: #2563eb;
+	}
+
+	.feature-icon-purple {
+		background: rgba(124, 58, 237, 0.1);
+		color: #7c3aed;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.feature-icon-red {
+			background: rgba(239, 68, 68, 0.15);
+			color: #ef4444;
+		}
+
+		.feature-icon-yellow {
+			background: rgba(234, 179, 8, 0.15);
+			color: #eab308;
+		}
+
+		.feature-icon-blue {
+			background: rgba(59, 130, 246, 0.15);
+			color: #3b82f6;
+		}
+
+		.feature-icon-purple {
+			background: rgba(139, 92, 246, 0.15);
+			color: #8b5cf6;
+		}
+	}
+
+	.feature-title {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+		margin-bottom: var(--space-2);
+	}
+
+	.feature-desc {
+		font-size: var(--font-size-base);
+		color: var(--text-secondary);
+		line-height: 1.5;
 	}
 </style>
