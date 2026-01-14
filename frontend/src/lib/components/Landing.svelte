@@ -125,6 +125,38 @@
 			<a href="/register" class="btn-cta-secondary">Try it Free</a>
 		</div>
 	</section>
+
+	<!-- Trust Section -->
+	<section class="trust">
+		<div class="trust-content">
+			<div class="trust-icon">
+				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+				</svg>
+			</div>
+			<h2 class="trust-title">Your Data, Your Control</h2>
+			<div class="trust-points">
+				<div class="trust-point">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="20 6 9 17 4 12"/>
+					</svg>
+					<span>API keys encrypted at rest</span>
+				</div>
+				<div class="trust-point">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="20 6 9 17 4 12"/>
+					</svg>
+					<span>Connects to YOUR servers only</span>
+				</div>
+				<div class="trust-point">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="20 6 9 17 4 12"/>
+					</svg>
+					<span>No media files stored on our end</span>
+				</div>
+			</div>
+		</div>
+	</section>
 </div>
 
 <style>
@@ -520,5 +552,57 @@
 	.btn-cta-secondary:hover {
 		background: var(--accent);
 		color: white;
+	}
+
+	/* Trust Section */
+	.trust {
+		padding: var(--space-10) var(--space-8);
+		background: var(--bg-secondary);
+		border-top: 1px solid var(--border);
+	}
+
+	.trust-content {
+		max-width: 600px;
+		margin: 0 auto;
+		text-align: center;
+	}
+
+	.trust-icon {
+		width: 64px;
+		height: 64px;
+		border-radius: 50%;
+		background: var(--success-light);
+		color: var(--success);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0 auto var(--space-4);
+	}
+
+	.trust-title {
+		font-size: var(--font-size-xl);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+		margin-bottom: var(--space-6);
+	}
+
+	.trust-points {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.trust-point {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-3);
+		font-size: var(--font-size-base);
+		color: var(--text-secondary);
+	}
+
+	.trust-point svg {
+		color: var(--success);
+		flex-shrink: 0;
 	}
 </style>
