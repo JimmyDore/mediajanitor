@@ -918,10 +918,85 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(whitelist): [US-11.3] add temporary whitelist UI with duration picker
 
+### 2026-01-14: US-M.1 - Landing Page Hero
+- Created Landing.svelte component with hero section:
+  - Gradient background (blue to purple): linear-gradient(135deg, #2563eb, #7c3aed)
+  - Bold tagline: "Keep Your Media Library Clean"
+  - Value proposition subtitle explaining the product
+  - Primary CTA: "Get Started Free" -> /register
+  - Secondary link: "Already have an account? Log in" -> /login
+  - Responsive design with scaling typography
+- Updated homepage (+page.svelte) to conditionally render:
+  - Landing page for unauthenticated visitors
+  - Dashboard for authenticated users
+- Added / to public routes in layout.svelte
+- Frontend tests: 5 new tests for landing page content
+- 107 frontend tests pass, typecheck clean
+- Files changed: Landing.svelte, +page.svelte, +layout.svelte, landing.test.ts, prd.json
+- Commits:
+  - feat(marketing): [US-M.1] add landing page hero
+
+### 2026-01-14: US-M.2 - Feature Highlights
+- Added features section to Landing component below hero:
+  - 4 feature cards in responsive 2x2 grid layout
+  - Old Content Detection (red clock icon)
+  - Large File Finder (yellow box icon)
+  - Language Checker (blue book icon)
+  - Request Tracking (purple alert icon)
+  - Each card: icon, 3-4 word title, 1-line description
+- Features visually link to dashboard functionality
+- 6 new tests for feature highlights
+- 113 frontend tests pass, typecheck clean
+- Files changed: Landing.svelte, landing.test.ts, prd.json
+- Commits:
+  - feat(marketing): [US-M.2] add feature highlights section
+
+### 2026-01-14: US-M.3 - Dashboard Preview
+- Added preview section with browser chrome mockup:
+  - macOS-style colored dots (red/yellow/green)
+  - URL bar showing mediajanitor.com/dashboard
+  - Dashboard mockup with 4 issue cards (sample data)
+  - "Try it Free" CTA button below preview
+- Responsive layout adjusts for mobile
+- 3 new tests for dashboard preview
+- 116 frontend tests pass, typecheck clean
+- Files changed: Landing.svelte, landing.test.ts, prd.json
+- Commits:
+  - feat(marketing): [US-M.3] add dashboard preview section
+
+### 2026-01-14: US-M.4 - Trust Section
+- Added trust section with security messaging:
+  - Shield icon in green circle
+  - "Your Data, Your Control" heading
+  - 3 key security points with checkmarks:
+    - API keys encrypted at rest
+    - Connects to YOUR servers only
+    - No media files stored on our end
+- 5 new tests for trust section
+- 121 frontend tests pass, typecheck clean
+- Files changed: Landing.svelte, landing.test.ts, prd.json
+- Commits:
+  - feat(marketing): [US-M.4] add trust section
+
+### 2026-01-14: US-M.5 - Auth Page CTAs
+- Updated register page with value-focused messaging:
+  - "Get Started Free" headline
+  - "Keep your media library clean and organized" subtitle
+  - "Create Free Account" button (was "Sign Up")
+- Login page already had clear CTA:
+  - "Log In" button
+  - "Don't have an account? Sign up" link
+- Consistent CSS variables with landing page
+- 5 new tests for auth page CTAs
+- 126 frontend tests pass, typecheck clean
+- Files changed: register/+page.svelte, landing.test.ts, prd.json
+- Commits:
+  - feat(marketing): [US-M.5] update auth page CTAs
+
 ## Current Status
 
-**Phase**: Marketing (Next)
-**Next US**: US-M.1 - Landing Page Hero
+**Phase**: ALL STORIES COMPLETE
+**Total Stories**: 44 (all passes: true)
 
 ## Notes
 
