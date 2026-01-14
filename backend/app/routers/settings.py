@@ -10,6 +10,8 @@ from app.database import User, UserSettings, get_db
 from app.models.settings import (
     AnalysisPreferencesCreate,
     AnalysisPreferencesResponse,
+    DisplayPreferencesCreate,
+    DisplayPreferencesResponse,
     JellyfinSettingsCreate,
     JellyfinSettingsResponse,
     JellyseerrSettingsCreate,
@@ -233,4 +235,51 @@ async def reset_analysis_preferences(
     return SettingsSaveResponse(
         success=True,
         message="Analysis preferences reset to defaults.",
+    )
+
+
+# Display Preferences Endpoints
+
+
+@router.get("/display", response_model=DisplayPreferencesResponse)
+async def get_display_preferences(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DisplayPreferencesResponse:
+    """Get display preferences for the user.
+
+    Returns defaults if not configured.
+    """
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    # Return user values or defaults
+    return DisplayPreferencesResponse(
+        show_unreleased_requests=(
+            settings.show_unreleased_requests if settings else False
+        ),
+    )
+
+
+@router.post("/display", response_model=SettingsSaveResponse)
+async def save_display_preferences(
+    prefs: DisplayPreferencesCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save display preferences for the user.
+
+    Supports partial updates - only provided fields are updated.
+    """
+    settings = await _get_or_create_user_settings(db, current_user.id)
+
+    # Only update fields that were provided
+    if prefs.show_unreleased_requests is not None:
+        settings.show_unreleased_requests = prefs.show_unreleased_requests
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Display preferences saved successfully.",
     )

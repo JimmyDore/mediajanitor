@@ -626,3 +626,223 @@ describe('French-Only Whitelist API Integration (US-5.2)', () => {
 		});
 	});
 });
+
+describe('Request Whitelist API Integration (US-13.5)', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	describe('POST /api/whitelist/requests', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/requests', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jellyseerr_id: 123,
+					title: 'Hidden Request',
+					media_type: 'movie'
+				})
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts POST with valid auth and returns 201', async () => {
+			const successResponse = {
+				message: 'Added to request whitelist',
+				jellyseerr_id: 123,
+				title: 'Hidden Request'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/requests', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyseerr_id: 123,
+					title: 'Hidden Request',
+					media_type: 'movie'
+				})
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(201);
+
+			const data = await response.json();
+			expect(data.message).toContain('request whitelist');
+		});
+
+		it('returns 409 when request already hidden', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ detail: 'Request already in whitelist' })
+			});
+
+			const response = await fetch('/api/whitelist/requests', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyseerr_id: 123,
+					title: 'Hidden Request',
+					media_type: 'movie'
+				})
+			});
+
+			expect(response.status).toBe(409);
+		});
+
+		it('accepts optional expires_at field for temporary hiding', async () => {
+			const futureDate = '2026-07-14T00:00:00Z';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						message: 'Added to request whitelist',
+						jellyseerr_id: 123,
+						title: 'Hidden Request'
+					})
+			});
+
+			await fetch('/api/whitelist/requests', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyseerr_id: 123,
+					title: 'Hidden Request',
+					media_type: 'movie',
+					expires_at: futureDate
+				})
+			});
+
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(body.expires_at).toBe(futureDate);
+		});
+	});
+
+	describe('GET /api/whitelist/requests', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/requests');
+
+			expect(response.status).toBe(401);
+		});
+
+		it('returns list of hidden requests', async () => {
+			const requestsResponse = {
+				items: [
+					{
+						id: 1,
+						jellyseerr_id: 123,
+						title: 'Hidden Movie Request',
+						media_type: 'movie',
+						created_at: '2024-01-15T10:30:00Z',
+						expires_at: null
+					},
+					{
+						id: 2,
+						jellyseerr_id: 456,
+						title: 'Hidden TV Request',
+						media_type: 'tv',
+						created_at: '2024-01-14T08:00:00Z',
+						expires_at: '2024-04-14T00:00:00Z'
+					}
+				],
+				total_count: 2
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(requestsResponse)
+			});
+
+			const response = await fetch('/api/whitelist/requests', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.total_count).toBe(2);
+			expect(data.items[0].title).toBe('Hidden Movie Request');
+			expect(data.items[0].jellyseerr_id).toBe(123);
+			expect(data.items[1].media_type).toBe('tv');
+			expect(data.items[1].expires_at).toBe('2024-04-14T00:00:00Z');
+		});
+	});
+
+	describe('DELETE /api/whitelist/requests/{id}', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/requests/1', {
+				method: 'DELETE'
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts DELETE with valid auth and returns 200', async () => {
+			const successResponse = {
+				message: 'Removed from request whitelist'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/requests/1', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(200);
+
+			const data = await response.json();
+			expect(data.message).toContain('request whitelist');
+		});
+
+		it('returns 404 for non-existent item', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 404,
+				json: () => Promise.resolve({ detail: 'Whitelist entry not found' })
+			});
+
+			const response = await fetch('/api/whitelist/requests/99999', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.status).toBe(404);
+		});
+	});
+});

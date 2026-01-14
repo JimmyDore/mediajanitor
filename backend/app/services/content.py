@@ -1182,12 +1182,19 @@ def _get_request_release_date(request: CachedJellyseerrRequest) -> str | None:
     return None
 
 
-def _should_include_request(request: CachedJellyseerrRequest) -> bool:
+def _should_include_request(
+    request: CachedJellyseerrRequest,
+    show_unreleased: bool = False,
+) -> bool:
     """Check if a request should be included in unavailable list.
 
     Filters out:
-    - Future releases (not yet released)
+    - Future releases (not yet released) - unless show_unreleased=True
     - Recent releases (released less than 3 months ago)
+
+    Args:
+        request: The Jellyseerr request to check
+        show_unreleased: If True, include future releases (user preference)
     """
     release_date_str = _get_request_release_date(request)
     if not release_date_str:
@@ -1202,8 +1209,8 @@ def _should_include_request(request: CachedJellyseerrRequest) -> bool:
     today = now.date()
     release_date_only = release_date.date()
 
-    # Filter future releases
-    if FILTER_FUTURE_RELEASES and release_date_only > today:
+    # Filter future releases (unless user wants to see them)
+    if FILTER_FUTURE_RELEASES and not show_unreleased and release_date_only > today:
         return False
 
     # Filter recent releases
@@ -1238,19 +1245,38 @@ def _get_missing_seasons(request: CachedJellyseerrRequest) -> list[int]:
     return sorted(missing)
 
 
-def is_unavailable_request(request: CachedJellyseerrRequest) -> bool:
+def is_unavailable_request(
+    request: CachedJellyseerrRequest,
+    show_unreleased: bool = False,
+) -> bool:
     """Check if a request is unavailable.
 
     A request is unavailable if:
     - Status is 0 (Unknown), 1 (Pending), 2 (Approved), or 4 (Partially Available)
     - NOT status 3 (Processing) or 5 (Available)
-    - Release date is not in the future
+    - Release date is not in the future (unless show_unreleased=True)
     - Release date is not too recent (< 3 months)
+
+    Args:
+        request: The Jellyseerr request to check
+        show_unreleased: If True, include future releases (user preference)
     """
     if request.status not in UNAVAILABLE_STATUS_CODES:
         return False
 
-    return _should_include_request(request)
+    return _should_include_request(request, show_unreleased)
+
+
+async def get_user_show_unreleased_setting(db: AsyncSession, user_id: int) -> bool:
+    """Get user's show_unreleased_requests setting.
+
+    Returns False (default) if not configured.
+    """
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+    return settings.show_unreleased_requests if settings else False
 
 
 async def get_unavailable_requests_count(
@@ -1260,7 +1286,11 @@ async def get_unavailable_requests_count(
     """Get count of unavailable requests for summary.
 
     Excludes whitelisted requests (non-expired only).
+    Respects user's show_unreleased_requests setting.
     """
+    # Get user's display preference
+    show_unreleased = await get_user_show_unreleased_setting(db, user_id)
+
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
             CachedJellyseerrRequest.user_id == user_id
@@ -1276,7 +1306,7 @@ async def get_unavailable_requests_count(
         # Skip whitelisted requests
         if request.jellyseerr_id in whitelisted_ids:
             continue
-        if is_unavailable_request(request):
+        if is_unavailable_request(request, show_unreleased):
             count += 1
 
     return count
@@ -1290,7 +1320,11 @@ async def get_unavailable_requests(
 
     Returns items sorted by request date (newest first).
     Excludes whitelisted requests (non-expired only).
+    Respects user's show_unreleased_requests setting.
     """
+    # Get user's display preference
+    show_unreleased = await get_user_show_unreleased_setting(db, user_id)
+
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
             CachedJellyseerrRequest.user_id == user_id
@@ -1307,7 +1341,7 @@ async def get_unavailable_requests(
         # Skip whitelisted requests
         if request.jellyseerr_id in whitelisted_ids:
             continue
-        if not is_unavailable_request(request):
+        if not is_unavailable_request(request, show_unreleased):
             continue
 
         # Get request date for sorting

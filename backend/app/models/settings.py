@@ -55,3 +55,18 @@ class AnalysisPreferencesResponse(BaseModel):
     old_content_months: int
     min_age_months: int
     large_movie_size_gb: int
+
+
+# Display Preferences
+
+
+class DisplayPreferencesCreate(BaseModel):
+    """Request model for saving display preferences."""
+
+    show_unreleased_requests: bool | None = None
+
+
+class DisplayPreferencesResponse(BaseModel):
+    """Response model for display preferences."""
+
+    show_unreleased_requests: bool

@@ -34,7 +34,7 @@
 	type SortField = 'name' | 'size' | 'date' | 'issues';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
-	type WhitelistType = 'content' | 'french-only' | 'language-exempt';
+	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'request';
 
 	// Tooltip text for informational badges
 	const badgeTooltips: Record<string, string> = {
@@ -49,6 +49,7 @@
 	let protectingIds = $state<Set<string>>(new Set());
 	let frenchOnlyIds = $state<Set<string>>(new Set());
 	let languageExemptIds = $state<Set<string>>(new Set());
+	let hidingRequestIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
@@ -117,6 +118,8 @@
 			await markAsFrenchOnlyWithExpiration(item, expiresAt);
 		} else if (type === 'language-exempt') {
 			await markAsLanguageExemptWithExpiration(item, expiresAt);
+		} else if (type === 'request') {
+			await hideRequestWithExpiration(item, expiresAt);
 		}
 	}
 
@@ -320,6 +323,44 @@
 			const newSet = new Set(languageExemptIds);
 			newSet.delete(item.jellyfin_id);
 			languageExemptIds = newSet;
+		}
+	}
+
+	async function hideRequestWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
+		const token = localStorage.getItem('access_token');
+		if (!token) { showToast('Not authenticated', 'error'); return; }
+
+		hidingRequestIds = new Set([...hidingRequestIds, item.jellyfin_id]);
+
+		// Extract numeric jellyseerr_id from "request-{id}" format
+		const jellyseerrIdMatch = item.jellyfin_id.match(/^request-(\d+)$/);
+		const jellyseerrId = jellyseerrIdMatch ? parseInt(jellyseerrIdMatch[1], 10) : parseInt(item.jellyfin_id, 10);
+
+		try {
+			const response = await fetch('/api/whitelist/requests', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ jellyseerr_id: jellyseerrId, title: item.name, media_type: item.media_type, expires_at: expiresAt })
+			});
+
+			if (response.status === 401) { showToast('Session expired', 'error'); return; }
+			if (response.status === 409) { showToast('Already hidden', 'error'); return; }
+			if (!response.ok) { showToast('Failed to hide', 'error'); return; }
+
+			// Remove item from list
+			if (data) {
+				data = {
+					...data,
+					items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+					total_count: data.total_count - 1
+				};
+			}
+			showToast('Hidden', 'success');
+		} catch { showToast('Failed', 'error'); }
+		finally {
+			const newSet = new Set(hidingRequestIds);
+			newSet.delete(item.jellyfin_id);
+			hidingRequestIds = newSet;
 		}
 	}
 
@@ -585,8 +626,26 @@
 												<!-- LARGE badge with info tooltip (no action) -->
 												<span class="badge badge-large" title={badgeTooltips.large}>large</span>
 											{:else if issue === 'request'}
-												<!-- REQUEST badge with info tooltip (no action) -->
-												<span class="badge badge-request" title={badgeTooltips.request}>request</span>
+												<!-- REQUEST badge with hide action -->
+												<span class="badge-group">
+													<span class="badge badge-request" title={badgeTooltips.request}>request</span>
+													<button
+														class="badge-action"
+														onclick={() => openDurationPicker(item, 'request')}
+														disabled={hidingRequestIds.has(item.jellyfin_id)}
+														title="Hide this request"
+													>
+														{#if hidingRequestIds.has(item.jellyfin_id)}
+															<span class="badge-spin"></span>
+														{:else}
+															<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+																<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+																<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+																<line x1="1" y1="1" x2="23" y2="23"/>
+															</svg>
+														{/if}
+													</button>
+												</span>
 											{:else}
 												<span class="badge badge-{issue}">{issue}</span>
 											{/if}

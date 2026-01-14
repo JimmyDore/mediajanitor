@@ -10,25 +10,41 @@
 		expires_at: string | null;
 	}
 
+	interface RequestWhitelistItem {
+		id: number;
+		jellyseerr_id: number;
+		title: string;
+		media_type: string;
+		created_at: string;
+		expires_at: string | null;
+	}
+
 	interface WhitelistResponse {
 		items: WhitelistItem[];
 		total_count: number;
 	}
 
-	type TabType = 'protected' | 'french' | 'exempt';
+	interface RequestWhitelistResponse {
+		items: RequestWhitelistItem[];
+		total_count: number;
+	}
+
+	type TabType = 'protected' | 'french' | 'exempt' | 'requests';
 
 	let loading = $state(true);
 	let activeTab = $state<TabType>('protected');
 	let protectedData = $state<WhitelistResponse | null>(null);
 	let frenchOnlyData = $state<WhitelistResponse | null>(null);
 	let languageExemptData = $state<WhitelistResponse | null>(null);
+	let requestsData = $state<RequestWhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let removingIds = $state<Set<number>>(new Set());
 
 	const tabLabels: Record<TabType, { label: string; desc: string }> = {
 		protected: { label: 'Protected', desc: 'Won\'t appear in old/unwatched list' },
 		french: { label: 'French-Only', desc: 'Won\'t flag missing English audio' },
-		exempt: { label: 'Language Exempt', desc: 'Won\'t flag any language issues' }
+		exempt: { label: 'Language Exempt', desc: 'Won\'t flag any language issues' },
+		requests: { label: 'Hidden Requests', desc: 'Requests hidden from the Issues view' }
 	};
 
 	function formatDate(dateStr: string): string {
@@ -53,16 +69,32 @@
 		} catch { return false; }
 	}
 
+	function isRequestItem(item: WhitelistItem | RequestWhitelistItem): item is RequestWhitelistItem {
+		return 'title' in item && 'jellyseerr_id' in item;
+	}
+
+	function getItemName(item: WhitelistItem | RequestWhitelistItem): string {
+		return isRequestItem(item) ? item.title : item.name;
+	}
+
+	function getMediaTypeDisplay(item: WhitelistItem | RequestWhitelistItem): string {
+		if (isRequestItem(item)) {
+			return item.media_type === 'movie' ? 'Movie' : 'TV Show';
+		}
+		return item.media_type === 'Movie' ? 'Movie' : 'Series';
+	}
+
 	function showToast(message: string, type: 'success' | 'error') {
 		toast = { message, type };
 		setTimeout(() => toast = null, 3000);
 	}
 
-	function getCurrentData(): WhitelistResponse | null {
+	function getCurrentData(): WhitelistResponse | RequestWhitelistResponse | null {
 		switch (activeTab) {
 			case 'protected': return protectedData;
 			case 'french': return frenchOnlyData;
 			case 'exempt': return languageExemptData;
+			case 'requests': return requestsData;
 		}
 	}
 
@@ -71,10 +103,11 @@
 			case 'protected': return '/api/whitelist/content';
 			case 'french': return '/api/whitelist/french-only';
 			case 'exempt': return '/api/whitelist/language-exempt';
+			case 'requests': return '/api/whitelist/requests';
 		}
 	}
 
-	async function removeItem(item: WhitelistItem) {
+	async function removeItem(item: WhitelistItem | RequestWhitelistItem) {
 		const token = localStorage.getItem('access_token');
 		if (!token) { showToast('Not authenticated', 'error'); return; }
 
@@ -89,7 +122,7 @@
 			if (!response.ok) { showToast('Failed to remove', 'error'); return; }
 
 			// Update the correct data source
-			const updateData = (data: WhitelistResponse | null) => {
+			const updateData = <T extends { id: number }>(data: { items: T[]; total_count: number } | null) => {
 				if (!data) return null;
 				return {
 					...data,
@@ -102,6 +135,7 @@
 				case 'protected': protectedData = updateData(protectedData); break;
 				case 'french': frenchOnlyData = updateData(frenchOnlyData); break;
 				case 'exempt': languageExemptData = updateData(languageExemptData); break;
+				case 'requests': requestsData = updateData(requestsData); break;
 			}
 
 			showToast('Removed', 'success');
@@ -118,15 +152,17 @@
 		if (!token) return;
 
 		try {
-			const [p, f, e] = await Promise.all([
+			const [p, f, e, r] = await Promise.all([
 				fetch('/api/whitelist/content', { headers: { Authorization: `Bearer ${token}` } }),
 				fetch('/api/whitelist/french-only', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/whitelist/language-exempt', { headers: { Authorization: `Bearer ${token}` } })
+				fetch('/api/whitelist/language-exempt', { headers: { Authorization: `Bearer ${token}` } }),
+				fetch('/api/whitelist/requests', { headers: { Authorization: `Bearer ${token}` } })
 			]);
 
 			if (p.ok) protectedData = await p.json();
 			if (f.ok) frenchOnlyData = await f.json();
 			if (e.ok) languageExemptData = await e.json();
+			if (r.ok) requestsData = await r.json();
 		} catch {}
 		finally { loading = false; }
 	}
@@ -150,7 +186,7 @@
 	<!-- Tabs -->
 	<nav class="tabs">
 		{#each Object.entries(tabLabels) as [tab, { label }]}
-			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : languageExemptData?.total_count}
+			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : tab === 'exempt' ? languageExemptData?.total_count : requestsData?.total_count}
 			<button
 				class="tab"
 				class:active={activeTab === tab}
@@ -178,8 +214,10 @@
 						Use "Protect" on the <a href="/issues?filter=old">Issues</a> page
 					{:else if activeTab === 'french'}
 						Use "FR" on the <a href="/issues?filter=language">Issues</a> page
-					{:else}
+					{:else if activeTab === 'exempt'}
 						Use the checkmark on the <a href="/issues?filter=language">Issues</a> page
+					{:else}
+						Use "Hide" on the <a href="/issues?filter=requests">Issues</a> page
 					{/if}
 				</p>
 			</div>
@@ -189,13 +227,13 @@
 					<div class="list-item" class:expired={isExpired(item.expires_at)}>
 						<div class="item-info">
 							<span class="item-name">
-								{item.name}
+								{getItemName(item)}
 								{#if isExpired(item.expires_at)}
 									<span class="badge-expired">Expired</span>
 								{/if}
 							</span>
 							<span class="item-meta">
-								{item.media_type === 'Movie' ? 'Movie' : 'Series'} · Added {formatDate(item.created_at)}
+								{getMediaTypeDisplay(item)} · Added {formatDate(item.created_at)}
 							</span>
 							<span class="item-expiration" class:permanent={!item.expires_at}>
 								{#if item.expires_at}

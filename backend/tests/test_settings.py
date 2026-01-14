@@ -589,3 +589,142 @@ class TestAnalysisPreferences:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 422
+
+
+class TestDisplayPreferences:
+    """Tests for display preferences endpoints (US-13.6)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "display@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_get_display_preferences_defaults(self, client: TestClient) -> None:
+        """Test retrieving display preferences returns defaults when not configured."""
+        token = self._get_auth_token(client)
+
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["show_unreleased_requests"] is False
+
+    def test_get_display_preferences_requires_auth(self, client: TestClient) -> None:
+        """Test that getting display preferences requires authentication."""
+        response = client.get("/api/settings/display")
+        assert response.status_code == 401
+
+    def test_save_display_preferences_success(self, client: TestClient) -> None:
+        """Test successful save of display preferences."""
+        token = self._get_auth_token(client, "display_save@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={
+                "show_unreleased_requests": True,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+
+    def test_save_display_preferences_requires_auth(self, client: TestClient) -> None:
+        """Test that saving display preferences requires authentication."""
+        response = client.post(
+            "/api/settings/display",
+            json={
+                "show_unreleased_requests": True,
+            },
+        )
+        assert response.status_code == 401
+
+    def test_saved_display_preferences_are_returned(self, client: TestClient) -> None:
+        """Test that saved display preferences are returned on GET."""
+        token = self._get_auth_token(client, "display_verify@example.com")
+
+        # Save custom preferences
+        client.post(
+            "/api/settings/display",
+            json={
+                "show_unreleased_requests": True,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Verify they are returned
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["show_unreleased_requests"] is True
+
+    def test_display_preferences_per_user_isolation(self, client: TestClient) -> None:
+        """Test that users can only see their own display preferences."""
+        # Create first user and save preferences
+        token1 = self._get_auth_token(client, "display_user1@example.com")
+
+        client.post(
+            "/api/settings/display",
+            json={
+                "show_unreleased_requests": True,
+            },
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+
+        # Create second user - should get defaults, not first user's settings
+        token2 = self._get_auth_token(client, "display_user2@example.com")
+
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Second user should get default (False), not first user's settings
+        assert data["show_unreleased_requests"] is False
+
+    def test_toggle_show_unreleased_requests(self, client: TestClient) -> None:
+        """Test toggling show_unreleased_requests on and off."""
+        token = self._get_auth_token(client, "display_toggle@example.com")
+
+        # Turn on
+        client.post(
+            "/api/settings/display",
+            json={"show_unreleased_requests": True},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["show_unreleased_requests"] is True
+
+        # Turn off
+        client.post(
+            "/api/settings/display",
+            json={"show_unreleased_requests": False},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["show_unreleased_requests"] is False

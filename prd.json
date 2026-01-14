@@ -935,8 +935,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 304,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Hide button with eye-slash icon on REQUEST badges, duration picker modal, Hidden Requests tab on whitelist page. 220 backend tests pass, 138 frontend tests pass, 17 integration tests pass."
     },
     {
       "id": "US-13.6",
@@ -953,8 +953,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 305,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Toggle switch in Display section of Settings page. 246 backend tests pass (7 new display tests), 146 frontend tests pass (8 new display tests), 17 integration tests pass."
     },
     {
       "id": "US-14.1",

@@ -32,6 +32,12 @@
 	let analysisSuccess = $state<string | null>(null);
 	let isAnalysisLoading = $state(false);
 
+	// Display preferences state
+	let showUnreleasedRequests = $state(false);
+	let displayError = $state<string | null>(null);
+	let displaySuccess = $state<string | null>(null);
+	let isDisplayLoading = $state(false);
+
 	// Expand/collapse states
 	let jellyfinExpanded = $state(false);
 	let jellyseerrExpanded = $state(false);
@@ -91,6 +97,16 @@
 				oldContentMonths = data.old_content_months;
 				minAgeMonths = data.min_age_months;
 				largeMovieSizeGb = data.large_movie_size_gb;
+			}
+
+			// Load display preferences
+			const displayResponse = await fetch('/api/settings/display', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (displayResponse.ok) {
+				const data = await displayResponse.json();
+				showUnreleasedRequests = data.show_unreleased_requests;
 			}
 		} catch (e) {
 			console.error('Failed to load settings:', e);
@@ -241,6 +257,44 @@
 			analysisError = e instanceof Error ? e.message : 'Failed to reset preferences';
 		} finally {
 			isAnalysisLoading = false;
+		}
+	}
+
+	async function handleDisplayToggle() {
+		displayError = null;
+		displaySuccess = null;
+		isDisplayLoading = true;
+
+		// Toggle the value optimistically
+		showUnreleasedRequests = !showUnreleasedRequests;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					show_unreleased_requests: showUnreleasedRequests
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				// Revert on error
+				showUnreleasedRequests = !showUnreleasedRequests;
+				throw new Error(data.detail || 'Failed to save setting');
+			}
+
+			displaySuccess = 'Saved';
+			setTimeout(() => displaySuccess = null, 3000);
+		} catch (e) {
+			displayError = e instanceof Error ? e.message : 'Failed to save setting';
+		} finally {
+			isDisplayLoading = false;
 		}
 	}
 
@@ -488,6 +542,39 @@
 					</button>
 				</div>
 			</form>
+		</section>
+
+		<!-- Display Preferences Section -->
+		<section class="section">
+			<h2 class="section-title">Display</h2>
+
+			{#if displayError}
+				<div class="inline-error">{displayError}</div>
+			{/if}
+			{#if displaySuccess}
+				<div class="inline-success">{displaySuccess}</div>
+			{/if}
+
+			<div class="toggle-row">
+				<div class="toggle-info">
+					<span class="toggle-label">Show unreleased requests</span>
+					<span class="toggle-description">Include requests for content that hasn't been released yet</span>
+				</div>
+				<button
+					class="toggle-switch"
+					class:active={showUnreleasedRequests}
+					onclick={handleDisplayToggle}
+					disabled={isDisplayLoading}
+					role="switch"
+					aria-checked={showUnreleasedRequests}
+				>
+					{#if isDisplayLoading}
+						<span class="toggle-spinner"></span>
+					{:else}
+						<span class="toggle-knob"></span>
+					{/if}
+				</button>
+			</div>
 		</section>
 	{/if}
 </div>
@@ -800,6 +887,87 @@
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	/* Toggle Row */
+	.toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-3) 0;
+	}
+
+	.toggle-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.toggle-label {
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+	}
+
+	.toggle-description {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.toggle-switch {
+		position: relative;
+		width: 44px;
+		height: 24px;
+		background: var(--bg-tertiary);
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		padding: 0;
+		flex-shrink: 0;
+	}
+
+	.toggle-switch:hover:not(:disabled) {
+		border-color: var(--text-muted);
+	}
+
+	.toggle-switch.active {
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.toggle-switch:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.toggle-knob {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 18px;
+		height: 18px;
+		background: white;
+		border-radius: 50%;
+		transition: transform var(--transition-fast);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+	}
+
+	.toggle-switch.active .toggle-knob {
+		transform: translateX(20px);
+	}
+
+	.toggle-spinner {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
 	/* Responsive */
