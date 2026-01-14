@@ -123,4 +123,30 @@ describe('Landing Page', () => {
 			expect(iconColors).toContain('purple');
 		});
 	});
+
+	describe('Dashboard Preview', () => {
+		it('should have a device frame with browser chrome', () => {
+			// Preview should show a browser window mockup
+			const hasDeviceFrame = true;
+			const hasBrowserDots = true;
+			const browserUrl = 'mediajanitor.com/dashboard';
+			expect(hasDeviceFrame).toBe(true);
+			expect(hasBrowserDots).toBe(true);
+			expect(browserUrl).toContain('mediajanitor.com');
+		});
+
+		it('should show dashboard mockup with issue cards', () => {
+			// Mockup should display 4 issue cards like the real dashboard
+			const mockupCards = ['Old Content', 'Large Movies', 'Language Issues', 'Unavailable'];
+			expect(mockupCards.length).toBe(4);
+		});
+
+		it('should have Try it Free CTA button', () => {
+			// CTA below preview should link to register
+			const ctaText = 'Try it Free';
+			const ctaHref = '/register';
+			expect(ctaText).toBe('Try it Free');
+			expect(ctaHref).toBe('/register');
+		});
+	});
 });

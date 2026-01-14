@@ -75,6 +75,56 @@
 			</div>
 		</div>
 	</section>
+
+	<!-- Dashboard Preview -->
+	<section class="preview">
+		<div class="preview-content">
+			<h2 class="preview-title">See Your Library at a Glance</h2>
+			<p class="preview-subtitle">
+				A clean dashboard that surfaces issues and keeps you informed
+			</p>
+
+			<!-- Device Frame -->
+			<div class="device-frame">
+				<div class="browser-chrome">
+					<div class="browser-dots">
+						<span></span>
+						<span></span>
+						<span></span>
+					</div>
+					<div class="browser-url">mediajanitor.com/dashboard</div>
+				</div>
+				<div class="dashboard-mockup">
+					<div class="mockup-header">
+						<span class="mockup-title">Dashboard</span>
+						<span class="mockup-sync">Updated 2m ago</span>
+					</div>
+					<div class="mockup-label">ISSUES</div>
+					<div class="mockup-cards">
+						<div class="mockup-card">
+							<div class="mockup-value">142</div>
+							<div class="mockup-name">Old Content</div>
+							<div class="mockup-meta">523.4 GB</div>
+						</div>
+						<div class="mockup-card">
+							<div class="mockup-value">0</div>
+							<div class="mockup-name">Large Movies</div>
+						</div>
+						<div class="mockup-card">
+							<div class="mockup-value">38</div>
+							<div class="mockup-name">Language Issues</div>
+						</div>
+						<div class="mockup-card">
+							<div class="mockup-value">12</div>
+							<div class="mockup-name">Unavailable</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<a href="/register" class="btn-cta-secondary">Try it Free</a>
+		</div>
+	</section>
 </div>
 
 <style>
@@ -300,5 +350,175 @@
 		font-size: var(--font-size-base);
 		color: var(--text-secondary);
 		line-height: 1.5;
+	}
+
+	/* Preview Section */
+	.preview {
+		padding: var(--space-12) var(--space-8);
+		background: var(--bg-primary);
+	}
+
+	.preview-content {
+		max-width: 900px;
+		margin: 0 auto;
+		text-align: center;
+	}
+
+	.preview-title {
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+		margin-bottom: var(--space-3);
+	}
+
+	.preview-subtitle {
+		font-size: var(--font-size-lg);
+		color: var(--text-secondary);
+		margin-bottom: var(--space-8);
+	}
+
+	/* Device Frame */
+	.device-frame {
+		background: var(--bg-tertiary);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+		margin-bottom: var(--space-8);
+	}
+
+	.browser-chrome {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border);
+	}
+
+	.browser-dots {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.browser-dots span {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--border);
+	}
+
+	.browser-dots span:first-child {
+		background: #ff5f57;
+	}
+
+	.browser-dots span:nth-child(2) {
+		background: #febc2e;
+	}
+
+	.browser-dots span:last-child {
+		background: #28c840;
+	}
+
+	.browser-url {
+		flex: 1;
+		text-align: center;
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
+	/* Dashboard Mockup */
+	.dashboard-mockup {
+		padding: var(--space-6);
+	}
+
+	.mockup-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: var(--space-6);
+	}
+
+	.mockup-title {
+		font-size: var(--font-size-xl);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+	}
+
+	.mockup-sync {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.mockup-label {
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
+		text-align: left;
+		margin-bottom: var(--space-3);
+	}
+
+	.mockup-cards {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: var(--space-3);
+	}
+
+	@media (max-width: 640px) {
+		.mockup-cards {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	.mockup-card {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		text-align: left;
+	}
+
+	.mockup-value {
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-bold);
+		font-family: var(--font-mono);
+		color: var(--text-primary);
+		line-height: 1;
+		margin-bottom: var(--space-1);
+	}
+
+	.mockup-name {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		margin-bottom: var(--space-1);
+	}
+
+	.mockup-meta {
+		font-size: var(--font-size-xs);
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+	}
+
+	/* Secondary CTA */
+	.btn-cta-secondary {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-3) var(--space-6);
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-semibold);
+		color: var(--accent);
+		background: transparent;
+		border: 2px solid var(--accent);
+		border-radius: var(--radius-lg);
+		text-decoration: none;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-cta-secondary:hover {
+		background: var(--accent);
+		color: white;
 	}
 </style>
