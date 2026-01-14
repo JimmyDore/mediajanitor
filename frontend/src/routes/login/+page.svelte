@@ -57,10 +57,17 @@
 
 <div class="auth-container">
 	<div class="auth-card">
-		<a href="/" class="auth-logo">Media Janitor</a>
+		<a href="/" class="auth-logo">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="logo-icon">
+				<path d="M3 21h4L17.5 10.5a2.828 2.828 0 0 0-4-4L3 17v4z"/>
+				<path d="M14.5 5.5l4 4"/>
+				<path d="M12 22h9"/>
+			</svg>
+			Media Janitor
+		</a>
 		<div class="auth-header">
 			<h1>Log In</h1>
-			<p class="auth-subtitle">Welcome back</p>
+			<p class="auth-subtitle">Sign in to your account</p>
 		</div>
 
 		<form onsubmit={handleSubmit} class="auth-form">
@@ -115,6 +122,7 @@
 <style>
 	.auth-container {
 		min-height: 100vh;
+		width: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -123,8 +131,7 @@
 	}
 
 	.auth-card {
-		width: 100%;
-		max-width: 400px;
+		width: 400px;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
@@ -132,8 +139,10 @@
 	}
 
 	.auth-logo {
-		display: block;
-		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
 		font-size: var(--font-size-xl);
 		font-weight: var(--font-weight-bold);
 		color: var(--text-primary);
@@ -144,6 +153,10 @@
 
 	.auth-logo:hover {
 		color: var(--accent);
+	}
+
+	.logo-icon {
+		flex-shrink: 0;
 	}
 
 	.auth-header {
