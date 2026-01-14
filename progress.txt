@@ -1008,10 +1008,22 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-D.6] add inline badge actions
 
+### 2026-01-14: US-13.1 - Fix Title Extraction in Jellyseerr Sync
+- Removed fetch_media_title() which made separate API calls for each request
+- Added extract_title_from_request() that uses embedded data from response
+- Fallback chain: title → name → originalTitle → originalName → TMDB-{id}
+- Updated cache_jellyseerr_requests() and content.py to use new function
+- No more redundant API calls - faster sync, less load on Jellyseerr
+- 10 new unit tests for title extraction (total 201 backend tests pass)
+- mypy clean
+- Files changed: backend/app/services/sync.py, backend/app/services/content.py, backend/tests/test_sync.py, prd.json
+- Commits:
+  - fix(sync): [US-13.1] extract titles from embedded request data
+
 ## Current Status
 
 **Phase**: Epic 13 - Requests Improvements (In Progress)
-**Total Stories**: 52 stories (45 passes: true, 7 remaining)
+**Total Stories**: 52 stories (46 passes: true, 6 remaining)
 
 ## Notes
 

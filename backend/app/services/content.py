@@ -1305,9 +1305,17 @@ async def get_unavailable_requests(
 
         # Get title - try stored title first, then raw_data media object
         title = request.title
-        if not title:
+        if not title or title == "Unknown":
             media = raw_data.get("media", {})
-            title = media.get("title") or media.get("name") or media.get("originalTitle") or "Unknown"
+            title = (
+                media.get("title")
+                or media.get("name")
+                or media.get("originalTitle")
+                or media.get("originalName")
+            )
+            if not title:
+                tmdb_id = request.tmdb_id or media.get("tmdbId")
+                title = f"TMDB-{tmdb_id}" if tmdb_id else "Unknown"
 
         item = UnavailableRequestItem(
             jellyseerr_id=request.jellyseerr_id,

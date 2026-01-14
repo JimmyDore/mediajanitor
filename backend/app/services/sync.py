@@ -79,34 +79,35 @@ async def fetch_jellyfin_media(
         raise
 
 
-async def fetch_media_title(
-    client: httpx.AsyncClient,
-    server_url: str,
-    api_key: str,
-    tmdb_id: int,
-    media_type: str,
-) -> str | None:
+def extract_title_from_request(req: dict[str, Any]) -> str:
     """
-    Fetch title for a movie or TV show from Jellyseerr API.
+    Extract title from a Jellyseerr request using embedded data.
 
-    The /api/v1/request endpoint doesn't include titles, so we need to
-    fetch from /api/v1/movie/{id} or /api/v1/tv/{id}.
+    Uses fallback chain: title → name → originalTitle → originalName → tmdbId
+
+    No separate API calls are made - all data comes from the request response.
     """
-    endpoint = "movie" if media_type == "movie" else "tv"
-    try:
-        response = await client.get(
-            f"{server_url}/api/v1/{endpoint}/{tmdb_id}",
-            headers={"X-Api-Key": api_key},
-            params={"language": "en"},
-        )
-        response.raise_for_status()
-        data: dict[str, Any] = response.json()
-        # Movies have 'title', TV shows have 'name'
-        title: str | None = data.get("title") or data.get("name") or data.get("originalTitle")
-        return title
-    except Exception as e:
-        logger.debug(f"Failed to fetch title for {media_type} {tmdb_id}: {e}")
-        return None
+    media = req.get("media", {})
+
+    # Try fields in order of preference
+    # Movies typically have 'title' and 'originalTitle'
+    # TV shows typically have 'name' and 'originalName'
+    title = (
+        media.get("title")
+        or media.get("name")
+        or media.get("originalTitle")
+        or media.get("originalName")
+    )
+
+    if title:
+        return str(title)
+
+    # Last resort: use TMDB ID
+    tmdb_id = media.get("tmdbId")
+    if tmdb_id:
+        return f"TMDB-{tmdb_id}"
+
+    return "Unknown"
 
 
 async def fetch_jellyseerr_requests(
@@ -116,13 +117,15 @@ async def fetch_jellyseerr_requests(
     Fetch all requests from Jellyseerr API with pagination.
 
     Based on original_script.py:fetch_jellyseer_requests
-    Also fetches titles from movie/tv endpoints since request API doesn't include them.
+
+    Titles are extracted from embedded data in the response using
+    the fallback chain: title → name → originalTitle → originalName → tmdbId
     """
     server_url = server_url.rstrip("/")
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            all_requests = []
+            all_requests: list[dict[str, Any]] = []
             page = 1
             take = 50
 
@@ -153,23 +156,6 @@ async def fetch_jellyseerr_requests(
 
                 if page > 100:  # Safety limit
                     break
-
-            # Fetch titles for each request (the /api/v1/request endpoint doesn't include them)
-            title_cache: dict[tuple[str, int], str | None] = {}
-            for req in all_requests:
-                media = req.get("media", {})
-                tmdb_id = media.get("tmdbId")
-                media_type = media.get("mediaType", "unknown")
-
-                if tmdb_id and media_type in ("movie", "tv"):
-                    cache_key = (media_type, tmdb_id)
-                    if cache_key not in title_cache:
-                        title = await fetch_media_title(
-                            client, server_url, api_key, tmdb_id, media_type
-                        )
-                        title_cache[cache_key] = title
-                    # Store title in media object for later caching
-                    media["_fetched_title"] = title_cache[cache_key]
 
             logger.info(f"Fetched {len(all_requests)} requests from Jellyseerr")
             return all_requests
@@ -248,8 +234,8 @@ async def cache_jellyseerr_requests(
         media = req.get("media", {})
         requested_by = req.get("requestedBy", {})
 
-        # Use _fetched_title (from separate API call) or fallback to media fields
-        title = media.get("_fetched_title") or media.get("title") or media.get("name")
+        # Extract title using fallback chain (from embedded data, no extra API calls)
+        title = extract_title_from_request(req)
 
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,

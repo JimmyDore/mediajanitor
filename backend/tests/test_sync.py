@@ -7,7 +7,106 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database import User, UserSettings, CachedMediaItem, CachedJellyseerrRequest, SyncStatus
+from app.services.sync import extract_title_from_request
 from tests.conftest import TestingAsyncSessionLocal
+
+
+class TestExtractTitleFromRequest:
+    """Test title extraction from Jellyseerr request data (US-13.1)."""
+
+    def test_extracts_title_for_movies(self) -> None:
+        """Movies should use 'title' field."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "title": "The Matrix",
+                "originalTitle": "The Matrix (Original)",
+                "tmdbId": 603,
+            }
+        }
+        assert extract_title_from_request(request) == "The Matrix"
+
+    def test_extracts_name_for_tv_shows(self) -> None:
+        """TV shows should use 'name' field."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+                "name": "Breaking Bad",
+                "originalName": "Breaking Bad (Original)",
+                "tmdbId": 1396,
+            }
+        }
+        assert extract_title_from_request(request) == "Breaking Bad"
+
+    def test_fallback_to_original_title(self) -> None:
+        """Should fall back to originalTitle if title/name missing."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "originalTitle": "Amélie",
+                "tmdbId": 194,
+            }
+        }
+        assert extract_title_from_request(request) == "Amélie"
+
+    def test_fallback_to_original_name(self) -> None:
+        """Should fall back to originalName if other fields missing."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+                "originalName": "La Casa de Papel",
+                "tmdbId": 71446,
+            }
+        }
+        assert extract_title_from_request(request) == "La Casa de Papel"
+
+    def test_fallback_to_tmdb_id(self) -> None:
+        """Should fall back to TMDB ID if no title fields available."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "tmdbId": 12345,
+            }
+        }
+        assert extract_title_from_request(request) == "TMDB-12345"
+
+    def test_returns_unknown_if_no_data(self) -> None:
+        """Should return 'Unknown' if no title or TMDB ID available."""
+        request = {"media": {}}
+        assert extract_title_from_request(request) == "Unknown"
+
+    def test_handles_empty_request(self) -> None:
+        """Should handle empty request gracefully."""
+        assert extract_title_from_request({}) == "Unknown"
+
+    def test_title_takes_precedence_over_name(self) -> None:
+        """'title' should take precedence over 'name'."""
+        request = {
+            "media": {
+                "title": "Title Value",
+                "name": "Name Value",
+            }
+        }
+        assert extract_title_from_request(request) == "Title Value"
+
+    def test_name_takes_precedence_over_original_title(self) -> None:
+        """'name' should take precedence over 'originalTitle'."""
+        request = {
+            "media": {
+                "name": "Name Value",
+                "originalTitle": "Original Title",
+            }
+        }
+        assert extract_title_from_request(request) == "Name Value"
+
+    def test_handles_non_string_values(self) -> None:
+        """Should convert non-string title values to strings."""
+        request = {
+            "media": {
+                "title": 123,  # Numeric title (edge case)
+            }
+        }
+        assert extract_title_from_request(request) == "123"
 
 
 class TestSyncModels:

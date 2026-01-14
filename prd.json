@@ -864,8 +864,8 @@
         "Unit tests pass"
       ],
       "priority": 300,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Removed fetch_media_title() API calls. New extract_title_from_request() uses embedded data with full fallback chain. 10 new unit tests. 201 backend tests pass, mypy clean."
     },
     {
       "id": "US-13.2",
