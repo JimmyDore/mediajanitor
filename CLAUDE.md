@@ -224,6 +224,8 @@ TestingAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=Fal
 
 ### Database Migrations (Alembic)
 
+**CRITICAL**: Production database schema diverges from models if migrations are missing. This causes 500 errors like `OperationalError: no such column`. The initial schema migration was created AFTER some columns were added to models, so production may be missing columns that exist in the model.
+
 **When to create migrations**: Any time you modify `app/database.py` models (add/remove columns, tables, constraints), you MUST create a migration.
 
 **Creating a migration**:
@@ -328,6 +330,37 @@ class UserSettings(Base):
 - POST validates connection BEFORE saving (call external API)
 - GET returns masked info (api_key_configured: bool, not the actual key)
 - Mock external API calls in tests using `@patch("app.routers.settings.function_name")`
+
+### Production Debugging (VPS)
+
+**Accessing production logs:**
+```bash
+ssh vpsjim "docker logs mediajanitor_backend_1 --tail 100 2>&1"
+```
+
+**Checking database schema in production:**
+```bash
+ssh vpsjim "docker exec mediajanitor_backend_1 python3 -c \"
+import sqlite3
+conn = sqlite3.connect('/app/data/plex_dashboard.db')
+cursor = conn.execute('PRAGMA table_info(TABLE_NAME)')
+print([row[1] for row in cursor])
+\""
+```
+
+**Common 500 errors:** Usually caused by missing database columns. Check logs for `OperationalError: no such column`. Fix by creating a migration.
+
+**Deployment workflow - NEVER do both:**
+1. **Option A**: Push migration and WAIT for GitHub Actions deployment to complete
+2. **Option B**: Apply fix manually on VPS without pushing
+
+Doing both causes conflicts - the automated deployment may restart containers mid-manual-fix.
+
+**Production location:** `/home/jimmydore/mediajanitor`
+
+**Nginx config:** `/etc/nginx/sites-enabled/mediajanitor*`
+- Frontend: `localhost:5173`
+- Backend API: `localhost:8080`
 
 ### Docker Verification (CRITICAL)
 
