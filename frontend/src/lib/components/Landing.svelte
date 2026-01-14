@@ -260,19 +260,25 @@
 	.hero {
 		position: relative;
 		min-height: 100vh;
+		width: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		padding: var(--space-8);
 		padding-top: calc(64px + var(--space-8));
 		overflow: hidden;
+		background: var(--bg-primary);
 	}
 
 	.hero-gradient {
 		position: absolute;
-		inset: 0;
+		top: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 100vw;
+		height: 100%;
 		background: linear-gradient(135deg, #2563eb 0%, #7c3aed 50%, #2563eb 100%);
-		opacity: 0.08;
+		opacity: 0.06;
 		z-index: 0;
 	}
 

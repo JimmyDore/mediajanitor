@@ -72,10 +72,8 @@
 	}
 
 	.content-centered {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		max-width: 800px;
+		max-width: none;
+		padding: 0;
 	}
 
 	.loading {
