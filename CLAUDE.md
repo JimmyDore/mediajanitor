@@ -310,6 +310,26 @@ uv run alembic stamp head
 - Never edit a migration after it's been applied to production
 - If you need to fix a migration, create a new one
 
+**⚠️ NEVER DELETE MIGRATIONS THAT EXIST IN PRODUCTION**
+
+If you delete a migration file that production has applied, production will fail with:
+```
+Can't locate revision identified by 'XXXXX'
+```
+
+To check what revision production is at:
+```bash
+ssh vpsjim "sqlite3 /home/jimmydore/mediajanitor/data/plex_dashboard.db 'SELECT * FROM alembic_version;'"
+```
+
+If you MUST delete a migration, first update production's alembic_version:
+```bash
+ssh vpsjim
+cd /home/jimmydore/mediajanitor
+sudo sqlite3 data/plex_dashboard.db "UPDATE alembic_version SET version_num = 'NEW_REVISION';"
+docker-compose up -d
+```
+
 ### Async/Sync Consistency (CRITICAL)
 
 **Always use async sessions in tests to match production:**
