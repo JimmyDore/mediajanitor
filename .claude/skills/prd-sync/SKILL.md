@@ -11,6 +11,23 @@ Sync completion status from prd.json back to PRD.md, keeping the human-readable 
 
 After Ralph completes stories (updating `passes: true` and `notes` in prd.json), this skill syncs those changes back to PRD.md so the human-readable document reflects current progress.
 
+**Note:** Since `/ralph-init` only includes incomplete stories in prd.json, this skill syncs Ralph's completions, then you can re-run `/ralph-init` to remove completed stories from prd.json.
+
+## Workflow with /ralph-init
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ /ralph-init │───▶│    Ralph    │───▶│  /prd-sync  │───▶│ /ralph-init │
+│ (incomplete │    │ (completes  │    │ (sync to    │    │ (regenerate │
+│  stories)   │    │  stories)   │    │  PRD.md)    │    │  clean)     │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+1. `/ralph-init` creates prd.json with only `[ ]` (incomplete) stories
+2. Ralph completes stories, sets `passes: true`, adds notes
+3. `/prd-sync` syncs completed stories to PRD.md (marks `[x]`)
+4. `/ralph-init` regenerates prd.json without completed stories
+
 ## Workflow
 
 ### Step 1: Read Both Files
@@ -21,12 +38,12 @@ After Ralph completes stories (updating `passes: true` and `notes` in prd.json),
 
 ### Step 2: Identify Changes
 
-For each story in prd.json, check if PRD.md needs updating:
+Since prd.json only contains stories that were incomplete when `/ralph-init` ran, we're looking for:
 
-| prd.json | PRD.md Checkbox | Action Needed |
-|----------|-----------------|---------------|
-| `passes: true` | `[ ]` | Update to `[x]` |
-| `passes: false` | `[x]` | Update to `[ ]` |
+| prd.json | PRD.md State | Action |
+|----------|--------------|--------|
+| `passes: true` | `[ ]` | Update to `[x]` (Ralph completed it) |
+| `passes: false` | `[ ]` | No change needed |
 | `notes` present | No note | Append note |
 
 List all stories that need updating before making changes.
@@ -63,8 +80,9 @@ Write the updated PRD.md file.
 | prd.json | PRD.md |
 |----------|--------|
 | `passes: true` | All AC checkboxes → `[x]` |
-| `passes: false` | All AC checkboxes → `[ ]` |
 | `notes: "text"` | Appended as `**Note:** text` |
+
+Note: `passes: false` stories don't need updating since they already have `[ ]` in PRD.md.
 
 ---
 
@@ -125,15 +143,23 @@ Write the updated PRD.md file.
 After Ralph has completed stories:
 
 ```bash
-# Check current prd.json status
+# Check if any stories were completed
 cat prd.json | jq '.userStories[] | select(.passes == true) | {id, title}'
 
 # Run this skill to sync to PRD.md
 /prd-sync
 ```
 
-Then review and commit the changes:
+Then review, commit, and regenerate prd.json:
 ```bash
+# Review changes
 git diff PRD.md
+
+# Commit the sync
 git add PRD.md && git commit -m "docs: sync PRD.md from prd.json"
+
+# Regenerate prd.json to remove completed stories
+/ralph-init
 ```
+
+**Tip:** If prd.json is empty after `/ralph-init`, all stories are complete. Add new stories to PRD.md to continue.
