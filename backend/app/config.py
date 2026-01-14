@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "sqlite:///./plex_dashboard.db"
 
+    # Celery / Redis Configuration
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = ""  # Falls back to redis_url if not set
+    celery_result_backend: str = ""  # Falls back to redis_url if not set
+
     # Authentication
     secret_key: str = "your-secret-key-change-in-production"
     access_token_expire_minutes: int = 30

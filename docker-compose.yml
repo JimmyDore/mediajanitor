@@ -1,6 +1,19 @@
 version: '3.3'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   backend:
     build:
       context: ./backend
@@ -9,14 +22,35 @@ services:
       - "8080:8000"
     environment:
       - DATABASE_URL=sqlite:///./data/plex_dashboard.db
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/data  # Persist database
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=sqlite:///./data/plex_dashboard.db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data  # Share database with backend
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
@@ -29,3 +63,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  redis_data:
