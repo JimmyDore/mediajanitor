@@ -575,23 +575,25 @@ Transform the dashboard from a simple status page into a unified library health 
 
 ---
 
-#### US-D.6: Inline Badge Actions
+#### US-D.6: Inline Badge Actions ✅
 **As a** user
 **I want** action buttons attached directly to issue badges
 **So that** I know exactly which problem each action resolves
 
 **Acceptance Criteria:**
-- [ ] OLD badge shows inline dismiss/shield button to protect from deletion
-- [ ] LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)
-- [ ] LARGE badge shows info tooltip on hover: "Re-download in lower quality from Radarr/Sonarr"
-- [ ] REQUEST badge shows info tooltip on hover: "Check status in Jellyseerr"
-- [ ] Clicking inline action behaves same as current buttons (calls same API endpoints)
-- [ ] Action buttons show tooltip on hover: "Protect from deletion", "Mark French-only", "Exempt from language checks"
-- [ ] Remove separate Actions column from table
-- [ ] Loading state shown on badge action while API call in progress
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] OLD badge shows inline dismiss/shield button to protect from deletion
+- [x] LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)
+- [x] LARGE badge shows info tooltip on hover: "Re-download in lower quality from Radarr/Sonarr"
+- [x] REQUEST badge shows info tooltip on hover: "Check status in Jellyseerr"
+- [x] Clicking inline action behaves same as current buttons (calls same API endpoints)
+- [x] Action buttons show tooltip on hover: "Protect from deletion", "Mark French-only", "Exempt from language checks"
+- [x] Remove separate Actions column from table
+- [x] Loading state shown on badge action while API call in progress
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Moved action buttons inline with badges. OLD/LANGUAGE badges have action buttons attached (shield/FR/checkmark). LARGE/REQUEST badges show info tooltips. Actions column removed. 126 frontend tests pass, 191 backend tests pass, typecheck clean.
 
 ### Non-Goals
 - Health score percentage (keeping it simple with counts)
@@ -1515,62 +1517,66 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 
 ### User Stories
 
-#### US-13.1: Fix Title Extraction in Jellyseerr Sync
+#### US-13.1: Fix Title Extraction in Jellyseerr Sync ✅
 **As a** media server owner
 **I want** to see the titles of unavailable requests
 **So that** I know what content is pending
 
 **Acceptance Criteria:**
-- [ ] Titles display correctly for all unavailable requests
-- [ ] No separate API calls made for title fetching (use embedded data)
-- [ ] Title fallback chain: title → name → originalTitle → originalName → tmdbId
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Titles display correctly for all unavailable requests
+- [x] No separate API calls made for title fetching (use embedded data)
+- [x] Title fallback chain: title → name → originalTitle → originalName → tmdbId
+- [x] Typecheck passes
+- [x] Unit tests pass
 
 **Root cause:** The sync code makes separate API calls via `fetch_media_title()` which fail silently. Titles ARE included directly in the Jellyseerr `/api/v1/request` response's media object.
 
 **Files:**
 - `backend/app/services/sync.py` - Remove `fetch_media_title()`, update `cache_jellyseerr_requests()`
 
+**Note:** Completed 2026-01-14 - Removed fetch_media_title() API calls. New extract_title_from_request() uses embedded data with full fallback chain. 10 new unit tests. 201 backend tests pass, mypy clean.
+
 ---
 
-#### US-13.2: Fix Frontend Request Item Display
+#### US-13.2: Fix Frontend Request Item Display ✅
 **As a** media server owner
 **I want** to see request details including who requested it
 **So that** I can manage requests effectively
 
 **Acceptance Criteria:**
-- [ ] Request items display title correctly (use `title` field, not `name`)
-- [ ] "Requested By" column shows requester name
-- [ ] Missing seasons shown for TV requests
-- [ ] Request date shown (replaces "Watched" column for requests)
-- [ ] Size column hidden for requests (they have no size)
-- [ ] TMDB link works for requests
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Request items display title correctly (use `title` field, not `name`)
+- [x] "Requested By" column shows requester name
+- [x] Missing seasons shown for TV requests
+- [x] Request date shown (replaces "Watched" column for requests)
+- [x] Size column hidden for requests (they have no size)
+- [x] TMDB link works for requests
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 **Root cause:** Backend returns `UnavailableRequestItem` with `title` field, but frontend `ContentIssueItem` expects `name`. Template uses `item.name` which is undefined for requests.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Add `UnavailableRequestItem` interface, conditional rendering
 
+**Note:** Completed 2026-01-14 - Unified request/content response format. Backend converts requests to ContentIssueItem. Frontend shows: title, 'by {requester}', missing seasons (S1, S2...), request date (e.g. '3mo ago'), dash for size, TMDB link. 201 backend + 126 frontend tests pass.
+
 ---
 
-#### US-13.3: Add Release Date Column to Requests
+#### US-13.3: Add Release Date Column to Requests ✅
 **As a** media server owner
 **I want** to see the release date of unavailable requests
 **So that** I know when the content will become available
 
 **Acceptance Criteria:**
-- [ ] "Release Date" column displays in requests table
-- [ ] Date extracted from Jellyseerr response (`media.releaseDate` for movies, `media.firstAirDate` for TV)
-- [ ] Date stored in `CachedJellyseerrRequest` table during sync
-- [ ] Frontend displays date in readable format
-- [ ] Future release dates highlighted visually (e.g., different color or badge)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] "Release Date" column displays in requests table
+- [x] Date extracted from Jellyseerr response (`media.releaseDate` for movies, `media.firstAirDate` for TV)
+- [x] Date stored in `CachedJellyseerrRequest` table during sync
+- [x] Frontend displays date in readable format
+- [x] Future release dates highlighted visually (e.g., different color or badge)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 **Database Migration:** Required (add `release_date` column)
 
@@ -1581,20 +1587,22 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 - `backend/app/services/content.py` - Return release date in response
 - `frontend/src/routes/issues/+page.svelte` - Display release date column
 
+**Note:** Completed 2026-01-14
+
 ---
 
-#### US-13.4: Add Jellyseerr Request Whitelist (Backend)
+#### US-13.4: Add Jellyseerr Request Whitelist (Backend) ✅
 **As a** media server owner
 **I want** to hide specific requests for a duration
 **So that** I don't see requests I'm intentionally waiting on
 
 **Acceptance Criteria:**
-- [ ] New database table `jellyseerr_request_whitelist` with expiration support
-- [ ] API endpoints: POST/GET/DELETE `/api/whitelist/requests`
-- [ ] Whitelisted requests excluded from unavailable list
-- [ ] Expired whitelist entries no longer filter requests
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] New database table `jellyseerr_request_whitelist` with expiration support
+- [x] API endpoints: POST/GET/DELETE `/api/whitelist/requests`
+- [x] Whitelisted requests excluded from unavailable list
+- [x] Expired whitelist entries no longer filter requests
+- [x] Typecheck passes
+- [x] Unit tests pass
 
 **Database Migration:** Required (add `jellyseerr_request_whitelist` table)
 
@@ -1604,42 +1612,46 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 - `backend/app/services/content.py` - Add whitelist filtering to `get_unavailable_requests()`
 - `backend/app/models/content.py` - Add `RequestWhitelistAddRequest` model
 
+**Note:** Completed 2026-01-14 - JellyseerrRequestWhitelist table, API endpoints, expiration logic. 10 new tests. 222 backend tests pass, mypy clean.
+
 ---
 
-#### US-13.5: Add Request Whitelist UI
+#### US-13.5: Add Request Whitelist UI ✅
 **As a** media server owner
 **I want** to click a button to hide a request
 **So that** I can manage my request list from the UI
 
 **Acceptance Criteria:**
-- [ ] Hide button appears on each request item (eye-slash icon)
-- [ ] Duration picker opens (same as content: permanent, 3/6/12 months, custom)
-- [ ] Hidden request removed from list after confirmation
-- [ ] Loading state shown during API call
-- [ ] Toast notification on success/error
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Hide button appears on each request item (eye-slash icon)
+- [x] Duration picker opens (same as content: permanent, 3/6/12 months, custom)
+- [x] Hidden request removed from list after confirmation
+- [x] Loading state shown during API call
+- [x] Toast notification on success/error
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Add hide button, wire up to whitelist API
 
+**Note:** Completed 2026-01-14 - Hide button with eye-slash icon on REQUEST badges, duration picker modal, Hidden Requests tab on whitelist page. 220 backend tests pass, 138 frontend tests pass, 17 integration tests pass.
+
 ---
 
-#### US-13.6: Setting to Include/Exclude Unreleased Requests
+#### US-13.6: Setting to Include/Exclude Unreleased Requests ✅
 **As a** media server owner
 **I want** to toggle whether unreleased content requests are shown
 **So that** I can focus on requests that should already be available
 
 **Acceptance Criteria:**
-- [ ] New boolean setting `show_unreleased_requests` in UserSettings (default: false)
-- [ ] Settings page shows toggle for "Show unreleased requests"
-- [ ] When false, requests with future release dates are hidden
-- [ ] When true, all requests are shown (with release date visible)
-- [ ] Setting persists in database
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] New boolean setting `show_unreleased_requests` in UserSettings (default: false)
+- [x] Settings page shows toggle for "Show unreleased requests"
+- [x] When false, requests with future release dates are hidden
+- [x] When true, all requests are shown (with release date visible)
+- [x] Setting persists in database
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
 
 **Database Migration:** Required (add `show_unreleased_requests` column to UserSettings)
 
@@ -1649,6 +1661,8 @@ Fix bugs and add features to the Jellyseerr unavailable requests display. Curren
 - `backend/app/routers/settings.py` - Add field to settings endpoint
 - `backend/app/models/settings.py` - Add field to settings models
 - `frontend/src/routes/settings/+page.svelte` - Add toggle to settings UI
+
+**Note:** Completed 2026-01-14 - Toggle switch in Display section of Settings page. 246 backend tests pass (7 new display tests), 146 frontend tests pass (8 new display tests), 17 integration tests pass.
 
 ---
 
@@ -1675,25 +1689,27 @@ Provide in-app help documentation in FAQ format to help users understand and use
 
 ### User Stories
 
-#### US-14.1: In-App FAQ Help Page
+#### US-14.1: In-App FAQ Help Page ✅
 **As a** user
 **I want** an in-app help page with FAQs
 **So that** I can understand how to use all features without external documentation
 
 **Acceptance Criteria:**
-- [ ] New route `/help` accessible from navigation header
-- [ ] FAQ sections covering:
+- [x] New route `/help` accessible from navigation header
+- [x] FAQ sections covering:
   - Getting Started (connect Jellyfin/Jellyseerr, first sync)
   - Dashboard (what each card means, how counts are calculated)
   - Issues (Old Content, Large Movies, Language Issues, Unavailable Requests)
   - Whitelists (how to protect content, temporary vs permanent, managing whitelists)
   - Settings (threshold configuration, what each setting affects)
-- [ ] Collapsible FAQ items (click question to reveal answer)
-- [ ] Search/filter functionality to find specific topics
-- [ ] Help link added to navigation header (question mark icon)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Collapsible FAQ items (click question to reveal answer)
+- [x] Search/filter functionality to find specific topics
+- [x] Help link added to navigation header (question mark icon)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Completed 2026-01-14 - Help page with 5 FAQ sections (18 FAQs total), collapsible items, search filter, Help link in sidebar. 176 frontend tests pass (30 new help tests).
 
 ### Non-Goals
 - API documentation (user docs only)
@@ -1709,7 +1725,7 @@ Provide in-app help documentation in FAQ format to help users understand and use
 
 ## Checklist Summary
 
-### Completed ✅ (47 stories)
+### Completed ✅ (55 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -1731,6 +1747,7 @@ Provide in-app help documentation in FAQ format to help users understand and use
 - [x] US-D.3: Unified Issues View
 - [x] US-D.4: Multi-Issue Content Support
 - [x] US-D.5: Navigation Update
+- [x] US-D.6: Inline Badge Actions
 - [x] US-4.1: Large Movies Backend Service
 - [x] US-5.1: Language Issues Backend Service
 - [x] US-5.2: Mark Content as French-Only
@@ -1757,17 +1774,16 @@ Provide in-app help documentation in FAQ format to help users understand and use
 - [x] US-M.3: Dashboard Preview
 - [x] US-M.4: Trust Section
 - [x] US-M.5: Auth Page CTAs
+- [x] US-13.1: Fix Title Extraction in Jellyseerr Sync
+- [x] US-13.2: Fix Frontend Request Item Display
+- [x] US-13.3: Add Release Date Column to Requests
+- [x] US-13.4: Add Jellyseerr Request Whitelist (Backend)
+- [x] US-13.5: Add Request Whitelist UI
+- [x] US-13.6: Setting to Include/Exclude Unreleased Requests
+- [x] US-14.1: In-App FAQ Help Page
 
-### Pending (12 stories)
-- [ ] US-D.6: Inline Badge Actions
+### Pending (4 stories)
 - [ ] US-12.1: Add Threshold Help Text
 - [ ] US-12.2: Remove Multi-Issue Tab
 - [ ] US-12.3: Fix TMDB Link Media Type
 - [ ] US-12.5: External Links for All Issue Types
-- [ ] US-13.1: Fix Title Extraction in Jellyseerr Sync (replaces US-12.4)
-- [ ] US-13.2: Fix Frontend Request Item Display
-- [ ] US-13.3: Add Release Date Column to Requests
-- [ ] US-13.4: Add Jellyseerr Request Whitelist (Backend)
-- [ ] US-13.5: Add Request Whitelist UI
-- [ ] US-13.6: Setting to Include/Exclude Unreleased Requests
-- [ ] US-14.1: In-App FAQ Help Page
