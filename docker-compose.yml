@@ -59,7 +59,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/data  # Share database with backend
-      - celery_beat_data:/app  # Persist beat schedule
     depends_on:
       - redis
       - backend
@@ -79,4 +78,3 @@ services:
 
 volumes:
   redis_data:
-  celery_beat_data:
