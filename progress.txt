@@ -899,10 +899,29 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(whitelist): [US-11.2] add whitelist expiration logic
 
+### 2026-01-14: US-11.3 - Temporary Whitelist UI
+- Added duration picker modal to Issues page action buttons (Protect, FR, Exempt):
+  - Duration options: Permanent, 3 Months, 6 Months, 1 Year, Custom Date
+  - Default selection is 'Permanent' (no expiration)
+  - Custom date shows date picker with min=today
+  - Modal styled with animations (fade-in, slide-up)
+- Updated whitelist page to show expiration information:
+  - Each item shows expiration date or "Permanent"
+  - "Expired" badge displayed for items past expiration
+  - Expired items styled with reduced opacity
+  - Expiration dates use monospace font, permanent entries show green color
+- Frontend tests: 8 new tests for expires_at API field handling
+- Updated WhitelistItem TypeScript interface with expires_at field
+- 102 frontend tests pass, npm run check clean
+- 191 backend tests pass (integration tests excluded - require Docker)
+- Files changed: issues/+page.svelte, whitelist/+page.svelte, whitelist.test.ts, prd.json
+- Commits:
+  - feat(whitelist): [US-11.3] add temporary whitelist UI with duration picker
+
 ## Current Status
 
-**Phase**: Whitelist Expiration (In Progress)
-**Next US**: US-11.3 - Temporary Whitelist UI
+**Phase**: Marketing (Next)
+**Next US**: US-M.1 - Landing Page Hero
 
 ## Notes
 

@@ -746,8 +746,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 122,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed 2026-01-14 - Duration picker modal on Issues page (Permanent, 3mo, 6mo, 1yr, Custom), Whitelist page shows expiration info with Expired badge. 191 backend tests pass, 102 frontend tests pass, mypy clean."
     },
     {
       "id": "US-M.1",

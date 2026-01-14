@@ -240,6 +240,216 @@ describe('Whitelist API Integration (US-3.3)', () => {
 	});
 });
 
+describe('Whitelist Expiration API Integration (US-11.3)', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	describe('POST /api/whitelist/content with expires_at', () => {
+		it('accepts optional expires_at field in request body', async () => {
+			const futureDate = '2026-04-14T00:00:00Z';
+			const successResponse = {
+				message: 'Added to whitelist',
+				jellyfin_id: 'movie-123',
+				name: 'Protected Movie'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Protected Movie',
+					media_type: 'Movie',
+					expires_at: futureDate
+				})
+			});
+
+			expect(response.ok).toBe(true);
+			const body = JSON.parse(
+				mockFetch.mock.calls[0][1].body as string
+			);
+			expect(body.expires_at).toBe(futureDate);
+		});
+
+		it('allows null expires_at for permanent protection', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						message: 'Added to whitelist',
+						jellyfin_id: 'movie-123',
+						name: 'Protected Movie'
+					})
+			});
+
+			await fetch('/api/whitelist/content', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Protected Movie',
+					media_type: 'Movie',
+					expires_at: null
+				})
+			});
+
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(body.expires_at).toBeNull();
+		});
+	});
+
+	describe('GET /api/whitelist/content returns expires_at', () => {
+		it('returns expires_at field for each whitelist item', async () => {
+			const whitelistResponse = {
+				items: [
+					{
+						id: 1,
+						jellyfin_id: 'movie-123',
+						name: 'Temporary Protection',
+						media_type: 'Movie',
+						created_at: '2024-01-15T10:30:00Z',
+						expires_at: '2024-04-15T10:30:00Z'
+					},
+					{
+						id: 2,
+						jellyfin_id: 'movie-456',
+						name: 'Permanent Protection',
+						media_type: 'Movie',
+						created_at: '2024-01-14T08:00:00Z',
+						expires_at: null
+					}
+				],
+				total_count: 2
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(whitelistResponse)
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+
+			// Check first item has expiration date
+			expect(data.items[0].expires_at).toBe('2024-04-15T10:30:00Z');
+			// Check second item has null expiration (permanent)
+			expect(data.items[1].expires_at).toBeNull();
+		});
+
+		it('displays Expired badge for items past expiration', async () => {
+			const pastDate = '2024-01-01T00:00:00Z';
+			const whitelistResponse = {
+				items: [
+					{
+						id: 1,
+						jellyfin_id: 'movie-expired',
+						name: 'Expired Protection',
+						media_type: 'Movie',
+						created_at: '2023-10-01T10:00:00Z',
+						expires_at: pastDate
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(whitelistResponse)
+			});
+
+			const response = await fetch('/api/whitelist/content', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			// Frontend will check if expires_at < now to show Expired badge
+			const expirationDate = new Date(data.items[0].expires_at);
+			const now = new Date();
+			expect(expirationDate < now).toBe(true);
+		});
+	});
+
+	describe('POST /api/whitelist/french-only with expires_at', () => {
+		it('accepts optional expires_at field in request body', async () => {
+			const futureDate = '2026-07-14T00:00:00Z';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						message: 'Added to french-only whitelist',
+						jellyfin_id: 'movie-fr',
+						name: 'French Movie'
+					})
+			});
+
+			await fetch('/api/whitelist/french-only', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-fr',
+					name: 'French Movie',
+					media_type: 'Movie',
+					expires_at: futureDate
+				})
+			});
+
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(body.expires_at).toBe(futureDate);
+		});
+	});
+
+	describe('POST /api/whitelist/language-exempt with expires_at', () => {
+		it('accepts optional expires_at field in request body', async () => {
+			const futureDate = '2027-01-14T00:00:00Z';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						message: 'Added to language-exempt whitelist',
+						jellyfin_id: 'movie-exempt',
+						name: 'Exempt Movie'
+					})
+			});
+
+			await fetch('/api/whitelist/language-exempt', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-exempt',
+					name: 'Exempt Movie',
+					media_type: 'Movie',
+					expires_at: futureDate
+				})
+			});
+
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(body.expires_at).toBe(futureDate);
+		});
+	});
+});
+
 describe('French-Only Whitelist API Integration (US-5.2)', () => {
 	beforeEach(() => {
 		mockFetch.mockReset();

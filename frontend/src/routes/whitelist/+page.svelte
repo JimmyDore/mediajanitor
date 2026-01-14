@@ -7,6 +7,7 @@
 		name: string;
 		media_type: string;
 		created_at: string;
+		expires_at: string | null;
 	}
 
 	interface WhitelistResponse {
@@ -35,6 +36,21 @@
 			const date = new Date(dateStr);
 			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 		} catch { return '?'; }
+	}
+
+	function formatExpiration(expiresAt: string | null): string {
+		if (!expiresAt) return 'Permanent';
+		try {
+			const date = new Date(expiresAt);
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		} catch { return '?'; }
+	}
+
+	function isExpired(expiresAt: string | null): boolean {
+		if (!expiresAt) return false;
+		try {
+			return new Date(expiresAt) < new Date();
+		} catch { return false; }
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
@@ -170,11 +186,23 @@
 		{:else}
 			<div class="list">
 				{#each currentData.items as item}
-					<div class="list-item">
+					<div class="list-item" class:expired={isExpired(item.expires_at)}>
 						<div class="item-info">
-							<span class="item-name">{item.name}</span>
+							<span class="item-name">
+								{item.name}
+								{#if isExpired(item.expires_at)}
+									<span class="badge-expired">Expired</span>
+								{/if}
+							</span>
 							<span class="item-meta">
-								{item.media_type === 'Movie' ? 'Movie' : 'Series'} · {formatDate(item.created_at)}
+								{item.media_type === 'Movie' ? 'Movie' : 'Series'} · Added {formatDate(item.created_at)}
+							</span>
+							<span class="item-expiration" class:permanent={!item.expires_at}>
+								{#if item.expires_at}
+									Expires: {formatExpiration(item.expires_at)}
+								{:else}
+									Permanent
+								{/if}
 							</span>
 						</div>
 						<button
@@ -348,6 +376,36 @@
 
 	.item-meta {
 		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.item-expiration {
+		font-size: var(--font-size-xs);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
+	.item-expiration.permanent {
+		color: var(--success);
+	}
+
+	.badge-expired {
+		display: inline-block;
+		padding: 1px 6px;
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		text-transform: uppercase;
+		background: var(--danger-light);
+		color: var(--danger);
+		border-radius: var(--radius-sm);
+		margin-left: var(--space-2);
+	}
+
+	.list-item.expired {
+		opacity: 0.6;
+	}
+
+	.list-item.expired .item-name {
 		color: var(--text-muted);
 	}
 

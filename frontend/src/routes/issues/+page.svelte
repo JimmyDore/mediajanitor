@@ -28,6 +28,8 @@
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests' | 'multi';
 	type SortField = 'name' | 'size' | 'date' | 'issues';
 	type SortOrder = 'asc' | 'desc';
+	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
+	type WhitelistType = 'content' | 'french-only' | 'language-exempt';
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -39,6 +41,73 @@
 	let activeFilter = $state<FilterType>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
+
+	// Duration picker state
+	let showDurationPicker = $state(false);
+	let selectedItem = $state<ContentIssueItem | null>(null);
+	let selectedWhitelistType = $state<WhitelistType>('content');
+	let selectedDuration = $state<DurationOption>('permanent');
+	let customDate = $state('');
+
+	const durationOptions: { value: DurationOption; label: string }[] = [
+		{ value: 'permanent', label: 'Permanent' },
+		{ value: '3months', label: '3 Months' },
+		{ value: '6months', label: '6 Months' },
+		{ value: '1year', label: '1 Year' },
+		{ value: 'custom', label: 'Custom Date' }
+	];
+
+	function getExpirationDate(duration: DurationOption, customDateValue: string): string | null {
+		if (duration === 'permanent') return null;
+		if (duration === 'custom') {
+			return customDateValue ? new Date(customDateValue + 'T00:00:00').toISOString() : null;
+		}
+
+		const now = new Date();
+		switch (duration) {
+			case '3months':
+				now.setMonth(now.getMonth() + 3);
+				break;
+			case '6months':
+				now.setMonth(now.getMonth() + 6);
+				break;
+			case '1year':
+				now.setFullYear(now.getFullYear() + 1);
+				break;
+		}
+		return now.toISOString();
+	}
+
+	function openDurationPicker(item: ContentIssueItem, type: WhitelistType) {
+		selectedItem = item;
+		selectedWhitelistType = type;
+		selectedDuration = 'permanent';
+		customDate = '';
+		showDurationPicker = true;
+	}
+
+	function closeDurationPicker() {
+		showDurationPicker = false;
+		selectedItem = null;
+	}
+
+	async function confirmWhitelist() {
+		if (!selectedItem) return;
+
+		const item = selectedItem;
+		const type = selectedWhitelistType;
+		const expiresAt = getExpirationDate(selectedDuration, customDate);
+
+		closeDurationPicker();
+
+		if (type === 'content') {
+			await protectContentWithExpiration(item, expiresAt);
+		} else if (type === 'french-only') {
+			await markAsFrenchOnlyWithExpiration(item, expiresAt);
+		} else if (type === 'language-exempt') {
+			await markAsLanguageExemptWithExpiration(item, expiresAt);
+		}
+	}
 
 	$effect(() => {
 		const urlFilter = $page.url.searchParams.get('filter');
@@ -75,7 +144,7 @@
 		setTimeout(() => toast = null, 3000);
 	}
 
-	async function protectContent(item: ContentIssueItem) {
+	async function protectContentWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
 		const token = localStorage.getItem('access_token');
 		if (!token) { showToast('Not authenticated', 'error'); return; }
 
@@ -85,7 +154,7 @@
 			const response = await fetch('/api/whitelist/content', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type })
+				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
 			if (response.status === 401) { showToast('Session expired', 'error'); return; }
@@ -112,7 +181,7 @@
 		}
 	}
 
-	async function markAsFrenchOnly(item: ContentIssueItem) {
+	async function markAsFrenchOnlyWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
 		const token = localStorage.getItem('access_token');
 		if (!token) { showToast('Not authenticated', 'error'); return; }
 
@@ -122,7 +191,7 @@
 			const response = await fetch('/api/whitelist/french-only', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type })
+				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
 			if (response.status === 401) { showToast('Session expired', 'error'); return; }
@@ -156,7 +225,7 @@
 		}
 	}
 
-	async function markAsLanguageExempt(item: ContentIssueItem) {
+	async function markAsLanguageExemptWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
 		const token = localStorage.getItem('access_token');
 		if (!token) { showToast('Not authenticated', 'error'); return; }
 
@@ -166,7 +235,7 @@
 			const response = await fetch('/api/whitelist/language-exempt', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type })
+				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
 			if (response.status === 401) { showToast('Session expired', 'error'); return; }
@@ -396,7 +465,7 @@
 									{#if item.issues.includes('old')}
 										<button
 											class="action-btn"
-											onclick={() => protectContent(item)}
+											onclick={() => openDurationPicker(item, 'content')}
 											disabled={protectingIds.has(item.jellyfin_id)}
 											title="Protect from deletion"
 										>
@@ -412,7 +481,7 @@
 									{#if hasMissingEnglishAudio(item)}
 										<button
 											class="action-btn"
-											onclick={() => markAsFrenchOnly(item)}
+											onclick={() => openDurationPicker(item, 'french-only')}
 											disabled={frenchOnlyIds.has(item.jellyfin_id)}
 											title="Mark as French-only"
 										>
@@ -426,7 +495,7 @@
 									{#if hasLanguageIssues(item)}
 										<button
 											class="action-btn"
-											onclick={() => markAsLanguageExempt(item)}
+											onclick={() => openDurationPicker(item, 'language-exempt')}
 											disabled={languageExemptIds.has(item.jellyfin_id)}
 											title="Exempt from language checks"
 										>
@@ -448,6 +517,56 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Duration Picker Modal -->
+{#if showDurationPicker && selectedItem}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" onclick={closeDurationPicker} role="presentation">
+		<!-- svelte-ignore a11y_interactive_supports_focus -->
+		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="modal-title">
+			<h3 id="modal-title">Set Whitelist Duration</h3>
+			<p class="modal-desc">Choose how long <strong>{selectedItem.name}</strong> should be whitelisted.</p>
+
+			<div class="duration-options">
+				{#each durationOptions as option}
+					<label class="duration-option" class:selected={selectedDuration === option.value}>
+						<input
+							type="radio"
+							name="duration"
+							value={option.value}
+							checked={selectedDuration === option.value}
+							onchange={() => selectedDuration = option.value}
+						/>
+						<span class="option-label">{option.label}</span>
+					</label>
+				{/each}
+			</div>
+
+			{#if selectedDuration === 'custom'}
+				<div class="custom-date-input">
+					<label for="custom-date">Expiration Date</label>
+					<input
+						id="custom-date"
+						type="date"
+						bind:value={customDate}
+						min={new Date().toISOString().split('T')[0]}
+					/>
+				</div>
+			{/if}
+
+			<div class="modal-actions">
+				<button class="btn-secondary" onclick={closeDurationPicker}>Cancel</button>
+				<button
+					class="btn-primary"
+					onclick={confirmWhitelist}
+					disabled={selectedDuration === 'custom' && !customDate}
+				>
+					Confirm
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.issues-page {
@@ -766,6 +885,169 @@
 
 		.col-size {
 			display: none;
+		}
+	}
+
+	/* Modal Styles */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+		animation: fade-in 0.15s ease-out;
+	}
+
+	.modal {
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-6);
+		width: 100%;
+		max-width: 380px;
+		margin: var(--space-4);
+		animation: slide-up 0.2s ease-out;
+	}
+
+	.modal h3 {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		margin: 0 0 var(--space-2) 0;
+	}
+
+	.modal-desc {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		margin: 0 0 var(--space-5) 0;
+	}
+
+	.modal-desc strong {
+		color: var(--text-primary);
+	}
+
+	.duration-options {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+	}
+
+	.duration-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.duration-option:hover {
+		background: var(--bg-hover);
+	}
+
+	.duration-option.selected {
+		border-color: var(--accent);
+		background: var(--accent-light);
+	}
+
+	.duration-option input {
+		margin: 0;
+		accent-color: var(--accent);
+	}
+
+	.option-label {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+	}
+
+	.custom-date-input {
+		margin-bottom: var(--space-4);
+	}
+
+	.custom-date-input label {
+		display: block;
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		margin-bottom: var(--space-2);
+		color: var(--text-secondary);
+	}
+
+	.custom-date-input input {
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-secondary);
+		color: var(--text-primary);
+		font-size: var(--font-size-sm);
+	}
+
+	.custom-date-input input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
+	}
+
+	.btn-primary {
+		padding: var(--space-2) var(--space-4);
+		background: var(--accent);
+		color: white;
+		border: none;
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background: var(--accent-hover);
+	}
+
+	.btn-primary:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-secondary {
+		padding: var(--space-2) var(--space-4);
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-secondary:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	@keyframes fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes slide-up {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
 		}
 	}
 </style>
