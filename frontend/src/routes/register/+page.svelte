@@ -61,6 +61,7 @@
 
 <div class="auth-container">
 	<div class="auth-card">
+		<a href="/" class="auth-logo">Media Janitor</a>
 		<div class="auth-header">
 			<h1>Get Started Free</h1>
 			<p class="auth-subtitle">Keep your media library clean and organized</p>
@@ -137,6 +138,21 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-8);
+	}
+
+	.auth-logo {
+		display: block;
+		text-align: center;
+		font-size: var(--font-size-xl);
+		font-weight: var(--font-weight-bold);
+		color: var(--text-primary);
+		text-decoration: none;
+		margin-bottom: var(--space-6);
+		letter-spacing: -0.02em;
+	}
+
+	.auth-logo:hover {
+		color: var(--accent);
 	}
 
 	.auth-header {

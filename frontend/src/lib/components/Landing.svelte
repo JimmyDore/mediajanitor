@@ -3,6 +3,19 @@
 </script>
 
 <div class="landing">
+	<!-- Public Header -->
+	<header class="public-header">
+		<div class="header-container">
+			<a href="/" class="logo">
+				<span class="logo-text">Media Janitor</span>
+			</a>
+			<nav class="public-nav">
+				<a href="/login" class="nav-link">Log in</a>
+				<a href="/register" class="nav-btn">Get Started</a>
+			</nav>
+		</div>
+	</header>
+
 	<!-- Hero Section -->
 	<section class="hero">
 		<div class="hero-content">
@@ -166,6 +179,83 @@
 		flex-direction: column;
 	}
 
+	/* Public Header */
+	.public-header {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 100;
+		background: rgba(255, 255, 255, 0.8);
+		backdrop-filter: blur(12px);
+		border-bottom: 1px solid var(--border);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.public-header {
+			background: rgba(17, 17, 17, 0.8);
+		}
+	}
+
+	.header-container {
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 0 var(--space-6);
+		height: 64px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.logo {
+		text-decoration: none;
+		display: flex;
+		align-items: center;
+	}
+
+	.logo-text {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-bold);
+		color: var(--text-primary);
+		letter-spacing: -0.02em;
+	}
+
+	.public-nav {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+
+	.nav-link {
+		font-size: var(--font-size-base);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		text-decoration: none;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		transition: all var(--transition-fast);
+	}
+
+	.nav-link:hover {
+		color: var(--text-primary);
+		background: var(--bg-hover);
+	}
+
+	.nav-btn {
+		font-size: var(--font-size-base);
+		font-weight: var(--font-weight-semibold);
+		color: white;
+		background: var(--accent);
+		text-decoration: none;
+		padding: var(--space-2) var(--space-4);
+		border-radius: var(--radius-md);
+		transition: all var(--transition-fast);
+	}
+
+	.nav-btn:hover {
+		background: var(--accent-hover);
+	}
+
 	/* Hero Section */
 	.hero {
 		position: relative;
@@ -174,6 +264,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: var(--space-8);
+		padding-top: calc(64px + var(--space-8));
 		overflow: hidden;
 	}
 

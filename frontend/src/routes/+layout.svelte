@@ -43,10 +43,10 @@
 	</div>
 {:else}
 	<div class="app">
-		{#if $auth.isAuthenticated && !isPublicRoute}
+		{#if $auth.isAuthenticated}
 			<Header />
 		{/if}
-		<main class="content" class:content-centered={isPublicRoute || !$auth.isAuthenticated}>
+		<main class="content" class:content-centered={!$auth.isAuthenticated}>
 			{@render children()}
 		</main>
 	</div>
