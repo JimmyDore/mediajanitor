@@ -16,7 +16,11 @@ from app.models.settings import (
     JellyfinSettingsResponse,
     JellyseerrSettingsCreate,
     JellyseerrSettingsResponse,
+    RadarrSettingsCreate,
+    RadarrSettingsResponse,
     SettingsSaveResponse,
+    SonarrSettingsCreate,
+    SonarrSettingsResponse,
 )
 from app.services.auth import get_current_user
 from app.services.jellyfin import (
@@ -28,6 +32,16 @@ from app.services.jellyseerr import (
     get_user_jellyseerr_settings,
     save_jellyseerr_settings,
     validate_jellyseerr_connection,
+)
+from app.services.radarr import (
+    get_user_radarr_settings,
+    save_radarr_settings,
+    validate_radarr_connection,
+)
+from app.services.sonarr import (
+    get_user_sonarr_settings,
+    save_sonarr_settings,
+    validate_sonarr_connection,
 )
 
 # Default values for analysis preferences
@@ -131,6 +145,110 @@ async def get_jellyseerr_config(
         )
 
     return JellyseerrSettingsResponse(
+        server_url=None,
+        api_key_configured=False,
+    )
+
+
+# Radarr Endpoints
+
+
+@router.post("/radarr", response_model=SettingsSaveResponse)
+async def save_radarr_config(
+    settings_data: RadarrSettingsCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save Radarr connection settings after validating the connection."""
+    # Convert HttpUrl to string
+    server_url = str(settings_data.server_url)
+
+    # Validate connection before saving
+    is_valid = await validate_radarr_connection(server_url, settings_data.api_key)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not establish connection to Radarr server. Please check URL and API key.",
+        )
+
+    # Save settings
+    await save_radarr_settings(
+        db, current_user.id, server_url, settings_data.api_key
+    )
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Radarr settings saved successfully.",
+    )
+
+
+@router.get("/radarr", response_model=RadarrSettingsResponse)
+async def get_radarr_config(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RadarrSettingsResponse:
+    """Get current Radarr connection settings for the user."""
+    settings = await get_user_radarr_settings(db, current_user.id)
+
+    if settings and settings.radarr_server_url:
+        return RadarrSettingsResponse(
+            server_url=settings.radarr_server_url,
+            api_key_configured=settings.radarr_api_key_encrypted is not None,
+        )
+
+    return RadarrSettingsResponse(
+        server_url=None,
+        api_key_configured=False,
+    )
+
+
+# Sonarr Endpoints
+
+
+@router.post("/sonarr", response_model=SettingsSaveResponse)
+async def save_sonarr_config(
+    settings_data: SonarrSettingsCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save Sonarr connection settings after validating the connection."""
+    # Convert HttpUrl to string
+    server_url = str(settings_data.server_url)
+
+    # Validate connection before saving
+    is_valid = await validate_sonarr_connection(server_url, settings_data.api_key)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not establish connection to Sonarr server. Please check URL and API key.",
+        )
+
+    # Save settings
+    await save_sonarr_settings(
+        db, current_user.id, server_url, settings_data.api_key
+    )
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Sonarr settings saved successfully.",
+    )
+
+
+@router.get("/sonarr", response_model=SonarrSettingsResponse)
+async def get_sonarr_config(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SonarrSettingsResponse:
+    """Get current Sonarr connection settings for the user."""
+    settings = await get_user_sonarr_settings(db, current_user.id)
+
+    if settings and settings.sonarr_server_url:
+        return SonarrSettingsResponse(
+            server_url=settings.sonarr_server_url,
+            api_key_configured=settings.sonarr_api_key_encrypted is not None,
+        )
+
+    return SonarrSettingsResponse(
         server_url=None,
         api_key_configured=False,
     )

@@ -24,6 +24,28 @@
 	let hasJellyseerrConfigured = $state(false);
 	let currentJellyseerrUrl = $state<string | null>(null);
 
+	// Radarr form state
+	let radarrUrl = $state('');
+	let radarrApiKey = $state('');
+	let radarrError = $state<string | null>(null);
+	let radarrSuccess = $state<string | null>(null);
+	let isRadarrLoading = $state(false);
+
+	// Radarr current settings state
+	let hasRadarrConfigured = $state(false);
+	let currentRadarrUrl = $state<string | null>(null);
+
+	// Sonarr form state
+	let sonarrUrl = $state('');
+	let sonarrApiKey = $state('');
+	let sonarrError = $state<string | null>(null);
+	let sonarrSuccess = $state<string | null>(null);
+	let isSonarrLoading = $state(false);
+
+	// Sonarr current settings state
+	let hasSonarrConfigured = $state(false);
+	let currentSonarrUrl = $state<string | null>(null);
+
 	// Analysis preferences state
 	let oldContentMonths = $state(4);
 	let minAgeMonths = $state(3);
@@ -41,6 +63,8 @@
 	// Expand/collapse states
 	let jellyfinExpanded = $state(false);
 	let jellyseerrExpanded = $state(false);
+	let radarrExpanded = $state(false);
+	let sonarrExpanded = $state(false);
 
 	// Default values for reset
 	const DEFAULT_OLD_CONTENT_MONTHS = 4;
@@ -85,6 +109,34 @@
 				}
 				// Auto-expand if not configured
 				if (!hasJellyseerrConfigured) jellyseerrExpanded = true;
+			}
+
+			// Load Radarr settings
+			const radarrResponse = await fetch('/api/settings/radarr', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (radarrResponse.ok) {
+				const data = await radarrResponse.json();
+				hasRadarrConfigured = data.api_key_configured;
+				currentRadarrUrl = data.server_url;
+				if (data.server_url) {
+					radarrUrl = data.server_url;
+				}
+			}
+
+			// Load Sonarr settings
+			const sonarrResponse = await fetch('/api/settings/sonarr', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (sonarrResponse.ok) {
+				const data = await sonarrResponse.json();
+				hasSonarrConfigured = data.api_key_configured;
+				currentSonarrUrl = data.server_url;
+				if (data.server_url) {
+					sonarrUrl = data.server_url;
+				}
 			}
 
 			// Load analysis preferences
@@ -190,6 +242,84 @@
 			jellyseerrError = e instanceof Error ? e.message : 'Failed to save settings';
 		} finally {
 			isJellyseerrLoading = false;
+		}
+	}
+
+	async function handleRadarrSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		radarrError = null;
+		radarrSuccess = null;
+		isRadarrLoading = true;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/radarr', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					server_url: radarrUrl,
+					api_key: radarrApiKey
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save settings');
+			}
+
+			radarrSuccess = 'Connected';
+			hasRadarrConfigured = true;
+			currentRadarrUrl = radarrUrl;
+			radarrApiKey = '';
+			radarrExpanded = false;
+			setTimeout(() => radarrSuccess = null, 3000);
+		} catch (e) {
+			radarrError = e instanceof Error ? e.message : 'Failed to save settings';
+		} finally {
+			isRadarrLoading = false;
+		}
+	}
+
+	async function handleSonarrSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		sonarrError = null;
+		sonarrSuccess = null;
+		isSonarrLoading = true;
+
+		try {
+			const token = localStorage.getItem('access_token');
+			const response = await fetch('/api/settings/sonarr', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					server_url: sonarrUrl,
+					api_key: sonarrApiKey
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save settings');
+			}
+
+			sonarrSuccess = 'Connected';
+			hasSonarrConfigured = true;
+			currentSonarrUrl = sonarrUrl;
+			sonarrApiKey = '';
+			sonarrExpanded = false;
+			setTimeout(() => sonarrSuccess = null, 3000);
+		} catch (e) {
+			sonarrError = e instanceof Error ? e.message : 'Failed to save settings';
+		} finally {
+			isSonarrLoading = false;
 		}
 	}
 
@@ -462,6 +592,154 @@
 						</div>
 						<button type="submit" class="btn-save" disabled={isJellyseerrLoading}>
 							{#if isJellyseerrLoading}
+								<span class="spinner-small"></span>
+							{:else}
+								Save
+							{/if}
+						</button>
+					</div>
+				</form>
+			{/if}
+
+			<div class="divider"></div>
+
+			<!-- Radarr -->
+			<div class="connection-row">
+				<div class="connection-info">
+					<div class="connection-header">
+						<span class="connection-name">Radarr</span>
+						{#if hasRadarrConfigured}
+							<span class="status-dot status-connected" title="Connected"></span>
+						{:else}
+							<span class="status-dot status-disconnected" title="Not connected"></span>
+						{/if}
+					</div>
+					{#if hasRadarrConfigured && currentRadarrUrl}
+						<span class="connection-url">{extractDomain(currentRadarrUrl)}</span>
+					{:else}
+						<span class="connection-url muted">Not configured</span>
+					{/if}
+				</div>
+				<button
+					class="btn-edit"
+					onclick={() => radarrExpanded = !radarrExpanded}
+					aria-expanded={radarrExpanded}
+				>
+					{radarrExpanded ? 'Cancel' : hasRadarrConfigured ? 'Edit' : 'Configure'}
+				</button>
+			</div>
+
+			{#if radarrExpanded}
+				<form onsubmit={handleRadarrSubmit} class="connection-form">
+					{#if radarrError}
+						<div class="inline-error">{radarrError}</div>
+					{/if}
+					{#if radarrSuccess}
+						<div class="inline-success">{radarrSuccess}</div>
+					{/if}
+					<div class="form-row">
+						<div class="form-field">
+							<label for="radarr-url">Server URL</label>
+							<input
+								type="url"
+								id="radarr-url"
+								bind:value={radarrUrl}
+								required
+								placeholder="https://radarr.example.com"
+							/>
+						</div>
+						<div class="form-field">
+							<label for="radarr-key">
+								API Key
+								{#if hasRadarrConfigured}
+									<span class="optional">(leave blank to keep)</span>
+								{/if}
+							</label>
+							<input
+								type="password"
+								id="radarr-key"
+								bind:value={radarrApiKey}
+								required={!hasRadarrConfigured}
+								placeholder={hasRadarrConfigured ? '••••••••' : 'API key'}
+								autocomplete="off"
+							/>
+						</div>
+						<button type="submit" class="btn-save" disabled={isRadarrLoading}>
+							{#if isRadarrLoading}
+								<span class="spinner-small"></span>
+							{:else}
+								Save
+							{/if}
+						</button>
+					</div>
+				</form>
+			{/if}
+
+			<div class="divider"></div>
+
+			<!-- Sonarr -->
+			<div class="connection-row">
+				<div class="connection-info">
+					<div class="connection-header">
+						<span class="connection-name">Sonarr</span>
+						{#if hasSonarrConfigured}
+							<span class="status-dot status-connected" title="Connected"></span>
+						{:else}
+							<span class="status-dot status-disconnected" title="Not connected"></span>
+						{/if}
+					</div>
+					{#if hasSonarrConfigured && currentSonarrUrl}
+						<span class="connection-url">{extractDomain(currentSonarrUrl)}</span>
+					{:else}
+						<span class="connection-url muted">Not configured</span>
+					{/if}
+				</div>
+				<button
+					class="btn-edit"
+					onclick={() => sonarrExpanded = !sonarrExpanded}
+					aria-expanded={sonarrExpanded}
+				>
+					{sonarrExpanded ? 'Cancel' : hasSonarrConfigured ? 'Edit' : 'Configure'}
+				</button>
+			</div>
+
+			{#if sonarrExpanded}
+				<form onsubmit={handleSonarrSubmit} class="connection-form">
+					{#if sonarrError}
+						<div class="inline-error">{sonarrError}</div>
+					{/if}
+					{#if sonarrSuccess}
+						<div class="inline-success">{sonarrSuccess}</div>
+					{/if}
+					<div class="form-row">
+						<div class="form-field">
+							<label for="sonarr-url">Server URL</label>
+							<input
+								type="url"
+								id="sonarr-url"
+								bind:value={sonarrUrl}
+								required
+								placeholder="https://sonarr.example.com"
+							/>
+						</div>
+						<div class="form-field">
+							<label for="sonarr-key">
+								API Key
+								{#if hasSonarrConfigured}
+									<span class="optional">(leave blank to keep)</span>
+								{/if}
+							</label>
+							<input
+								type="password"
+								id="sonarr-key"
+								bind:value={sonarrApiKey}
+								required={!hasSonarrConfigured}
+								placeholder={hasSonarrConfigured ? '••••••••' : 'API key'}
+								autocomplete="off"
+							/>
+						</div>
+						<button type="submit" class="btn-save" disabled={isSonarrLoading}>
+							{#if isSonarrLoading}
 								<span class="spinner-small"></span>
 							{:else}
 								Save

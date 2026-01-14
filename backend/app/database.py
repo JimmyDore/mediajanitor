@@ -52,6 +52,12 @@ class UserSettings(Base):
     large_movie_size_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Display preferences
     show_unreleased_requests: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Radarr settings (API key is encrypted)
+    radarr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    radarr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Sonarr settings (API key is encrypted)
+    sonarr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sonarr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

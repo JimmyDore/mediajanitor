@@ -31,6 +31,34 @@ class JellyseerrSettingsResponse(BaseModel):
     api_key_configured: bool
 
 
+class RadarrSettingsCreate(BaseModel):
+    """Request model for saving Radarr settings."""
+
+    server_url: HttpUrl
+    api_key: str
+
+
+class RadarrSettingsResponse(BaseModel):
+    """Response model for Radarr settings (without exposing API key)."""
+
+    server_url: str | None
+    api_key_configured: bool
+
+
+class SonarrSettingsCreate(BaseModel):
+    """Request model for saving Sonarr settings."""
+
+    server_url: HttpUrl
+    api_key: str
+
+
+class SonarrSettingsResponse(BaseModel):
+    """Response model for Sonarr settings (without exposing API key)."""
+
+    server_url: str | None
+    api_key_configured: bool
+
+
 class SettingsSaveResponse(BaseModel):
     """Response model for successful settings save."""
 

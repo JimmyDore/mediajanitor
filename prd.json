@@ -1,978 +1,225 @@
 {
-  "project": "Plex Dashboard",
-  "branchName": "main",
+  "project": "Media Janitor",
+  "branchName": "ralph/ux-improvements-and-backlog",
   "userStories": [
     {
-      "id": "US-0.1",
-      "title": "Hello World (Full Stack)",
-      "story": "As a developer, I want a working frontend that displays Hello World from the backend, so that I can verify the full stack communication works",
+      "id": "US-12.1",
+      "title": "Add Threshold Help Text",
+      "story": "As a user, I want to understand what each threshold setting does, so that I can configure them correctly",
       "acceptanceCriteria": [
-        "Backend endpoint GET /api/hello returns {\"message\": \"Hello World\"}",
-        "Frontend displays the message fetched from backend",
-        "Both run locally with docker-compose up",
+        "\"Flag content unwatched for\" shows help text: \"Used by: Old tab\"",
+        "\"Don't flag content newer than\" shows help text: \"Used by: Old tab (for never-watched items)\"",
+        "\"Flag movies larger than\" shows help text: \"Used by: Large tab\"",
+        "Help text appears in subtle gray below each input",
         "Typecheck passes",
-        "Unit tests pass"
+        "Unit tests pass",
+        "Verify in browser using browser tools"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "passes": false,
+      "notes": "File: frontend/src/routes/settings/+page.svelte"
     },
     {
-      "id": "US-0.2",
-      "title": "Dockerize the Application",
-      "story": "As a developer, I want the entire application containerized, so that I can deploy it anywhere",
+      "id": "US-12.2",
+      "title": "Remove Multi-Issue Tab",
+      "story": "As a user, I want a simpler Issues page, so that I'm not confused by extra filters",
       "acceptanceCriteria": [
-        "Dockerfile for backend",
-        "Dockerfile for frontend",
-        "docker-compose.yml that runs both + database",
-        "docker-compose up starts the full app on localhost",
+        "Multi-Issue tab removed from Issues page filter tabs",
+        "URL parameter ?filter=multi no longer supported (returns all issues or 400)",
+        "Backend API documentation updated to remove 'multi' filter option",
         "Typecheck passes",
-        "Unit tests pass"
+        "Unit tests pass",
+        "Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "passes": false,
+      "notes": "Files: frontend/src/routes/issues/+page.svelte, backend/app/routers/content.py, backend/app/services/content.py"
     },
     {
-      "id": "US-0.3",
-      "title": "Deploy to VPS",
-      "story": "As a developer, I want to deploy the app to my VPS, so that it's accessible on the internet",
+      "id": "US-12.3",
+      "title": "Fix TMDB Link Media Type",
+      "story": "As a user, I want TMDB links to work correctly, so that I can check content details on TMDB",
       "acceptanceCriteria": [
-        "GitHub Actions workflow for CI/CD",
-        "Auto-deploy to VPS on push to main",
-        "App accessible at configured domain",
-        "HTTPS via Let's Encrypt / Caddy",
+        "TMDB links work for Movies (link to /movie/{id})",
+        "TMDB links work for TV Shows (link to /tv/{id})",
+        "Handle both uppercase (\"Movie\", \"Series\") and lowercase (\"movie\", \"tv\") media types",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: click TMDB link on Requests tab -> correct page opens"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Root cause: getTmdbUrl() checks item.media_type === 'Movie' but request items use lowercase 'movie'. File: frontend/src/routes/issues/+page.svelte"
+    },
+    {
+      "id": "US-12.5",
+      "title": "External Links for All Issue Types",
+      "story": "As a user, I want TMDB/IMDb links on all content items, so that I can easily look up any flagged content",
+      "acceptanceCriteria": [
+        "Old tab items show TMDB/IMDb links (where data exists)",
+        "Large tab items show TMDB/IMDb links (where data exists)",
+        "Language tab items show TMDB/IMDb links (where data exists)",
+        "Requests tab items show TMDB/IMDb links (already implemented, just needs fix from US-12.3)",
+        "External link icon appears next to title if TMDB or IMDb ID available",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: external links appear on items in all tabs"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Backend already extracts TMDB/IMDb IDs via extract_provider_ids(). File: frontend/src/routes/issues/+page.svelte"
+    },
+    {
+      "id": "US-15.1",
+      "title": "Fix Hidden Requests Showing TMDB IDs",
+      "story": "As a user, I want hidden requests to show actual movie/show titles, so that I can identify what content I've hidden",
+      "acceptanceCriteria": [
+        "Hidden Requests tab shows actual titles, not \"TMDB-123456\"",
+        "Backend looks up title from CachedJellyseerrRequest table when whitelisting",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Root Cause: Frontend passes item.name which may be the fallback TMDB-{id} string. Files: backend/app/routers/whitelist.py, backend/app/services/content.py"
+    },
+    {
+      "id": "US-15.8",
+      "title": "Fix Auth Check Loading Delay",
+      "story": "As a user, I want public pages to load instantly, so that I don't see a loading spinner on landing/login/register pages",
+      "acceptanceCriteria": [
+        "Landing page (/) renders immediately without loading state",
+        "Login page (/login) renders immediately without loading state",
+        "Register page (/register) renders immediately without loading state",
+        "Protected routes still show loading while auth check runs",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Root Cause: Layout shows loading for ALL routes. Should only show loading on protected routes. File: frontend/src/routes/+layout.svelte"
+    },
+    {
+      "id": "US-15.9",
+      "title": "Remove Unused api.ts File",
+      "story": "As a developer, I want unused code removed, so that the codebase is clean and maintainable",
+      "acceptanceCriteria": [
+        "frontend/src/lib/api.ts file deleted",
+        "No import errors after deletion",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 3,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "priority": 7,
+      "passes": false,
+      "notes": "Unused exports: contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi. File: frontend/src/lib/api.ts"
     },
     {
-      "id": "US-1.1",
-      "title": "User Registration",
-      "story": "As a new user, I want to create an account, so that I can use the dashboard",
+      "id": "US-15.2",
+      "title": "Add Radarr Connection Settings",
+      "story": "As a user, I want to connect my Radarr instance, so that I can delete movies directly from the dashboard",
       "acceptanceCriteria": [
-        "Registration form (email, password)",
-        "Backend creates user in database",
-        "Password is hashed securely (bcrypt)",
-        "User redirected to login after signup",
+        "Settings page has Radarr section: URL + API Key",
+        "Backend validates connection by calling GET /api/v3/system/status",
+        "Credentials stored encrypted in database",
+        "Toast notification on success/error",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
       "priority": 10,
       "passes": true,
-      "notes": "Completed 2026-01-12"
+      "notes": "API: X-Api-Key header, test endpoint: GET /api/v3/system/status. Files: backend/app/database.py, backend/app/routers/settings.py, backend/app/services/radarr.py, frontend/src/routes/settings/+page.svelte"
     },
     {
-      "id": "US-1.2",
-      "title": "User Login",
-      "story": "As a registered user, I want to log in, so that I can access my dashboard",
+      "id": "US-15.3",
+      "title": "Add Sonarr Connection Settings",
+      "story": "As a user, I want to connect my Sonarr instance, so that I can delete TV series directly from the dashboard",
       "acceptanceCriteria": [
-        "Login form (email, password)",
-        "Backend validates credentials and returns JWT",
-        "Token stored in frontend (localStorage)",
-        "User redirected to dashboard",
+        "Settings page has Sonarr section: URL + API Key",
+        "Backend validates connection by calling GET /api/v3/system/status",
+        "Credentials stored encrypted in database",
+        "Toast notification on success/error",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
       "priority": 11,
       "passes": true,
-      "notes": "Completed 2026-01-12"
+      "notes": "API: X-Api-Key header, test endpoint: GET /api/v3/system/status. Files: backend/app/database.py, backend/app/routers/settings.py, backend/app/services/sonarr.py, frontend/src/routes/settings/+page.svelte"
     },
     {
-      "id": "US-1.3",
-      "title": "Protected Routes",
-      "story": "As a user, I want my data to be private, so that only I can see my content",
+      "id": "US-15.4",
+      "title": "Delete Movie from Radarr",
+      "story": "As a user, I want to delete a movie via the dashboard, so that it's removed from Radarr and Jellyfin automatically",
       "acceptanceCriteria": [
-        "API endpoints require valid JWT",
-        "Frontend redirects to login if not authenticated",
-        "Each user sees only their own data",
+        "Backend endpoint to delete movie by TMDB ID",
+        "Finds Radarr movie ID via GET /api/v3/movie?tmdbId={id}",
+        "Deletes via DELETE /api/v3/movie/{id}?deleteFiles=true",
+        "Returns success/error response",
+        "Deleting from Radarr with files auto-deletes from Jellyfin",
         "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
-    },
-    {
-      "id": "US-2.1",
-      "title": "Configure Jellyfin Connection",
-      "story": "As a user, I want to input my Jellyfin API key and URL, so that the app can fetch my library data",
-      "acceptanceCriteria": [
-        "Settings page with form for Jellyfin URL and API key",
-        "Backend validates connection before saving",
-        "Credentials stored encrypted in database",
-        "Success/error feedback shown to user",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
+        "Unit tests pass"
       ],
       "priority": 20,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "passes": false,
+      "notes": "Depends on US-15.2. Files: backend/app/services/radarr.py, backend/app/routers/content.py"
     },
     {
-      "id": "US-2.1.5",
-      "title": "Backend Cleanup",
-      "story": "As a developer, I want to remove premature code that was created but not needed, so that the codebase only contains code for completed stories",
+      "id": "US-15.5",
+      "title": "Delete Series from Sonarr",
+      "story": "As a user, I want to delete a TV series via the dashboard, so that it's removed from Sonarr and Jellyfin automatically",
       "acceptanceCriteria": [
-        "Delete unused Pydantic models: models/content.py, models/jellyseerr.py, models/whitelist.py",
-        "Update models/__init__.py to only export user.py and settings.py models",
-        "Remove premature SQLAlchemy tables from database.py: WhitelistContent, WhitelistFrenchOnly, WhitelistFrenchSubsOnly, WhitelistLanguageExempt, WhitelistEpisodeExempt, AppSettings",
-        "Run uv run pytest - all tests pass",
-        "Run uv run mypy app - no type errors",
+        "Backend endpoint to delete series by TMDB ID",
+        "Finds Sonarr series via GET /api/v3/series (iterate to find tmdbId match)",
+        "Deletes via DELETE /api/v3/series/{id}?deleteFiles=true",
+        "Returns success/error response",
+        "Deleting from Sonarr with files auto-deletes from Jellyfin",
         "Typecheck passes",
         "Unit tests pass"
       ],
       "priority": 21,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "passes": false,
+      "notes": "Depends on US-15.3. Files: backend/app/services/sonarr.py, backend/app/routers/content.py"
     },
     {
-      "id": "US-2.2",
-      "title": "Configure Jellyseerr Connection",
-      "story": "As a user, I want to input my Jellyseerr API key and URL, so that the app can fetch my requests data",
+      "id": "US-15.6",
+      "title": "Delete Jellyseerr Request",
+      "story": "As a user, I want to delete a request from Jellyseerr, so that it's removed from the requests list",
       "acceptanceCriteria": [
-        "Settings page shows Jellyseerr section below Jellyfin",
-        "Form fields for Jellyseerr URL and API key",
-        "Backend validates connection by calling Jellyseerr API",
-        "Credentials stored encrypted in database (using existing encryption service)",
-        "Toast notification shows Jellyseerr connected on success or error message on failure",
+        "Backend endpoint to delete request by jellyseerr_id",
+        "Calls DELETE /api/v1/request/{requestId} on Jellyseerr",
+        "Returns success/error response (204 No Content on success)",
         "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
+        "Unit tests pass"
       ],
       "priority": 22,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
+      "passes": false,
+      "notes": "API: X-Api-Key header, response: 204 No Content. Files: backend/app/services/jellyseerr.py, backend/app/routers/content.py"
     },
     {
-      "id": "US-2.3",
-      "title": "Navigation Header",
-      "story": "As a user, I want a consistent navigation header across all pages, so that I can easily move between dashboard, settings, and log out",
+      "id": "US-15.7",
+      "title": "Delete Content UI",
+      "story": "As a user, I want a delete button on content items, so that I can remove content without leaving the dashboard",
       "acceptanceCriteria": [
-        "Header component with app logo/name on the left",
-        "User menu on the right with: Settings link, Logout button",
-        "Header appears on dashboard, settings, and all authenticated pages",
-        "Current page highlighted in navigation",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
-    },
-    {
-      "id": "US-7.1",
-      "title": "Automatic Daily Data Sync",
-      "story": "As a user, I want my data to refresh automatically every day, so that the dashboard is always up-to-date",
-      "acceptanceCriteria": [
-        "Refer to original_script.py functions: setup_jellyfin_client, fetch_jellyseer_requests, aggregate_all_user_data, get_movies_and_shows_for_user",
-        "Use API keys from backend/.env file for testing (JELLYFIN_API_KEY, JELLYFIN_SERVER_URL, JELLYSEERR_API_KEY, JELLYSEERR_BASE_URL)",
-        "All cached data is tied to a user_id - each user's sync is independent",
-        "Background task can be triggered manually (for testing) or scheduled daily",
-        "Uses the user's own stored API keys (from UserSettings) to fetch their data",
-        "Fetches data from Jellyfin API: all movies/series with UserData, MediaSources",
-        "Fetches data from Jellyseerr API: all requests with status",
-        "Stores raw results in database cache tables with user_id FK (e.g., cached_media_items, cached_jellyseerr_requests)",
-        "Dashboard shows Last synced: [timestamp] for the current user",
-        "Failed syncs logged but don't crash the app",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Completed 2026-01-12 - MISSING: scheduler for daily auto-sync, see SUGGESTIONS.md [P1]"
-    },
-    {
-      "id": "US-7.1.5",
-      "title": "Local Integration Test for Sync",
-      "story": "As a developer, I want to verify the sync service works with real Jellyfin/Jellyseerr APIs locally, so that I can confirm data is fetched and cached correctly before deploying",
-      "acceptanceCriteria": [
-        "Run docker-compose up locally",
-        "Register/login with credentials from .env.example (APP_USER_EMAIL, APP_USER_PASSWORD)",
-        "Configure Jellyfin settings via Settings UI (user's real Jellyfin server)",
-        "Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)",
-        "Trigger sync via curl -X POST http://localhost:8080/api/sync with JWT token",
-        "Verify cached_media_items table has data (query via SQLite or check /api/sync/status)",
-        "Verify cached_jellyseerr_requests table has data",
-        "Verify GET /api/sync/status returns correct counts (media_items_count > 0, requests_count > 0)",
-        "Dashboard displays Last synced timestamp after sync",
-        "Document any issues found in SUGGESTIONS.md"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Completed 2026-01-12 - Verified: 324 media items, 244 requests synced successfully"
-    },
-    {
-      "id": "US-7.2",
-      "title": "Manual Data Refresh",
-      "story": "As a user, I want to manually trigger a data refresh, so that I can see changes immediately",
-      "acceptanceCriteria": [
-        "Refresh button on dashboard header",
-        "Button shows loading spinner during refresh",
-        "Data updates on page after refresh completes",
-        "Rate limited: max 1 refresh per 5 minutes per user",
-        "Toast notification shows result (success or rate limit message)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "Completed 2026-01-12"
-    },
-    {
-      "id": "US-3.1",
-      "title": "View Old Unwatched Content",
-      "story": "As a user, I want to see a list of content not watched in 4+ months, so that I can decide what to delete",
-      "acceptanceCriteria": [
-        "Refer to original_script.py functions: filter_old_or_unwatched_items, list_old_or_unwatched_content",
-        "Dashboard page shows list of old/unwatched movies and series (reads from current user's cached DB, not live API)",
-        "API endpoint filters by user_id from JWT token",
-        "Each item shows: name, type (movie/series), year, size (formatted), last watched date, file path",
-        "List sorted by size (largest first)",
-        "Total count and total size displayed at top",
-        "Content in user's whitelist is excluded from results",
-        "Uses hardcoded threshold: 4 months, min age: 3 months",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - 221 items totaling 741.3 GB verified"
-    },
-    {
-      "id": "US-3.2",
-      "title": "Protect Content from Deletion",
-      "story": "As a user, I want to add content to a whitelist, so that it won't appear in the to delete list",
-      "acceptanceCriteria": [
-        "Protect button on each content item in old content list",
-        "Clicking creates whitelist entry linked to current user (user_id foreign key)",
-        "Protected item immediately disappears from old content list",
-        "Toast notification confirms Added to whitelist",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Protect button with toast, item removal, count/size update verified in Docker"
-    },
-    {
-      "id": "US-3.3",
-      "title": "Manage Content Whitelist",
-      "story": "As a user, I want to view and edit my content whitelist, so that I can remove protection from items",
-      "acceptanceCriteria": [
-        "Whitelist page accessible from settings or navigation",
-        "Shows all items in user's content whitelist",
-        "Each item shows: name, date added",
-        "Remove button to unprotect items",
-        "Removing item makes it appear again in old content list (if still old)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Whitelist page with list, Remove button, and navigation link verified in Docker"
-    },
-    {
-      "id": "US-D.1",
-      "title": "Dashboard Summary Cards",
-      "story": "As a user, I want to see summary cards for each issue type on my dashboard, so that I can quickly understand my library's health status",
-      "acceptanceCriteria": [
-        "Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests",
-        "Each card displays: count of items, total size (where applicable)",
-        "Cards are clickable -> navigate to /issues?filter=<type>",
-        "Cards show loading skeleton while data loads",
-        "Cards show 0 issues gracefully when no problems exist",
-        "API endpoint GET /api/content/summary returns counts for all issue types",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 43,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - 4 summary cards with counts, sizes, icons, click navigation to /issues?filter=<type>"
-    },
-    {
-      "id": "US-D.2",
-      "title": "Dashboard Info Section",
-      "story": "As a user, I want to see informational content (recently available), so that I can stay informed about my library without these being problems",
-      "acceptanceCriteria": [
-        "Separate Info section below issue cards",
-        "Recently Available card (past 7 days)",
-        "Card shows item count",
-        "Click -> dedicated simple list view",
-        "Visually distinct from issue cards (different color/style)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 44,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Info section with Recently Available card, /info/recent list view. Also cleaned up E2E tests (79 -> 20) and updated testing documentation."
-    },
-    {
-      "id": "US-D.3",
-      "title": "Unified Issues View",
-      "story": "As a user, I want a single view showing all content with issues, so that I can see everything in one place and filter by issue type",
-      "acceptanceCriteria": [
-        "New route /issues with unified table/list",
-        "Filter tabs: All, Old, Large, Language, Requests",
-        "URL supports filter param: /issues?filter=old",
-        "Each row shows all applicable issue badges (content can have multiple)",
-        "Sortable by: name, size, date, issue count",
-        "Actions column with contextual buttons (Protect, Mark French-only, etc.)",
-        "Total count and size displayed at top",
-        "Replaces old /content/old-unwatched route (redirect for backwards compat)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 45,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Unified issues view with filter tabs, sortable columns, Protect button. Integration tests pass."
-    },
-    {
-      "id": "US-D.4",
-      "title": "Multi-Issue Content Support",
-      "story": "As a user, I want to see when content has multiple issues, so that I can prioritize cleaning up the worst offenders",
-      "acceptanceCriteria": [
-        "API endpoint returns all issue types for each content item",
-        "Frontend displays multiple badges per row (e.g., Old + Large)",
-        "Can filter to show multiple issues only",
-        "Sorting by issue count puts worst offenders first",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 46,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Added filter=multi to API, Multi-Issue filter tab in frontend, sortable Issues column header"
-    },
-    {
-      "id": "US-D.5",
-      "title": "Navigation Update",
-      "story": "As a user, I want the navigation to reflect the new architecture, so that I can easily access the Issues view",
-      "acceptanceCriteria": [
-        "Navigation shows: Dashboard | Issues | Whitelist | Settings",
-        "Issues link goes to /issues",
-        "Old Content nav item removed (redirects to /issues?filter=old)",
-        "Current page highlighted correctly",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 47,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Navigation shows Dashboard | Issues | Whitelist | Settings with correct active states"
-    },
-    {
-      "id": "US-D.6",
-      "title": "Inline Badge Actions",
-      "story": "As a user, I want action buttons attached directly to issue badges, so that I know exactly which problem each action resolves",
-      "acceptanceCriteria": [
-        "OLD badge shows inline dismiss/shield button to protect from deletion",
-        "LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)",
-        "LARGE badge shows info tooltip on hover: Re-download in lower quality from Radarr/Sonarr",
-        "REQUEST badge shows info tooltip on hover: Check status in Jellyseerr",
-        "Clicking inline action behaves same as current buttons (calls same API endpoints)",
-        "Action buttons show tooltip on hover: Protect from deletion, Mark French-only, Exempt from language checks",
-        "Remove separate Actions column from table",
-        "Loading state shown on badge action while API call in progress",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 48,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Moved action buttons inline with badges. OLD/LANGUAGE badges have action buttons attached (shield/FR/checkmark). LARGE/REQUEST badges show info tooltips. Actions column removed. 126 frontend tests pass, 191 backend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-4.1",
-      "title": "Large Movies Backend Service",
-      "story": "As a user, I want to identify movies larger than 13GB, so that I can re-download them in lower quality",
-      "acceptanceCriteria": [
-        "Refer to original_script.py function: list_large_movies",
-        "Backend service get_large_movies() identifies movies exceeding 13GB (reads from cached DB)",
-        "Large movies marked with 'large' issue type in content response",
-        "/api/content/summary endpoint includes large_movies count and total_size",
-        "/api/content/issues?filter=large returns only large movies",
-        "Each item includes: name, year, size (bytes), watched status, file path",
-        "Results sorted by size (largest first)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 50,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - is_large_movie() in content service, 13GB threshold, integrated with summary and issues endpoints"
-    },
-    {
-      "id": "US-5.1",
-      "title": "Language Issues Backend Service",
-      "story": "As a user, I want to identify content missing French or English audio, so that I can re-download proper versions",
-      "acceptanceCriteria": [
-        "Refer to original_script.py functions: check_audio_languages, list_recent_items_language_check",
-        "Backend service get_language_issues() identifies content with language problems (reads from cached DB)",
-        "Content marked with 'language' issue type in response",
-        "/api/content/summary endpoint includes language_issues count",
-        "/api/content/issues?filter=language returns only items with language issues",
-        "Each item includes: name, type, year, specific issue (missing_en_audio, missing_fr_audio, missing_fr_subs)",
-        "For series: episode-level issues aggregated at series level",
-        "Content in language exemption whitelist is excluded",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - check_audio_languages() in content service, 78 items with language issues in Docker test. Series episode-level aggregation and whitelist exclusion deferred to US-5.2/US-5.3"
-    },
-    {
-      "id": "US-5.2",
-      "title": "Mark Content as French-Only",
-      "story": "As a user, I want to mark French films as not needing English audio, so that they don't appear as language issues",
-      "acceptanceCriteria": [
-        "Mark as French-only button appears in unified issues view actions for items with missing EN audio",
-        "POST /api/whitelist/french-only creates entry (user_id FK)",
-        "Item no longer flagged for missing English audio",
-        "Can be managed in whitelist page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - FR Only button on issues page, French-Only section on whitelist page, 147 backend tests + 84 frontend tests pass"
-    },
-    {
-      "id": "US-5.3",
-      "title": "Exempt Content from Language Checks",
-      "story": "As a user, I want to completely exempt content from language checks, so that special cases don't show as issues",
-      "acceptanceCriteria": [
-        "Exempt from checks button appears in unified issues view actions for language issues",
-        "POST /api/whitelist/language-exempt creates entry (user_id FK)",
-        "Item no longer appears in language issues",
-        "Can be managed in whitelist page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Exempt button on issues page, Language-Exempt section on whitelist page, 154 backend tests + 84 frontend tests pass"
-    },
-    {
-      "id": "US-6.1",
-      "title": "Unavailable Requests Backend Service",
-      "story": "As a user, I want to identify Jellyseerr requests that aren't available, so that I can manually find them",
-      "acceptanceCriteria": [
-        "Refer to original_script.py functions: fetch_jellyseer_requests, get_jellyseer_unavailable_requests, analyze_jellyseer_requests",
-        "Backend service get_unavailable_requests() identifies unavailable/pending requests (reads from cached DB)",
-        "Requests marked with 'request' issue type in response",
-        "/api/content/summary endpoint includes unavailable_requests count",
-        "/api/content/issues?filter=requests returns only unavailable requests",
-        "Each item includes: title, type (movie/TV), requested by, request date",
-        "For TV: includes which seasons are requested but missing",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - 26 unavailable requests found in test data. Filters future/recent releases per original script."
-    },
-    {
-      "id": "US-V.1",
-      "title": "Validate Old Content Filtering Logic",
-      "story": "As a developer, I want to verify the old/unwatched content logic matches the original script, so that I can trust the app produces correct results",
-      "acceptanceCriteria": [
-        "Run /original-script snippet for old content, note: total items, old items count, protected count",
-        "Run app API GET /api/content/issues?filter=old, note: total_count",
-        "Expected: app count = original (old items + protected items) since app has empty whitelist",
-        "If counts differ (excluding whitelist): investigate is_old_or_unwatched() in content.py",
-        "Known issue to check: min_age_months logic - original applies only to unplayed items, verify app does same",
-        "Document any bugs found in SUGGESTIONS.md",
-        "Fix identified bugs (separate commits per bug)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Fixed bug: min_age_months was being applied to ALL items instead of only unplayed items. Original script only applies min_age check to never-watched content. Added test to verify fix."
-    },
-    {
-      "id": "US-V.2",
-      "title": "Validate Large Movies Detection",
-      "story": "As a developer, I want to verify the large movies detection matches the original script, so that users see the same large movies in both",
-      "acceptanceCriteria": [
-        "Run /original-script snippet for large movies, note count",
-        "Run app API GET /api/content/issues?filter=large, note: total_count",
-        "Counts should match (no whitelist involved for large movies)",
-        "If counts differ: investigate is_large_movie() in content.py",
-        "Verify threshold is 13GB in both",
-        "Document any bugs found in SUGGESTIONS.md",
-        "Fix identified bugs",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Both original script and app return 0 large movies (largest is 12.43 GB). Fixed minor bug: changed > to >= to match original script behavior. Added test for boundary condition."
-    },
-    {
-      "id": "US-6.3",
-      "title": "Recently Available Content (INFO)",
-      "story": "As a user, I want to see what became available this week, so that I can notify my friends",
-      "acceptanceCriteria": [
-        "Refer to original_script.py function: get_jellyseer_recently_available_requests",
-        "Backend service get_recently_available() returns content from past 7 days (reads from cached DB)",
-        "/api/content/summary endpoint includes recently_available count",
-        "Dedicated simple list view at /info/recent",
-        "Grouped by date (newest first)",
-        "Each item shows: title, type, availability date",
-        "Copy list button for sharing (plain text format)",
-        "Accessed from dashboard Info section card",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Items grouped by date with headers, copy list includes grouped format, 3 items verified in browser"
-    },
-    {
-      "id": "US-V.3",
-      "title": "Validate Language Issues Detection",
-      "story": "As a developer, I want to verify the language issues detection matches the original script, so that users see the same language problems in both",
-      "acceptanceCriteria": [
-        "Run /original-script snippet for language issues, note count",
-        "Run app API GET /api/content/issues?filter=language, note: total_count",
-        "Compare counts (accounting for french-only and language-exempt whitelists)",
-        "If counts differ: investigate check_audio_languages() in content.py",
-        "Verify language codes checked: eng/en for English, fre/fra/fr for French",
-        "Document any bugs found in SUGGESTIONS.md",
-        "Fix identified bugs",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - App count: 76 items (287.8 GB). Original script would have fewer due to hardcoded allowlists (LANGUAGE_CHECK_ALLOWLIST, FRENCH_ONLY_ALLOWLIST, FRENCH_SUBS_ONLY_ALLOWLIST). This difference is by design - app uses per-user DB whitelists (starts empty). Language codes verified: eng/en/english for English, fre/fr/french/fra for French - matches original script exactly."
-    },
-    {
-      "id": "US-V.4",
-      "title": "Validate Unavailable Requests Detection",
-      "story": "As a developer, I want to verify the unavailable requests detection matches the original script, so that users see the same pending/unavailable requests in both",
-      "acceptanceCriteria": [
-        "Run /original-script snippet for unavailable requests, note count",
-        "Run app API GET /api/content/issues?filter=requests, note: total_count",
-        "Counts should match exactly (no whitelist involved)",
-        "If counts differ: investigate get_unavailable_requests() in content.py",
-        "Verify status codes: original uses status != 5 (Available)",
-        "Verify FILTER_FUTURE_RELEASES and FILTER_RECENT_RELEASES logic matches",
-        "Document any bugs found in SUGGESTIONS.md",
-        "Fix identified bugs",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - App count: 26 unavailable requests. Fixed bug: titles were showing as 'Unknown' because Jellyseerr /api/v1/request endpoint doesn't include titles. Added fetch_media_title() to sync.py to fetch titles from /api/v1/movie/{id} or /api/v1/tv/{id}. Known difference: original script does complex TV series season analysis (excludes 'complete for released seasons'), app uses simpler status-based filtering. Documented in SUGGESTIONS.md [P2]."
-    },
-    {
-      "id": "US-8.1",
-      "title": "Configure Thresholds",
-      "story": "As a user, I want to customize analysis thresholds, so that the dashboard matches my preferences",
-      "acceptanceCriteria": [
-        "Settings section for Analysis Preferences",
-        "Configurable: Old content months (default: 4)",
-        "Configurable: Minimum age months (default: 3)",
-        "Configurable: Large movie size GB (default: 13)",
-        "Changes saved to user settings and apply immediately",
-        "Reset to defaults button",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 80,
-      "passes": true,
-      "notes": "Completed 2026-01-13 - Analysis Preferences section in settings page, backend service uses user thresholds, 176 backend tests + 93 frontend tests pass"
-    },
-    {
-      "id": "US-UI.1",
-      "title": "Design System Refinement",
-      "story": "As a user, I want a polished, consistent interface, so that the app feels professional and is easy to scan",
-      "acceptanceCriteria": [
-        "Typography: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)",
-        "Spacing: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)",
-        "Border Radius: Standardize to 4/6/8px system",
-        "Colors: Reduce decorative color, use gray structure + accent for actions only",
-        "Cards: Consistent padding (16px), border-only depth, no heavy shadows",
-        "Buttons: Unified styling with 150ms transitions",
-        "Data Display: Monospace font with tabular-nums for numbers/sizes/dates",
-        "Modals & Popups: Review sizing, padding, transitions; ensure they feel crafted",
-        "Toasts: Consistent styling, appropriate sizing, smooth animations",
-        "Forms & Inputs: Unified field styling, proper focus states, accessible contrast",
-        "Dark Mode: Adjust borders to 10-15% white opacity, desaturate status colors",
-        "Navigation: Consistent styling with current page indicator",
-        "Autonomous Improvements: Make any additional improvements deemed necessary",
-        "Typecheck passes",
-        "Visual review in browser (light + dark mode)"
-      ],
-      "priority": 85,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Comprehensive design system refinement: app.css with CSS custom properties (typography scale, 4px spacing grid, 4/6/8px radius system, cool slate colors, dark mode adjustments), updated all pages (Dashboard, Issues, Whitelist, Settings, Login, Register), Header component, monospace for data values, border-only depth, single blue accent, 93 frontend tests pass, 0 typecheck errors"
-    },
-    {
-      "id": "US-9.1",
-      "title": "Fix Page Titles",
-      "story": "As a user, I want consistent branding across all pages, so that the app feels professional and cohesive",
-      "acceptanceCriteria": [
-        "Login page title is 'Login | Media Janitor'",
-        "Register page title is 'Register | Media Janitor'",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 100,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Updated page titles from 'Log In/Sign Up - Media Janitor' to 'Login/Register | Media Janitor'"
-    },
-    {
-      "id": "US-9.2",
-      "title": "Add Favicon",
-      "story": "As a user, I want a favicon in my browser tab, so that I can easily identify the app among my open tabs",
-      "acceptanceCriteria": [
-        "Favicon displays in browser tab",
-        "No 404 for /favicon.png",
-        "Typecheck passes"
-      ],
-      "priority": 101,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Created SVG favicon with broom icon (Media Janitor theme), blue accent color matching app design"
-    },
-    {
-      "id": "US-9.3",
-      "title": "Add CORS Production URL",
-      "story": "As a developer, I want CORS configured for production, so that the app works on mediajanitor.com",
-      "acceptanceCriteria": [
-        "CORS allows requests from https://mediajanitor.com",
-        "Existing localhost origins still work",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 102,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Added https://mediajanitor.com to CORS allowed origins in main.py"
-    },
-    {
-      "id": "US-9.4",
-      "title": "Add IMDB/TMDB Links to Content Items",
-      "story": "As a user, I want to click on a movie/series title to open IMDB or TMDB, so that I can quickly lookup more information about the content",
-      "acceptanceCriteria": [
-        "Each content item in Issues view has clickable TMDB link icon",
-        "Link opens in new tab: https://www.themoviedb.org/{movie|tv}/{tmdb_id}",
-        "For Jellyseerr requests: use existing tmdb_id from cached_jellyseerr_requests",
-        "For Jellyfin media: extract TMDB ID from ProviderIds in raw_data (or add to sync if not present)",
-        "Fallback: if no TMDB ID available, hide the link icon",
-        "Optional: add IMDB link too if ImdbId is available in ProviderIds",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 103,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Added tmdb_id/imdb_id to ContentIssueItem and UnavailableRequestItem. External link icons (TMDB + IMDB) visible next to item names in Issues view. 172 backend tests pass, 96 frontend tests pass."
-    },
-    {
-      "id": "US-10.1",
-      "title": "Add Celery Infrastructure",
-      "story": "As a developer, I want Celery configured with Redis, so that we can run background tasks reliably",
-      "acceptanceCriteria": [
-        "Celery app configured with Redis broker",
-        "docker-compose up starts redis + celery worker services",
-        "Can enqueue and execute a test task",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 110,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Added Celery 5.3+ with Redis 5.0+ broker. Created celery_app.py with configuration and tasks.py with test_task. Updated docker-compose with redis and celery-worker services. 170 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-10.2",
-      "title": "Daily Sync Scheduler",
-      "story": "As a user, I want my data to sync automatically every day, so that the dashboard is always up-to-date without manual intervention",
-      "acceptanceCriteria": [
-        "Celery Beat schedules sync_all_users task daily at 3 AM UTC",
-        "Task iterates all users with configured Jellyfin settings",
-        "Each user's sync runs independently (failures don't block others)",
-        "Sync status updated in database for each user",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 111,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Added Celery Beat schedule for sync_all_users at 3 AM UTC. Created sync_all_users and sync_user tasks. Each user synced independently via separate task. 175 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-11.1",
-      "title": "Add Expiration to Whitelist Schema",
-      "story": "As a developer, I want whitelist tables to support expiration dates, so that users can create temporary whitelists",
-      "acceptanceCriteria": [
-        "All 3 whitelist tables have nullable expires_at column",
-        "Existing entries have expires_at = NULL (permanent)",
-        "API models support optional expiration date",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 120,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Added nullable expires_at column to ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist. Updated WhitelistAddRequest and WhitelistItem Pydantic models. 178 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-11.2",
-      "title": "Whitelist Expiration Logic",
-      "story": "As a user, I want expired whitelist entries to stop protecting content, so that items automatically return to issues list when protection expires",
-      "acceptanceCriteria": [
-        "Expired whitelist entries don't exclude items from issues",
-        "Non-expired entries still work as before",
-        "NULL expires_at means permanent (never expires)",
-        "API accepts optional expires_at when adding to whitelist",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 121,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Whitelist queries filter out expired entries (expires_at < now). API saves expires_at from request. GET /api/whitelist/* returns expires_at. 191 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-11.3",
-      "title": "Temporary Whitelist UI",
-      "story": "As a user, I want to choose how long to whitelist an item, so that I can set temporary protection for seasonal content",
-      "acceptanceCriteria": [
-        "Default is 'Permanent' (no expiration)",
-        "Preset duration options: 3 months, 6 months, 1 year",
-        "Custom date picker option",
-        "Whitelist page shows expiration date or 'Permanent'",
-        "Expired items show 'Expired' badge",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 122,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Duration picker modal on Issues page (Permanent, 3mo, 6mo, 1yr, Custom), Whitelist page shows expiration info with Expired badge. 191 backend tests pass, 102 frontend tests pass, mypy clean."
-    },
-    {
-      "id": "US-M.1",
-      "title": "Landing Page Hero",
-      "story": "As a visitor, I want to see an attractive landing page, so that I understand the value and sign up",
-      "acceptanceCriteria": [
-        "Bold hero section with gradient background (blue to purple)",
-        "Tagline: Keep Your Media Library Clean (or similar)",
-        "Value proposition subtitle explaining the product",
-        "Primary CTA button: Get Started Free -> /register",
-        "Secondary link: Already have an account? -> /login",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 200,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Landing component with gradient hero, tagline, CTAs. 107 frontend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-M.2",
-      "title": "Feature Highlights",
-      "story": "As a visitor, I want to see the main features, so that I understand what the product does",
-      "acceptanceCriteria": [
-        "4 feature cards in grid layout with icons",
-        "Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking",
-        "Each card: icon, title (3-4 words), 1-line description",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 201,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - 4 feature cards with colored icons (red/yellow/blue/purple), 2x2 grid, responsive. 113 frontend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-M.3",
-      "title": "Dashboard Preview",
-      "story": "As a visitor, I want to see a preview of the dashboard, so that I know what to expect",
-      "acceptanceCriteria": [
-        "Screenshot or mockup of dashboard UI",
-        "Device frame around preview (laptop or browser window)",
-        "CTA button below: Try it Free",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 202,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Browser chrome frame with colored dots and URL bar, dashboard mockup with 4 issue cards, Try it Free CTA. 116 frontend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-M.4",
-      "title": "Trust Section",
-      "story": "As a visitor, I want to know my data is secure, so that I feel confident signing up",
-      "acceptanceCriteria": [
-        "Section with security/privacy messaging",
-        "Key points: Your API keys are encrypted, Connects to YOUR servers, No data stored on our servers beyond cache",
-        "Optional: shield/lock icon",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 203,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Trust section with shield icon, 3 key security points with checkmarks. 121 frontend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-M.5",
-      "title": "Auth Page CTAs",
-      "story": "As a visitor, I want clear calls-to-action on auth pages, so that I convert easily",
-      "acceptanceCriteria": [
-        "Register page: value-focused headline above form",
-        "Login page: clear submit button and Don't have an account? link",
-        "Consistent branding (colors, fonts) with landing page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 204,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Register page: 'Get Started Free' headline, 'Create Free Account' button. Login page: clear 'Log In' button, 'Sign up' link. Consistent CSS variables with landing page. 126 frontend tests pass, typecheck clean."
-    },
-    {
-      "id": "US-13.1",
-      "title": "Fix Title Extraction in Jellyseerr Sync",
-      "story": "As a media server owner, I want to see the titles of unavailable requests, so that I know what content is pending",
-      "acceptanceCriteria": [
-        "Titles display correctly for all unavailable requests",
-        "No separate API calls made for title fetching (use embedded data)",
-        "Title fallback chain: title → name → originalTitle → originalName → tmdbId",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 300,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Removed fetch_media_title() API calls. New extract_title_from_request() uses embedded data with full fallback chain. 10 new unit tests. 201 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-13.2",
-      "title": "Fix Frontend Request Item Display",
-      "story": "As a media server owner, I want to see request details including who requested it, so that I can manage requests effectively",
-      "acceptanceCriteria": [
-        "Request items display title correctly (use title field, not name)",
-        "Requested By column shows requester name",
-        "Missing seasons shown for TV requests",
-        "Request date shown (replaces Watched column for requests)",
-        "Size column hidden for requests (they have no size)",
-        "TMDB link works for requests",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 301,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Unified request/content response format. Backend converts requests to ContentIssueItem. Frontend shows: title, 'by {requester}', missing seasons (S1, S2...), request date (e.g. '3mo ago'), dash for size, TMDB link. 201 backend + 126 frontend tests pass."
-    },
-    {
-      "id": "US-13.3",
-      "title": "Add Release Date Column to Requests",
-      "story": "As a media server owner, I want to see the release date of unavailable requests, so that I know when the content will become available",
-      "acceptanceCriteria": [
-        "Release Date column displays in requests table",
-        "Date extracted from Jellyseerr response (media.releaseDate for movies, media.firstAirDate for TV)",
-        "Date stored in CachedJellyseerrRequest table during sync",
-        "Frontend displays date in readable format",
-        "Future release dates highlighted visually (e.g., different color or badge)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 302,
-      "passes": true,
-      "notes": "Completed 2026-01-14"
-    },
-    {
-      "id": "US-13.4",
-      "title": "Add Jellyseerr Request Whitelist (Backend)",
-      "story": "As a media server owner, I want to hide specific requests for a duration, so that I don't see requests I'm intentionally waiting on",
-      "acceptanceCriteria": [
-        "New database table jellyseerr_request_whitelist with expiration support",
-        "API endpoints: POST/GET/DELETE /api/whitelist/requests",
-        "Whitelisted requests excluded from unavailable list",
-        "Expired whitelist entries no longer filter requests",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 303,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - JellyseerrRequestWhitelist table, API endpoints, expiration logic. 10 new tests. 222 backend tests pass, mypy clean."
-    },
-    {
-      "id": "US-13.5",
-      "title": "Add Request Whitelist UI",
-      "story": "As a media server owner, I want to click a button to hide a request, so that I can manage my request list from the UI",
-      "acceptanceCriteria": [
-        "Hide button appears on each request item (eye-slash icon)",
-        "Duration picker opens (same as content: permanent, 3/6/12 months, custom)",
-        "Hidden request removed from list after confirmation",
-        "Loading state shown during API call",
+        "\"Delete\" button appears on content items in Issues view",
+        "Button disabled/greyed if Radarr/Sonarr not configured",
+        "Tooltip explains why disabled when not configured",
+        "Confirmation modal with 2 checkboxes: Delete from Radarr/Sonarr (default checked), Delete from Jellyseerr (default checked)",
+        "Loading state during deletion",
         "Toast notification on success/error",
+        "Item removed from list after successful deletion",
+        "For Movies: calls Radarr delete",
+        "For Series: calls Sonarr delete",
+        "If request exists: optionally deletes from Jellyseerr",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 304,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Hide button with eye-slash icon on REQUEST badges, duration picker modal, Hidden Requests tab on whitelist page. 220 backend tests pass, 138 frontend tests pass, 17 integration tests pass."
-    },
-    {
-      "id": "US-13.6",
-      "title": "Setting to Include/Exclude Unreleased Requests",
-      "story": "As a media server owner, I want to toggle whether unreleased content requests are shown, so that I can focus on requests that should already be available",
-      "acceptanceCriteria": [
-        "New boolean setting show_unreleased_requests in UserSettings (default: false)",
-        "Settings page shows toggle for Show unreleased requests",
-        "When false, requests with future release dates are hidden",
-        "When true, all requests are shown (with release date visible)",
-        "Setting persists in database",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 305,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Toggle switch in Display section of Settings page. 246 backend tests pass (7 new display tests), 146 frontend tests pass (8 new display tests), 17 integration tests pass."
-    },
-    {
-      "id": "US-14.1",
-      "title": "In-App FAQ Help Page",
-      "story": "As a user, I want an in-app help page with FAQs, so that I can understand how to use all features without external documentation",
-      "acceptanceCriteria": [
-        "New route /help accessible from navigation header",
-        "FAQ sections covering: Getting Started, Dashboard, Issues, Whitelists, Settings",
-        "Collapsible FAQ items (click question to reveal answer)",
-        "Search/filter functionality to find specific topics",
-        "Help link added to navigation header (question mark icon)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 400,
-      "passes": true,
-      "notes": "Completed 2026-01-14 - Help page with 5 FAQ sections (18 FAQs total), collapsible items, search filter, Help link in sidebar. 176 frontend tests pass (30 new help tests)."
+      "priority": 30,
+      "passes": false,
+      "notes": "Depends on US-15.4, US-15.5, US-15.6. File: frontend/src/routes/issues/+page.svelte"
     }
   ]
 }
