@@ -3402,6 +3402,67 @@ class TestUnavailableRequests:
         # Requests now use unified format with 'name' instead of 'title'
         assert data["items"][0]["name"] == "Old Release Movie"
 
+    @pytest.mark.asyncio
+    async def test_tv_request_includes_sonarr_title_slug(
+        self, client: TestClient
+    ) -> None:
+        """TV requests should include sonarr_title_slug when Sonarr is configured."""
+        from unittest.mock import patch, AsyncMock
+
+        token = self._get_auth_token(client, "sonarr-slug@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest, UserSettings
+        from app.services.encryption import encrypt_value
+        from datetime import datetime, timedelta
+
+        past_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Configure Sonarr settings for the user
+            settings = UserSettings(
+                user_id=user_id,
+                sonarr_server_url="http://sonarr:8989",
+                sonarr_api_key_encrypted=encrypt_value("test-sonarr-key"),
+            )
+            session.add(settings)
+
+            # TV request
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=8001,
+                tmdb_id=44444,
+                media_type="tv",
+                status=1,  # Pending
+                title="Fallout",
+                requested_by="TestUser",
+                raw_data={
+                    "media": {"title": "Fallout", "firstAirDate": past_date},
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        # Mock the Sonarr API to return a titleSlug map
+        mock_slug_map = {44444: "fallout"}
+        with patch(
+            "app.routers.content.get_sonarr_tmdb_to_slug_map",
+            new_callable=AsyncMock,
+            return_value=mock_slug_map,
+        ):
+            response = client.get("/api/content/issues?filter=requests", headers=headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["name"] == "Fallout"
+        assert item["media_type"] == "tv"
+        assert item["sonarr_title_slug"] == "fallout"
+
 
 class TestProviderIds:
     """Test TMDB/IMDB provider ID extraction (US-9.4)."""

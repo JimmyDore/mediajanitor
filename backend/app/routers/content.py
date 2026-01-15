@@ -35,6 +35,7 @@ from app.services.radarr import (
 from app.services.sonarr import (
     delete_series_by_tmdb_id,
     get_decrypted_sonarr_api_key,
+    get_sonarr_tmdb_to_slug_map,
 )
 
 
@@ -106,28 +107,45 @@ async def get_issues(
     # Requests filter converts to unified format
     if filter == "requests":
         request_items = await get_unavailable_requests(db, current_user.id)
+
+        # Build Sonarr TMDB -> titleSlug map for TV show requests
+        sonarr_slug_map: dict[int, str] = {}
+        if settings and settings.sonarr_server_url and settings.sonarr_api_key_encrypted:
+            sonarr_api_key = get_decrypted_sonarr_api_key(settings)
+            if sonarr_api_key:
+                sonarr_slug_map = await get_sonarr_tmdb_to_slug_map(
+                    settings.sonarr_server_url, sonarr_api_key
+                )
+
         # Convert request items to ContentIssueItem format
-        unified_items = [
-            ContentIssueItem(
-                jellyfin_id=f"request-{req.jellyseerr_id}",  # Use jellyseerr_id with prefix
-                name=req.title,
-                media_type=req.media_type,
-                production_year=None,  # Requests don't have production year
-                size_bytes=None,  # Requests don't have size
-                size_formatted="",
-                last_played_date=None,  # Requests don't have watched date
-                path=None,
-                issues=req.issues,
-                tmdb_id=str(req.tmdb_id) if req.tmdb_id else None,
-                jellyseerr_request_id=req.jellyseerr_id,  # Request items have their own ID
-                # Request-specific fields
-                requested_by=req.requested_by,
-                request_date=req.request_date,
-                missing_seasons=req.missing_seasons,
-                release_date=req.release_date,
+        unified_items = []
+        for req in request_items:
+            # Look up Sonarr titleSlug for TV requests
+            sonarr_title_slug = None
+            if req.media_type == "tv" and req.tmdb_id:
+                sonarr_title_slug = sonarr_slug_map.get(req.tmdb_id)
+
+            unified_items.append(
+                ContentIssueItem(
+                    jellyfin_id=f"request-{req.jellyseerr_id}",  # Use jellyseerr_id with prefix
+                    name=req.title,
+                    media_type=req.media_type,
+                    production_year=None,  # Requests don't have production year
+                    size_bytes=None,  # Requests don't have size
+                    size_formatted="",
+                    last_played_date=None,  # Requests don't have watched date
+                    path=None,
+                    issues=req.issues,
+                    tmdb_id=str(req.tmdb_id) if req.tmdb_id else None,
+                    jellyseerr_request_id=req.jellyseerr_id,  # Request items have their own ID
+                    sonarr_title_slug=sonarr_title_slug,  # Sonarr link for TV shows
+                    # Request-specific fields
+                    requested_by=req.requested_by,
+                    request_date=req.request_date,
+                    missing_seasons=req.missing_seasons,
+                    release_date=req.release_date,
+                )
             )
-            for req in request_items
-        ]
         return ContentIssuesResponse(
             items=unified_items,
             total_count=len(unified_items),

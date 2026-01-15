@@ -1,4 +1,3 @@
-- Sonarr link not present on request
 - Delete : Not working at all, only the content is deleted, not the request
 - Watched: Never => Not fixed 
 - Jellyseer connection validation not sure if it's working

@@ -9,6 +9,18 @@ description: Investigate and fix bugs from error messages, test failures, or bug
 
 Systematically investigate and fix bugs in the codebase. Handles error messages, test failures, and bug descriptions. Automatically determines whether to fix directly or suggest based on context.
 
+## Definition of Done
+
+**A fix is NOT complete until ALL of these are true:**
+
+1. Root cause identified and explained to user
+2. Code change implemented
+3. Existing tests pass
+4. **Regression test added** (prevents bug from returning)
+5. Fix verified (curl/browser/Docker as appropriate)
+
+**The regression test is MANDATORY, not optional.** Without it, the same bug can reappear later.
+
 ## When to Use
 
 Invoke with `/fix <description>` when:
