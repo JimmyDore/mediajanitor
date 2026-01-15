@@ -24,6 +24,7 @@ class UserThresholds:
     old_content_months: int
     min_age_months: int
     large_movie_size_gb: int
+    large_season_size_gb: int
 
 
 from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist, UserSettings
@@ -49,6 +50,7 @@ from app.models.content import (
 OLD_CONTENT_MONTHS_CUTOFF = 4  # Content not watched in 4+ months
 MIN_AGE_MONTHS = 3  # Don't flag content added recently
 LARGE_MOVIE_SIZE_THRESHOLD_GB = 13  # Movies larger than 13GB
+LARGE_SEASON_SIZE_THRESHOLD_GB = 15  # Series if any season exceeds this size
 
 # Unavailable requests configuration (from original script)
 FILTER_FUTURE_RELEASES = True  # Filter out content not yet released
@@ -82,6 +84,11 @@ async def get_user_thresholds(db: AsyncSession, user_id: int) -> UserThresholds:
             settings.large_movie_size_gb
             if settings and settings.large_movie_size_gb is not None
             else LARGE_MOVIE_SIZE_THRESHOLD_GB
+        ),
+        large_season_size_gb=(
+            settings.large_season_size_gb
+            if settings and settings.large_season_size_gb is not None
+            else LARGE_SEASON_SIZE_THRESHOLD_GB
         ),
     )
 
@@ -615,6 +622,32 @@ def is_large_movie(
     return item.size_bytes >= threshold_bytes
 
 
+def is_large_series(
+    item: CachedMediaItem,
+    threshold_gb: int = LARGE_SEASON_SIZE_THRESHOLD_GB,
+) -> bool:
+    """Check if an item is a large series (based on largest season size).
+
+    Args:
+        item: The media item to check
+        threshold_gb: Size threshold in GB (default: 15)
+
+    Returns True if:
+    - Item is a Series (not Movie)
+    - largest_season_size_bytes meets or exceeds threshold_gb
+
+    Note: Uses >= to match is_large_movie() behavior.
+    """
+    if item.media_type != "Series":
+        return False
+
+    if item.largest_season_size_bytes is None:
+        return False
+
+    threshold_bytes = threshold_gb * 1024 * 1024 * 1024
+    return item.largest_season_size_bytes >= threshold_bytes
+
+
 # Language code variants recognized by the system
 ENGLISH_CODES = {"eng", "en", "english"}
 FRENCH_CODES = {"fre", "fr", "french", "fra"}
@@ -773,13 +806,15 @@ async def get_content_summary(
 
     old_content_size = sum(item.size_bytes or 0 for item in old_content_items)
 
-    # Calculate large movies
-    large_movies_items: list[CachedMediaItem] = []
+    # Calculate large content (movies + series)
+    large_content_items: list[CachedMediaItem] = []
     for item in all_items:
         if is_large_movie(item, threshold_gb=thresholds.large_movie_size_gb):
-            large_movies_items.append(item)
+            large_content_items.append(item)
+        elif is_large_series(item, threshold_gb=thresholds.large_season_size_gb):
+            large_content_items.append(item)
 
-    large_movies_size = sum(item.size_bytes or 0 for item in large_movies_items)
+    large_content_size = sum(item.size_bytes or 0 for item in large_content_items)
 
     # Get french-only whitelist for language checks
     french_only_ids = await get_french_only_ids(db, user_id)
@@ -809,9 +844,9 @@ async def get_content_summary(
             total_size_formatted=format_size(old_content_size) if old_content_size > 0 else "0 B",
         ),
         large_movies=IssueCategorySummary(
-            count=len(large_movies_items),
-            total_size_bytes=large_movies_size,
-            total_size_formatted=format_size(large_movies_size) if large_movies_size > 0 else "0 B",
+            count=len(large_content_items),
+            total_size_bytes=large_content_size,
+            total_size_formatted=format_size(large_content_size) if large_content_size > 0 else "0 B",
         ),
         language_issues=IssueCategorySummary(
             count=len(language_issues_items),
@@ -1066,7 +1101,8 @@ def get_item_issues(
     # Use defaults if thresholds not provided
     old_months = thresholds.old_content_months if thresholds else OLD_CONTENT_MONTHS_CUTOFF
     min_age = thresholds.min_age_months if thresholds else MIN_AGE_MONTHS
-    large_size = thresholds.large_movie_size_gb if thresholds else LARGE_MOVIE_SIZE_THRESHOLD_GB
+    large_movie_size = thresholds.large_movie_size_gb if thresholds else LARGE_MOVIE_SIZE_THRESHOLD_GB
+    large_season_size = thresholds.large_season_size_gb if thresholds else LARGE_SEASON_SIZE_THRESHOLD_GB
 
     # Check for old/unwatched (exclude whitelisted)
     if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(
@@ -1074,8 +1110,10 @@ def get_item_issues(
     ):
         issues.append("old")
 
-    # Check for large movie
-    if is_large_movie(item, threshold_gb=large_size):
+    # Check for large content (movie or series)
+    if is_large_movie(item, threshold_gb=large_movie_size):
+        issues.append("large")
+    elif is_large_series(item, threshold_gb=large_season_size):
         issues.append("large")
 
     # Check for language issues (skip if language-exempt, respect french-only whitelist)
@@ -1208,6 +1246,10 @@ async def get_content_issues(
             except (ValueError, TypeError):
                 pass
 
+        # Calculate largest_season_size fields for series
+        largest_season_size_bytes = item.largest_season_size_bytes if item.media_type == "Series" else None
+        largest_season_size_formatted = format_size(largest_season_size_bytes) if largest_season_size_bytes else None
+
         response_items.append(
             ContentIssueItem(
                 jellyfin_id=item.jellyfin_id,
@@ -1226,6 +1268,8 @@ async def get_content_issues(
                 imdb_id=imdb_id,
                 sonarr_title_slug=sonarr_title_slug,
                 jellyseerr_request_id=jellyseerr_request_id,
+                largest_season_size_bytes=largest_season_size_bytes,
+                largest_season_size_formatted=largest_season_size_formatted,
             )
         )
 

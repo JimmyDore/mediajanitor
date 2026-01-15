@@ -4979,3 +4979,353 @@ class TestRecentlyAvailableDisplayName:
 
         assert items_by_title["Charlie Movie"]["display_name"] == "charlie"
         assert items_by_title["Charlie Movie"]["requested_by"] == "charlie"
+
+
+class TestLargeSeriesDetection:
+    """Test is_large_series() function and large content detection (US-20.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "large-series@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_is_large_series_returns_true_when_above_threshold(
+        self, client: TestClient
+    ) -> None:
+        """is_large_series() should return True when largest_season_size_bytes >= threshold."""
+        from app.services.content import is_large_series
+
+        item = CachedMediaItem(
+            user_id=1,
+            jellyfin_id="series-large-1",
+            name="Large Series",
+            media_type="Series",
+            size_bytes=50_000_000_000,  # 50GB total
+            largest_season_size_bytes=20_000_000_000,  # 20GB largest season
+        )
+
+        # Default threshold is 15GB
+        assert is_large_series(item, threshold_gb=15) is True
+
+    @pytest.mark.asyncio
+    async def test_is_large_series_returns_false_when_below_threshold(
+        self, client: TestClient
+    ) -> None:
+        """is_large_series() should return False when largest_season_size_bytes < threshold."""
+        from app.services.content import is_large_series
+
+        item = CachedMediaItem(
+            user_id=1,
+            jellyfin_id="series-small-1",
+            name="Small Series",
+            media_type="Series",
+            size_bytes=30_000_000_000,  # 30GB total
+            largest_season_size_bytes=10_000_000_000,  # 10GB largest season
+        )
+
+        # Default threshold is 15GB
+        assert is_large_series(item, threshold_gb=15) is False
+
+    @pytest.mark.asyncio
+    async def test_is_large_series_returns_false_for_movies(
+        self, client: TestClient
+    ) -> None:
+        """is_large_series() should return False for movies."""
+        from app.services.content import is_large_series
+
+        item = CachedMediaItem(
+            user_id=1,
+            jellyfin_id="movie-1",
+            name="Movie",
+            media_type="Movie",
+            size_bytes=20_000_000_000,  # 20GB
+            largest_season_size_bytes=None,
+        )
+
+        assert is_large_series(item, threshold_gb=15) is False
+
+    @pytest.mark.asyncio
+    async def test_is_large_series_returns_false_when_no_season_size(
+        self, client: TestClient
+    ) -> None:
+        """is_large_series() should return False when largest_season_size_bytes is None."""
+        from app.services.content import is_large_series
+
+        item = CachedMediaItem(
+            user_id=1,
+            jellyfin_id="series-no-size-1",
+            name="Series Without Size",
+            media_type="Series",
+            size_bytes=50_000_000_000,  # 50GB total
+            largest_season_size_bytes=None,  # Not calculated yet
+        )
+
+        assert is_large_series(item, threshold_gb=15) is False
+
+    @pytest.mark.asyncio
+    async def test_is_large_series_includes_exactly_threshold(
+        self, client: TestClient
+    ) -> None:
+        """Series exactly at threshold should be counted (>= not >)."""
+        from app.services.content import is_large_series
+
+        threshold_bytes = 15 * 1024 * 1024 * 1024  # Exactly 15GB
+
+        item = CachedMediaItem(
+            user_id=1,
+            jellyfin_id="series-exact-1",
+            name="Series Exactly At Threshold",
+            media_type="Series",
+            size_bytes=50_000_000_000,
+            largest_season_size_bytes=threshold_bytes,  # Exactly at threshold
+        )
+
+        assert is_large_series(item, threshold_gb=15) is True
+
+    @pytest.mark.asyncio
+    async def test_content_summary_includes_large_series_in_count(
+        self, client: TestClient
+    ) -> None:
+        """Content summary should count both large movies AND large series."""
+        token = self._get_auth_token(client, "large-summary@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Large movie (20GB > 13GB threshold)
+            movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large",
+                name="Large Movie",
+                media_type="Movie",
+                size_bytes=20_000_000_000,  # 20GB
+                played=True,
+            )
+            # Large series (18GB largest season > 15GB threshold)
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-large",
+                name="Large Series",
+                media_type="Series",
+                size_bytes=60_000_000_000,  # 60GB total
+                largest_season_size_bytes=18_000_000_000,  # 18GB largest season
+                played=True,
+            )
+            # Small series (10GB largest season < 15GB threshold)
+            small_series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-small",
+                name="Small Series",
+                media_type="Series",
+                size_bytes=30_000_000_000,  # 30GB total
+                largest_season_size_bytes=10_000_000_000,  # 10GB largest season
+                played=True,
+            )
+            session.add_all([movie, series, small_series])
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should count both large movie (1) and large series (1) = 2 total
+        assert data["large_movies"]["count"] == 2
+        # Total size should include both
+        assert data["large_movies"]["total_size_bytes"] == 80_000_000_000  # 20GB + 60GB
+
+    @pytest.mark.asyncio
+    async def test_content_issues_filter_large_returns_movies_and_series(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/content/issues?filter=large should return both large movies and series."""
+        token = self._get_auth_token(client, "large-issues@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Large movie
+            movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-large-issues",
+                name="Large Movie",
+                media_type="Movie",
+                size_bytes=20_000_000_000,  # 20GB > 13GB threshold
+                played=True,
+            )
+            # Large series
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-large-issues",
+                name="Large Series",
+                media_type="Series",
+                size_bytes=60_000_000_000,  # 60GB total
+                largest_season_size_bytes=18_000_000_000,  # 18GB > 15GB threshold
+                played=True,
+            )
+            session.add_all([movie, series])
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return both large movie and large series
+        assert data["total_count"] == 2
+        names = [item["name"] for item in data["items"]]
+        assert "Large Movie" in names
+        assert "Large Series" in names
+
+    @pytest.mark.asyncio
+    async def test_content_issues_large_series_has_correct_fields(
+        self, client: TestClient
+    ) -> None:
+        """Large series in issues response should have largest_season_size fields."""
+        token = self._get_auth_token(client, "large-fields@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-fields-test",
+                name="Series With Fields",
+                media_type="Series",
+                size_bytes=60_000_000_000,  # 60GB total
+                largest_season_size_bytes=18_500_000_000,  # 18.5GB largest season
+                played=True,
+            )
+            session.add(series)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["name"] == "Series With Fields"
+        assert item["largest_season_size_bytes"] == 18_500_000_000
+        assert item["largest_season_size_formatted"] == "17.2 GB"  # 18.5GB in formatted string
+
+    @pytest.mark.asyncio
+    async def test_content_issues_movie_has_null_largest_season_size(
+        self, client: TestClient
+    ) -> None:
+        """Movies in issues response should have null largest_season_size fields."""
+        token = self._get_auth_token(client, "movie-null-season@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-null-test",
+                name="Movie Null Test",
+                media_type="Movie",
+                size_bytes=20_000_000_000,  # 20GB > 13GB threshold
+                played=True,
+            )
+            session.add(movie)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["name"] == "Movie Null Test"
+        assert item["largest_season_size_bytes"] is None
+        assert item["largest_season_size_formatted"] is None
+
+    @pytest.mark.asyncio
+    async def test_large_series_uses_user_threshold_setting(
+        self, client: TestClient
+    ) -> None:
+        """Large series detection should use user's large_season_size_gb setting."""
+        from app.database import UserSettings
+
+        token = self._get_auth_token(client, "large-setting@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Set user's threshold to 20GB
+            settings = UserSettings(
+                user_id=user_id,
+                large_season_size_gb=20,
+            )
+            session.add(settings)
+
+            # Series with 18GB largest season (below 20GB threshold, above default 15GB)
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-threshold-test",
+                name="Series Threshold Test",
+                media_type="Series",
+                size_bytes=60_000_000_000,
+                largest_season_size_bytes=18_000_000_000,  # 18GB < 20GB user threshold
+                played=True,
+            )
+            session.add(series)
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should NOT count because 18GB < 20GB user threshold
+        assert data["large_movies"]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_large_series_issues_badge_is_large(
+        self, client: TestClient
+    ) -> None:
+        """Large series should have 'large' in issues list."""
+        token = self._get_auth_token(client, "large-badge@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-badge-test",
+                name="Series Badge Test",
+                media_type="Series",
+                size_bytes=60_000_000_000,
+                largest_season_size_bytes=18_000_000_000,  # 18GB > 15GB default
+                played=True,
+            )
+            session.add(series)
+            await session.commit()
+
+        response = client.get("/api/content/issues", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Find the series item
+        series_item = next(
+            (item for item in data["items"] if item["name"] == "Series Badge Test"), None
+        )
+        assert series_item is not None
+        assert "large" in series_item["issues"]

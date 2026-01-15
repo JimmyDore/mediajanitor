@@ -412,8 +412,8 @@
         "Test: large series appears in issues, large movie still appears"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented is_large_series() function, updated UserThresholds to include large_season_size_gb, modified get_content_summary() and get_content_issues() to detect large series, added largest_season_size_bytes and largest_season_size_formatted fields to ContentIssueItem model"
     },
     {
       "id": "US-20.4",

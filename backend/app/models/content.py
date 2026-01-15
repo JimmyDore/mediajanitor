@@ -142,6 +142,9 @@ class ContentIssueItem(BaseModel):
     imdb_id: str | None = None  # IMDB ID for external links
     sonarr_title_slug: str | None = None  # Sonarr titleSlug for external links (e.g., "arcane")
     jellyseerr_request_id: int | None = None  # Matching Jellyseerr request ID (for reconciliation)
+    # Series-specific fields for large content detection
+    largest_season_size_bytes: int | None = None  # For series only - largest season size
+    largest_season_size_formatted: str | None = None  # Formatted version (e.g., "18.5 GB")
     # Request-specific fields (only populated for items with "request" issue)
     requested_by: str | None = None  # Who requested it
     request_date: str | None = None  # When it was requested
