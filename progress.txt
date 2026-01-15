@@ -542,10 +542,126 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-20.4] add large content filtering UI
 
+### 2026-01-15: US-21.1 - Slack Notification Service
+- Created app/services/slack.py with async send_slack_message() function:
+  - Accepts webhook_url (string) and message (dict, Slack Block Kit format)
+  - Uses httpx.AsyncClient for async, non-blocking HTTP calls
+  - Returns True on success (HTTP 200), False otherwise
+- Graceful error handling:
+  - Catches httpx.RequestError, httpx.TimeoutException, and unexpected exceptions
+  - Logs warnings for all error cases (doesn't crash app)
+  - Never raises exceptions - safe for fire-and-forget usage
+- Added config settings for Slack webhooks:
+  - slack_webhook_new_users: str = "" (optional, empty default)
+  - slack_webhook_sync_failures: str = "" (optional, empty default)
+  - Empty string is falsy, so callers can check `if settings.slack_webhook_*:`
+- 11 unit tests covering:
+  - Successful message sending (2 tests)
+  - HTTP error handling with logging (1 test)
+  - Network error handling (1 test)
+  - Timeout handling (1 test)
+  - Async non-blocking verification (1 test)
+  - Block Kit format support (1 test)
+  - Graceful error handling (1 test)
+  - Config defaults (3 tests)
+- 382 backend tests pass (+11 new), 21 integration tests pass, mypy clean
+- Files changed: app/services/slack.py, app/config.py, tests/test_slack.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.1] add Slack notification service
+
+### 2026-01-16: US-21.2 - New User Signup Notifications
+- Implemented send_signup_notification() function in auth router:
+  - Creates Slack Block Kit formatted message with header and fields
+  - Includes user email, user ID, signup timestamp (UTC), and total user count
+  - Uses fallback text for basic Slack clients
+- Added get_total_user_count() helper to count registered users
+- Updated register endpoint to trigger notification via BackgroundTasks:
+  - Fire-and-forget pattern: notification failures don't block registration
+  - Exception handling wraps add_task() to ensure robustness
+- Notification silently skipped when slack_webhook_new_users not configured
+- 5 new tests in TestNewUserSignupNotifications:
+  - test_signup_sends_slack_notification (verifies args passed correctly)
+  - test_signup_notification_includes_total_user_count
+  - test_signup_notification_is_fire_and_forget
+  - test_signup_without_webhook_configured
+  - test_signup_notification_uses_block_kit_format
+- 387 backend tests pass (+5 new), 21 integration tests pass, mypy clean
+- Files changed: app/routers/auth.py, tests/test_auth.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.2] add new user signup notifications
+
+### 2026-01-16: US-21.3 - Sync Failure Notifications
+- Implemented send_sync_failure_notification() function in sync service:
+  - Creates Slack Block Kit formatted message with header and fields
+  - Includes user email, service name (Jellyfin/Jellyseerr), error message, timestamp
+  - Uses fallback text for basic Slack clients
+  - Truncates error message to 200 chars for readability
+- Updated run_user_sync() to send notifications on failure:
+  - Jellyfin sync failure triggers notification with service="Jellyfin"
+  - Jellyseerr sync failure triggers notification with service="Jellyseerr"
+  - Fire-and-forget pattern: notification failures don't affect sync error handling
+- Added Celery sync failure notification support:
+  - send_sync_failure_notification_for_celery() synchronous wrapper
+  - _get_user_email() async helper to fetch user email by ID
+  - sync_user task calls notification on exception
+- Notification silently skipped when slack_webhook_sync_failures not configured
+- 6 new tests in TestSyncFailureNotifications:
+  - test_jellyfin_sync_failure_sends_notification
+  - test_jellyseerr_sync_failure_sends_notification
+  - test_sync_failure_notification_is_fire_and_forget
+  - test_sync_failure_notification_without_webhook_configured
+  - test_sync_failure_notification_uses_block_kit_format
+  - test_celery_sync_user_failure_sends_notification
+- 393 backend tests pass (+6 new), 21 integration tests pass, mypy clean
+- Files changed: app/services/sync.py, app/tasks.py, tests/test_sync.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.3] add sync failure notifications
+
+### 2026-01-16: US-22.1 - Library API Endpoint
+- Created GET /api/library endpoint with comprehensive filtering and sorting
+- Query parameters supported:
+  - type: movie, series, or all (default)
+  - search: case-insensitive name search
+  - watched: true, false, or all (default)
+  - sort: name (default), year, size, date_added, last_watched
+  - order: asc (default), desc
+  - min_year, max_year: production year range filter
+  - min_size_gb, max_size_gb: size range filter
+- Created LibraryItem Pydantic model with fields:
+  - jellyfin_id, name, media_type, production_year, size_bytes, size_formatted
+  - played, last_played_date, date_created, tmdb_id
+- Created LibraryResponse model with items[], total_count, total_size_bytes, total_size_formatted, service_urls
+- Implemented get_library() service function in content.py
+- Created app/routers/library.py with endpoint registration
+- 20 unit tests in test_library.py covering all acceptance criteria
+- 4 integration tests in test_integration.py for Docker verification
+- 413 backend tests pass (+20 new), 25 integration tests pass (+4 new), mypy clean
+- Files changed: app/main.py, app/models/content.py, app/services/content.py, app/routers/library.py (new), tests/test_library.py (new), tests/test_integration.py, prd.json
+- Commits:
+  - feat(api): [US-22.1] add library API endpoint
+
+### 2026-01-16: US-22.2 - Library Page with Sub-tabs
+- Created /library route with SvelteKit page component
+- Added Library menu item to sidebar between Issues and Whitelist with book icon
+- Implemented sub-tabs: All, Movies, Series for filtering by media type
+- Table displays: Name, Year, Size, Added, Last Watched columns
+- External service links: JF (Jellyfin) and TMDB badges for each item
+- Server-side sorting: clicking column headers sends sort/order params to API
+- Loading spinner displayed while fetching data
+- Empty state with link to Settings when library is empty
+- "Never" displayed in yellow for unwatched content
+- 12 new unit tests in library.test.ts for API integration
+- 352 frontend tests pass (+12 new), typecheck clean
+- 25 integration tests pass
+- Verified in browser: all tabs work, sorting works, links work
+- Files changed: frontend/src/routes/library/+page.svelte (new), frontend/tests/library.test.ts (new), frontend/src/lib/components/Sidebar.svelte, prd.json
+- Commits:
+  - feat(ui): [US-22.2] add Library page with sub-tabs
+
 ## Current Status
 
-**Phase**: Epic 20 - Large Content Analysis (Complete)
-**Total Stories**: 41 stories (27 passes: true, 14 remaining)
+**Phase**: Epic 22 - Library Browser (In Progress)
+**Total Stories**: 41 stories (32 passes: true, 9 remaining)
 
 ## Notes
 

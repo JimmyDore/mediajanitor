@@ -533,8 +533,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 71,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /library route with sub-tabs (All/Movies/Series), table with Name/Year/Size/Added/Last Watched columns, JF and TMDB external links, server-side sorting, loading and empty states. Added Library menu item to sidebar between Issues and Whitelist with book icon."
     },
     {
       "id": "US-22.3",
