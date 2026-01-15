@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { auth } from '$lib/stores';
 
 	let email = $state('');
@@ -9,12 +10,15 @@
 	let isLoading = $state(false);
 	let mounted = $state(false);
 
+	// Get redirect path from query params (if any)
+	let redirectPath = $derived($page.url.searchParams.get('redirect') || '/');
+
 	onMount(() => {
 		mounted = true;
-		// If already authenticated, redirect to home
+		// If already authenticated, redirect to intended destination
 		auth.subscribe((authState) => {
 			if (authState.isAuthenticated && !authState.isLoading) {
-				goto('/');
+				goto(redirectPath);
 			}
 		})();
 	});
@@ -42,9 +46,9 @@
 			// Refresh token is stored in httpOnly cookie by the server
 			auth.setToken(data.access_token, data.expires_in);
 
-			// Update auth state and redirect
+			// Update auth state and redirect to intended destination
 			await auth.checkAuth();
-			goto('/');
+			goto(redirectPath);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Login failed';
 		} finally {

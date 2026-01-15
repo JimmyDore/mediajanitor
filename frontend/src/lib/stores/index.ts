@@ -10,6 +10,17 @@ let accessToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Session expiration handler (set by layout to trigger redirect)
+let sessionExpiredHandler: ((currentPath: string) => void) | null = null;
+
+/**
+ * Register a handler to be called when session expires.
+ * The handler receives the current path for redirect purposes.
+ */
+export function onSessionExpired(handler: (currentPath: string) => void) {
+	sessionExpiredHandler = handler;
+}
+
 // Token management functions
 function getAccessToken(): string | null {
 	return accessToken;
@@ -146,10 +157,12 @@ export const auth = createAuthStore();
  * Wrapper for fetch that handles authentication and automatic token refresh.
  * Use this for all authenticated API calls.
  *
+ * When a 401 is received and token refresh fails, this triggers a session
+ * expiration which redirects the user to login with the current path preserved.
+ *
  * @param input - URL or Request object
  * @param init - Request options
  * @returns Response from the API
- * @throws Error if the request fails after token refresh attempt
  */
 export async function authenticatedFetch(
 	input: RequestInfo | URL,
@@ -182,6 +195,17 @@ export async function authenticatedFetch(
 					credentials: 'include'
 				});
 			}
+		}
+
+		// Refresh failed - session has expired
+		// Clear auth state and trigger redirect
+		const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+		clearTokens();
+		auth.setUser(null);
+
+		// Call the session expired handler to redirect with toast
+		if (sessionExpiredHandler && currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/') {
+			sessionExpiredHandler(currentPath);
 		}
 	}
 

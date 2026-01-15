@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { auth, theme } from '$lib/stores';
+	import { auth, theme, toasts, onSessionExpired } from '$lib/stores';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let { children } = $props();
@@ -14,7 +14,19 @@
 	// Check if current route is public
 	let isPublicRoute = $derived(publicRoutes.includes($page.url.pathname));
 
+	// Helper to redirect to login with optional redirect path
+	function redirectToLogin(redirectPath?: string) {
+		const loginUrl = redirectPath ? `/login?redirect=${encodeURIComponent(redirectPath)}` : '/login';
+		goto(loginUrl);
+	}
+
 	onMount(async () => {
+		// Register session expiration handler
+		onSessionExpired((currentPath) => {
+			toasts.add('Session expired, please log in again', 'error');
+			redirectToLogin(currentPath);
+		});
+
 		// Check if user is authenticated
 		const isAuthenticated = await auth.checkAuth();
 
@@ -32,7 +44,7 @@
 			auth.subscribe((authState) => {
 				if (!authState.isLoading) {
 					if (!authState.isAuthenticated && !isPublicRoute) {
-						goto('/login');
+						redirectToLogin(currentPath);
 					}
 				}
 			})();

@@ -60,8 +60,8 @@
         "Verify in browser: let session expire → automatic redirect to login"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Session expiration redirect with ?redirect param, toast message, and protected route handling were already implemented in US-32.2. Added 12 new tests for session expiration behavior."
     },
     {
       "id": "US-29.1",
