@@ -322,10 +322,40 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-17.1] add multi-user watch data aggregation
 
+### 2026-01-15: US-17.2 - Sync Progress Visibility
+- Added progress tracking fields to SyncStatus database model:
+  - current_step: "syncing_media" or "syncing_requests"
+  - total_steps: 1 or 2 (Jellyfin only, or Jellyfin + Jellyseerr)
+  - current_step_progress: current user being processed
+  - current_step_total: total users to process
+  - current_user_name: name of current Jellyfin user
+- Created Alembic migration: add_sync_progress_fields
+- Added update_sync_progress() function for updating progress during sync
+- Created fetch_jellyfin_media_with_progress() that processes users in batches:
+  - Batch size of 3 for visible progress updates
+  - Updates progress per batch with first user's name
+  - Same aggregation logic as fetch_all_users_media()
+- Updated run_user_sync() to use progress-aware function
+- Updated GET /api/sync/status to return:
+  - is_syncing: boolean flag when sync is in progress
+  - progress: object with current_step, total_steps, etc.
+- Updated frontend dashboard to poll every 2 seconds during sync:
+  - startPolling()/stopPolling() with setInterval
+  - formatProgressMessage() displays e.g. "Fetching user 3/10: John..."
+  - Progress shown in header next to "Dashboard" title
+  - onDestroy() cleanup stops polling
+- 5 new backend unit tests in TestSyncProgressTracking
+- 3 new frontend unit tests for progress API contract
+- 345 backend tests pass, 266 frontend tests pass, mypy clean, typecheck clean
+- Verified in browser: sync triggers correctly, rate limiting works
+- Files changed: database.py, routers/sync.py, services/sync.py, test_sync.py, +page.svelte, sync.test.ts, prd.json, alembic migration
+- Commits:
+  - feat(sync): [US-17.2] add sync progress visibility
+
 ## Current Status
 
 **Phase**: Epic 17 - Sync Improvements (In Progress)
-**Total Stories**: 66 stories (66 passes: true)
+**Total Stories**: 66 stories (67 passes: true)
 
 ## Notes
 
