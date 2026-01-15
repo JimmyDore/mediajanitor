@@ -11,6 +11,7 @@
 		size_bytes: number | null;
 		size_formatted: string;
 		last_played_date: string | null;
+		played: boolean | null;
 		path: string | null;
 		issues: string[];
 		language_issues: string[] | null;
@@ -333,18 +334,23 @@
 		return item.issues.includes('request');
 	}
 
-	function formatLastWatched(lastPlayed: string | null): string {
-		if (!lastPlayed) return 'Never';
-		try {
-			const date = new Date(lastPlayed);
-			const now = new Date();
-			const daysAgo = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-			if (daysAgo > 365) return `${Math.floor(daysAgo / 365)}y`;
-			if (daysAgo > 30) return `${Math.floor(daysAgo / 30)}mo`;
-			return `${daysAgo}d`;
-		} catch {
-			return '?';
+	function formatLastWatched(lastPlayed: string | null, played: boolean | null): string {
+		// If we have a date, format it
+		if (lastPlayed) {
+			try {
+				const date = new Date(lastPlayed);
+				const now = new Date();
+				const daysAgo = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+				if (daysAgo > 365) return `${Math.floor(daysAgo / 365)}y`;
+				if (daysAgo > 30) return `${Math.floor(daysAgo / 30)}mo`;
+				return `${daysAgo}d`;
+			} catch {
+				return '?';
+			}
 		}
+		// No date - check if it was played
+		if (played) return 'Watched';
+		return 'Never';
 	}
 
 	function formatRequestDate(requestDate: string | null): string {
@@ -858,11 +864,11 @@
 										{formatReleaseDate(item.release_date)}
 									</td>
 								{/if}
-								<td class="col-watched" class:never={!isRequestItem(item) && !item.last_played_date}>
+								<td class="col-watched" class:never={!isRequestItem(item) && !item.last_played_date && !item.played}>
 									{#if isRequestItem(item)}
 										{formatRequestDate(item.request_date)}
 									{:else}
-										{formatLastWatched(item.last_played_date)}
+										{formatLastWatched(item.last_played_date, item.played)}
 									{/if}
 								</td>
 								<td class="col-actions">

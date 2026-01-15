@@ -66,8 +66,8 @@
         "Verify in browser: click TMDB link on Requests tab -> correct page opens"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "Root cause: getTmdbUrl() checks item.media_type === 'Movie' but request items use lowercase 'movie'. File: frontend/src/routes/issues/+page.svelte"
+      "passes": true,
+      "notes": "Already fixed in US-13.2 commit. getTmdbUrl() now uses toLowerCase() to handle both 'Movie' and 'movie' media types. Verified: TV shows link to /tv/{id}, movies link to /movie/{id}."
     },
     {
       "id": "US-12.5",
@@ -84,8 +84,8 @@
         "Verify in browser: external links appear on items in all tabs"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Backend already extracts TMDB/IMDb IDs via extract_provider_ids(). File: frontend/src/routes/issues/+page.svelte"
+      "passes": true,
+      "notes": "Already implemented in US-9.4. Verified: Old, Language, Requests tabs all show TMDB/IMDb links. Large tab has 0 items but uses same rendering code."
     },
     {
       "id": "US-12.6",
@@ -101,8 +101,8 @@
         "Verify in browser: watched items no longer show 'Never'"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "Root cause: ContentIssueItem model missing 'played' boolean field. Files: backend/app/models/content.py, backend/app/services/content.py, frontend/src/routes/issues/+page.svelte"
+      "passes": true,
+      "notes": "Added played boolean field to ContentIssueItem model and service. Updated frontend formatLastWatched() to use both played and last_played_date."
     },
     {
       "id": "US-15.1",

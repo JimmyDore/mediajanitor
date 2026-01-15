@@ -139,6 +139,7 @@ class ContentIssueItem(BaseModel):
     size_bytes: int | None
     size_formatted: str
     last_played_date: str | None
+    played: bool | None = None  # Whether content has been watched (for accurate "Never" display)
     path: str | None
     issues: list[str]  # List of issue types: "old", "large", "language", "request"
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"

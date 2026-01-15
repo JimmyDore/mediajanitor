@@ -1123,6 +1123,7 @@ async def get_content_issues(
                 size_bytes=item.size_bytes,
                 size_formatted=format_size(item.size_bytes),
                 last_played_date=item.last_played_date,
+                played=item.played,
                 path=item.path,
                 issues=issues,
                 language_issues=language_issues_detail if language_issues_detail else None,
