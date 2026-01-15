@@ -19,6 +19,46 @@ from app.services.encryption import decrypt_value
 logger = logging.getLogger(__name__)
 
 
+async def fetch_media_details(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    tmdb_id: int,
+    media_type: str,
+) -> dict[str, Any]:
+    """
+    Fetch media details (including title) from Jellyseerr API.
+
+    Args:
+        client: httpx client to reuse connection
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+        tmdb_id: TMDB ID of the media
+        media_type: "movie" or "tv"
+
+    Returns dict with title and other media info, or empty dict on failure.
+    """
+    endpoint = "movie" if media_type == "movie" else "tv"
+
+    try:
+        response = await client.get(
+            f"{server_url}/api/v1/{endpoint}/{tmdb_id}",
+            headers={"X-Api-Key": api_key},
+            params={"language": "en"},
+        )
+        if response.status_code == 200:
+            data: dict[str, Any] = response.json()
+            return data
+        else:
+            logger.warning(
+                f"Failed to fetch {media_type} details for TMDB {tmdb_id}: {response.status_code}"
+            )
+            return {}
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Error fetching {media_type} details for TMDB {tmdb_id}: {e}")
+        return {}
+
+
 async def fetch_jellyfin_media(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
@@ -139,8 +179,9 @@ async def fetch_jellyseerr_requests(
 
     Based on original_script.py:fetch_jellyseer_requests
 
-    Titles are extracted from embedded data in the response using
-    the fallback chain: title → name → originalTitle → originalName → tmdbId
+    The /api/v1/request endpoint does not include titles in the media object,
+    so we make additional calls to /api/v1/movie/{tmdbId} or /api/v1/tv/{tmdbId}
+    to fetch the actual titles. Results are cached to avoid duplicate calls.
     """
     server_url = server_url.rstrip("/")
 
@@ -179,6 +220,40 @@ async def fetch_jellyseerr_requests(
                     break
 
             logger.info(f"Fetched {len(all_requests)} requests from Jellyseerr")
+
+            # Enrich requests with titles from media detail endpoints
+            # Use a cache to avoid duplicate lookups for the same TMDB ID
+            title_cache: dict[tuple[str, int], dict[str, Any]] = {}
+
+            for req in all_requests:
+                media = req.get("media", {})
+                tmdb_id = media.get("tmdbId")
+                media_type = media.get("mediaType", "")
+
+                if not tmdb_id or not media_type:
+                    continue
+
+                cache_key = (media_type, tmdb_id)
+                if cache_key not in title_cache:
+                    details = await fetch_media_details(
+                        client, server_url, api_key, tmdb_id, media_type
+                    )
+                    title_cache[cache_key] = details
+
+                # Merge title info into the media object
+                details = title_cache[cache_key]
+                if details:
+                    # Movies have 'title', TV shows have 'name'
+                    if media_type == "movie":
+                        media["title"] = details.get("title")
+                        media["originalTitle"] = details.get("originalTitle")
+                        media["releaseDate"] = details.get("releaseDate")
+                    else:  # tv
+                        media["name"] = details.get("name")
+                        media["originalName"] = details.get("originalName")
+                        media["firstAirDate"] = details.get("firstAirDate")
+
+            logger.info(f"Enriched {len(title_cache)} unique media items with titles")
             return all_requests
 
     except httpx.HTTPStatusError as e:
