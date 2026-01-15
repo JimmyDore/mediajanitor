@@ -53,6 +53,7 @@ class UserSettings(Base):
     # Display preferences
     show_unreleased_requests: Mapped[bool] = mapped_column(Boolean, default=False)
     theme_preference: Mapped[str] = mapped_column(String(10), default="system")  # light, dark, system
+    recently_available_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Default: 7
     # Radarr settings (API key is encrypted)
     radarr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     radarr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)

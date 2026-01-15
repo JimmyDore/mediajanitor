@@ -362,5 +362,60 @@ class TestIntegrationWhitelist:
             assert isinstance(data["items"], list)
 
 
+class TestIntegrationDisplaySettings:
+    """Integration tests for display settings endpoints (US-31.1)."""
+
+    @pytest.fixture
+    def auth_headers(self):
+        """Get authentication headers by logging in."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/login",
+                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+            )
+            token = response.json()["access_token"]
+            return {"Authorization": f"Bearer {token}"}
+
+    def test_get_display_settings_includes_recently_available_days(self, auth_headers):
+        """Test GET /api/settings/display returns recently_available_days."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/settings/display", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify recently_available_days is present
+            assert "recently_available_days" in data
+            assert isinstance(data["recently_available_days"], int)
+            assert 1 <= data["recently_available_days"] <= 30
+
+    def test_save_recently_available_days(self, auth_headers):
+        """Test POST /api/settings/display saves recently_available_days."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Get current value
+            response = client.get("/api/settings/display", headers=auth_headers)
+            original_value = response.json()["recently_available_days"]
+
+            # Save new value
+            new_value = 14 if original_value != 14 else 21
+            response = client.post(
+                "/api/settings/display",
+                headers=auth_headers,
+                json={"recently_available_days": new_value},
+            )
+            assert response.status_code == 200
+
+            # Verify it was saved
+            response = client.get("/api/settings/display", headers=auth_headers)
+            assert response.json()["recently_available_days"] == new_value
+
+            # Reset to original value
+            client.post(
+                "/api/settings/display",
+                headers=auth_headers,
+                json={"recently_available_days": original_value},
+            )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

@@ -48,6 +48,8 @@ from app.services.sonarr import (
 DEFAULT_OLD_CONTENT_MONTHS = 4
 DEFAULT_MIN_AGE_MONTHS = 3
 DEFAULT_LARGE_MOVIE_SIZE_GB = 13
+# Default value for display preferences
+DEFAULT_RECENTLY_AVAILABLE_DAYS = 7
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -384,6 +386,11 @@ async def get_display_preferences(
             settings.show_unreleased_requests if settings else False
         ),
         theme_preference=theme_pref,  # type: ignore[arg-type]
+        recently_available_days=(
+            settings.recently_available_days
+            if settings and settings.recently_available_days is not None
+            else DEFAULT_RECENTLY_AVAILABLE_DAYS
+        ),
     )
 
 
@@ -404,6 +411,8 @@ async def save_display_preferences(
         settings.show_unreleased_requests = prefs.show_unreleased_requests
     if prefs.theme_preference is not None:
         settings.theme_preference = prefs.theme_preference
+    if prefs.recently_available_days is not None:
+        settings.recently_available_days = prefs.recently_available_days
 
     return SettingsSaveResponse(
         success=True,

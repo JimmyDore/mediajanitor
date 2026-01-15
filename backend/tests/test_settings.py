@@ -1167,3 +1167,89 @@ class TestDisplayPreferences:
         )
         # Pydantic should reject invalid literal values
         assert response.status_code == 422
+
+    def test_get_display_preferences_recently_available_days_default(
+        self, client: TestClient
+    ) -> None:
+        """Test that default recently_available_days is 7."""
+        token = self._get_auth_token(client, "recent_days_default@example.com")
+
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["recently_available_days"] == 7
+
+    def test_save_recently_available_days_success(self, client: TestClient) -> None:
+        """Test saving recently_available_days."""
+        token = self._get_auth_token(client, "recent_days_save@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={"recently_available_days": 14},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify it's saved
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["recently_available_days"] == 14
+
+    def test_recently_available_days_validates_min(self, client: TestClient) -> None:
+        """Test that recently_available_days validates minimum of 1."""
+        token = self._get_auth_token(client, "recent_days_min@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={"recently_available_days": 0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_recently_available_days_validates_max(self, client: TestClient) -> None:
+        """Test that recently_available_days validates maximum of 30."""
+        token = self._get_auth_token(client, "recent_days_max@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={"recently_available_days": 31},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_recently_available_days_accepts_boundary_values(
+        self, client: TestClient
+    ) -> None:
+        """Test that recently_available_days accepts 1 and 30."""
+        token = self._get_auth_token(client, "recent_days_boundary@example.com")
+
+        # Test min boundary (1)
+        response = client.post(
+            "/api/settings/display",
+            json={"recently_available_days": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["recently_available_days"] == 1
+
+        # Test max boundary (30)
+        response = client.post(
+            "/api/settings/display",
+            json={"recently_available_days": 30},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["recently_available_days"] == 30

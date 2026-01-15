@@ -122,8 +122,8 @@
         "Unit tests pass"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented recently_available_days field in UserSettings, added to display preferences API, GET /api/info/recent and GET /api/content/summary now use user's setting"
     },
     {
       "id": "US-31.2",

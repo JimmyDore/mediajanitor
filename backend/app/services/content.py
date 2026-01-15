@@ -831,14 +831,36 @@ async def get_content_summary(
 
 
 # Constants for info endpoints
-RECENT_ITEMS_DAYS_BACK = 7  # Content available in past 7 days
+DEFAULT_RECENTLY_AVAILABLE_DAYS = 7  # Content available in past 7 days
+
+
+async def get_user_recently_available_days(db: AsyncSession, user_id: int) -> int:
+    """Get user's recently_available_days setting, falling back to default."""
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if settings and settings.recently_available_days is not None:
+        return settings.recently_available_days
+    return DEFAULT_RECENTLY_AVAILABLE_DAYS
 
 
 async def get_recently_available_count(
     db: AsyncSession,
     user_id: int,
+    days_back: int | None = None,
 ) -> int:
-    """Get count of recently available content for summary."""
+    """Get count of recently available content for summary.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        days_back: Number of days to look back. If None, uses user's setting.
+    """
+    if days_back is None:
+        days_back = await get_user_recently_available_days(db, user_id)
+
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
             CachedJellyseerrRequest.user_id == user_id
@@ -847,7 +869,7 @@ async def get_recently_available_count(
     all_requests = result.scalars().all()
 
     now = datetime.now(timezone.utc)
-    cutoff_date = now - timedelta(days=RECENT_ITEMS_DAYS_BACK)
+    cutoff_date = now - timedelta(days=days_back)
 
     count = 0
     for request in all_requests:
@@ -892,11 +914,20 @@ def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
 async def get_recently_available(
     db: AsyncSession,
     user_id: int,
+    days_back: int | None = None,
 ) -> RecentlyAvailableResponse:
-    """Get content that became available in the past 7 days.
+    """Get content that became available in the specified number of days.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        days_back: Number of days to look back. If None, uses user's setting.
 
     Returns items sorted by date, newest first.
     """
+    if days_back is None:
+        days_back = await get_user_recently_available_days(db, user_id)
+
     result = await db.execute(
         select(CachedJellyseerrRequest).where(
             CachedJellyseerrRequest.user_id == user_id
@@ -905,7 +936,7 @@ async def get_recently_available(
     all_requests = result.scalars().all()
 
     now = datetime.now(timezone.utc)
-    cutoff_date = now - timedelta(days=RECENT_ITEMS_DAYS_BACK)
+    cutoff_date = now - timedelta(days=days_back)
 
     recent_items: list[tuple[datetime, CachedJellyseerrRequest]] = []
 

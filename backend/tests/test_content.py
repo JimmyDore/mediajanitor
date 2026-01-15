@@ -1720,6 +1720,150 @@ class TestInfoEndpoints:
         assert data2["total_count"] == 1
         assert data2["items"][0]["title"] == "User 2 Movie"
 
+    @pytest.mark.asyncio
+    async def test_recently_available_uses_user_setting(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/info/recent should use user's recently_available_days setting."""
+        from app.database import CachedJellyseerrRequest, UserSettings
+
+        token = self._get_auth_token(client, "recent-custom-days@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Set user's recently_available_days to 14 (instead of default 7)
+            user_settings = UserSettings(
+                user_id=user_id,
+                recently_available_days=14,
+            )
+            session.add(user_settings)
+
+            # Request available 10 days ago (should appear with 14-day setting, not with 7-day default)
+            day10 = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7001,
+                tmdb_id=70001,
+                media_type="movie",
+                status=5,  # Available
+                title="10 Day Old Movie",
+                requested_by="test_user",
+                created_at_source=day10,
+                raw_data={"media": {"mediaAddedAt": day10}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should appear because user set 14 days (10 < 14)
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "10 Day Old Movie"
+
+    @pytest.mark.asyncio
+    async def test_recently_available_excludes_content_outside_user_setting(
+        self, client: TestClient
+    ) -> None:
+        """Content older than user's setting should not appear."""
+        from app.database import CachedJellyseerrRequest, UserSettings
+
+        token = self._get_auth_token(client, "recent-exclude@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Set user's recently_available_days to 5
+            user_settings = UserSettings(
+                user_id=user_id,
+                recently_available_days=5,
+            )
+            session.add(user_settings)
+
+            # Request available 6 days ago (should NOT appear with 5-day setting)
+            day6 = (datetime.now(timezone.utc) - timedelta(days=6)).isoformat()
+            # Request available 3 days ago (should appear)
+            day3 = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+
+            request_old = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7002,
+                tmdb_id=70002,
+                media_type="movie",
+                status=5,
+                title="6 Day Old Movie",
+                requested_by="test_user",
+                raw_data={"media": {"mediaAddedAt": day6}},
+            )
+            request_recent = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=7003,
+                tmdb_id=70003,
+                media_type="movie",
+                status=5,
+                title="3 Day Old Movie",
+                requested_by="test_user",
+                raw_data={"media": {"mediaAddedAt": day3}},
+            )
+            session.add_all([request_old, request_recent])
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only the 3-day old movie should appear (5 day setting)
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "3 Day Old Movie"
+
+    @pytest.mark.asyncio
+    async def test_summary_recently_available_uses_user_setting(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/content/summary recently_available count should use user's setting."""
+        from app.database import CachedJellyseerrRequest, UserSettings
+
+        token = self._get_auth_token(client, "summary-custom-days@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Set user's recently_available_days to 20
+            user_settings = UserSettings(
+                user_id=user_id,
+                recently_available_days=20,
+            )
+            session.add(user_settings)
+
+            # Request available 15 days ago (should count with 20-day setting)
+            day15 = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=8001,
+                tmdb_id=80001,
+                media_type="movie",
+                status=5,
+                title="15 Day Old Movie",
+                raw_data={"media": {"mediaAddedAt": day15}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should count because user set 20 days (15 < 20)
+        assert data["recently_available"]["count"] == 1
+
 
 class TestUnifiedIssuesEndpoint:
     """Test GET /api/content/issues endpoint (US-D.3)."""

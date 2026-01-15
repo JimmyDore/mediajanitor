@@ -99,6 +99,7 @@ class DisplayPreferencesCreate(BaseModel):
 
     show_unreleased_requests: bool | None = None
     theme_preference: ThemePreference | None = None
+    recently_available_days: int | None = Field(default=None, ge=1, le=30)
 
 
 class DisplayPreferencesResponse(BaseModel):
@@ -106,3 +107,4 @@ class DisplayPreferencesResponse(BaseModel):
 
     show_unreleased_requests: bool
     theme_preference: ThemePreference
+    recently_available_days: int
