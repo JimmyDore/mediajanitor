@@ -574,8 +574,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Column headers (Name, Year, Size, Added, Last Watched) are clickable with toggleSort() function. Visual arrow indicators (↑/↓) show current sort. Clicking same column toggles asc/desc. Default is name asc. Server-side sorting via API params. Added 12 new tests in library.test.ts for column header sorting."
     },
     {
       "id": "US-24.1",

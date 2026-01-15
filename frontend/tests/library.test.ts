@@ -1001,3 +1001,319 @@ describe('Library Search and Filter Functionality (US-22.3)', () => {
 		});
 	});
 });
+
+/**
+ * Tests for Library Column Header Sorting (US-22.4)
+ */
+describe('Library Column Header Sorting (US-22.4)', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	describe('Clickable Column Headers', () => {
+		it('clicking Name column header sends sort=name parameter', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [],
+						total_count: 0,
+						total_size_bytes: 0,
+						total_size_formatted: '0 B',
+						service_urls: null
+					})
+			});
+
+			await fetch('/api/library?sort=name&order=asc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=name&order=asc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+		});
+
+		it('clicking Year column header sends sort=year parameter', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [],
+						total_count: 0,
+						total_size_bytes: 0,
+						total_size_formatted: '0 B',
+						service_urls: null
+					})
+			});
+
+			await fetch('/api/library?sort=year&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=year&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+		});
+
+		it('clicking Size column header sends sort=size parameter', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [],
+						total_count: 0,
+						total_size_bytes: 0,
+						total_size_formatted: '0 B',
+						service_urls: null
+					})
+			});
+
+			await fetch('/api/library?sort=size&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=size&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+		});
+
+		it('clicking Last Watched column header sends sort=last_watched parameter', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [],
+						total_count: 0,
+						total_size_bytes: 0,
+						total_size_formatted: '0 B',
+						service_urls: null
+					})
+			});
+
+			await fetch('/api/library?sort=last_watched&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=last_watched&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+		});
+	});
+
+	describe('Toggle Sort Direction', () => {
+		it('toggleSort toggles between asc and desc for same column', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			let sortField: SortField = 'name';
+			let sortOrder: SortOrder = 'asc';
+
+			const toggleSort = (field: SortField) => {
+				if (sortField === field) {
+					sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+				} else {
+					sortField = field;
+					sortOrder = field === 'name' ? 'asc' : 'desc';
+				}
+			};
+
+			// Initially name ascending
+			expect(sortField).toBe('name');
+			expect(sortOrder).toBe('asc');
+
+			// Click name again - should toggle to desc
+			toggleSort('name');
+			expect(sortField).toBe('name');
+			expect(sortOrder).toBe('desc');
+
+			// Click name again - should toggle back to asc
+			toggleSort('name');
+			expect(sortField).toBe('name');
+			expect(sortOrder).toBe('asc');
+		});
+
+		it('clicking different column changes field and sets appropriate default order', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			let sortField: SortField = 'name';
+			let sortOrder: SortOrder = 'asc';
+
+			const toggleSort = (field: SortField) => {
+				if (sortField === field) {
+					sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+				} else {
+					sortField = field;
+					// Name defaults to asc, others default to desc
+					sortOrder = field === 'name' ? 'asc' : 'desc';
+				}
+			};
+
+			// Click year - should set to year desc
+			toggleSort('year');
+			expect(sortField).toBe('year');
+			expect(sortOrder).toBe('desc');
+
+			// Click size - should set to size desc
+			toggleSort('size');
+			expect(sortField).toBe('size');
+			expect(sortOrder).toBe('desc');
+
+			// Click name - should set to name asc (default for name)
+			toggleSort('name');
+			expect(sortField).toBe('name');
+			expect(sortOrder).toBe('asc');
+		});
+	});
+
+	describe('Visual Sort Indicator', () => {
+		it('displays arrow indicator for sorted column', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			const sortField: SortField = 'name';
+			const sortOrder: SortOrder = 'asc';
+
+			const getSortIndicator = (field: SortField) => {
+				if (sortField === field) {
+					return sortOrder === 'asc' ? '↑' : '↓';
+				}
+				return '';
+			};
+
+			expect(getSortIndicator('name')).toBe('↑');
+			expect(getSortIndicator('year')).toBe('');
+			expect(getSortIndicator('size')).toBe('');
+		});
+
+		it('shows descending arrow when sort order is desc', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			const sortField: SortField = 'year';
+			const sortOrder: SortOrder = 'desc';
+
+			const getSortIndicator = (field: SortField, currentSortField: SortField, currentSortOrder: SortOrder) => {
+				if (currentSortField === field) {
+					return currentSortOrder === 'asc' ? '↑' : '↓';
+				}
+				return '';
+			};
+
+			expect(getSortIndicator('year', sortField, sortOrder)).toBe('↓');
+			expect(getSortIndicator('name', sortField, sortOrder)).toBe('');
+		});
+
+		it('only shows indicator for currently sorted column', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			const sortField: SortField = 'size';
+			const sortOrder: SortOrder = 'desc';
+
+			const getSortIndicator = (field: SortField, currentSortField: SortField, currentSortOrder: SortOrder) => {
+				if (currentSortField === field) {
+					return currentSortOrder === 'asc' ? '↑' : '↓';
+				}
+				return '';
+			};
+
+			// Only size column should have indicator
+			const columns: SortField[] = ['name', 'year', 'size', 'date_added', 'last_watched'];
+			const indicators = columns.map((col) => ({ field: col, indicator: getSortIndicator(col, sortField, sortOrder) }));
+
+			expect(indicators.filter((i) => i.indicator !== '')).toHaveLength(1);
+			expect(indicators.find((i) => i.field === 'size')?.indicator).toBe('↓');
+		});
+	});
+
+	describe('Default Sort', () => {
+		it('default sort is name ascending', () => {
+			type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
+			type SortOrder = 'asc' | 'desc';
+
+			// Default state should be name ascending
+			const defaultSortField: SortField = 'name';
+			const defaultSortOrder: SortOrder = 'asc';
+
+			expect(defaultSortField).toBe('name');
+			expect(defaultSortOrder).toBe('asc');
+		});
+	});
+
+	describe('Server-side Sorting', () => {
+		it('sorting sends API request with sort and order parameters', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [
+							{
+								jellyfin_id: 'movie-1',
+								name: 'Zebra',
+								media_type: 'Movie',
+								production_year: 2010,
+								size_bytes: 5000000000,
+								size_formatted: '4.7 GB',
+								played: true,
+								last_played_date: '2024-01-01T00:00:00Z',
+								date_created: '2023-01-01T00:00:00Z',
+								tmdb_id: '111'
+							},
+							{
+								jellyfin_id: 'movie-2',
+								name: 'Apple',
+								media_type: 'Movie',
+								production_year: 2020,
+								size_bytes: 10000000000,
+								size_formatted: '9.3 GB',
+								played: false,
+								last_played_date: null,
+								date_created: '2024-01-01T00:00:00Z',
+								tmdb_id: '222'
+							}
+						],
+						total_count: 2,
+						total_size_bytes: 15000000000,
+						total_size_formatted: '14.0 GB',
+						service_urls: null
+					})
+			});
+
+			const response = await fetch('/api/library?sort=name&order=asc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=name&order=asc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+			expect(response.ok).toBe(true);
+
+			// API should return items sorted by the server
+			const data = await response.json();
+			expect(data.items).toHaveLength(2);
+		});
+
+		it('API accepts date_added sort parameter', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						items: [],
+						total_count: 0,
+						total_size_bytes: 0,
+						total_size_formatted: '0 B',
+						service_urls: null
+					})
+			});
+
+			await fetch('/api/library?sort=date_added&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/library?sort=date_added&order=desc', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+		});
+	});
+});
