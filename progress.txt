@@ -1528,10 +1528,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-31.4] add user nickname mapping frontend
 
+### 2026-01-15: US-31.5 - Copy Output Grouped by Requester
+- Added display_name field to RecentlyAvailableItem Pydantic model
+- Implemented get_nickname_map() in content service to fetch user's nickname mappings
+- Implemented resolve_display_name() to resolve Jellyseerr username to display name
+- Updated get_recently_available() to include resolved display_name in API response
+- Updated frontend copy function to group items by requester (alphabetically)
+- Items under each requester sorted by availability date (newest first)
+- Items without requester grouped under 'Unknown' at the end
+- Frontend table now displays display_name instead of requested_by
+- Copy output format: `{display_name}:\n  - {Title} ({Type}) - available since {Date}`
+- Added 4 backend tests for display_name resolution in TestRecentlyAvailableDisplayName
+- Added 3 frontend tests for display_name API contract in info.test.ts
+- 332 backend tests pass, 263 frontend tests pass, mypy clean, typecheck clean
+- Files changed: models/content.py, services/content.py, test_content.py, info/recent/+page.svelte, info.test.ts, prd.json
+- Commits:
+  - feat(info): [US-31.5] copy output grouped by requester
+
 ## Current Status
 
 **Phase**: Epic 31 - Display Settings (In Progress)
-**Total Stories**: 64 stories (64 passes: true)
+**Total Stories**: 65 stories (65 passes: true)
 
 ## Notes
 
