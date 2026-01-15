@@ -371,11 +371,13 @@
 
 		.sidebar {
 			transform: translateX(-100%);
-			transition: transform var(--transition-base);
+			visibility: hidden;
+			transition: transform var(--transition-base), visibility var(--transition-base);
 		}
 
 		.sidebar.open {
 			transform: translateX(0);
+			visibility: visible;
 		}
 	}
 </style>

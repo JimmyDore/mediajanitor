@@ -257,8 +257,8 @@
         "Verify in browser using mobile viewport (Chrome DevTools device mode)"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added visibility: hidden when sidebar is closed on mobile, visibility: visible when open. This ensures the sidebar is completely hidden when translated off-screen."
     },
     {
       "id": "US-19.1",
