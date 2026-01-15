@@ -1,20 +1,20 @@
 ---
 name: prd-archive
-description: Move completed epics from PRD.md to ARCHIVED_PRD.md
+description: Move completed epics from PRD.md to ARCHIVED_PRD.md and clean up progress.txt
 ---
 
 # PRD Archive Skill
 
-Move completed epics from PRD.md to ARCHIVED_PRD.md for historical reference.
+Move completed epics from PRD.md to ARCHIVED_PRD.md and archive old task logs from progress.txt.
 
 ## Purpose
 
-Keep PRD.md focused on pending work by archiving completed epics. This makes the PRD easier to navigate and reduces context size for Ralph execution.
+Keep PRD.md and progress.txt focused on current work by archiving completed content. This makes files easier to navigate and reduces context size for Ralph execution.
 
 ## When to Use
 
 - After completing a significant number of stories (e.g., all stories in one or more epics)
-- When PRD.md becomes unwieldy with completed content
+- When PRD.md or progress.txt becomes unwieldy with completed content
 - Before starting a new phase of development
 
 ## Workflow
@@ -66,7 +66,35 @@ For each completed epic:
    See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for completed epics and stories.
    ```
 
-### Step 5: Show Summary
+### Step 5: Archive progress.txt Task Logs
+
+1. Read `progress.txt` and identify sections:
+   - `# Codebase Patterns` section (lines ~3-50) → **KEEP**
+   - `## Completed Tasks` section (bulk of file) → **ARCHIVE**
+   - `## Current Status` section → **KEEP**
+   - `## Notes` section → **KEEP**
+
+2. If `ARCHIVED_PROGRESS.txt` doesn't exist, create it with header:
+   ```markdown
+   # Plex Dashboard - Archived Progress Log
+
+   Historical task completion logs moved from progress.txt.
+
+   ---
+   ```
+
+3. **Move** all `### YYYY-MM-DD: US-X.X` entries from `## Completed Tasks` to `ARCHIVED_PROGRESS.txt`
+   - Append to existing content (chronological order preserved)
+   - Each entry includes the date header and all bullet points
+
+4. **Keep** in progress.txt:
+   - The `# Plex Dashboard - Progress Log` header
+   - The entire `# Codebase Patterns` section (learnings)
+   - An empty `## Completed Tasks` section (for new entries)
+   - The `## Current Status` section
+   - The `## Notes` section
+
+### Step 6: Show Summary
 
 Report what was moved:
 ```
@@ -75,9 +103,24 @@ Archived 3 epics to ARCHIVED_PRD.md:
 - Epic 6: Jellyseerr Requests (2 stories)
 - Epic V: Validation (4 stories)
 
-Total: 9 stories moved
+Archived 45 task logs to ARCHIVED_PROGRESS.txt:
+- Moved entries from 2026-01-12 to 2026-01-15
+- progress.txt reduced from 1400 to 80 lines
+
+Total: 9 stories moved, 45 task logs archived
 PRD.md now has X pending stories
 ```
+
+---
+
+## What to Preserve in progress.txt
+
+**NEVER archive these sections** (always keep in progress.txt):
+- `# Codebase Patterns` - Contains reusable learnings for future development
+- `## Current Status` - Brief summary of where we are
+- `## Notes` - Important reminders
+
+Only archive the detailed `### YYYY-MM-DD: US-X.X` task completion entries.
 
 ---
 
@@ -152,10 +195,16 @@ criterion.checked = criterion.startswith("[x]") or criterion.startswith("- [x]")
 
 ## Edge Cases
 
-1. **No completed epics**: Report "No completed epics found to archive" and exit
+### PRD.md
+1. **No completed epics**: Report "No completed epics found to archive" and continue to progress.txt
 2. **All epics completed**: Move all, leave PRD.md with only header sections
 3. **Epic with `✅` in title but unchecked items**: Trust checkboxes, not emoji - skip the epic
 4. **Stories without acceptance criteria**: Treat as incomplete (conservative approach)
+
+### progress.txt
+5. **No task logs**: Report "No task logs to archive" and continue
+6. **Only recent logs (last 7 days)**: Optionally keep recent logs, archive older ones
+7. **Missing sections**: Create empty `## Completed Tasks` section if missing after archive
 
 ---
 
@@ -165,7 +214,9 @@ criterion.checked = criterion.startswith("[x]") or criterion.startswith("- [x]")
 - Do NOT modify story content (only move as-is)
 - Do NOT reorder epics within files
 - Do NOT create commits automatically (let user review first)
-- Do NOT archive the Vision/Tech Stack/Architecture sections
+- Do NOT archive the Vision/Tech Stack/Architecture sections from PRD.md
+- Do NOT archive the Codebase Patterns section from progress.txt (learnings are valuable)
+- Do NOT archive Current Status or Notes sections from progress.txt
 
 ---
 
@@ -180,15 +231,18 @@ grep -E "^## Epic.*✅" PRD.md
 # Or check for unchecked items
 grep -c "\[ \]" PRD.md
 
-# Run this skill to archive completed epics
+# Check progress.txt size
+wc -l progress.txt
+
+# Run this skill to archive completed epics and task logs
 /prd-archive
 ```
 
 Then review and commit:
 ```bash
 # Review changes
-git diff PRD.md ARCHIVED_PRD.md
+git diff PRD.md ARCHIVED_PRD.md progress.txt ARCHIVED_PROGRESS.txt
 
 # Commit the archive
-git add PRD.md ARCHIVED_PRD.md && git commit -m "docs: archive completed epics"
+git add PRD.md ARCHIVED_PRD.md progress.txt ARCHIVED_PROGRESS.txt && git commit -m "docs: archive completed epics and task logs"
 ```
