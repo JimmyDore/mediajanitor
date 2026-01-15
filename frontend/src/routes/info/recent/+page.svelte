@@ -23,6 +23,7 @@
 
 	let data = $state<RecentlyAvailableResponse | null>(null);
 	let groupedData = $state<GroupedItems[]>([]);
+	let recentlyAvailableDays = $state(7);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -101,6 +102,13 @@
 
 	onMount(async () => {
 		try {
+			// Fetch display preferences to get the user's recently_available_days setting
+			const displayResponse = await authenticatedFetch('/api/settings/display');
+			if (displayResponse.ok) {
+				const displayData = await displayResponse.json();
+				recentlyAvailableDays = displayData.recently_available_days ?? 7;
+			}
+
 			const response = await authenticatedFetch('/api/info/recent');
 
 			if (!response.ok) {
@@ -151,7 +159,7 @@
 		{/if}
 	</header>
 
-	<p class="page-subtitle">Content that became available in the past 7 days</p>
+	<p class="page-subtitle">Content that became available in the past {recentlyAvailableDays} day{recentlyAvailableDays !== 1 ? 's' : ''}</p>
 
 	{#if loading}
 		<div class="loading">
@@ -161,7 +169,7 @@
 		<div class="error-box">{error}</div>
 	{:else if data}
 		{#if data.items.length === 0}
-			<div class="empty">No content became available in the past 7 days</div>
+			<div class="empty">No content became available in the past {recentlyAvailableDays} day{recentlyAvailableDays !== 1 ? 's' : ''}</div>
 		{:else}
 			<div class="table-container">
 				<table class="data-table">

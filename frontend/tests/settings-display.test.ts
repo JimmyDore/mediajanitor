@@ -243,6 +243,157 @@ describe('Display Preferences API Integration (US-13.6)', () => {
 		});
 	});
 
+	describe('Recently available days (US-31.2)', () => {
+		it('GET returns recently_available_days field', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						show_unreleased_requests: false,
+						recently_available_days: 14,
+						theme_preference: 'system'
+					})
+			});
+
+			const response = await fetch('/api/settings/display', {
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			const data = await response.json();
+			expect(data.recently_available_days).toBe(14);
+		});
+
+		it('recently_available_days defaults to 7', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						show_unreleased_requests: false,
+						recently_available_days: 7,
+						theme_preference: 'system'
+					})
+			});
+
+			const response = await fetch('/api/settings/display', {
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			const data = await response.json();
+			expect(data.recently_available_days).toBe(7);
+		});
+
+		it('POST can save recently_available_days', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ success: true })
+			});
+
+			const response = await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					recently_available_days: 14
+				})
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					recently_available_days: 14
+				})
+			});
+			expect(response.ok).toBe(true);
+		});
+
+		it('recently_available_days accepts values 1-30', async () => {
+			// Test value of 1
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ success: true })
+			});
+
+			await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					recently_available_days: 1
+				})
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith(
+				'/api/settings/display',
+				expect.objectContaining({
+					body: JSON.stringify({ recently_available_days: 1 })
+				})
+			);
+
+			// Test value of 30
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ success: true })
+			});
+
+			await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					recently_available_days: 30
+				})
+			});
+
+			expect(mockFetch).toHaveBeenLastCalledWith(
+				'/api/settings/display',
+				expect.objectContaining({
+					body: JSON.stringify({ recently_available_days: 30 })
+				})
+			);
+		});
+
+		it('invalid recently_available_days values return 422', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 422,
+				json: () =>
+					Promise.resolve({
+						detail: [
+							{
+								loc: ['body', 'recently_available_days'],
+								msg: 'ensure this value is greater than or equal to 1',
+								type: 'value_error.number.not_ge'
+							}
+						]
+					})
+			});
+
+			const response = await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					recently_available_days: 0
+				})
+			});
+
+			expect(response.ok).toBe(false);
+			expect(response.status).toBe(422);
+		});
+	});
+
 	describe('Toggle behavior integration', () => {
 		it('can toggle from off to on', async () => {
 			// First GET returns false (default)

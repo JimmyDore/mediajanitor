@@ -57,11 +57,13 @@
 
 	// Display preferences state
 	let showUnreleasedRequests = $state(false);
+	let recentlyAvailableDays = $state(7);
 	let currentTheme = $state<ThemePreference>('system');
 	let displayError = $state<string | null>(null);
 	let displaySuccess = $state<string | null>(null);
 	let isDisplayLoading = $state(false);
 	let isThemeLoading = $state(false);
+	let isRecentDaysLoading = $state(false);
 
 	// Expand/collapse states
 	let jellyfinExpanded = $state(false);
@@ -148,6 +150,7 @@
 			if (displayResponse.ok) {
 				const data = await displayResponse.json();
 				showUnreleasedRequests = data.show_unreleased_requests;
+				recentlyAvailableDays = data.recently_available_days ?? 7;
 				currentTheme = data.theme_preference || 'system';
 			}
 		} catch (e) {
@@ -406,6 +409,43 @@
 		}
 
 		isThemeLoading = false;
+	}
+
+	async function handleRecentDaysChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const newValue = parseInt(input.value, 10);
+
+		if (isNaN(newValue) || newValue < 1 || newValue > 30) {
+			return;
+		}
+
+		isRecentDaysLoading = true;
+		displayError = null;
+		displaySuccess = null;
+
+		try {
+			const response = await authenticatedFetch('/api/settings/display', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					recently_available_days: newValue
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save setting');
+			}
+
+			recentlyAvailableDays = newValue;
+			displaySuccess = 'Saved';
+			setTimeout(() => displaySuccess = null, 3000);
+		} catch (e) {
+			displayError = e instanceof Error ? e.message : 'Failed to save setting';
+		} finally {
+			isRecentDaysLoading = false;
+		}
 	}
 
 	function extractDomain(url: string): string {
@@ -877,6 +917,31 @@
 
 			<div class="divider"></div>
 
+			<!-- Recently Available Days -->
+			<div class="threshold-row">
+				<div class="threshold-label-group">
+					<label for="recent-days">Recently available days</label>
+					<span class="threshold-help">Show content that became available in the past N days</span>
+				</div>
+				<div class="threshold-input">
+					<input
+						type="number"
+						id="recent-days"
+						bind:value={recentlyAvailableDays}
+						min="1"
+						max="30"
+						onchange={handleRecentDaysChange}
+						disabled={isRecentDaysLoading}
+					/>
+					<span class="unit">days</span>
+					{#if isRecentDaysLoading}
+						<span class="spinner-small spinner-inline"></span>
+					{/if}
+				</div>
+			</div>
+
+			<div class="divider"></div>
+
 			<div class="toggle-row">
 				<div class="toggle-info">
 					<span class="toggle-label">Show unreleased requests</span>
@@ -1216,6 +1281,12 @@
 		border-top-color: white;
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
+	}
+
+	.spinner-inline {
+		border-color: var(--border);
+		border-top-color: var(--accent);
+		flex-shrink: 0;
 	}
 
 	@keyframes spin {

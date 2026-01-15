@@ -141,8 +141,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added recently_available_days input to Settings Display section with onchange save. Recently Available page fetches user setting and displays dynamic subtitle."
     },
     {
       "id": "US-31.3",
