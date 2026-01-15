@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routers import auth, content, info, settings, sync, whitelist
+from app.routers import auth, content, info, library, settings, sync, whitelist
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(content.router)
 app.include_router(info.router)
+app.include_router(library.router)
 app.include_router(settings.router)
 app.include_router(sync.router)
 app.include_router(whitelist.router)

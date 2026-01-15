@@ -486,5 +486,85 @@ class TestIntegrationNicknames:
                 assert response.status_code == 200
 
 
+class TestIntegrationLibrary:
+    """Integration tests for library endpoints (US-22.1)."""
+
+    @pytest.fixture
+    def auth_headers(self):
+        """Get authentication headers by logging in."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/login",
+                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+            )
+            token = response.json()["access_token"]
+            return {"Authorization": f"Bearer {token}"}
+
+    def test_library_endpoint_requires_auth(self):
+        """Test GET /api/library returns 401 without token."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/library")
+            assert response.status_code == 401
+
+    def test_library_endpoint_returns_valid_response(self, auth_headers):
+        """Test GET /api/library returns valid structure."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/library", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify response structure
+            assert "items" in data
+            assert "total_count" in data
+            assert "total_size_bytes" in data
+            assert "total_size_formatted" in data
+            assert "service_urls" in data
+            assert isinstance(data["items"], list)
+            assert isinstance(data["total_count"], int)
+            assert isinstance(data["total_size_bytes"], int)
+
+    def test_library_filter_by_type(self, auth_headers):
+        """Test GET /api/library with type filter."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Test movie filter
+            response = client.get("/api/library?type=movie", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            for item in data["items"]:
+                assert item["media_type"] == "Movie"
+
+            # Test series filter
+            response = client.get("/api/library?type=series", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            for item in data["items"]:
+                assert item["media_type"] == "Series"
+
+    def test_library_items_have_required_fields(self, auth_headers):
+        """Test that library items have all required fields."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/library", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            if data["items"]:
+                item = data["items"][0]
+                required_fields = [
+                    "jellyfin_id",
+                    "name",
+                    "media_type",
+                    "production_year",
+                    "size_bytes",
+                    "size_formatted",
+                    "played",
+                    "last_played_date",
+                    "date_created",
+                ]
+                for field in required_fields:
+                    assert field in item, f"Missing field: {field}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

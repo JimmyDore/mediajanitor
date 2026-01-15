@@ -244,3 +244,31 @@ class DeleteRequestResponse(BaseModel):
 
     success: bool
     message: str
+
+
+# US-22.1: Library API models
+
+
+class LibraryItem(BaseModel):
+    """Response model for a single library item."""
+
+    jellyfin_id: str
+    name: str
+    media_type: str  # "Movie" or "Series"
+    production_year: int | None
+    size_bytes: int | None
+    size_formatted: str
+    played: bool
+    last_played_date: str | None
+    date_created: str | None
+    tmdb_id: str | None = None
+
+
+class LibraryResponse(BaseModel):
+    """Response model for library list."""
+
+    items: list[LibraryItem]
+    total_count: int
+    total_size_bytes: int
+    total_size_formatted: str
+    service_urls: ServiceUrls | None = None

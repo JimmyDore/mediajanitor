@@ -1649,3 +1649,137 @@ async def get_request_whitelist_ids(db: AsyncSession, user_id: int) -> set[int]:
         )
     )
     return set(result.scalars().all())
+
+
+# US-22.1: Library API functions
+
+
+from app.models.content import LibraryItem, LibraryResponse
+
+
+async def get_library(
+    db: AsyncSession,
+    user_id: int,
+    media_type: str | None = None,
+    search: str | None = None,
+    watched: str | None = None,
+    sort: str = "name",
+    order: str = "asc",
+    min_year: int | None = None,
+    max_year: int | None = None,
+    min_size_gb: float | None = None,
+    max_size_gb: float | None = None,
+) -> LibraryResponse:
+    """Get all cached media items for a user with filtering and sorting.
+
+    Args:
+        db: Database session
+        user_id: User ID from JWT
+        media_type: Filter by type - "movie", "series", or None for all
+        search: Search string (case-insensitive name search)
+        watched: Filter by watched status - "true", "false", or None for all
+        sort: Sort field - "name", "year", "size", "date_added", "last_watched"
+        order: Sort order - "asc" or "desc"
+        min_year: Minimum production year filter
+        max_year: Maximum production year filter
+        min_size_gb: Minimum size in GB filter
+        max_size_gb: Maximum size in GB filter
+
+    Returns:
+        LibraryResponse with items, totals, and service URLs
+    """
+    # Get all cached media items for the user
+    result = await db.execute(
+        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
+    )
+    all_items = list(result.scalars().all())
+
+    # Apply filters
+    filtered_items: list[CachedMediaItem] = []
+    for item in all_items:
+        # Filter by media type
+        if media_type:
+            if media_type.lower() == "movie" and item.media_type != "Movie":
+                continue
+            if media_type.lower() == "series" and item.media_type != "Series":
+                continue
+
+        # Filter by search string (case-insensitive name match)
+        if search:
+            if search.lower() not in item.name.lower():
+                continue
+
+        # Filter by watched status
+        if watched is not None:
+            if watched.lower() == "true" and not item.played:
+                continue
+            if watched.lower() == "false" and item.played:
+                continue
+
+        # Filter by year range
+        if min_year is not None and (item.production_year is None or item.production_year < min_year):
+            continue
+        if max_year is not None and (item.production_year is None or item.production_year > max_year):
+            continue
+
+        # Filter by size range (convert GB to bytes)
+        if min_size_gb is not None:
+            min_bytes = int(min_size_gb * 1024 * 1024 * 1024)
+            if item.size_bytes is None or item.size_bytes < min_bytes:
+                continue
+        if max_size_gb is not None:
+            max_bytes = int(max_size_gb * 1024 * 1024 * 1024)
+            if item.size_bytes is None or item.size_bytes > max_bytes:
+                continue
+
+        filtered_items.append(item)
+
+    # Sort items
+    reverse = order.lower() == "desc"
+
+    def sort_key(item: CachedMediaItem) -> tuple[int, Any]:
+        """Generate sort key with null handling. Returns (is_null, value) tuple."""
+        if sort == "name":
+            return (0, item.name.lower())
+        elif sort == "year":
+            return (0 if item.production_year else 1, item.production_year or 0)
+        elif sort == "size":
+            return (0 if item.size_bytes else 1, item.size_bytes or 0)
+        elif sort == "date_added":
+            return (0 if item.date_created else 1, item.date_created or "")
+        elif sort == "last_watched":
+            return (0 if item.last_played_date else 1, item.last_played_date or "")
+        else:
+            # Default to name
+            return (0, item.name.lower())
+
+    filtered_items.sort(key=sort_key, reverse=reverse)
+
+    # Calculate totals
+    total_size_bytes = sum(item.size_bytes or 0 for item in filtered_items)
+
+    # Convert to response models
+    response_items = []
+    for item in filtered_items:
+        tmdb_id, _ = extract_provider_ids(item)
+        response_items.append(
+            LibraryItem(
+                jellyfin_id=item.jellyfin_id,
+                name=item.name,
+                media_type=item.media_type,
+                production_year=item.production_year,
+                size_bytes=item.size_bytes,
+                size_formatted=format_size(item.size_bytes),
+                played=item.played,
+                last_played_date=item.last_played_date,
+                date_created=item.date_created,
+                tmdb_id=tmdb_id,
+            )
+        )
+
+    return LibraryResponse(
+        items=response_items,
+        total_count=len(response_items),
+        total_size_bytes=total_size_bytes,
+        total_size_formatted=format_size(total_size_bytes) if total_size_bytes > 0 else "0 B",
+    )

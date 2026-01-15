@@ -511,8 +511,8 @@
         "Unit tests pass"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented GET /api/library endpoint with filtering by type, search, watched status, year range, size range, sorting by name/year/size/date_added/last_watched with asc/desc order. Created LibraryItem and LibraryResponse models. 20 unit tests + 4 integration tests."
     },
     {
       "id": "US-22.2",
