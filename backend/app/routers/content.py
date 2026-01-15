@@ -25,6 +25,7 @@ from app.services.content import (
     get_unavailable_requests,
 )
 from app.services.jellyseerr import (
+    delete_jellyseerr_media,
     delete_jellyseerr_request,
     get_decrypted_jellyseerr_api_key,
 )
@@ -170,10 +171,10 @@ async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | N
     return result.scalar_one_or_none()
 
 
-async def _lookup_jellyseerr_request_by_tmdb(
+async def _lookup_jellyseerr_media_by_tmdb(
     db: AsyncSession, user_id: int, tmdb_id: int, media_type: str
 ) -> int | None:
-    """Look up Jellyseerr request ID by TMDB ID and media type.
+    """Look up Jellyseerr media ID by TMDB ID and media type.
 
     Args:
         db: Database session
@@ -182,10 +183,11 @@ async def _lookup_jellyseerr_request_by_tmdb(
         media_type: "movie" or "tv" (lowercase)
 
     Returns:
-        Jellyseerr request ID if found, None otherwise
+        Jellyseerr media ID if found, None otherwise.
+        Note: This returns media.id (for deletion), NOT request.id.
     """
     result = await db.execute(
-        select(CachedJellyseerrRequest.jellyseerr_id)
+        select(CachedJellyseerrRequest.jellyseerr_media_id)
         .where(CachedJellyseerrRequest.user_id == user_id)
         .where(CachedJellyseerrRequest.tmdb_id == tmdb_id)
         .where(CachedJellyseerrRequest.media_type == media_type)
@@ -231,48 +233,42 @@ async def delete_movie(
     else:
         arr_message = "Skipped Radarr deletion"
 
-    # Optionally delete from Jellyseerr
+    # Optionally delete from Jellyseerr (delete media entry, not request)
     jellyseerr_deleted = False
     jellyseerr_message = ""
     delete_from_jellyseerr = delete_request.delete_from_jellyseerr if delete_request else True
-    jellyseerr_request_id = delete_request.jellyseerr_request_id if delete_request else None
-    request_found_by_lookup = False
+    jellyseerr_media_id: int | None = None
 
     if delete_from_jellyseerr:
-        # If no jellyseerr_request_id provided, try to look it up by TMDB ID
-        if not jellyseerr_request_id:
-            looked_up_id = await _lookup_jellyseerr_request_by_tmdb(
-                db, current_user.id, tmdb_id, "movie"
-            )
-            if looked_up_id:
-                jellyseerr_request_id = looked_up_id
-                request_found_by_lookup = True
+        # Look up media ID by TMDB ID (media.id is different from request.id)
+        jellyseerr_media_id = await _lookup_jellyseerr_media_by_tmdb(
+            db, current_user.id, tmdb_id, "movie"
+        )
 
-        if jellyseerr_request_id:
+        if jellyseerr_media_id:
             if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
                 jellyseerr_api_key = get_decrypted_jellyseerr_api_key(settings)
                 if jellyseerr_api_key:
-                    success, message = await delete_jellyseerr_request(
-                        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_request_id
+                    success, message = await delete_jellyseerr_media(
+                        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_media_id
                     )
                     jellyseerr_deleted = success
                     jellyseerr_message = message
         else:
-            # No request ID provided and none found by lookup
-            jellyseerr_message = "No request found for this TMDB ID"
+            jellyseerr_message = "No media found for this TMDB ID"
 
     # Compose response message
     messages = []
     if delete_from_arr:
         messages.append(arr_message)
     if delete_from_jellyseerr:
-        if jellyseerr_request_id:
+        if jellyseerr_media_id:
             messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
         else:
             messages.append(jellyseerr_message)
 
     overall_success = (not delete_from_arr or arr_deleted) and \
-                      (not delete_from_jellyseerr or not jellyseerr_request_id or jellyseerr_deleted)
+                      (not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted)
 
     return DeleteContentResponse(
         success=overall_success,
@@ -319,46 +315,42 @@ async def delete_series(
     else:
         arr_message = "Skipped Sonarr deletion"
 
-    # Optionally delete from Jellyseerr
+    # Optionally delete from Jellyseerr (delete media entry, not request)
     jellyseerr_deleted = False
     jellyseerr_message = ""
     delete_from_jellyseerr = delete_request.delete_from_jellyseerr if delete_request else True
-    jellyseerr_request_id = delete_request.jellyseerr_request_id if delete_request else None
+    jellyseerr_media_id: int | None = None
 
     if delete_from_jellyseerr:
-        # If no jellyseerr_request_id provided, try to look it up by TMDB ID
-        if not jellyseerr_request_id:
-            looked_up_id = await _lookup_jellyseerr_request_by_tmdb(
-                db, current_user.id, tmdb_id, "tv"
-            )
-            if looked_up_id:
-                jellyseerr_request_id = looked_up_id
+        # Look up media ID by TMDB ID (media.id is different from request.id)
+        jellyseerr_media_id = await _lookup_jellyseerr_media_by_tmdb(
+            db, current_user.id, tmdb_id, "tv"
+        )
 
-        if jellyseerr_request_id:
+        if jellyseerr_media_id:
             if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
                 jellyseerr_api_key = get_decrypted_jellyseerr_api_key(settings)
                 if jellyseerr_api_key:
-                    success, message = await delete_jellyseerr_request(
-                        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_request_id
+                    success, message = await delete_jellyseerr_media(
+                        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_media_id
                     )
                     jellyseerr_deleted = success
                     jellyseerr_message = message
         else:
-            # No request ID provided and none found by lookup
-            jellyseerr_message = "No request found for this TMDB ID"
+            jellyseerr_message = "No media found for this TMDB ID"
 
     # Compose response message
     messages = []
     if delete_from_arr:
         messages.append(arr_message)
     if delete_from_jellyseerr:
-        if jellyseerr_request_id:
+        if jellyseerr_media_id:
             messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
         else:
             messages.append(jellyseerr_message)
 
     overall_success = (not delete_from_arr or arr_deleted) and \
-                      (not delete_from_jellyseerr or not jellyseerr_request_id or jellyseerr_deleted)
+                      (not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted)
 
     return DeleteContentResponse(
         success=overall_success,
@@ -368,13 +360,40 @@ async def delete_series(
     )
 
 
+async def _lookup_jellyseerr_media_by_request_id(
+    db: AsyncSession, user_id: int, jellyseerr_id: int
+) -> int | None:
+    """Look up Jellyseerr media ID by request ID.
+
+    Args:
+        db: Database session
+        user_id: User ID to filter by
+        jellyseerr_id: Jellyseerr request ID
+
+    Returns:
+        Jellyseerr media ID if found, None otherwise.
+    """
+    result = await db.execute(
+        select(CachedJellyseerrRequest.jellyseerr_media_id)
+        .where(CachedJellyseerrRequest.user_id == user_id)
+        .where(CachedJellyseerrRequest.jellyseerr_id == jellyseerr_id)
+    )
+    row = result.scalar_one_or_none()
+    return row
+
+
 @router.delete("/request/{jellyseerr_id}", response_model=DeleteRequestResponse)
 async def delete_request_endpoint(
     jellyseerr_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeleteRequestResponse:
-    """Delete a request from Jellyseerr by request ID."""
+    """Delete a media entry from Jellyseerr by request ID.
+
+    Note: This looks up the media ID from the cached request and deletes
+    the media entry (not the request), which properly removes the item
+    from Jellyseerr's tracking.
+    """
     settings = await _get_user_settings(db, current_user.id)
 
     if not settings or not settings.jellyseerr_server_url or not settings.jellyseerr_api_key_encrypted:
@@ -387,8 +406,16 @@ async def delete_request_endpoint(
     if not jellyseerr_api_key:
         raise HTTPException(status_code=400, detail="Jellyseerr API key not configured")
 
-    success, message = await delete_jellyseerr_request(
-        settings.jellyseerr_server_url, jellyseerr_api_key, jellyseerr_id
+    # Look up the media ID from the cached request
+    media_id = await _lookup_jellyseerr_media_by_request_id(db, current_user.id, jellyseerr_id)
+    if not media_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No media found for request {jellyseerr_id}. Try syncing your data.",
+        )
+
+    success, message = await delete_jellyseerr_media(
+        settings.jellyseerr_server_url, jellyseerr_api_key, media_id
     )
 
     if not success:

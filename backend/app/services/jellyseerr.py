@@ -108,3 +108,39 @@ async def delete_jellyseerr_request(
             return False, f"Failed to delete request from Jellyseerr (status: {response.status_code})"
     except (httpx.RequestError, httpx.TimeoutException) as e:
         return False, f"Failed to connect to Jellyseerr: {str(e)}"
+
+
+async def delete_jellyseerr_media(
+    server_url: str, api_key: str, media_id: int
+) -> tuple[bool, str]:
+    """
+    Delete a media entry from Jellyseerr.
+
+    This removes the media tracking in Jellyseerr (not the request).
+    Use this when content has been downloaded and you want to fully
+    remove it from Jellyseerr's tracking.
+
+    Args:
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+        media_id: The Jellyseerr media ID (from media.id, NOT request.id)
+
+    Returns a tuple of (success: bool, message: str).
+    Jellyseerr returns 204 No Content on successful deletion.
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.delete(
+                f"{server_url}/api/v1/media/{media_id}",
+                headers={"X-Api-Key": api_key},
+            )
+            # Jellyseerr returns 204 No Content on success
+            if response.status_code == 204:
+                return True, "Media deleted successfully from Jellyseerr"
+            if response.status_code == 404:
+                return False, f"Media {media_id} not found in Jellyseerr"
+            return False, f"Failed to delete media from Jellyseerr (status: {response.status_code})"
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        return False, f"Failed to connect to Jellyseerr: {str(e)}"

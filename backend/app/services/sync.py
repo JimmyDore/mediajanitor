@@ -339,6 +339,7 @@ async def cache_jellyseerr_requests(
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,
             jellyseerr_id=req.get("id", 0),
+            jellyseerr_media_id=media.get("id"),  # media.id for deletion (distinct from request.id)
             tmdb_id=media.get("tmdbId"),
             media_type=media.get("mediaType", "unknown"),
             status=req.get("status", 0),

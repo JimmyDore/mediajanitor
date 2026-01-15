@@ -99,6 +99,7 @@ class CachedJellyseerrRequest(Base):
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
     jellyseerr_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    jellyseerr_media_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # media.id for deletion
     tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "movie" or "tv"
     status: Mapped[int] = mapped_column(Integer, nullable=False)  # Jellyseerr status code

@@ -104,25 +104,36 @@ class TestDeleteMovie:
         assert data["arr_deleted"] is False
         assert "not found" in data["message"].lower()
 
+    @pytest.mark.asyncio
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
-    def test_delete_movie_with_jellyseerr_request(
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_movie_with_jellyseerr_request(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_movie: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_radarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test movie deletion that also deletes Jellyseerr request."""
+        """Test movie deletion that also deletes Jellyseerr media entry."""
+        from tests.conftest import TestingAsyncSessionLocal
+        from app.database import CachedJellyseerrRequest
+
         mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
-        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
         mock_validate_radarr.return_value = True
         mock_validate_jellyseerr.return_value = True
 
-        token = self._get_auth_token(client, "delete_movie_with_request@example.com")
+        token = self._get_auth_token(client, "delete_movie_with_media@example.com")
+
+        # Get user ID for creating cached request
+        user_response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        user_id = user_response.json()["id"]
 
         # Setup Radarr
         client.post(
@@ -144,6 +155,20 @@ class TestDeleteMovie:
             headers={"Authorization": f"Bearer {token}"},
         )
 
+        # Create a cached Jellyseerr request with media_id for lookup
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=999,
+                jellyseerr_media_id=228,  # Media ID used for deletion
+                tmdb_id=12345,
+                media_type="movie",
+                status=1,
+                title="Test Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
+
         # TestClient.delete doesn't support json parameter, use request method instead
         response = client.request(
             "DELETE",
@@ -153,7 +178,6 @@ class TestDeleteMovie:
                 "tmdb_id": 12345,
                 "delete_from_arr": True,
                 "delete_from_jellyseerr": True,
-                "jellyseerr_request_id": 999,
             },
         )
         assert response.status_code == 200
@@ -161,6 +185,10 @@ class TestDeleteMovie:
         assert data["success"] is True
         assert data["arr_deleted"] is True
         assert data["jellyseerr_deleted"] is True
+        # Verify media ID was used (not request ID)
+        mock_delete_media.assert_called_once()
+        call_args = mock_delete_media.call_args
+        assert call_args[0][2] == 228  # media_id, not request_id
 
 
 class TestDeleteSeries:
@@ -311,18 +339,43 @@ class TestDeleteRequest:
         assert response.status_code == 400
         assert "jellyseerr" in response.json()["detail"].lower()
 
+    @pytest.mark.asyncio
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
-    def test_delete_request_success(
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_request_success(
         self,
         mock_delete: AsyncMock,
         mock_validate: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test successful request deletion from Jellyseerr."""
-        mock_delete.return_value = (True, "Request deleted successfully from Jellyseerr")
+        """Test successful request deletion from Jellyseerr (via media deletion)."""
+        from tests.conftest import TestingAsyncSessionLocal
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete.return_value = (True, "Media deleted successfully from Jellyseerr")
         token = self._get_auth_token(client)
         self._setup_jellyseerr_settings(client, token, mock_validate)
+
+        # Get user ID for creating cached request
+        user_response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        user_id = user_response.json()["id"]
+
+        # Create a cached request with media_id
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=12345,
+                jellyseerr_media_id=500,  # Media ID used for deletion
+                tmdb_id=99999,
+                media_type="movie",
+                status=1,
+                title="Test Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
 
         response = client.delete(
             "/api/content/request/12345",
@@ -332,26 +385,32 @@ class TestDeleteRequest:
         data = response.json()
         assert data["success"] is True
         assert "deleted" in data["message"].lower()
+        # Verify media ID was used
+        mock_delete.assert_called_once()
+        call_args = mock_delete.call_args
+        assert call_args[0][2] == 500  # media_id
 
+    @pytest.mark.asyncio
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
-    def test_delete_request_not_found(
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_request_not_found(
         self,
         mock_delete: AsyncMock,
         mock_validate: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test request deletion when request not found in Jellyseerr."""
-        mock_delete.return_value = (False, "Request 12345 not found in Jellyseerr")
+        """Test request deletion when no media ID found in cache."""
+        mock_delete.return_value = (False, "Media not found in Jellyseerr")
         token = self._get_auth_token(client, "delete_request_404@example.com")
         self._setup_jellyseerr_settings(client, token, mock_validate)
 
+        # No cached request exists, so media_id lookup will fail
         response = client.delete(
             "/api/content/request/12345",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 400
-        assert "not found" in response.json()["detail"].lower()
+        assert response.status_code == 404
+        assert "no media found" in response.json()["detail"].lower()
 
 
 class TestDeleteServiceFunctions:
@@ -547,20 +606,20 @@ class TestJellyseerrRequestLookupByTmdbId:
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
     async def test_delete_movie_looks_up_jellyseerr_request_by_tmdb_id(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_movie: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_radarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test that delete movie looks up Jellyseerr request by TMDB ID when no request ID provided."""
+        """Test that delete movie looks up Jellyseerr media by TMDB ID."""
         from app.database import CachedJellyseerrRequest
 
         mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
-        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
         mock_validate_radarr.return_value = True
         mock_validate_jellyseerr.return_value = True
 
@@ -579,11 +638,12 @@ class TestJellyseerrRequestLookupByTmdbId:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        # Create a cached Jellyseerr request for this TMDB ID
+        # Create a cached Jellyseerr request for this TMDB ID with media_id
         async with TestingAsyncSessionLocal() as session:
             cached_request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=999,
+                jellyseerr_media_id=555,  # Media ID used for deletion
                 tmdb_id=12345,
                 media_type="movie",
                 status=1,
@@ -592,7 +652,7 @@ class TestJellyseerrRequestLookupByTmdbId:
             session.add(cached_request)
             await session.commit()
 
-        # Delete movie WITHOUT providing jellyseerr_request_id but WITH delete_from_jellyseerr=true
+        # Delete movie - media_id should be looked up by TMDB ID
         response = client.request(
             "DELETE",
             "/api/content/movie/12345",
@@ -601,7 +661,6 @@ class TestJellyseerrRequestLookupByTmdbId:
                 "tmdb_id": 12345,
                 "delete_from_arr": True,
                 "delete_from_jellyseerr": True,
-                # Note: NO jellyseerr_request_id provided - should be looked up
             },
         )
 
@@ -610,30 +669,29 @@ class TestJellyseerrRequestLookupByTmdbId:
         assert data["success"] is True
         assert data["arr_deleted"] is True
         assert data["jellyseerr_deleted"] is True
-        # Verify the lookup was used - mock should have been called with request ID 999
-        mock_delete_request.assert_called_once()
-        call_args = mock_delete_request.call_args
-        # The third positional arg is the jellyseerr_id
-        assert call_args[0][2] == 999
+        # Verify the lookup was used - mock should have been called with media ID 555
+        mock_delete_media.assert_called_once()
+        call_args = mock_delete_media.call_args
+        assert call_args[0][2] == 555  # media_id
 
     @pytest.mark.asyncio
     @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
     async def test_delete_series_looks_up_jellyseerr_request_by_tmdb_id(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_series: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_sonarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test that delete series looks up Jellyseerr request by TMDB ID when no request ID provided."""
+        """Test that delete series looks up Jellyseerr media by TMDB ID."""
         from app.database import CachedJellyseerrRequest
 
         mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
-        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
         mock_validate_sonarr.return_value = True
         mock_validate_jellyseerr.return_value = True
 
@@ -652,11 +710,12 @@ class TestJellyseerrRequestLookupByTmdbId:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        # Create a cached Jellyseerr request for this TMDB ID
+        # Create a cached Jellyseerr request for this TMDB ID with media_id
         async with TestingAsyncSessionLocal() as session:
             cached_request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=888,
+                jellyseerr_media_id=666,  # Media ID used for deletion
                 tmdb_id=67890,
                 media_type="tv",
                 status=1,
@@ -665,7 +724,7 @@ class TestJellyseerrRequestLookupByTmdbId:
             session.add(cached_request)
             await session.commit()
 
-        # Delete series WITHOUT providing jellyseerr_request_id
+        # Delete series - media_id should be looked up by TMDB ID
         response = client.request(
             "DELETE",
             "/api/content/series/67890",
@@ -682,24 +741,24 @@ class TestJellyseerrRequestLookupByTmdbId:
         assert data["success"] is True
         assert data["arr_deleted"] is True
         assert data["jellyseerr_deleted"] is True
-        mock_delete_request.assert_called_once()
-        call_args = mock_delete_request.call_args
-        assert call_args[0][2] == 888
+        mock_delete_media.assert_called_once()
+        call_args = mock_delete_media.call_args
+        assert call_args[0][2] == 666  # media_id
 
     @pytest.mark.asyncio
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
-    async def test_delete_movie_no_jellyseerr_request_found_skips_gracefully(
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_movie_no_jellyseerr_media_found_skips_gracefully(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_movie: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_radarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test that when no matching Jellyseerr request found, deletion skips gracefully."""
+        """Test that when no matching Jellyseerr media found, deletion skips gracefully."""
         mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
         mock_validate_radarr.return_value = True
         mock_validate_jellyseerr.return_value = True
@@ -718,7 +777,7 @@ class TestJellyseerrRequestLookupByTmdbId:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        # Delete movie with no matching request in cache
+        # Delete movie with no matching media in cache
         response = client.request(
             "DELETE",
             "/api/content/movie/99999",  # No cached request for this TMDB ID
@@ -734,10 +793,10 @@ class TestJellyseerrRequestLookupByTmdbId:
         data = response.json()
         assert data["success"] is True  # Still success since movie was deleted
         assert data["arr_deleted"] is True
-        assert data["jellyseerr_deleted"] is False  # No request to delete
-        # Delete request should NOT have been called
-        mock_delete_request.assert_not_called()
-        assert "no request found" in data["message"].lower()
+        assert data["jellyseerr_deleted"] is False  # No media to delete
+        # Delete media should NOT have been called
+        mock_delete_media.assert_not_called()
+        assert "no media found" in data["message"].lower()
 
     @pytest.mark.asyncio
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
@@ -806,24 +865,24 @@ class TestJellyseerrRequestLookupByTmdbId:
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
-    async def test_delete_movie_uses_provided_request_id_over_lookup(
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_movie_always_looks_up_media_id(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_movie: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_radarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Test that explicitly provided jellyseerr_request_id is used, not looked up."""
+        """Test that media_id is always looked up from cache, regardless of request body params."""
         from app.database import CachedJellyseerrRequest
 
         mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
-        mock_delete_request.return_value = (True, "Request deleted successfully from Jellyseerr")
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
         mock_validate_radarr.return_value = True
         mock_validate_jellyseerr.return_value = True
 
-        token = self._get_auth_token(client, "explicit_request_id@example.com")
+        token = self._get_auth_token(client, "always_lookup_media@example.com")
         user_id = self._get_user_id(client, token)
 
         # Setup Radarr and Jellyseerr
@@ -838,11 +897,12 @@ class TestJellyseerrRequestLookupByTmdbId:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        # Create a cached Jellyseerr request with different ID
+        # Create a cached Jellyseerr request with media_id
         async with TestingAsyncSessionLocal() as session:
             cached_request = CachedJellyseerrRequest(
                 user_id=user_id,
-                jellyseerr_id=111,  # This would be looked up
+                jellyseerr_id=111,
+                jellyseerr_media_id=333,  # This is what should be used
                 tmdb_id=12345,
                 media_type="movie",
                 status=1,
@@ -851,7 +911,7 @@ class TestJellyseerrRequestLookupByTmdbId:
             session.add(cached_request)
             await session.commit()
 
-        # Delete movie WITH explicit jellyseerr_request_id
+        # Delete movie - media_id should be looked up by TMDB ID
         response = client.request(
             "DELETE",
             "/api/content/movie/12345",
@@ -860,7 +920,7 @@ class TestJellyseerrRequestLookupByTmdbId:
                 "tmdb_id": 12345,
                 "delete_from_arr": True,
                 "delete_from_jellyseerr": True,
-                "jellyseerr_request_id": 222,  # Explicit ID, different from cached
+                # Note: jellyseerr_request_id is ignored - media_id is always looked up
             },
         )
 
@@ -868,7 +928,7 @@ class TestJellyseerrRequestLookupByTmdbId:
         data = response.json()
         assert data["success"] is True
         assert data["jellyseerr_deleted"] is True
-        # Should use the provided ID (222), not the cached one (111)
-        mock_delete_request.assert_called_once()
-        call_args = mock_delete_request.call_args
-        assert call_args[0][2] == 222
+        # Should use the cached media_id (333)
+        mock_delete_media.assert_called_once()
+        call_args = mock_delete_media.call_args
+        assert call_args[0][2] == 333
