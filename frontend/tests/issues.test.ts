@@ -637,5 +637,111 @@ describe('Unified Issues API Integration', () => {
 			expect(item.media_type).toBe('tv');
 			expect(item.missing_seasons).toEqual([1, 2]);
 		});
+
+		it('returns items with date_created field (US-23.1)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'movie-with-date',
+						name: 'Movie With Date Created',
+						media_type: 'Movie',
+						production_year: 2020,
+						size_bytes: 10000000000,
+						size_formatted: '9.3 GB',
+						last_played_date: null,
+						path: '/media/movies/Movie With Date',
+						date_created: '2024-06-15T10:30:00Z',
+						issues: ['old']
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 10000000000,
+				total_size_formatted: '9.3 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.date_created).toBe('2024-06-15T10:30:00Z');
+		});
+
+		it('handles items with null date_created (US-23.1)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'movie-no-date',
+						name: 'Movie Without Date Created',
+						media_type: 'Movie',
+						production_year: 2020,
+						size_bytes: 10000000000,
+						size_formatted: '9.3 GB',
+						last_played_date: null,
+						path: '/media/movies/Movie Without Date',
+						date_created: null,
+						issues: ['old']
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 10000000000,
+				total_size_formatted: '9.3 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.date_created).toBeNull();
+		});
+
+		it('returns date_created for series items (US-23.1)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'series-with-date',
+						name: 'Series With Date Created',
+						media_type: 'Series',
+						production_year: 2021,
+						size_bytes: 50000000000,
+						size_formatted: '46.6 GB',
+						last_played_date: '2024-01-15T10:00:00Z',
+						path: '/media/tv/Series With Date',
+						date_created: '2023-03-20T14:45:00Z',
+						issues: ['large']
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 50000000000,
+				total_size_formatted: '46.6 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=large', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.date_created).toBe('2023-03-20T14:45:00Z');
+			expect(item.media_type).toBe('Series');
+		});
 	});
 });

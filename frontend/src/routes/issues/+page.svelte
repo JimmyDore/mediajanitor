@@ -14,6 +14,7 @@
 		last_played_date: string | null;
 		played: boolean | null;
 		path: string | null;
+		date_created: string | null;  // When content was added to the library (ISO format)
 		issues: string[];
 		language_issues: string[] | null;
 		tmdb_id: string | null;
@@ -49,7 +50,7 @@
 	}
 
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
-	type SortField = 'name' | 'size' | 'date' | 'issues';
+	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
 	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'request';
@@ -441,6 +442,17 @@
 		}
 	}
 
+	function formatDateCreated(dateCreated: string | null): string {
+		if (!dateCreated) return 'Unknown';
+		try {
+			const date = new Date(dateCreated);
+			// Format as "Jan 15, 2024"
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		} catch {
+			return '?';
+		}
+	}
+
 	function isFutureRelease(releaseDate: string | null): boolean {
 		if (!releaseDate) return false;
 		try {
@@ -722,6 +734,12 @@
 						: (b.last_played_date ? new Date(b.last_played_date).getTime() : 0);
 					comparison = dateA - dateB;
 					break;
+				case 'added':
+					// Sort by date_created (when content was added to library)
+					const addedA = a.date_created ? new Date(a.date_created).getTime() : 0;
+					const addedB = b.date_created ? new Date(b.date_created).getTime() : 0;
+					comparison = addedA - addedB;
+					break;
 				case 'issues': comparison = a.issues.length - b.issues.length; break;
 			}
 			return sortOrder === 'asc' ? comparison : -comparison;
@@ -821,6 +839,11 @@
 							<th class="col-size">
 								<button class="sort-btn" onclick={() => toggleSort('size')}>
 									Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+								</button>
+							</th>
+							<th class="col-added">
+								<button class="sort-btn" onclick={() => toggleSort('added')}>
+									Added {sortField === 'added' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
 							{#if activeFilter === 'requests'}
@@ -970,6 +993,13 @@
 										<span class="text-muted">—</span>
 									{:else}
 										{item.size_formatted}
+									{/if}
+								</td>
+								<td class="col-added">
+									{#if isRequestItem(item)}
+										<span class="text-muted">—</span>
+									{:else}
+										{formatDateCreated(item.date_created)}
 									{/if}
 								</td>
 								{#if activeFilter === 'requests'}
@@ -1548,8 +1578,15 @@
 	}
 
 	.col-size {
-		width: 12%;
+		width: 10%;
 		font-family: var(--font-mono);
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		text-align: right;
+	}
+
+	.col-added {
+		width: 12%;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
@@ -1589,7 +1626,8 @@
 			padding: var(--space-4);
 		}
 
-		.col-watched {
+		.col-watched,
+		.col-added {
 			display: none;
 		}
 

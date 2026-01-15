@@ -298,8 +298,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added date_created to ContentIssueItem model and API response, Added column to Issues table with formatDateCreated() for display, client-side sorting, responsive hiding on mobile, and shows dash for request items"
     },
     {
       "id": "US-18.1",

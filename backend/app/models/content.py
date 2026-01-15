@@ -135,6 +135,7 @@ class ContentIssueItem(BaseModel):
     last_played_date: str | None
     played: bool | None = None  # Whether content has been watched (for accurate "Never" display)
     path: str | None
+    date_created: str | None = None  # When content was added to the library (ISO format)
     issues: list[str]  # List of issue types: "old", "large", "language", "request"
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
     tmdb_id: str | None = None  # TMDB ID for external links

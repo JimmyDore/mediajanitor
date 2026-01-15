@@ -1219,6 +1219,7 @@ async def get_content_issues(
                 last_played_date=item.last_played_date,
                 played=item.played,
                 path=item.path,
+                date_created=item.date_created,
                 issues=issues,
                 language_issues=language_issues_detail if language_issues_detail else None,
                 tmdb_id=tmdb_id,
