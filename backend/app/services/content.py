@@ -31,8 +31,6 @@ from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
     ContentSummaryResponse,
-    CurrentlyAiringItem,
-    CurrentlyAiringResponse,
     InfoCategorySummary,
     IssueCategorySummary,
     OldUnwatchedItem,
@@ -829,9 +827,6 @@ async def get_content_summary(
         recently_available=InfoCategorySummary(
             count=await get_recently_available_count(db, user_id),
         ),
-        currently_airing=InfoCategorySummary(
-            count=0,  # Placeholder - will be implemented in US-6.2
-        ),
     )
 
 
@@ -945,23 +940,6 @@ async def get_recently_available(
     return RecentlyAvailableResponse(
         items=response_items,
         total_count=len(response_items),
-    )
-
-
-async def get_currently_airing(
-    db: AsyncSession,
-    user_id: int,
-) -> CurrentlyAiringResponse:
-    """Get series that are currently airing (have in-progress seasons).
-
-    Returns items sorted by next air date.
-    Note: This is a placeholder implementation - full implementation in US-6.2.
-    """
-    # Placeholder - return empty list for now
-    # Full implementation will analyze raw_data for in_progress_seasons
-    return CurrentlyAiringResponse(
-        items=[],
-        total_count=0,
     )
 
 

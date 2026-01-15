@@ -1427,11 +1427,6 @@ class TestInfoEndpoints:
         response = client.get("/api/info/recent")
         assert response.status_code == 401
 
-    def test_currently_airing_requires_authentication(self, client: TestClient) -> None:
-        """GET /api/info/airing should require authentication."""
-        response = client.get("/api/info/airing")
-        assert response.status_code == 401
-
     @pytest.mark.asyncio
     async def test_recently_available_returns_empty_list_when_no_data(
         self, client: TestClient
@@ -1441,20 +1436,6 @@ class TestInfoEndpoints:
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.get("/api/info/recent", headers=headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["items"] == []
-        assert data["total_count"] == 0
-
-    @pytest.mark.asyncio
-    async def test_currently_airing_returns_empty_list_when_no_data(
-        self, client: TestClient
-    ) -> None:
-        """Should return empty list when no currently airing series exist."""
-        token = self._get_auth_token(client, "airing-empty@example.com")
-        headers = {"Authorization": f"Bearer {token}"}
-
-        response = client.get("/api/info/airing", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["items"] == []
@@ -1655,10 +1636,10 @@ class TestInfoEndpoints:
         assert data["items"][2]["title"] == "Day 5 Movie"
 
     @pytest.mark.asyncio
-    async def test_summary_includes_info_counts(
+    async def test_summary_includes_recently_available_count(
         self, client: TestClient
     ) -> None:
-        """GET /api/content/summary should include recently_available and currently_airing counts."""
+        """GET /api/content/summary should include recently_available count."""
         from app.database import CachedJellyseerrRequest
 
         token = self._get_auth_token(client, "summary-info@example.com")
@@ -1685,12 +1666,9 @@ class TestInfoEndpoints:
         assert response.status_code == 200
         data = response.json()
 
-        # Summary should include info counts
+        # Summary should include recently_available count
         assert "recently_available" in data
         assert data["recently_available"]["count"] == 1
-        assert "currently_airing" in data
-        # Currently airing is placeholder for now
-        assert data["currently_airing"]["count"] == 0
 
     @pytest.mark.asyncio
     async def test_user_isolation_for_recently_available(

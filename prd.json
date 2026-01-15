@@ -103,8 +103,8 @@
         "Verify in browser: dashboard no longer shows 'currently airing'"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed all currently airing code: endpoint, models, service function, frontend page and link, related tests. Dashboard info section now shows only recently available."
     },
     {
       "id": "US-31.1",

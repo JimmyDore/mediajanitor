@@ -37,7 +37,6 @@
 		language_issues: IssueCategorySummary;
 		unavailable_requests: IssueCategorySummary;
 		recently_available: InfoCategorySummary;
-		currently_airing: InfoCategorySummary;
 	}
 
 	let syncStatus = $state<SyncStatus | null>(null);
@@ -245,11 +244,6 @@
 					<span class="info-count">{contentSummary?.recently_available?.count ?? 0}</span>
 					<span class="info-text">recently available</span>
 				</button>
-				<span class="info-separator">·</span>
-				<button class="info-link" onclick={() => navigateToInfo('airing')}>
-					<span class="info-count">{contentSummary?.currently_airing?.count ?? 0}</span>
-					<span class="info-text">currently airing</span>
-				</button>
 			</div>
 		</section>
 		{/if}
@@ -429,10 +423,6 @@
 
 	.info-text {
 		color: inherit;
-	}
-
-	.info-separator {
-		color: var(--text-muted);
 	}
 
 	@keyframes spin {

@@ -91,7 +91,6 @@ class ContentSummaryResponse(BaseModel):
     unavailable_requests: IssueCategorySummary
     # Info categories (not issues)
     recently_available: InfoCategorySummary
-    currently_airing: InfoCategorySummary
 
 
 class RecentlyAvailableItem(BaseModel):
@@ -108,21 +107,6 @@ class RecentlyAvailableResponse(BaseModel):
     """Response model for recently available content list."""
 
     items: list[RecentlyAvailableItem]
-    total_count: int
-
-
-class CurrentlyAiringItem(BaseModel):
-    """Response model for a single currently airing series."""
-
-    jellyseerr_id: int
-    title: str
-    in_progress_seasons: list[dict[str, int | str]]
-
-
-class CurrentlyAiringResponse(BaseModel):
-    """Response model for currently airing series list."""
-
-    items: list[CurrentlyAiringItem]
     total_count: int
 
 

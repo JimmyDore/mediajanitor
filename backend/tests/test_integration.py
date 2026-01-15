@@ -259,7 +259,6 @@ class TestIntegrationContentSummary:
             assert "language_issues" in data
             assert "unavailable_requests" in data
             assert "recently_available" in data
-            assert "currently_airing" in data
 
             # Verify structure of issue categories
             for category in ["old_content", "large_movies", "language_issues", "unavailable_requests"]:
@@ -268,8 +267,7 @@ class TestIntegrationContentSummary:
                 assert "total_size_formatted" in data[category]
 
             # Verify structure of info categories
-            for category in ["recently_available", "currently_airing"]:
-                assert "count" in data[category]
+            assert "count" in data["recently_available"]
 
 
 class TestIntegrationSyncStatus:
