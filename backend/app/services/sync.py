@@ -577,6 +577,154 @@ def extract_size_from_item(item: dict[str, Any]) -> int | None:
     return total_size if total_size > 0 else None
 
 
+async def fetch_series_seasons(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    series_id: str,
+) -> list[dict[str, Any]]:
+    """
+    Fetch all seasons for a series from Jellyfin API.
+
+    Returns list of season dicts with Id and IndexNumber.
+    """
+    params = {
+        "ParentId": series_id,
+        "IncludeItemTypes": "Season",
+    }
+
+    response = await client.get(
+        f"{server_url}/Items",
+        headers={"X-Emby-Token": api_key},
+        params=params,
+    )
+    response.raise_for_status()
+    data = response.json()
+    seasons: list[dict[str, Any]] = data.get("Items", [])
+    return seasons
+
+
+async def fetch_season_episodes(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    season_id: str,
+) -> list[dict[str, Any]]:
+    """
+    Fetch all episodes for a season from Jellyfin API.
+
+    Returns list of episode dicts with MediaSources for size calculation.
+    """
+    params = {
+        "ParentId": season_id,
+        "IncludeItemTypes": "Episode",
+        "Fields": "MediaSources",
+    }
+
+    response = await client.get(
+        f"{server_url}/Items",
+        headers={"X-Emby-Token": api_key},
+        params=params,
+    )
+    response.raise_for_status()
+    data = response.json()
+    episodes: list[dict[str, Any]] = data.get("Items", [])
+    return episodes
+
+
+def calculate_season_total_size(episodes: list[dict[str, Any]]) -> int:
+    """Calculate total size of all episodes in a season."""
+    total_size = 0
+    for episode in episodes:
+        size = extract_size_from_item(episode)
+        if size:
+            total_size += size
+    return total_size
+
+
+async def calculate_season_sizes(
+    db: AsyncSession,
+    user_id: int,
+    server_url: str,
+    api_key: str,
+) -> None:
+    """
+    Calculate and store largest season sizes for all series in user's cache.
+
+    This function:
+    1. Fetches all series from cached_media_items for the user
+    2. For each series, fetches seasons from Jellyfin API
+    3. For each season, fetches episodes and calculates total size
+    4. Stores the largest season size in largest_season_size_bytes
+
+    Args:
+        db: Database session
+        user_id: User ID
+        server_url: Jellyfin server URL
+        api_key: Decrypted Jellyfin API key
+    """
+    server_url = server_url.rstrip("/")
+
+    # Fetch all series from cache
+    result = await db.execute(
+        select(CachedMediaItem).where(
+            CachedMediaItem.user_id == user_id,
+            CachedMediaItem.media_type == "Series",
+        )
+    )
+    series_items = result.scalars().all()
+
+    if not series_items:
+        logger.info("No series found for user, skipping season size calculation")
+        return
+
+    logger.info(f"Calculating season sizes for {len(series_items)} series...")
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for series in series_items:
+            try:
+                # Fetch seasons for this series
+                seasons = await fetch_series_seasons(
+                    client, server_url, api_key, series.jellyfin_id
+                )
+
+                if not seasons:
+                    logger.debug(f"No seasons found for series '{series.name}'")
+                    continue
+
+                # Calculate size for each season and find the largest
+                largest_season_size = 0
+                for season in seasons:
+                    season_id = season.get("Id")
+                    if not season_id:
+                        continue
+
+                    episodes = await fetch_season_episodes(
+                        client, server_url, api_key, season_id
+                    )
+                    season_size = calculate_season_total_size(episodes)
+
+                    if season_size > largest_season_size:
+                        largest_season_size = season_size
+
+                # Update the series with largest season size
+                if largest_season_size > 0:
+                    series.largest_season_size_bytes = largest_season_size
+                    logger.debug(
+                        f"Series '{series.name}': largest season = "
+                        f"{largest_season_size / (1024**3):.2f} GB"
+                    )
+
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                logger.warning(
+                    f"Failed to calculate season sizes for series '{series.name}': {e}"
+                )
+                # Continue to next series on error
+                continue
+
+    await db.flush()
+
+
 async def cache_media_items(
     db: AsyncSession, user_id: int, items: list[dict[str, Any]]
 ) -> int:
@@ -798,6 +946,15 @@ async def run_user_sync(
         )
         media_count = await cache_media_items(db, user_id, items)
         logger.info(f"Cached {media_count} media items for user {user_id}")
+
+        # Calculate season sizes for series (background task after main sync)
+        await update_sync_progress(
+            db, user_id, current_step="calculating_sizes",
+            current_step_progress=None, current_step_total=None, current_user_name=None
+        )
+        await calculate_season_sizes(
+            db, user_id, settings.jellyfin_server_url, jellyfin_api_key
+        )
 
     except Exception as e:
         error_message = f"Jellyfin sync failed: {str(e)}"

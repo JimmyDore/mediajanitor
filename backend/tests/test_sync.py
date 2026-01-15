@@ -1081,3 +1081,407 @@ class TestSyncProgressTracking:
             assert data["progress"]["current_step_progress"] == 3
             assert data["progress"]["current_step_total"] == 10
             assert data["progress"]["current_user_name"] == "John"
+
+
+class TestCalculateSeasonSizes:
+    """Test season size calculation (US-20.2)."""
+
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_updates_series_only(
+        self, client: TestClient
+    ) -> None:
+        """calculate_season_sizes should only update Series items, not Movies."""
+        from app.services.sync import calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a user with settings
+            user = User(
+                email="season_size1@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+
+            # Add a movie and a series to cache
+            movie = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="movie-123",
+                name="Test Movie",
+                media_type="Movie",
+                size_bytes=5_000_000_000,  # 5 GB
+            )
+            series = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="series-456",
+                name="Test Series",
+                media_type="Series",
+            )
+            session.add(movie)
+            session.add(series)
+            await session.commit()
+
+            # Mock the Jellyfin API response for seasons
+            mock_seasons_response = {
+                "Items": [
+                    {
+                        "Id": "season1",
+                        "Name": "Season 1",
+                        "IndexNumber": 1,
+                        "Type": "Season",
+                    },
+                    {
+                        "Id": "season2",
+                        "Name": "Season 2",
+                        "IndexNumber": 2,
+                        "Type": "Season",
+                    },
+                ]
+            }
+            # Season 1 episodes: 10 GB total, Season 2 episodes: 15 GB total
+            mock_episodes_s1 = {
+                "Items": [
+                    {"Id": "ep1", "MediaSources": [{"Size": 5_000_000_000}]},  # 5 GB
+                    {"Id": "ep2", "MediaSources": [{"Size": 5_000_000_000}]},  # 5 GB
+                ]
+            }
+            mock_episodes_s2 = {
+                "Items": [
+                    {"Id": "ep3", "MediaSources": [{"Size": 8_000_000_000}]},  # 8 GB
+                    {"Id": "ep4", "MediaSources": [{"Size": 7_000_000_000}]},  # 7 GB
+                ]
+            }
+
+            async def mock_get(self, url, **kwargs):
+                import httpx
+                params = kwargs.get("params", {})
+                parent_id = params.get("ParentId", "")
+
+                # Seasons request for series-456
+                if "series-456" in str(parent_id) or ("Items" in str(url) and "Season" in str(params.get("IncludeItemTypes", ""))):
+                    if parent_id == "series-456":
+                        return httpx.Response(200, json=mock_seasons_response, request=httpx.Request("GET", url))
+                # Episodes for season1
+                if parent_id == "season1":
+                    return httpx.Response(200, json=mock_episodes_s1, request=httpx.Request("GET", url))
+                # Episodes for season2
+                if parent_id == "season2":
+                    return httpx.Response(200, json=mock_episodes_s2, request=httpx.Request("GET", url))
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                    await calculate_season_sizes(
+                        session, user.id,
+                        "http://jellyfin.local", "decrypted-key"
+                    )
+
+            # Refresh from DB
+            from sqlalchemy import select
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            items = {item.name: item for item in result.scalars().all()}
+
+            # Movie should NOT have largest_season_size_bytes set
+            assert items["Test Movie"].largest_season_size_bytes is None
+
+            # Series should have largest season size (15 GB from Season 2)
+            assert items["Test Series"].largest_season_size_bytes == 15_000_000_000
+
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_handles_api_errors(
+        self, client: TestClient
+    ) -> None:
+        """calculate_season_sizes should continue if API fails for one series."""
+        from app.services.sync import calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="season_size2@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            # Add two series
+            series1 = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="series-1",
+                name="Series 1",
+                media_type="Series",
+            )
+            series2 = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="series-2",
+                name="Series 2",
+                media_type="Series",
+            )
+            session.add(series1)
+            session.add(series2)
+            await session.commit()
+
+            call_count = {"count": 0}
+
+            async def mock_get(self, url, **kwargs):
+                import httpx
+                call_count["count"] += 1
+                params = kwargs.get("params", {})
+                parent_id = params.get("ParentId", "")
+
+                # First series call succeeds
+                if parent_id == "series-1":
+                    return httpx.Response(200, json={
+                        "Items": [{"Id": "s1-season1", "IndexNumber": 1}]
+                    }, request=httpx.Request("GET", url))
+                elif parent_id == "s1-season1":
+                    return httpx.Response(200, json={
+                        "Items": [{"Id": "ep1", "MediaSources": [{"Size": 5_000_000_000}]}]
+                    }, request=httpx.Request("GET", url))
+                # Second series call fails
+                elif parent_id == "series-2":
+                    raise httpx.RequestError("Connection failed")
+
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                # Should not raise, just log warning and continue
+                await calculate_season_sizes(
+                    session, user.id,
+                    "http://jellyfin.local", "api-key"
+                )
+
+            from sqlalchemy import select
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            items = {item.name: item for item in result.scalars().all()}
+
+            # First series should have size calculated
+            assert items["Series 1"].largest_season_size_bytes == 5_000_000_000
+
+            # Second series should be None (API failed)
+            assert items["Series 2"].largest_season_size_bytes is None
+
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_handles_empty_series(
+        self, client: TestClient
+    ) -> None:
+        """calculate_season_sizes should handle series with no seasons."""
+        from app.services.sync import calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="season_size3@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            series = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="empty-series",
+                name="Empty Series",
+                media_type="Series",
+            )
+            session.add(series)
+            await session.commit()
+
+            async def mock_get(self, url, **kwargs):
+                import httpx
+                # Return empty seasons list
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                await calculate_season_sizes(
+                    session, user.id,
+                    "http://jellyfin.local", "api-key"
+                )
+
+            from sqlalchemy import select
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            items = result.scalars().all()
+
+            # Series with no seasons should have None
+            assert items[0].largest_season_size_bytes is None
+
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_progress_logging(
+        self, client: TestClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """calculate_season_sizes should log progress."""
+        import logging
+        from app.services.sync import calculate_season_sizes
+
+        caplog.set_level(logging.INFO)
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="season_size4@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            series1 = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="s1",
+                name="Series One",
+                media_type="Series",
+            )
+            series2 = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="s2",
+                name="Series Two",
+                media_type="Series",
+            )
+            session.add(series1)
+            session.add(series2)
+            await session.commit()
+
+            async def mock_get(self, url, **kwargs):
+                import httpx
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                await calculate_season_sizes(
+                    session, user.id,
+                    "http://jellyfin.local", "api-key"
+                )
+
+            # Should have log message about calculating sizes
+            assert any("Calculating season sizes for 2 series" in record.message for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_cached_media_item_has_largest_season_size_column(
+        self, client: TestClient
+    ) -> None:
+        """CachedMediaItem should have largest_season_size_bytes column."""
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=1,
+                jellyfin_id="test-series",
+                name="Test Series",
+                media_type="Series",
+                largest_season_size_bytes=15_000_000_000,  # 15 GB
+            )
+            session.add(item)
+            await session.commit()
+
+            assert item.id is not None
+            assert item.largest_season_size_bytes == 15_000_000_000
+
+
+class TestSyncCalculatingSizesState:
+    """Test calculating_sizes sync state (US-20.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "calcsize@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_sync_status_includes_calculating_sizes_step(
+        self, client: TestClient
+    ) -> None:
+        """Sync status should show calculating_sizes step after main sync."""
+        async with TestingAsyncSessionLocal() as session:
+            status = SyncStatus(
+                user_id=999,
+                last_sync_started=datetime.now(timezone.utc),
+                last_sync_status="in_progress",
+                current_step="calculating_sizes",
+                total_steps=2,
+                current_step_progress=5,
+                current_step_total=10,
+            )
+            session.add(status)
+            await session.commit()
+
+            assert status.current_step == "calculating_sizes"
+
+    @pytest.mark.asyncio
+    @patch("app.services.sync.fetch_jellyfin_media_with_progress")
+    @patch("app.services.sync.calculate_season_sizes")
+    async def test_sync_triggers_calculate_season_sizes_after_media_sync(
+        self,
+        mock_calculate_sizes: AsyncMock,
+        mock_jellyfin: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """run_user_sync should call calculate_season_sizes after caching media."""
+        from app.services.sync import run_user_sync
+
+        mock_jellyfin.return_value = [
+            {
+                "Id": "series-1",
+                "Name": "Test Series",
+                "Type": "Series",
+                "UserData": {"Played": False, "PlayCount": 0},
+            }
+        ]
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="calc_trigger@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+            await session.commit()
+
+            with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                await run_user_sync(session, user.id)
+
+            # calculate_season_sizes should have been called
+            mock_calculate_sizes.assert_called_once()
+            call_args = mock_calculate_sizes.call_args
+            assert call_args[0][1] == user.id  # user_id
+            assert call_args[0][2] == "http://jellyfin.local"  # server_url
+            assert call_args[0][3] == "decrypted-key"  # api_key
+
+    def test_sync_status_returns_calculating_sizes_in_progress(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/sync/status should include calculating_sizes step."""
+        token = self._get_auth_token(client, "calcsize1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        mock_status = SyncStatus(
+            user_id=1,
+            last_sync_started=datetime.now(timezone.utc),
+            current_step="calculating_sizes",
+            total_steps=2,
+            current_step_progress=5,
+            current_step_total=20,
+        )
+
+        with patch("app.routers.sync.get_sync_status", return_value=mock_status):
+            response = client.get("/api/sync/status", headers=headers)
+            assert response.status_code == 200
+            data = response.json()
+
+            assert data["is_syncing"] is True
+            assert data["progress"]["current_step"] == "calculating_sizes"

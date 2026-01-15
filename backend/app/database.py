@@ -87,6 +87,7 @@ class CachedMediaItem(Base):
     played: Mapped[bool] = mapped_column(Boolean, default=False)
     play_count: Mapped[int] = mapped_column(Integer, default=0)
     last_played_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    largest_season_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # For series only
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

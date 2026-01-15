@@ -393,8 +393,8 @@
         "Integration test: trigger sync, verify season sizes populated"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added largest_season_size_bytes field to CachedMediaItem, created Alembic migration, implemented calculate_season_sizes() that fetches seasons/episodes from Jellyfin API and stores largest season size, triggered after media sync with calculating_sizes progress step"
     },
     {
       "id": "US-20.3",
