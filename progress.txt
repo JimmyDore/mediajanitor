@@ -1292,10 +1292,96 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-16.3] add theme toggle UI
 
+### 2026-01-15: US-32.1 - Refresh Token Backend Implementation
+- Created RefreshToken database model with:
+  - id, user_id (FK), token_hash (SHA-256), expires_at, created_at
+  - Unique index on token_hash for fast lookups
+- Created Alembic migration for refresh_tokens table
+- Updated config.py:
+  - access_token_expire_minutes: 30 → 15 (short-lived)
+  - Added refresh_token_expire_days: 30 (long-lived)
+- Implemented auth service functions:
+  - generate_refresh_token(): Cryptographically secure token generation
+  - hash_refresh_token(): SHA-256 hashing (stored in DB, not the raw token)
+  - create_refresh_token(): Creates and stores hashed token
+  - validate_refresh_token(): Validates token exists and not expired
+  - rotate_refresh_token(): Invalidates old, creates new (security best practice)
+  - invalidate_refresh_token(): Deletes token by hash
+  - get_user_by_id_async(): Helper for refresh endpoint
+- Updated POST /api/auth/login:
+  - Returns TokenWithRefresh: access_token, token_type, expires_in (900 seconds)
+  - Sets refresh_token as httpOnly cookie (30 days, secure, samesite=lax)
+- Created POST /api/auth/refresh:
+  - Accepts refresh token via cookie or request body
+  - Rotates token (old invalidated, new issued)
+  - Returns new access token
+- Created POST /api/auth/logout:
+  - Invalidates refresh token in database
+  - Clears refresh token cookie
+  - Returns 204 No Content
+- Updated Pydantic models:
+  - TokenWithRefresh: access_token, token_type, expires_in
+  - RefreshTokenRequest: optional refresh_token for non-cookie clients
+- Added TESTING env var check for cookie settings (path, secure flags)
+- 8 new unit tests for refresh token functionality:
+  - test_refresh_success_with_cookie
+  - test_refresh_without_token_returns_401
+  - test_refresh_with_invalid_token_returns_401
+  - test_refresh_rotates_token (verifies old token invalidated)
+  - test_refresh_via_request_body
+  - test_logout_success
+  - test_logout_without_token_succeeds
+  - test_logout_clears_cookie
+- 286 backend unit tests pass, 17 integration tests pass, mypy clean
+- Verified in Docker: login, refresh, rotation, logout all work correctly
+- Files changed: config.py, database.py, models/user.py, routers/auth.py, services/auth.py, tests/conftest.py, tests/test_auth.py, alembic migration
+- Commits:
+  - feat(auth): [US-32.1] add refresh token backend implementation
+
+### 2026-01-15: US-32.2 - Frontend Token Refresh
+- Refactored auth store to use in-memory token storage instead of localStorage:
+  - accessToken and tokenExpiresAt stored in module-level variables
+  - Removed localStorage.getItem/setItem/removeItem for access_token
+  - auth.setToken(token, expiresIn) stores token in memory with expiration
+  - auth.getToken() returns current in-memory token
+- Implemented refreshAccessToken() method:
+  - Calls POST /api/auth/refresh with credentials: 'include' for httpOnly cookie
+  - Updates in-memory token on success
+  - Returns boolean for success/failure
+- Implemented proactive token refresh:
+  - scheduleTokenRefresh() sets timer to refresh 60 seconds before expiration
+  - Timer cleared on logout or token change
+- Updated logout to invalidate refresh token:
+  - Calls POST /api/auth/logout endpoint
+  - Clears in-memory tokens
+  - Clears refresh timer
+- Created authenticatedFetch() wrapper:
+  - Adds Authorization header with Bearer token
+  - Includes credentials: 'include' for cookies
+  - On 401 response: attempts token refresh and retries original request
+  - Returns original 401 response if refresh fails
+- Updated all frontend pages to use authenticatedFetch:
+  - +page.svelte (dashboard): syncStatus, contentSummary, triggerSync
+  - settings/+page.svelte: all loadCurrentSettings and submit handlers
+  - issues/+page.svelte: fetchIssues, fetchConfigStatus, all whitelist actions
+  - whitelist/+page.svelte: fetchAll, removeItem
+  - info/recent/+page.svelte: onMount fetch
+  - info/airing/+page.svelte: onMount fetch
+  - content/old-unwatched/+page.svelte: protectContent, fetchOldUnwatchedContent
+- Updated login page to use credentials: 'include' and store token via auth.setToken()
+- Updated theme store to use getAccessToken() instead of localStorage
+- New frontend tests: 10 tests for token refresh API integration (token-refresh.test.ts)
+- Updated theme.test.ts to use auth.setToken() for test setup
+- 232 frontend tests pass, typecheck passes
+- Verified in browser: login, navigation, API calls all work correctly
+- Files changed: stores/index.ts, +page.svelte (dashboard), settings/+page.svelte, issues/+page.svelte, whitelist/+page.svelte, info/recent/+page.svelte, info/airing/+page.svelte, content/old-unwatched/+page.svelte, login/+page.svelte, theme.test.ts, token-refresh.test.ts
+- Commits:
+  - feat(auth): [US-32.2] add frontend token refresh implementation
+
 ## Current Status
 
-**Phase**: Epic 16 - Theme Preferences (COMPLETE)
-**Total Stories**: 55 stories (55 passes: true, 0 remaining)
+**Phase**: Epic 32 - Session Management (In Progress)
+**Total Stories**: 57 stories (57 passes: true, US-32.3 remaining)
 
 ## Notes
 
