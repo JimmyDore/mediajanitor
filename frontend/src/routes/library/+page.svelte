@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
 
@@ -32,22 +32,59 @@
 	}
 
 	type MediaTypeFilter = 'all' | 'movie' | 'series';
-	type SortField = 'name' | 'year' | 'size' | 'added' | 'last_watched';
+	type WatchedFilter = 'all' | 'true' | 'false';
+	type SortField = 'name' | 'year' | 'size' | 'date_added' | 'last_watched';
 	type SortOrder = 'asc' | 'desc';
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let data = $state<LibraryResponse | null>(null);
 
+	// Filter state
 	let activeFilter = $state<MediaTypeFilter>('all');
+	let searchQuery = $state('');
+	let watchedFilter = $state<WatchedFilter>('all');
+	let minYear = $state<number | null>(null);
+	let maxYear = $state<number | null>(null);
+	let minSizeGb = $state<number | null>(null);
+	let maxSizeGb = $state<number | null>(null);
 	let sortField = $state<SortField>('name');
 	let sortOrder = $state<SortOrder>('asc');
+
+	// Debounce timer
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const filterLabels: Record<MediaTypeFilter, string> = {
 		all: 'All',
 		movie: 'Movies',
 		series: 'Series'
 	};
+
+	const watchedLabels: Record<WatchedFilter, string> = {
+		all: 'All',
+		true: 'Watched',
+		false: 'Unwatched'
+	};
+
+	const sortLabels: Record<SortField, string> = {
+		name: 'Name',
+		year: 'Year',
+		size: 'Size',
+		date_added: 'Date Added',
+		last_watched: 'Last Watched'
+	};
+
+	// Check if any filters are active
+	let hasActiveFilters = $derived(
+		searchQuery.trim() !== '' ||
+			watchedFilter !== 'all' ||
+			minYear !== null ||
+			maxYear !== null ||
+			minSizeGb !== null ||
+			maxSizeGb !== null ||
+			sortField !== 'name' ||
+			sortOrder !== 'asc'
+	);
 
 	function formatLastWatched(lastPlayed: string | null, played: boolean): string {
 		if (lastPlayed) {
@@ -88,13 +125,31 @@
 		return `${baseUrl.replace(/\/$/, '')}/web/index.html#!/details?id=${item.jellyfin_id}`;
 	}
 
-	async function fetchLibrary(filter: MediaTypeFilter) {
+	async function fetchLibrary() {
 		loading = true;
 		error = null;
 		try {
 			const params = new URLSearchParams();
-			if (filter !== 'all') {
-				params.set('type', filter);
+			if (activeFilter !== 'all') {
+				params.set('type', activeFilter);
+			}
+			if (searchQuery.trim()) {
+				params.set('search', searchQuery.trim());
+			}
+			if (watchedFilter !== 'all') {
+				params.set('watched', watchedFilter);
+			}
+			if (minYear !== null) {
+				params.set('min_year', minYear.toString());
+			}
+			if (maxYear !== null) {
+				params.set('max_year', maxYear.toString());
+			}
+			if (minSizeGb !== null) {
+				params.set('min_size_gb', minSizeGb.toString());
+			}
+			if (maxSizeGb !== null) {
+				params.set('max_size_gb', maxSizeGb.toString());
 			}
 			params.set('sort', sortField);
 			params.set('order', sortOrder);
@@ -122,7 +177,84 @@
 
 	function setFilter(filter: MediaTypeFilter) {
 		activeFilter = filter;
-		fetchLibrary(filter);
+		fetchLibrary();
+	}
+
+	function handleSearchInput(event: Event) {
+		const target = event.target as HTMLInputElement;
+		searchQuery = target.value;
+
+		// Debounce the search
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
+		searchDebounceTimer = setTimeout(() => {
+			fetchLibrary();
+		}, 300);
+	}
+
+	function clearSearch() {
+		searchQuery = '';
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
+		fetchLibrary();
+	}
+
+	function handleWatchedChange(event: Event) {
+		const target = event.target as HTMLSelectElement;
+		watchedFilter = target.value as WatchedFilter;
+		fetchLibrary();
+	}
+
+	function handleMinYearChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		minYear = target.value ? parseInt(target.value, 10) : null;
+		fetchLibrary();
+	}
+
+	function handleMaxYearChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		maxYear = target.value ? parseInt(target.value, 10) : null;
+		fetchLibrary();
+	}
+
+	function handleMinSizeChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		minSizeGb = target.value ? parseFloat(target.value) : null;
+		fetchLibrary();
+	}
+
+	function handleMaxSizeChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		maxSizeGb = target.value ? parseFloat(target.value) : null;
+		fetchLibrary();
+	}
+
+	function handleSortChange(event: Event) {
+		const target = event.target as HTMLSelectElement;
+		sortField = target.value as SortField;
+		fetchLibrary();
+	}
+
+	function toggleSortOrder() {
+		sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		fetchLibrary();
+	}
+
+	function clearAllFilters() {
+		searchQuery = '';
+		watchedFilter = 'all';
+		minYear = null;
+		maxYear = null;
+		minSizeGb = null;
+		maxSizeGb = null;
+		sortField = 'name';
+		sortOrder = 'asc';
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
+		fetchLibrary();
 	}
 
 	function toggleSort(field: SortField) {
@@ -132,11 +264,17 @@
 			sortField = field;
 			sortOrder = field === 'name' ? 'asc' : 'desc';
 		}
-		fetchLibrary(activeFilter);
+		fetchLibrary();
 	}
 
 	onMount(() => {
-		fetchLibrary(activeFilter);
+		fetchLibrary();
+	});
+
+	onDestroy(() => {
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
 	});
 </script>
 
@@ -154,6 +292,20 @@
 				</span>
 			{/if}
 		</div>
+
+		<!-- Search Input -->
+		<div class="search-container">
+			<input
+				type="text"
+				class="search-input"
+				placeholder="Search by title, year..."
+				value={searchQuery}
+				oninput={handleSearchInput}
+			/>
+			{#if searchQuery}
+				<button class="search-clear" onclick={clearSearch} aria-label="Clear search">×</button>
+			{/if}
+		</div>
 	</header>
 
 	<!-- Filter Tabs (underline style) -->
@@ -168,6 +320,92 @@
 			</button>
 		{/each}
 	</nav>
+
+	<!-- Filters Row -->
+	<div class="filters-row">
+		<div class="filter-group">
+			<label for="watched-filter">Status</label>
+			<select id="watched-filter" class="filter-select" value={watchedFilter} onchange={handleWatchedChange}>
+				{#each Object.entries(watchedLabels) as [value, label]}
+					<option {value}>{label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<div class="filter-group filter-group-range">
+			<span class="filter-label">Year</span>
+			<div class="range-inputs">
+				<input
+					type="number"
+					class="filter-input"
+					placeholder="Min"
+					aria-label="Minimum year"
+					value={minYear ?? ''}
+					onchange={handleMinYearChange}
+					min="1900"
+					max="2099"
+				/>
+				<span class="range-separator">–</span>
+				<input
+					type="number"
+					class="filter-input"
+					placeholder="Max"
+					aria-label="Maximum year"
+					value={maxYear ?? ''}
+					onchange={handleMaxYearChange}
+					min="1900"
+					max="2099"
+				/>
+			</div>
+		</div>
+
+		<div class="filter-group filter-group-range">
+			<span class="filter-label">Size (GB)</span>
+			<div class="range-inputs">
+				<input
+					type="number"
+					class="filter-input"
+					placeholder="Min"
+					aria-label="Minimum size in GB"
+					value={minSizeGb ?? ''}
+					onchange={handleMinSizeChange}
+					min="0"
+					step="0.1"
+				/>
+				<span class="range-separator">–</span>
+				<input
+					type="number"
+					class="filter-input"
+					placeholder="Max"
+					aria-label="Maximum size in GB"
+					value={maxSizeGb ?? ''}
+					onchange={handleMaxSizeChange}
+					min="0"
+					step="0.1"
+				/>
+			</div>
+		</div>
+
+		<div class="filter-group">
+			<label for="sort-field">Sort by</label>
+			<div class="sort-controls">
+				<select id="sort-field" class="filter-select" value={sortField} onchange={handleSortChange}>
+					{#each Object.entries(sortLabels) as [value, label]}
+						<option {value}>{label}</option>
+					{/each}
+				</select>
+				<button class="sort-order-btn" onclick={toggleSortOrder} title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}>
+					{sortOrder === 'asc' ? '↑' : '↓'}
+				</button>
+			</div>
+		</div>
+
+		{#if hasActiveFilters}
+			<button class="clear-filters-btn" onclick={clearAllFilters}>
+				Clear filters
+			</button>
+		{/if}
+	</div>
 
 	{#if loading}
 		<div class="loading">
@@ -204,8 +442,8 @@
 								</button>
 							</th>
 							<th class="col-added">
-								<button class="sort-btn" onclick={() => toggleSort('added')}>
-									Added {sortField === 'added' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+								<button class="sort-btn" onclick={() => toggleSort('date_added')}>
+									Added {sortField === 'date_added' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
 							<th class="col-watched">
@@ -313,6 +551,176 @@
 	.filter-tab.active {
 		color: var(--text-primary);
 		border-bottom-color: var(--accent);
+	}
+
+	/* Search */
+	.search-container {
+		position: relative;
+		margin-top: var(--space-3);
+	}
+
+	.search-input {
+		width: 100%;
+		max-width: 300px;
+		padding: var(--space-2) var(--space-3);
+		padding-right: var(--space-8);
+		font-size: var(--font-size-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		transition: border-color var(--transition-fast);
+	}
+
+	.search-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.search-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.search-clear {
+		position: absolute;
+		right: var(--space-2);
+		top: 50%;
+		transform: translateY(-50%);
+		padding: var(--space-1);
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: var(--font-size-lg);
+		line-height: 1;
+	}
+
+	.search-clear:hover {
+		color: var(--text-primary);
+	}
+
+	/* Filters Row */
+	.filters-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		align-items: flex-end;
+		margin-bottom: var(--space-6);
+		padding: var(--space-4);
+		background: var(--bg-secondary);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border);
+	}
+
+	.filter-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.filter-group label,
+	.filter-label {
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.filter-select {
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		cursor: pointer;
+		min-width: 100px;
+	}
+
+	.filter-select:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.filter-group-range .range-inputs {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.filter-input {
+		width: 70px;
+		padding: var(--space-2) var(--space-2);
+		font-size: var(--font-size-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		text-align: center;
+	}
+
+	.filter-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.filter-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	/* Hide spinner buttons on number inputs */
+	.filter-input::-webkit-outer-spin-button,
+	.filter-input::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		appearance: none;
+		margin: 0;
+	}
+	.filter-input[type=number] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
+
+	.range-separator {
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
+
+	.sort-controls {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.sort-order-btn {
+		padding: var(--space-2);
+		font-size: var(--font-size-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		cursor: pointer;
+		min-width: 32px;
+	}
+
+	.sort-order-btn:hover {
+		background: var(--bg-hover);
+	}
+
+	.clear-filters-btn {
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-muted);
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.clear-filters-btn:hover {
+		color: var(--text-primary);
+		background: var(--bg-hover);
 	}
 
 	/* Loading & Error */
@@ -521,6 +929,15 @@
 			padding: var(--space-4);
 		}
 
+		.filters-row {
+			gap: var(--space-3);
+			padding: var(--space-3);
+		}
+
+		.filter-group-range {
+			width: 100%;
+		}
+
 		.col-added {
 			display: none;
 		}
@@ -534,6 +951,23 @@
 	@media (max-width: 640px) {
 		.filter-nav {
 			overflow-x: auto;
+		}
+
+		.filters-row {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.filter-group {
+			width: 100%;
+		}
+
+		.filter-select {
+			width: 100%;
+		}
+
+		.filter-input {
+			flex: 1;
 		}
 
 		.col-watched {
