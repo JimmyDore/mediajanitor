@@ -109,6 +109,40 @@ async def get_sonarr_series_by_tmdb_id(
         return None
 
 
+async def get_sonarr_tmdb_to_slug_map(
+    server_url: str, api_key: str
+) -> dict[int, str]:
+    """
+    Build a mapping from TMDB ID to Sonarr titleSlug.
+
+    Sonarr's web UI uses titleSlug in URLs (e.g., /series/arcane),
+    not internal IDs. This map allows us to build correct external links.
+
+    Returns dict mapping tmdb_id -> titleSlug
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/series",
+                headers={"X-Api-Key": api_key},
+            )
+            if response.status_code != 200:
+                return {}
+
+            series_list = response.json()
+            tmdb_to_slug: dict[int, str] = {}
+            for series in series_list:
+                tmdb_id = series.get("tmdbId")
+                title_slug = series.get("titleSlug")
+                if tmdb_id is not None and title_slug:
+                    tmdb_to_slug[int(tmdb_id)] = str(title_slug)
+            return tmdb_to_slug
+    except (httpx.RequestError, httpx.TimeoutException):
+        return {}
+
+
 async def delete_sonarr_series(
     server_url: str, api_key: str, sonarr_id: int, delete_files: bool = True
 ) -> bool:

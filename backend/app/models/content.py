@@ -154,6 +154,7 @@ class ContentIssueItem(BaseModel):
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
     tmdb_id: str | None = None  # TMDB ID for external links
     imdb_id: str | None = None  # IMDB ID for external links
+    sonarr_title_slug: str | None = None  # Sonarr titleSlug for external links (e.g., "arcane")
     jellyseerr_request_id: int | None = None  # Matching Jellyseerr request ID (for reconciliation)
     # Request-specific fields (only populated for items with "request" issue)
     requested_by: str | None = None  # Who requested it

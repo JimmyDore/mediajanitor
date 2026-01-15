@@ -1055,6 +1055,20 @@ async def get_content_issues(
     # Get user's thresholds
     thresholds = await get_user_thresholds(db, user_id)
 
+    # Build Sonarr TMDB -> titleSlug map for enriching series items
+    from app.services.sonarr import get_sonarr_tmdb_to_slug_map, get_decrypted_sonarr_api_key
+    sonarr_slug_map: dict[int, str] = {}
+    settings_result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    user_settings = settings_result.scalar_one_or_none()
+    if user_settings and user_settings.sonarr_server_url and user_settings.sonarr_api_key_encrypted:
+        sonarr_api_key = get_decrypted_sonarr_api_key(user_settings)
+        if sonarr_api_key:
+            sonarr_slug_map = await get_sonarr_tmdb_to_slug_map(
+                user_settings.sonarr_server_url, sonarr_api_key
+            )
+
     # Get user's cached media items
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -1128,14 +1142,18 @@ async def get_content_issues(
     for item, issues, language_issues_detail in items_with_issues:
         tmdb_id, imdb_id = extract_provider_ids(item)
 
-        # Look up matching Jellyseerr request
+        # Look up matching Jellyseerr request and Sonarr titleSlug
         jellyseerr_request_id = None
+        sonarr_title_slug = None
         if tmdb_id:
             try:
                 tmdb_id_int = int(tmdb_id)
                 # Normalize media type for lookup: "Movie" -> "movie", "Series" -> "tv"
                 normalized_media_type = "movie" if item.media_type == "Movie" else "tv"
                 jellyseerr_request_id = jellyseerr_map.get((tmdb_id_int, normalized_media_type))
+                # Look up Sonarr titleSlug for series items (for external links)
+                if item.media_type == "Series":
+                    sonarr_title_slug = sonarr_slug_map.get(tmdb_id_int)
             except (ValueError, TypeError):
                 pass
 
@@ -1154,6 +1172,7 @@ async def get_content_issues(
                 language_issues=language_issues_detail if language_issues_detail else None,
                 tmdb_id=tmdb_id,
                 imdb_id=imdb_id,
+                sonarr_title_slug=sonarr_title_slug,
                 jellyseerr_request_id=jellyseerr_request_id,
             )
         )

@@ -17,6 +17,7 @@
 		language_issues: string[] | null;
 		tmdb_id: string | null;
 		imdb_id: string | null;
+		sonarr_title_slug: string | null;  // Sonarr titleSlug for external links (e.g., "arcane")
 		jellyseerr_request_id: number | null;  // Matching Jellyseerr request ID (for reconciliation)
 		// Request-specific fields
 		requested_by: string | null;
@@ -623,9 +624,9 @@
 		// Only show for series
 		if (item.media_type.toLowerCase() !== 'series' && item.media_type.toLowerCase() !== 'tv') return null;
 		const baseUrl = data?.service_urls?.sonarr_url;
-		if (!baseUrl || !item.tmdb_id) return null;
-		// Sonarr URL pattern for series (using TMDB ID): /series/{tmdb_id}
-		return `${baseUrl.replace(/\/$/, '')}/series/${item.tmdb_id}`;
+		if (!baseUrl || !item.sonarr_title_slug) return null;
+		// Sonarr URL pattern for series (using titleSlug): /series/{titleSlug}
+		return `${baseUrl.replace(/\/$/, '')}/series/${item.sonarr_title_slug}`;
 	}
 
 	function formatSize(sizeBytes: number): string {
