@@ -40,7 +40,9 @@
 14. Append to progress.txt (date, story ID, files changed, learnings)
 15. Use /improve-claude-md skill to capture any new learnings for CLAUDE.md
 
-If all stories have `passes: true`, output <promise>COMPLETE</promise>.
+**Completion check (only after step 15):**
+Run: `jq '[.userStories[] | select(.passes == false)] | length' prd.json`
+If the result is **exactly 0**, output `<promise>COMPLETE</promise>`. Otherwise, do NOT output this tag.
 
 **CRITICAL: STOP AFTER ONE STORY.**
 After completing steps 1-15 for ONE story, you MUST stop immediately. Do NOT look for the next story. Do NOT continue working. The script will start a fresh session for the next story. This is essential for memory management.

@@ -112,13 +112,17 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   section_header "Iteration $i of $ITERATIONS"
   run_ralph
 
-  # Check for completion
-  if tail -100 "$LOGFILE" | grep -q "<promise>COMPLETE</promise>"; then
+  # Check for completion by verifying prd.json directly (don't trust Claude's output)
+  REMAINING=$(jq '[.userStories[] | select(.passes == false)] | length' prd.json 2>/dev/null || echo "999")
+  if [ "$REMAINING" -eq 0 ]; then
     echo ""
     echo "=========================================="
-    echo "PRD complete after $i iterations!"
+    echo "PRD complete after $i iterations! (0 stories remaining)"
     echo "=========================================="
     break
+  else
+    echo ""
+    echo "📋 $REMAINING stories remaining..."
   fi
 done
 
