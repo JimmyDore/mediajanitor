@@ -66,2137 +66,964 @@ Content items can have **multiple issues** (e.g., both Old AND Large), shown as 
 
 ---
 
-## Epic 0: Foundation & Deployment
+## Epic 17: Bug Fixes
 
 ### Overview
-Establish the foundational infrastructure: working full-stack communication, containerization, and production deployment.
-
-### Goals
-- Verify frontend-backend communication works
-- Enable reproducible deployments via Docker
-- Make app accessible on the internet
+Critical bug fixes that affect core functionality and data accuracy.
 
 ### User Stories
 
-#### US-0.1: Hello World (Full Stack) ✅
-**As a** developer
-**I want** a working frontend that displays "Hello World" from the backend
-**So that** I can verify the full stack communication works
-
-**Acceptance Criteria:**
-- [x] Backend endpoint `GET /api/hello` returns `{"message": "Hello World"}`
-- [x] Frontend displays the message fetched from backend
-- [x] Both run locally with `docker-compose up`
-
----
-
-#### US-0.2: Dockerize the Application ✅
-**As a** developer
-**I want** the entire application containerized
-**So that** I can deploy it anywhere
-
-**Acceptance Criteria:**
-- [x] Dockerfile for backend
-- [x] Dockerfile for frontend
-- [x] docker-compose.yml that runs both + database
-- [x] `docker-compose up` starts the full app on localhost
-
----
-
-#### US-0.3: Deploy to VPS ✅
-**As a** developer
-**I want** to deploy the app to my VPS
-**So that** it's accessible on the internet
-
-**Acceptance Criteria:**
-- [x] GitHub Actions workflow for CI/CD
-- [x] Auto-deploy to VPS on push to `main`
-- [x] App accessible at configured domain
-- [x] HTTPS via Let's Encrypt / Caddy
-
-### Non-Goals
-- Database migrations (handled by SQLAlchemy create_all for now)
-
----
-
-## Epic 1: Authentication
-
-### Overview
-Allow users to register, log in, and access their private data securely.
-
-### Goals
-- Secure user registration with hashed passwords
-- JWT-based authentication
-- Route protection for authenticated users
-
-### User Stories
-
-#### US-1.1: User Registration ✅
-**As a** new user
-**I want** to create an account
-**So that** I can use the dashboard
-
-**Acceptance Criteria:**
-- [x] Registration form (email, password)
-- [x] Backend creates user in database
-- [x] Password is hashed securely (bcrypt)
-- [x] User redirected to login after signup
-
----
-
-#### US-1.2: User Login ✅
-**As a** registered user
-**I want** to log in
-**So that** I can access my dashboard
-
-**Acceptance Criteria:**
-- [x] Login form (email, password)
-- [x] Backend validates credentials and returns JWT
-- [x] Token stored in frontend (localStorage)
-- [x] User redirected to dashboard
-
----
-
-#### US-1.3: Protected Routes ✅
+#### US-17.1: Multi-User Watch Data Aggregation
 **As a** user
-**I want** my data to be private
-**So that** only I can see my content
+**I want** my watched content to reflect plays from ALL Jellyfin users
+**So that** the Old/Unwatched content detection is accurate
+
+**Problem:**
+- Current sync only fetches watch data from the first Jellyfin user (`users[0]`)
+- If User B watched a movie but User A didn't, it shows as "Never watched"
+- Example: "La Chambre de Mariana" shows "Never" but was watched on 2025-09-14 by another user
 
 **Acceptance Criteria:**
-- [x] API endpoints require valid JWT
-- [x] Frontend redirects to login if not authenticated
-- [x] Each user sees only their own data
-
-### Non-Goals
-- OAuth/social login (see SUGGESTIONS.md)
-- Password reset flow
-
----
-
-## Epic 2: Configuration
-
-### Overview
-Allow users to connect their external services (Jellyfin, Jellyseerr) and set up navigation.
-
-### Goals
-- Secure storage of API credentials (encrypted)
-- Validate connections before saving
-- Consistent navigation across all pages
-
-### User Stories
-
-#### US-2.1: Configure Jellyfin Connection ✅
-**As a** user
-**I want** to input my Jellyfin API key and URL
-**So that** the app can fetch my library data
-
-**Acceptance Criteria:**
-- [x] Settings page with form for Jellyfin URL and API key
-- [x] Backend validates connection before saving
-- [x] Credentials stored encrypted in database
-- [x] Success/error feedback shown to user
-
----
-
-#### US-2.1.5: Backend Cleanup ✅
-**As a** developer
-**I want** to remove premature code that was created but not needed
-**So that** the codebase only contains code for completed stories
-
-**Acceptance Criteria:**
-- [x] Delete unused Pydantic models: `models/content.py`, `models/jellyseerr.py`, `models/whitelist.py`
-- [x] Update `models/__init__.py` to only export `user.py` and `settings.py` models
-- [x] Remove premature SQLAlchemy tables from `database.py`: `WhitelistContent`, `WhitelistFrenchOnly`, `WhitelistFrenchSubsOnly`, `WhitelistLanguageExempt`, `WhitelistEpisodeExempt`, `AppSettings`
-- [x] Run `uv run pytest` - all tests pass
-- [x] Run `uv run mypy app` - no type errors
-- [x] Typecheck passes
-- [x] Unit tests pass
-
----
-
-#### US-2.2: Configure Jellyseerr Connection ✅
-**As a** user
-**I want** to input my Jellyseerr API key and URL
-**So that** the app can fetch my requests data
-
-**Acceptance Criteria:**
-- [x] Settings page shows Jellyseerr section below Jellyfin
-- [x] Form fields for Jellyseerr URL and API key
-- [x] Backend validates connection by calling Jellyseerr API
-- [x] Credentials stored encrypted in database (using existing encryption service)
-- [x] Toast notification shows "Jellyseerr connected" on success or error message on failure
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
----
-
-#### US-2.3: Navigation Header ✅
-**As a** user
-**I want** a consistent navigation header across all pages
-**So that** I can easily move between dashboard, settings, and log out
-
-**Acceptance Criteria:**
-- [x] Header component with app logo/name on the left
-- [x] User menu on the right with: Settings link, Logout button
-- [x] Header appears on dashboard, settings, and all authenticated pages
-- [x] Current page highlighted in navigation
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-### Non-Goals
-- Breadcrumb navigation (see SUGGESTIONS.md)
-- Dark mode toggle
-
-### Technical Considerations
-- Reuse existing encryption service from US-2.1
-- Jellyseerr API: `GET /api/v1/status` for connection test
-
----
-
-## Epic 7: Background Tasks & Refresh
-
-### Overview
-Keep dashboard data fresh through automatic and manual sync mechanisms.
-
-### Goals
-- Daily automatic data refresh
-- On-demand manual refresh
-- Prevent API abuse
-
-### User Stories
-
-#### US-7.1: Automatic Daily Data Sync ✅
-**As a** user
-**I want** my data to refresh automatically every day
-**So that** the dashboard is always up-to-date
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` functions: `setup_jellyfin_client`, `fetch_jellyseer_requests`, `aggregate_all_user_data`, `get_movies_and_shows_for_user`**
-- [x] **Use API keys from `backend/.env` file for testing** (JELLYFIN_API_KEY, JELLYFIN_SERVER_URL, JELLYSEERR_API_KEY, JELLYSEERR_BASE_URL)
-- [x] **All cached data is tied to a user_id** - each user's sync is independent
-- [x] Background task can be triggered manually (for testing) or scheduled daily
-- [x] Uses the user's own stored API keys (from UserSettings) to fetch their data
-- [x] Fetches data from Jellyfin API: all movies/series with UserData, MediaSources
-- [x] Fetches data from Jellyseerr API: all requests with status
-- [x] Stores raw results in database cache tables with `user_id` FK (e.g., `cached_media_items`, `cached_jellyseerr_requests`)
-- [x] Dashboard shows "Last synced: [timestamp]" for the current user
-- [x] Failed syncs logged but don't crash the app
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Missing daily scheduler - see SUGGESTIONS.md [P1]
-
----
-
-#### US-7.1.5: Local Integration Test for Sync ✅
-**As a** developer
-**I want** to verify the sync service works with real Jellyfin/Jellyseerr APIs locally
-**So that** I can confirm data is fetched and cached correctly before deploying
-
-**Acceptance Criteria:**
-- [x] Run `docker-compose up` locally
-- [x] Register/login with credentials from `.env.example` (APP_USER_EMAIL, APP_USER_PASSWORD)
-- [x] Configure Jellyfin settings via Settings UI (user's real Jellyfin server)
-- [x] Configure Jellyseerr settings via Settings UI (user's real Jellyseerr server)
-- [x] Trigger sync via `curl -X POST http://localhost:8080/api/sync` with JWT token
-- [x] Verify `cached_media_items` table has data (query via SQLite or check /api/sync/status)
-- [x] Verify `cached_jellyseerr_requests` table has data
-- [x] Verify `GET /api/sync/status` returns correct counts (media_items_count > 0, requests_count > 0)
-- [x] Dashboard displays "Last synced" timestamp after sync
-- [x] Document any issues found in SUGGESTIONS.md
-
-**Result:** Verified 324 media items, 244 requests synced successfully.
-
----
-
-#### US-7.2: Manual Data Refresh ✅
-**As a** user
-**I want** to manually trigger a data refresh
-**So that** I can see changes immediately
-
-**Acceptance Criteria:**
-- [x] "Refresh" button on dashboard header
-- [x] Button shows loading spinner during refresh
-- [x] Data updates on page after refresh completes
-- [x] Rate limited: max 1 refresh per 5 minutes per user
-- [x] Toast notification shows result (success or rate limit message)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-### Non-Goals
-- Real-time websocket updates
-- Configurable sync schedule
-
-### Technical Considerations
-**Jellyfin API (from original_script.py):**
-```
-Authentication: Header `X-Emby-Token: {api_key}`
-
-Get all movies/series for user:
-  GET /Users/{userId}/Items
-  Params:
-    - UserId: user ID
-    - IncludeItemTypes: 'Movie,Series'
-    - Recursive: 'true'
-    - Fields: 'DateCreated,UserData,Path,ProductionYear,MediaSources'
-    - Limit: 10000
-
-Response item structure:
-  - Id: string (Jellyfin item ID)
-  - Name: string
-  - Type: 'Movie' | 'Series'
-  - ProductionYear: int
-  - DateCreated: ISO datetime string
-  - Path: string (file path)
-  - UserData:
-    - Played: boolean
-    - LastPlayedDate: ISO datetime string (nullable)
-    - PlayCount: int
-  - MediaSources: array with size info
-```
-
-**Jellyseerr API (from original_script.py):**
-```
-Authentication: Header `X-Api-Key: {api_key}`
-
-Get all requests (paginated):
-  GET /api/v1/request
-  Params: take=50, skip=(page-1)*50
-  Response:
-    - results: array of requests
-    - pageInfo: { results, pages }
-```
-
-- Use FastAPI BackgroundTasks for simplicity (Celery if needed later)
-- Store `last_synced_at` in UserSettings
-
----
-
-## Epic 3: Old/Unwatched Content
-
-### Overview
-Help users identify content that hasn't been watched in a configurable period, allowing them to reclaim storage space.
-
-### Goals
-- Surface unwatched content older than threshold (default: 4 months)
-- Respect user's protected content whitelist
-- Display useful metadata (size, last watched, path)
-
-### User Stories
-
-#### US-3.1: View Old Unwatched Content ✅
-**As a** user
-**I want** to see a list of content not watched in 4+ months
-**So that** I can decide what to delete
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` functions: `filter_old_or_unwatched_items`, `list_old_or_unwatched_content`**
-- [x] Dashboard page shows list of old/unwatched movies and series (reads from **current user's** cached DB, not live API)
-- [x] API endpoint filters by `user_id` from JWT token
-- [x] Each item shows: name, type (movie/series), year, size (formatted), last watched date, file path
-- [x] List sorted by size (largest first)
-- [x] Total count and total size displayed at top
-- [x] Content in user's whitelist is excluded from results
-- [x] Uses hardcoded threshold: 4 months, min age: 3 months
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Result:** 221 items totaling 741.3 GB verified.
-
----
-
-#### US-3.2: Protect Content from Deletion ✅
-**As a** user
-**I want** to add content to a whitelist
-**So that** it won't appear in the "to delete" list
-
-**Acceptance Criteria:**
-- [x] "Protect" button on each content item in old content list
-- [x] Clicking creates whitelist entry linked to current user (user_id foreign key)
-- [x] Protected item immediately disappears from old content list
-- [x] Toast notification confirms "Added to whitelist"
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
----
-
-#### US-3.3: Manage Content Whitelist ✅
-**As a** user
-**I want** to view and edit my content whitelist
-**So that** I can remove protection from items
-
-**Acceptance Criteria:**
-- [x] Whitelist page accessible from settings or navigation
-- [x] Shows all items in user's content whitelist
-- [x] Each item shows: name, date added
-- [x] "Remove" button to unprotect items
-- [x] Removing item makes it appear again in old content list (if still old)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-### Non-Goals
-- Direct deletion from dashboard (requires Radarr/Sonarr - see SUGGESTIONS.md)
-- Automatic deletion based on rules
-
-### Technical Considerations
-**Jellyfin API (from original_script.py):**
-```
-GET /Users/{userId}/Items
-Headers: X-Emby-Token: {api_key}
-Params:
-  - IncludeItemTypes: 'Movie,Series'
-  - Recursive: 'true'
-  - Fields: 'DateCreated,UserData,Path,ProductionYear,MediaSources'
-  - Limit: 10000
-
-Response UserData structure:
-  - Played: boolean
-  - LastPlayedDate: ISO datetime (nullable)
-  - PlayCount: int
-```
-- Filter logic: `LastPlayedDate < (now - 4 months)` OR `Played == false AND DateCreated < (now - 3 months)`
-- Cache results in database (API is slow)
-- New table: `user_content_whitelist` with `user_id` FK
-
----
-
-## Epic D: Dashboard Redesign
-
-### Overview
-Transform the dashboard from a simple status page into a unified library health center. Replace the "one tab per feature" approach with summary cards that link to a unified issues view.
-
-### Goals
-- Provide at-a-glance library health via summary cards
-- Unify all issue types into a single filterable view
-- Support content with multiple issues (e.g., both old AND large)
-- Separate "problems" from "informational" content
-
-### User Stories
-
-#### US-D.1: Dashboard Summary Cards ✅
-**As a** user
-**I want** to see summary cards for each issue type on my dashboard
-**So that** I can quickly understand my library's health status
-
-**Acceptance Criteria:**
-- [x] Dashboard shows 4 issue cards: Old Content, Large Movies, Language Issues, Unavailable Requests
-- [x] Each card displays: count of items, total size (where applicable)
-- [x] Cards are clickable → navigate to `/issues?filter=<type>`
-- [x] Cards show loading skeleton while data loads
-- [x] Cards show "0 issues" gracefully when no problems exist
-- [x] API endpoint `GET /api/content/summary` returns counts for all issue types
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - 4 summary cards with counts, sizes, icons, click navigation to /issues?filter=<type>
-
----
-
-#### US-D.2: Dashboard Info Section ✅
-**As a** user
-**I want** to see informational content (recently available)
-**So that** I can stay informed about my library without these being "problems"
-
-**Acceptance Criteria:**
-- [x] Separate "Info" section below issue cards
-- [x] Recently Available card (past 7 days)
-- [x] Card shows item count
-- [x] Click → dedicated simple list view
-- [x] Visually distinct from issue cards (different color/style)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Info section with Recently Available card, /info/recent list view. Also cleaned up E2E tests (79 -> 20) and updated testing documentation.
-
----
-
-#### US-D.3: Unified Issues View ✅
-**As a** user
-**I want** a single view showing all content with issues
-**So that** I can see everything in one place and filter by issue type
-
-**Acceptance Criteria:**
-- [x] New route `/issues` with unified table/list
-- [x] Filter tabs: All, Old, Large, Language, Requests
-- [x] URL supports filter param: `/issues?filter=old`
-- [x] Each row shows all applicable issue badges (content can have multiple)
-- [x] Sortable by: name, size, date, issue count
-- [x] Actions column with contextual buttons (Protect, Mark French-only, etc.)
-- [x] Total count and size displayed at top
-- [x] Replaces old `/content/old-unwatched` route (redirect for backwards compat)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Unified issues view with filter tabs, sortable columns, Protect button. Integration tests pass.
-
----
-
-#### US-D.4: Multi-Issue Content Support ✅
-**As a** user
-**I want** to see when content has multiple issues
-**So that** I can prioritize cleaning up the worst offenders
-
-**Acceptance Criteria:**
-- [x] API endpoint returns all issue types for each content item
-- [x] Frontend displays multiple badges per row (e.g., "🕐 Old 📦 Large")
-- [x] Can filter to show "multiple issues only"
-- [x] Sorting by "issue count" puts worst offenders first
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - Added filter=multi to API, Multi-Issue filter tab in frontend, sortable Issues column header
-
----
-
-#### US-D.5: Navigation Update ✅
-**As a** user
-**I want** the navigation to reflect the new architecture
-**So that** I can easily access the Issues view
-
-**Acceptance Criteria:**
-- [x] Navigation shows: Dashboard | Issues | Whitelist | Settings
-- [x] "Issues" link goes to `/issues`
-- [x] "Old Content" nav item removed (redirects to `/issues?filter=old`)
-- [x] Current page highlighted correctly
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Navigation shows Dashboard | Issues | Whitelist | Settings with correct active states
-
----
-
-#### US-D.6: Inline Badge Actions ✅
-**As a** user
-**I want** action buttons attached directly to issue badges
-**So that** I know exactly which problem each action resolves
-
-**Acceptance Criteria:**
-- [x] OLD badge shows inline dismiss/shield button to protect from deletion
-- [x] LANGUAGE badge shows inline FR button (if missing EN audio) and/or checkmark button (to exempt)
-- [x] LARGE badge shows info tooltip on hover: "Re-download in lower quality from Radarr/Sonarr"
-- [x] REQUEST badge shows info tooltip on hover: "Check status in Jellyseerr"
-- [x] Clicking inline action behaves same as current buttons (calls same API endpoints)
-- [x] Action buttons show tooltip on hover: "Protect from deletion", "Mark French-only", "Exempt from language checks"
-- [x] Remove separate Actions column from table
-- [x] Loading state shown on badge action while API call in progress
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Moved action buttons inline with badges. OLD/LANGUAGE badges have action buttons attached (shield/FR/checkmark). LARGE/REQUEST badges show info tooltips. Actions column removed. 126 frontend tests pass, 191 backend tests pass, typecheck clean.
-
-### Non-Goals
-- Health score percentage (keeping it simple with counts)
-- Collapsible info section
-- Real-time updates via WebSocket
-
-### Technical Considerations
-- New API endpoint: `GET /api/content/summary` returning:
-  ```json
-  {
-    "old_content": { "count": 221, "total_size_bytes": 795750400000 },
-    "large_movies": { "count": 18, "total_size_bytes": 335007744000 },
-    "language_issues": { "count": 34 },
-    "unavailable_requests": { "count": 12 },
-    "recently_available": { "count": 15 }
-  }
-  ```
-- Unified issues endpoint: `GET /api/content/issues?filter=all|old|large|language|requests`
-- Reuse existing content analysis logic from Epic 3, 4, 5
-- Issue badges stored as enum: `old`, `large`, `language`, `request`
-
----
-
-## Epic 4: Large Movies
-
-### Overview
-Identify movies that consume excessive storage, allowing users to re-download in lower quality.
-
-**Integration Note:** Large movies are displayed in the **unified issues view** (Epic D), not a separate page. This epic focuses on the backend service.
-
-### Goals
-- Flag movies above size threshold (default: 13GB)
-- Help users prioritize storage reclamation
-
-### User Stories
-
-#### US-4.1: Large Movies Backend Service ✅
-**As a** user
-**I want** to identify movies larger than 13GB
-**So that** I can re-download them in lower quality
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` function: `list_large_movies`**
-- [x] Backend service `get_large_movies()` identifies movies exceeding 13GB (reads from cached DB)
-- [x] Large movies marked with `large` issue type in content response
-- [x] `/api/content/summary` endpoint includes `large_movies` count and total_size
-- [x] `/api/content/issues?filter=large` returns only large movies
-- [x] Each item includes: name, year, size (bytes), watched status, file path
-- [x] Results sorted by size (largest first)
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - is_large_movie() in content service, 13GB threshold, integrated with summary and issues endpoints
-
-### Non-Goals
-- Configurable threshold in v1 (see US-8.1)
-- Automatic re-download triggers
-- Separate dedicated page (use unified issues view)
-
-### Technical Considerations
-**Jellyfin API (from original_script.py):**
-- Uses same endpoint as Epic 3: `GET /Users/{userId}/Items`
-- Filter: `Type == 'Movie'` AND size from `MediaSources[0].Size > 13GB`
-- Size calculation: `sum(ms.Size for ms in item.MediaSources)` in bytes
-
----
-
-## Epic 5: Language Issues
-
-### Overview
-Identify content with language problems (missing French/English audio or subtitles).
-
-**Integration Note:** Language issues are displayed in the **unified issues view** (Epic D), not a separate page. This epic focuses on the backend service and whitelist actions.
-
-### Goals
-- Flag content missing required languages
-- Support whitelists for French-only content and exemptions
-- Handle series at episode level
-
-### User Stories
-
-#### US-5.1: Language Issues Backend Service ✅
-**As a** user
-**I want** to identify content missing French or English audio
-**So that** I can re-download proper versions
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` functions: `check_audio_languages`, `list_recent_items_language_check`**
-- [x] Backend service `get_language_issues()` identifies content with language problems (reads from cached DB)
-- [x] Content marked with `language` issue type in response
-- [x] `/api/content/summary` endpoint includes `language_issues` count
-- [x] `/api/content/issues?filter=language` returns only items with language issues
-- [x] Each item includes: name, type, year, specific issue (missing_en_audio, missing_fr_audio, missing_fr_subs)
-- [x] For series: episode-level issues aggregated at series level
-- [x] Content in language exemption whitelist is excluded
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - check_audio_languages() in content service, 78 items with language issues in Docker test. Series episode-level aggregation and whitelist exclusion deferred to US-5.2/US-5.3
-
----
-
-#### US-5.2: Mark Content as French-Only ✅
-**As a** user
-**I want** to mark French films as not needing English audio
-**So that** they don't appear as language issues
-
-**Acceptance Criteria:**
-- [x] "Mark as French-only" button appears in unified issues view actions for items with missing EN audio
-- [x] `POST /api/whitelist/french-only` creates entry (user_id FK)
-- [x] Item no longer flagged for missing English audio
-- [x] Can be managed in whitelist page
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - FR Only button on issues page, French-Only section on whitelist page, 147 backend tests + 84 frontend tests pass
-
----
-
-#### US-5.3: Exempt Content from Language Checks ✅
-**As a** user
-**I want** to completely exempt content from language checks
-**So that** special cases don't show as issues
-
-**Acceptance Criteria:**
-- [x] "Exempt from checks" button appears in unified issues view actions for language issues
-- [x] `POST /api/whitelist/language-exempt` creates entry (user_id FK)
-- [x] Item no longer appears in language issues
-- [x] Can be managed in whitelist page
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Exempt button on issues page, Language-Exempt section on whitelist page, 154 backend tests + 84 frontend tests pass
-
-### Non-Goals
-- Automatic language detection/correction
-- Episode-level exemptions in v1
-- Separate dedicated page (use unified issues view)
-
-### Technical Considerations
-**Jellyfin API (from original_script.py):**
-```
-# For movies: check MediaSources directly from Items response
-MediaSources[].MediaStreams[]:
-  - Type: 'Audio' | 'Subtitle'
-  - Language: 'eng' | 'fre' | etc.
-
-# For series: need episode-level data
-GET /Shows/{seriesId}/Episodes
-Params: UserId, Fields='MediaSources'
-```
-- Check for: EN audio, FR audio, FR subtitles
-- Language codes: 'eng', 'en' for English; 'fre', 'fra', 'fr' for French
-- New tables: `user_french_only_whitelist`, `user_language_exempt_whitelist` with user_id FK
-
----
-
-## Epic 6: Jellyseerr Requests
-
-### Overview
-Display information about media requests from Jellyseerr.
-
-**Integration Note:** This epic has two categories:
-- **ISSUE (US-6.1):** Unavailable requests are problems → displayed in **unified issues view**
-- **INFO (US-6.3):** Recently available is informational → displayed in **dashboard info section** with dedicated simple view
-
-### Goals
-- Show unavailable/pending requests (as issues)
-- Display recently available content (informational)
-
-### User Stories
-
-#### US-6.1: Unavailable Requests Backend Service ✅
-**As a** user
-**I want** to identify Jellyseerr requests that aren't available
-**So that** I can manually find them
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` functions: `fetch_jellyseer_requests`, `get_jellyseer_unavailable_requests`, `analyze_jellyseer_requests`**
-- [x] Backend service `get_unavailable_requests()` identifies unavailable/pending requests (reads from cached DB)
-- [x] Requests marked with `request` issue type in response
-- [x] `/api/content/summary` endpoint includes `unavailable_requests` count
-- [x] `/api/content/issues?filter=requests` returns only unavailable requests
-- [x] Each item includes: title, type (movie/TV), requested by, request date
-- [x] For TV: includes which seasons are requested but missing
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - 26 unavailable requests found in test data. Filters future/recent releases per original script.
-
----
-
-#### US-6.3: Recently Available Content (INFO)
-**As a** user
-**I want** to see what became available this week
-**So that** I can notify my friends
-
-**Type:** INFO feature (not an issue)
-
-**Acceptance Criteria:**
-- [x] **Refer to `original_script.py` function: `get_jellyseer_recently_available_requests`**
-- [x] Backend service `get_recently_available()` returns content from past 7 days (reads from cached DB)
-- [x] `/api/content/summary` endpoint includes `recently_available` count
-- [x] Dedicated simple list view at `/info/recent`
-- [x] Grouped by date (newest first)
-- [x] Each item shows: title, type, availability date
-- [x] "Copy list" button for sharing (plain text format)
-- [x] Accessed from dashboard Info section card
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Items grouped by date with headers, copy list includes grouped format, 3 items verified in browser
-
-### Non-Goals
-- Webhook notifications
-- Integration with Discord/Telegram
-- Separate pages for unavailable requests (use unified issues view)
-
-### Technical Considerations
-**Jellyseerr API (from original_script.py):**
-```
-Headers: X-Api-Key: {api_key}
-
-# Get all requests (paginated)
-GET /api/v1/request
-Params: take=50, skip=(page-1)*50
-Response:
-  - results: array of requests
-  - pageInfo: { results, pages }
-
-# Request structure
-{
-  id: int,
-  status: int,  # 1=pending, 2=approved, 3=declined, 4=available, 5=unavailable
-  media: { tmdbId, mediaType: 'movie'|'tv' },
-  requestedBy: { displayName },
-  createdAt: ISO datetime
-}
-
-# Get media details (for season info)
-GET /api/v1/movie/{tmdbId} or /api/v1/tv/{tmdbId}
-```
-- Filter unavailable: `status == 5` (unavailable) or `status == 1` (pending)
-- For TV: check which seasons are available via media details
-
----
-
-## Epic V: Validation Against Original Script
-
-### Overview
-Validate that the app's content analysis features produce correct results by comparing against `original_script.py` (the battle-tested source of truth). Use `/original-script` skill for debugging.
-
-### Goals
-- Verify each content analysis feature matches original script logic
-- Identify and fix any filtering/calculation bugs
-- Ensure counts match when accounting for expected differences
-
-### Important: Whitelist Differences Are BY DESIGN
-
-The original script uses **substring matching** against a hardcoded allowlist (~107 terms protecting ~144 items). This is a **HACK** that does NOT scale for multi-tenant SaaS.
-
-The app correctly uses **exact jellyfin_id matching** against a per-user database whitelist. This difference is **intentional and correct**.
-
-**DO NOT** implement substring matching. When validating, compare only the filtering logic, not whitelist behavior.
-
-### User Stories
-
-#### US-V.1: Validate Old Content Filtering Logic
-**As a** developer
-**I want** to verify the old/unwatched content logic matches the original script
-**So that** I can trust the app produces correct results
-
-**Acceptance Criteria:**
-- [x] Run `/original-script` snippet for old content, note: total items, old items count, protected count
-- [x] Run app API `GET /api/content/issues?filter=old`, note: total_count
-- [x] Expected: app count = original (old items + protected items) since app has empty whitelist
-- [x] If counts differ (excluding whitelist): investigate `is_old_or_unwatched()` in `content.py`
-- [x] **Known issue to check**: min_age_months logic - original applies only to unplayed items, verify app does same
-- [x] Document any bugs found in SUGGESTIONS.md
-- [x] Fix identified bugs (separate commits per bug)
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - Fixed bug: min_age_months was being applied to ALL items instead of only unplayed items. Original script only applies min_age check to never-watched content. Added test to verify fix.
-
----
-
-#### US-V.2: Validate Large Movies Detection
-**As a** developer
-**I want** to verify the large movies detection matches the original script
-**So that** users see the same large movies in both
-
-**Acceptance Criteria:**
-- [x] Run `/original-script` snippet for large movies, note count
-- [x] Run app API `GET /api/content/issues?filter=large`, note: total_count
-- [x] Counts should match (no whitelist involved for large movies)
-- [x] If counts differ: investigate `is_large_movie()` in `content.py`
-- [x] Verify threshold is 13GB in both
-- [x] Document any bugs found in SUGGESTIONS.md
-- [x] Fix identified bugs
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - Both original script and app return 0 large movies (largest is 12.43 GB). Fixed minor bug: changed > to >= to match original script behavior. Added test for boundary condition.
-
----
-
-#### US-V.3: Validate Language Issues Detection
-**As a** developer
-**I want** to verify the language issues detection matches the original script
-**So that** users see the same language problems in both
-
-**Acceptance Criteria:**
-- [x] Run `/original-script` snippet for language issues, note count
-- [x] Run app API `GET /api/content/issues?filter=language`, note: total_count
-- [x] Compare counts (accounting for french-only and language-exempt whitelists)
-- [x] If counts differ: investigate `check_audio_languages()` in `content.py`
-- [x] Verify language codes checked: eng/en for English, fre/fra/fr for French
-- [x] Document any bugs found in SUGGESTIONS.md
-- [x] Fix identified bugs
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - App count: 76 items (287.8 GB). Original script would have fewer due to hardcoded allowlists. This difference is by design - app uses per-user DB whitelists (starts empty). Language codes verified: eng/en/english for English, fre/fr/french/fra for French - matches original script exactly.
-
----
-
-#### US-V.4: Validate Unavailable Requests Detection
-**As a** developer
-**I want** to verify the unavailable requests detection matches the original script
-**So that** users see the same pending/unavailable requests in both
-
-**Acceptance Criteria:**
-- [x] Run `/original-script` snippet for unavailable requests, note count
-- [x] Run app API `GET /api/content/issues?filter=requests`, note: total_count
-- [x] Counts should match exactly (no whitelist involved)
-- [x] If counts differ: investigate `get_unavailable_requests()` in `content.py`
-- [x] Verify status codes: original uses status != 5 (Available)
-- [x] Verify FILTER_FUTURE_RELEASES and FILTER_RECENT_RELEASES logic matches
-- [x] Document any bugs found in SUGGESTIONS.md
-- [x] Fix identified bugs
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-13 - App count: 26 unavailable requests. Fixed bug: titles were showing as 'Unknown' because Jellyseerr /api/v1/request endpoint doesn't include titles. Added fetch_media_title() to sync.py. Known difference: original script does complex TV series season analysis, app uses simpler status-based filtering. Documented in SUGGESTIONS.md [P2].
-
-### Non-Goals
-- Implementing substring whitelist matching (this is a HACK, not a feature)
-- Achieving exact 1:1 parity when whitelist differences exist
-- Validating UI rendering (focus on backend logic only)
-
-### Technical Considerations
-- Use `/original-script` skill for all comparisons
-- Run `export $(cat .env | xargs)` before running original script snippets
-- App must be running locally (`docker-compose up`) for API comparison
-- Trigger sync before comparing: `POST /api/sync` to ensure fresh data
-
----
-
-## Epic 8: Settings & Preferences
-
-### Overview
-Allow users to customize analysis thresholds to match their preferences.
-
-### Goals
-- Configurable thresholds for all analysis features
-- Sensible defaults for new users
-
-### User Stories
-
-#### US-8.1: Configure Thresholds
-**As a** user
-**I want** to customize analysis thresholds
-**So that** the dashboard matches my preferences
-
-**Acceptance Criteria:**
-- [x] Settings section for "Analysis Preferences"
-- [x] Configurable: Old content months (default: 4)
-- [x] Configurable: Minimum age months (default: 3)
-- [x] Configurable: Large movie size GB (default: 13)
-- [x] Changes saved to user settings and apply immediately
-- [x] Reset to defaults button
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-13 - Analysis Preferences section in settings page, backend service uses user thresholds, 176 backend tests + 93 frontend tests pass
-
-### Non-Goals
-- Per-library thresholds
-- Scheduled reports
-
-### Technical Considerations
-- Add columns to UserSettings table
-- Migrate existing analysis queries to use user preferences
-
----
-
-## Epic UI: Design System Polish
-
-### Overview
-Apply a consistent, crafted design system inspired by Linear/Stripe/Notion to create a polished, professional dashboard experience. The designer has **full autonomy** to review and improve all UI elements.
-
-### Goals
-- Establish consistent visual language across all pages
-- Improve information hierarchy and scanability
-- Polish dark mode experience
-- Make the UI feel intentionally designed, not just functional
-- Ensure all interactive elements feel crafted
-
-### User Stories
-
-#### US-UI.1: Design System Refinement
-**As a** user
-**I want** a polished, consistent interface
-**So that** the app feels professional and is easy to scan
-
-**Design Direction**: Data & Analysis + Utility & Function
-- Cool slate foundation
-- Sharp corners (4/6/8px radius)
-- Borders-only depth (no shadows except hover states)
-- Single blue accent for actions
-- Monospace for all data values
-
-**Scope**: Designer has **full autonomy** to review and improve:
-- All pages (Dashboard, Issues, Whitelist, Settings, Login, Register)
-- All components (cards, tables, forms, buttons)
-- All interactive elements (modals, popups, toasts, dropdowns)
-- Element sizing (padding, margins, font sizes, icon sizes)
-- Any other UI element that could benefit from polish
-
-**Acceptance Criteria:**
-- [x] **Typography**: Implement 4-level hierarchy (Headlines 600 weight, -0.02em; Body 400-500; Labels 500 uppercase; Data monospace)
-- [x] **Spacing**: Migrate to 4px grid (use 8, 12, 16, 24, 32px exclusively)
-- [x] **Border Radius**: Standardize to 4/6/8px system
-- [x] **Colors**: Reduce decorative color, use gray structure + accent for actions only
-- [x] **Cards**: Consistent padding (16px), border-only depth, no heavy shadows
-- [x] **Buttons**: Unified styling with 150ms transitions
-- [x] **Data Display**: Monospace font with tabular-nums for numbers/sizes/dates
-- [x] **Modals & Popups**: Review sizing, padding, transitions; ensure they feel crafted
-- [x] **Toasts**: Consistent styling, appropriate sizing, smooth animations
-- [x] **Forms & Inputs**: Unified field styling, proper focus states, accessible contrast
-- [x] **Dark Mode**: Adjust borders to 10-15% white opacity, desaturate status colors
-- [x] **Navigation**: Consistent styling with current page indicator
-- [x] **Autonomous Improvements**: Make any additional improvements deemed necessary
-- [x] Typecheck passes
-- [x] Visual review in browser (light + dark mode)
-
-**Note:** Completed 2026-01-14 - Comprehensive design system refinement: app.css with CSS custom properties (typography scale, 4px spacing grid, 4/6/8px radius system, cool slate colors, dark mode adjustments), updated all pages (Dashboard, Issues, Whitelist, Settings, Login, Register), Header component, monospace for data values, border-only depth, single blue accent, 93 frontend tests pass, 0 typecheck errors
-
-### Non-Goals
-- Complete redesign of page layouts
-- New page structures or navigation patterns
-- Custom icon library
-
-### Technical Considerations
-- Update `app.css` with new CSS custom properties
-- Use `/design-principles` skill for guidance
-- Test all pages in both light and dark mode
-- Review all Svelte components for consistency
-
----
-
-## Epic 9: Infrastructure & Polish
-
-### Overview
-Address P1/P2 issues from SUGGESTIONS.md: page title inconsistency, missing favicon, and CORS configuration for production.
-
-### Goals
-- Fix branding inconsistencies
-- Eliminate 404 errors for static assets
-- Enable production deployment
-
-### User Stories
-
-#### US-9.1: Fix Page Titles ✅
-**As a** user
-**I want** consistent branding across all pages
-**So that** the app feels professional and cohesive
-
-**Acceptance Criteria:**
-- [x] Login page title is "Login | Media Janitor"
-- [x] Register page title is "Register | Media Janitor"
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Updated page titles from 'Log In/Sign Up - Media Janitor' to 'Login/Register | Media Janitor'
-
----
-
-#### US-9.2: Add Favicon ✅
-**As a** user
-**I want** a favicon in my browser tab
-**So that** I can easily identify the app among my open tabs
-
-**Acceptance Criteria:**
-- [x] Favicon displays in browser tab
-- [x] No 404 for `/favicon.png`
-- [x] Typecheck passes
-
-**Note:** Completed 2026-01-14 - Created SVG favicon with broom icon (Media Janitor theme), blue accent color matching app design
-
----
-
-#### US-9.3: Add CORS Production URL ✅
-**As a** developer
-**I want** CORS configured for production
-**So that** the app works on mediajanitor.com
-
-**Acceptance Criteria:**
-- [x] CORS allows requests from https://mediajanitor.com
-- [x] Existing localhost origins still work
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Added https://mediajanitor.com to CORS allowed origins in main.py
-
----
-
-#### US-9.4: Add IMDB/TMDB Links to Content Items ✅
-**As a** user
-**I want** to click on a movie/series title to open IMDB or TMDB
-**So that** I can quickly lookup more information about the content
-
-**Acceptance Criteria:**
-- [x] Each content item in Issues view has clickable TMDB link icon
-- [x] Link opens in new tab: `https://www.themoviedb.org/{movie|tv}/{tmdb_id}`
-- [x] For Jellyseerr requests: use existing `tmdb_id` from `cached_jellyseerr_requests`
-- [x] For Jellyfin media: extract TMDB ID from `ProviderIds` in raw_data (or add to sync if not present)
-- [x] Fallback: if no TMDB ID available, hide the link icon
-- [x] Optional: add IMDB link too if `ImdbId` is available in ProviderIds
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Added tmdb_id/imdb_id to ContentIssueItem and UnavailableRequestItem. External link icons (TMDB + IMDB) visible next to item names in Issues view. 172 backend tests pass, 96 frontend tests pass.
-
-### Non-Goals
-- Custom branding per user
-- Dynamic favicon
-
-### Technical Considerations
-- Update `<svelte:head><title>` in login/register pages
-- Create `frontend/static/` folder with favicon
-- Add production URL to `backend/app/main.py` CORS origins
-- **For US-9.4**: Jellyfin API returns `ProviderIds` in item responses:
-  ```json
-  "ProviderIds": { "Tmdb": "12345", "Imdb": "tt1234567" }
-  ```
-  - Add `ProviderIds` to sync fields if not already in raw_data
-  - Frontend displays link icon with `target="_blank"`
-
----
-
-## Epic 10: Automatic Sync Scheduler
-
-### Overview
-Complete US-7.1 by adding automatic daily sync. Currently only manual sync exists.
-
-### Goals
-- Automate daily data refresh for all users
-- Use Celery Beat for reliable scheduling
-- Handle failures gracefully
-
-### User Stories
-
-#### US-10.1: Add Celery Infrastructure ✅
-**As a** developer
-**I want** Celery configured with Redis
-**So that** we can run background tasks reliably
-
-**Acceptance Criteria:**
-- [x] Celery app configured with Redis broker
-- [x] `docker-compose up` starts redis + celery worker services
-- [x] Can enqueue and execute a test task
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Added Celery 5.3+ with Redis 5.0+ broker. Created celery_app.py with configuration and tasks.py with test_task. Updated docker-compose with redis and celery-worker services. 170 backend tests pass, mypy clean.
-
----
-
-#### US-10.2: Daily Sync Scheduler ✅
-**As a** user
-**I want** my data to sync automatically every day
-**So that** the dashboard is always up-to-date without manual intervention
-
-**Acceptance Criteria:**
-- [x] Celery Beat schedules `sync_all_users` task daily at 3 AM UTC
-- [x] Task iterates all users with configured Jellyfin settings
-- [x] Each user's sync runs independently (failures don't block others)
-- [x] Sync status updated in database for each user
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Added Celery Beat schedule for sync_all_users at 3 AM UTC. Created sync_all_users and sync_user tasks. Each user synced independently via separate task. 175 backend tests pass, mypy clean.
-
-### Non-Goals
-- Per-user configurable schedule
-- Real-time sync notifications
-
-### Technical Considerations
-- Add `celery`, `redis` dependencies to `pyproject.toml`
-- Create `backend/app/celery_app.py` for Celery configuration
-- Create `backend/app/tasks.py` for task definitions
-- Add redis, celery-worker, celery-beat services to `docker-compose.yml`
-
----
-
-## Epic 11: Temporary Whitelisting
-
-### Overview
-Allow users to whitelist items for a limited time instead of permanently. Useful for seasonal content or temporary exceptions.
-
-### Goals
-- Support optional expiration on whitelist entries
-- Default behavior remains permanent (no expiration)
-- Show expiration status in UI
-
-### User Stories
-
-#### US-11.1: Add Expiration to Whitelist Schema ✅
-**As a** developer
-**I want** whitelist tables to support expiration dates
-**So that** users can create temporary whitelists
-
-**Acceptance Criteria:**
-- [x] All 3 whitelist tables have nullable `expires_at` column
-- [x] Existing entries have `expires_at = NULL` (permanent)
-- [x] API models support optional expiration date
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Added nullable expires_at column to ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist. Updated WhitelistAddRequest and WhitelistItem Pydantic models. 178 backend tests pass, mypy clean.
-
----
-
-#### US-11.2: Whitelist Expiration Logic ✅
-**As a** user
-**I want** expired whitelist entries to stop protecting content
-**So that** items automatically return to issues list when protection expires
-
-**Acceptance Criteria:**
-- [x] Expired whitelist entries don't exclude items from issues
-- [x] Non-expired entries still work as before
-- [x] NULL `expires_at` means permanent (never expires)
-- [x] API accepts optional `expires_at` when adding to whitelist
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Completed 2026-01-14 - Whitelist queries filter out expired entries (expires_at < now). API saves expires_at from request. GET /api/whitelist/* returns expires_at. 191 backend tests pass, mypy clean.
-
----
-
-#### US-11.3: Temporary Whitelist UI ✅
-**As a** user
-**I want** to choose how long to whitelist an item
-**So that** I can set temporary protection for seasonal content
-
-**Acceptance Criteria:**
-- [x] Default is "Permanent" (no expiration)
-- [x] Preset duration options: 3 months, 6 months, 1 year
-- [x] Custom date picker option
-- [x] Whitelist page shows expiration date or "Permanent"
-- [x] Expired items show "Expired" badge
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Duration picker modal on Issues page (Permanent, 3mo, 6mo, 1yr, Custom), Whitelist page shows expiration info with Expired badge. 191 backend tests pass, 102 frontend tests pass, mypy clean.
-
-### Non-Goals
-- Automatic renewal of expiring whitelists
-- Notifications before expiration
-
-### Technical Considerations
-- Add `expires_at: datetime | None` to ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist
-- Update filtering logic to check `expires_at < now()` for expired entries
-- Duration selector UI with presets + custom date picker
-
----
-
-## Epic M: Marketing & Conversion
-
-### Overview
-Create an attractive landing page and auth flow to convert visitors into users.
-
-### Goals
-- Communicate value proposition clearly
-- Build trust through security messaging
-- Streamline sign-up flow
-
-### User Stories
-
-#### US-M.1: Landing Page Hero ✅
-**As a** visitor
-**I want** to see an attractive landing page
-**So that** I understand the value and sign up
-
-**Acceptance Criteria:**
-- [x] Bold hero section with gradient background (blue→purple)
-- [x] Tagline: "Keep Your Media Library Clean" (or similar)
-- [x] Value proposition subtitle explaining the product
-- [x] Primary CTA button: "Get Started Free" → /register
-- [x] Secondary link: "Already have an account?" → /login
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Landing component with gradient hero, tagline, CTAs. 107 frontend tests pass, typecheck clean.
-
----
-
-#### US-M.2: Feature Highlights ✅
-**As a** visitor
-**I want** to see the main features
-**So that** I understand what the product does
-
-**Acceptance Criteria:**
-- [x] 4 feature cards in grid layout with icons
-- [x] Features: Old Content Detection, Large File Finder, Language Checker, Request Tracking
-- [x] Each card: icon, title (3-4 words), 1-line description
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - 4 feature cards with colored icons (red/yellow/blue/purple), 2x2 grid, responsive. 113 frontend tests pass, typecheck clean.
-
----
-
-#### US-M.3: Dashboard Preview ✅
-**As a** visitor
-**I want** to see a preview of the dashboard
-**So that** I know what to expect
-
-**Acceptance Criteria:**
-- [x] Screenshot or mockup of dashboard UI
-- [x] Device frame around preview (laptop or browser window)
-- [x] CTA button below: "Try it Free"
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Browser chrome frame with colored dots and URL bar, dashboard mockup with 4 issue cards, Try it Free CTA. 116 frontend tests pass, typecheck clean.
-
----
-
-#### US-M.4: Trust Section ✅
-**As a** visitor
-**I want** to know my data is secure
-**So that** I feel confident signing up
-
-**Acceptance Criteria:**
-- [x] Section with security/privacy messaging
-- [x] Key points: "Your API keys are encrypted", "Connects to YOUR servers", "No data stored on our servers beyond cache"
-- [x] Optional: shield/lock icon
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Trust section with shield icon, 3 key security points with checkmarks. 121 frontend tests pass, typecheck clean.
-
----
-
-#### US-M.5: Auth Page CTAs ✅
-**As a** visitor
-**I want** clear calls-to-action on auth pages
-**So that** I convert easily
-
-**Acceptance Criteria:**
-- [x] Register page: value-focused headline above form
-- [x] Login page: clear submit button and "Don't have an account?" link
-- [x] Consistent branding (colors, fonts) with landing page
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Register page: 'Get Started Free' headline, 'Create Free Account' button. Login page: clear 'Log In' button, 'Sign up' link. Consistent CSS variables with landing page. 126 frontend tests pass, typecheck clean.
-
-### Non-Goals
-- Pricing page (free tier only for v1)
-- Blog or documentation
-
----
-
-## Epic 12: Issues Page UX Improvements
-
-### Overview
-Fix usability issues on the Issues page and Settings page to improve clarity and fix bugs.
-
-### Goals
-- Make threshold settings self-explanatory
-- Simplify the Issues page by removing the Multi-Issue tab
-- Fix broken external links (TMDB/IMDb)
-- Ensure all content items display external links where data is available
-
-### User Stories
-
-#### US-12.1: Add Threshold Help Text ✅
-**As a** user
-**I want** to understand what each threshold setting does
-**So that** I can configure them correctly
-
-**Acceptance Criteria:**
-- [x] "Flag content unwatched for" shows help text: "Used by: Old tab"
-- [x] "Don't flag content newer than" shows help text: "Used by: Old tab (for never-watched items)"
-- [x] "Flag movies larger than" shows help text: "Used by: Large tab"
-- [x] Help text appears in subtle gray below each input
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Added threshold-label-group wrapper and threshold-help class for subtle gray help text below each threshold input.
-
-**File:** `frontend/src/routes/settings/+page.svelte`
-
----
-
-#### US-12.2: Remove Multi-Issue Tab ✅
-**As a** user
-**I want** a simpler Issues page
-**So that** I'm not confused by extra filters
-
-**Acceptance Criteria:**
-- [x] Multi-Issue tab removed from Issues page filter tabs
-- [x] URL parameter `?filter=multi` no longer supported (returns all issues or 400)
-- [x] Backend API documentation updated to remove 'multi' filter option
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)
-
-**Note:** Removed multi filter from backend (content.py service and router docstrings) and frontend (FilterType type and filterLabels). Removed TestMultiIssueContent test class (4 tests). URL ?filter=multi gracefully falls back to showing all issues.
-
-**Files:**
-- `frontend/src/routes/issues/+page.svelte` - Remove 'multi' from FilterType
-- `backend/app/routers/content.py` - Update API docs
-- `backend/app/services/content.py` - Remove multi filter logic
-
----
-
-#### US-12.3: Fix TMDB Link Media Type ✅
-**As a** user
-**I want** TMDB links to work correctly
-**So that** I can check content details on TMDB
-
-**Acceptance Criteria:**
-- [x] TMDB links work for Movies (link to `/movie/{id}`)
-- [x] TMDB links work for TV Shows (link to `/tv/{id}`)
-- [x] Handle both uppercase ("Movie", "Series") and lowercase ("movie", "tv") media types
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser: click TMDB link on Requests tab → correct page opens
-
-**Note:** Already fixed in US-13.2 commit. getTmdbUrl() now uses toLowerCase() to handle both 'Movie' and 'movie' media types. Verified: TV shows link to /tv/{id}, movies link to /movie/{id}.
-
-**Root cause:** `getTmdbUrl()` checks `item.media_type === 'Movie'` but request items use lowercase "movie".
-
-**File:** `frontend/src/routes/issues/+page.svelte` - Fix `getTmdbUrl()` function
-
----
-
-#### US-12.4: Fix Missing Request Titles
-**As a** user
-**I want** to see titles for all requested content
-**So that** I know what each request is for
-
-**Acceptance Criteria:**
-- [ ] All items on Requests tab display a title
-- [ ] Fallback chain: title → media.title → media.name → originalTitle → "Unknown"
-- [ ] Verify sync service correctly stores titles from Jellyseerr API
+- [ ] Sync fetches media items from ALL Jellyfin users (not just first user)
+- [ ] Watch data is aggregated: `played = True` if ANY user has watched
+- [ ] `last_played_date` uses the MOST RECENT date across all users
+- [ ] `play_count` sums all users' play counts
+- [ ] Uses `asyncio.gather()` to parallelize user fetches (6-15 users expected)
+- [ ] Progress logging shows which user is being synced (e.g., "Fetching user 3/10: John")
+- [ ] Existing sync tests still pass
+- [ ] New test verifies multi-user aggregation logic
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-- [ ] Verify in browser: Requests tab shows titles for all items
-
-**Investigation needed:** Determine if issue is in sync (data not stored) or in API response (data not returned).
+- [ ] Verify "La Chambre de Mariana" shows correct watch date after sync
 
 **Files:**
-- `backend/app/services/sync.py` - Verify title extraction in `cache_jellyseerr_requests()`
-- `backend/app/services/content.py` - Verify title returned in `get_unavailable_requests()`
+- `backend/app/services/sync.py` - Modify `fetch_jellyfin_media()` to loop through all users and aggregate
+- `backend/tests/test_sync_service.py` - Add test for multi-user aggregation
 
 ---
 
-#### US-12.5: External Links for All Issue Types ✅
+#### US-17.2: Sync Progress Visibility
 **As a** user
-**I want** TMDB/IMDb links on all content items
-**So that** I can easily look up any flagged content
+**I want** to see detailed sync progress in the UI
+**So that** I know what's happening during the longer sync
 
 **Acceptance Criteria:**
-- [x] Old tab items show TMDB/IMDb links (where data exists)
-- [x] Large tab items show TMDB/IMDb links (where data exists)
-- [x] Language tab items show TMDB/IMDb links (where data exists)
-- [x] Requests tab items show TMDB/IMDb links (already implemented, just needs fix from US-12.3)
-- [x] External link icon appears next to title if TMDB or IMDb ID available
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser: external links appear on items in all tabs
-
-**Note:** Already implemented in US-9.4. Verified: Old, Language, Requests tabs all show TMDB/IMDb links. Large tab has 0 items but uses same rendering code.
-
-**File:** `frontend/src/routes/issues/+page.svelte` - Verify link rendering logic applies to all items
-
----
-
-#### US-12.6: Fix Watch Status Display ✅
-**As a** user
-**I want** to see accurate watch status for content items
-**So that** I can make informed decisions about what to delete
-
-**Acceptance Criteria:**
-- [x] Items that have been watched show relative date (e.g., "3mo ago") or "Watched" if no date
-- [x] Items never watched show "Never"
-- [x] Backend returns `played` boolean in ContentIssueItem response
-- [x] Frontend uses both `played` and `last_played_date` to determine display
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser: watched items no longer show "Never"
-
-**Note:** Added played boolean field to ContentIssueItem model and service. Updated frontend formatLastWatched() to use both played and last_played_date.
-
-**Root cause:** ContentIssueItem model missing `played` boolean field. Frontend only receives `last_played_date` which is often null even for watched items.
+- [ ] Backend stores sync progress details (current step, current user being fetched)
+- [ ] `GET /api/sync/status` returns progress info: `current_step`, `total_steps`, `current_user_name`
+- [ ] Frontend displays progress during sync (e.g., "Fetching user 3/10: John...")
+- [ ] Progress updates while sync is running (poll every 2-3 seconds)
+- [ ] Shows "Syncing media..." or "Syncing requests..." as appropriate
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: trigger sync and see progress updates
 
 **Files:**
-- `backend/app/models/content.py` - Add `played: bool` to ContentIssueItem
-- `backend/app/services/content.py` - Include `played=item.played` in response
-- `frontend/src/routes/issues/+page.svelte` - Update formatLastWatched() to use both fields
-
----
+- `backend/app/database.py` - Add progress fields to SyncStatus model (or use separate table)
+- `backend/app/services/sync.py` - Update progress during sync steps
+- `backend/app/routers/sync.py` - Return progress in status endpoint
+- `frontend/src/routes/dashboard/+page.svelte` - Display progress during sync
 
 ### Non-Goals
-- Adding Jellyfin direct links (would require Jellyfin server URL per item)
-- Changing threshold functionality (just improving labels)
+- Storing per-user play data (only aggregated data needed)
+- Displaying which user watched what (just aggregated status)
+- WebSocket real-time updates (polling is sufficient for now)
 
 ### Technical Considerations
-- Media type normalization: Consider standardizing on lowercase in backend to avoid frontend case handling
-- Provider IDs availability: Not all Jellyfin items have TMDB/IMDb IDs in their metadata
+- **Original script reference:** `aggregate_all_user_data()` at line 1499 in `original_script.py`
+- **Parallelization:** Use `asyncio.gather()` to fetch all users concurrently
+- **Performance:** With 6-15 users, parallel fetches should complete in ~30-60 seconds vs 3-5 minutes sequential
+- **Progress tracking:** Store in SyncStatus table with fields like `progress_step`, `progress_total`, `progress_message`
 
 ---
 
-## Epic 13: Jellyseerr Requests Improvements
+#### US-17.3: Fix Mobile Sidebar Visual Overlap
+**As a** mobile user
+**I want** the sidebar to be completely hidden when closed
+**So that** I don't see visual artifacts on the dashboard
+
+**Problem:**
+A thin blue strip is visible on the left edge of the mobile dashboard when the sidebar is closed, suggesting the sidebar isn't fully off-screen.
+
+**Acceptance Criteria:**
+- [ ] On mobile (viewport < 768px), when sidebar is closed, no part of it is visible
+- [ ] No blue strip or other visual artifacts on left edge
+- [ ] Sidebar still opens/closes correctly with hamburger menu
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using mobile viewport (Chrome DevTools device mode)
+
+**Files:**
+- `frontend/src/lib/components/Sidebar.svelte` - Fix CSS transform/position values for mobile
+
+---
+
+## Epic 18: Onboarding Flow
 
 ### Overview
-Fix bugs and add features to the Jellyseerr unavailable requests display. Currently, titles are missing, there's no way to hide requests, and no release date information is shown.
+Guide new users through service configuration and first sync via an enhanced dashboard experience. After signup/login, users see a setup checklist that disappears once Jellyfin is configured and first sync completes.
 
 ### Goals
-- Display titles correctly for all unavailable requests
-- Show who requested each item and when it will be released
-- Allow users to hide requests they're intentionally waiting on
-- Provide setting to filter unreleased content
+- Guide new users to configure Jellyfin immediately after signup
+- Auto-trigger first sync once Jellyfin is configured
+- Show clear progress through setup steps
+- Disappear gracefully once onboarding is complete
 
 ### User Stories
 
-#### US-13.1: Fix Title Extraction in Jellyseerr Sync ✅
-**As a** media server owner
-**I want** to see the titles of unavailable requests
-**So that** I know what content is pending
+#### US-18.1: Show Setup Checklist for New Users
+**As a** new user who just signed up
+**I want** to see a clear checklist of what to do next
+**So that** I know how to get started with the app
 
 **Acceptance Criteria:**
-- [x] Titles display correctly for all unavailable requests
-- [x] No separate API calls made for title fetching (use embedded data)
-- [x] Title fallback chain: title → name → originalTitle → originalName → tmdbId
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Root cause:** The sync code makes separate API calls via `fetch_media_title()` which fail silently. Titles ARE included directly in the Jellyseerr `/api/v1/request` response's media object.
+- [ ] Dashboard shows "Setup Checklist" card when Jellyfin not configured OR never synced
+- [ ] Checklist shows 2 steps: "Connect Jellyfin" and "Run First Sync"
+- [ ] Each step shows status: pending (gray), in-progress (blue), complete (green)
+- [ ] "Connect Jellyfin" step has button linking to /settings
+- [ ] Checklist hides when both steps are complete
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser
 
 **Files:**
-- `backend/app/services/sync.py` - Remove `fetch_media_title()`, update `cache_jellyseerr_requests()`
-
-**Note:** Completed 2026-01-14 - Removed fetch_media_title() API calls. New extract_title_from_request() uses embedded data with full fallback chain. 10 new unit tests. 201 backend tests pass, mypy clean.
+- `frontend/src/routes/+page.svelte` - Add SetupChecklist component
+- `frontend/src/lib/components/SetupChecklist.svelte` - New component
 
 ---
 
-#### US-13.2: Fix Frontend Request Item Display ✅
-**As a** media server owner
-**I want** to see request details including who requested it
-**So that** I can manage requests effectively
+#### US-18.2: Auto-Sync After Jellyfin Configuration
+**As a** user who just configured Jellyfin
+**I want** the first sync to start automatically
+**So that** I don't have to figure out how to trigger it manually
 
 **Acceptance Criteria:**
-- [x] Request items display title correctly (use `title` field, not `name`)
-- [x] "Requested By" column shows requester name
-- [x] Missing seasons shown for TV requests
-- [x] Request date shown (replaces "Watched" column for requests)
-- [x] Size column hidden for requests (they have no size)
-- [x] TMDB link works for requests
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Root cause:** Backend returns `UnavailableRequestItem` with `title` field, but frontend `ContentIssueItem` expects `name`. Template uses `item.name` which is undefined for requests.
+- [ ] When Jellyfin settings saved successfully AND user has never synced, trigger sync automatically
+- [ ] Show "Syncing..." state in checklist with spinner
+- [ ] On sync complete, show success message with item counts
+- [ ] Handle sync errors gracefully with retry option
+- [ ] First sync bypasses rate limit (or rate limit doesn't apply to first sync)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
 
 **Files:**
-- `frontend/src/routes/issues/+page.svelte` - Add `UnavailableRequestItem` interface, conditional rendering
-
-**Note:** Completed 2026-01-14 - Unified request/content response format. Backend converts requests to ContentIssueItem. Frontend shows: title, 'by {requester}', missing seasons (S1, S2...), request date (e.g. '3mo ago'), dash for size, TMDB link. 201 backend + 126 frontend tests pass.
+- `frontend/src/routes/settings/+page.svelte` - Trigger sync after Jellyfin save (if first time)
+- `backend/app/routers/sync.py` - Ensure first sync isn't rate-limited
 
 ---
 
-#### US-13.3: Add Release Date Column to Requests ✅
-**As a** media server owner
-**I want** to see the release date of unavailable requests
-**So that** I know when the content will become available
+#### US-18.3: Optional Services Prompt
+**As a** user who completed basic setup
+**I want** to see optional services I can configure
+**So that** I can enhance my experience if I have Jellyseerr/Radarr/Sonarr
 
 **Acceptance Criteria:**
-- [x] "Release Date" column displays in requests table
-- [x] Date extracted from Jellyseerr response (`media.releaseDate` for movies, `media.firstAirDate` for TV)
-- [x] Date stored in `CachedJellyseerrRequest` table during sync
-- [x] Frontend displays date in readable format
-- [x] Future release dates highlighted visually (e.g., different color or badge)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Database Migration:** Required (add `release_date` column)
+- [ ] After checklist complete, show dismissible "Enhance your setup" card
+- [ ] Lists: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)
+- [ ] Each has "Configure" link to /settings
+- [ ] User can dismiss card permanently (stored in localStorage)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser
 
 **Files:**
-- `backend/app/database.py` - Add `release_date` column to `CachedJellyseerrRequest`
-- `backend/app/services/sync.py` - Extract and store release date during sync
-- `backend/app/models/content.py` - Add `release_date` to `UnavailableRequestItem`
-- `backend/app/services/content.py` - Return release date in response
-- `frontend/src/routes/issues/+page.svelte` - Display release date column
-
-**Note:** Completed 2026-01-14
-
----
-
-#### US-13.4: Add Jellyseerr Request Whitelist (Backend) ✅
-**As a** media server owner
-**I want** to hide specific requests for a duration
-**So that** I don't see requests I'm intentionally waiting on
-
-**Acceptance Criteria:**
-- [x] New database table `jellyseerr_request_whitelist` with expiration support
-- [x] API endpoints: POST/GET/DELETE `/api/whitelist/requests`
-- [x] Whitelisted requests excluded from unavailable list
-- [x] Expired whitelist entries no longer filter requests
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Database Migration:** Required (add `jellyseerr_request_whitelist` table)
-
-**Files:**
-- `backend/app/database.py` - Add `JellyseerrRequestWhitelist` model
-- `backend/app/routers/whitelist.py` - Add request whitelist endpoints
-- `backend/app/services/content.py` - Add whitelist filtering to `get_unavailable_requests()`
-- `backend/app/models/content.py` - Add `RequestWhitelistAddRequest` model
-
-**Note:** Completed 2026-01-14 - JellyseerrRequestWhitelist table, API endpoints, expiration logic. 10 new tests. 222 backend tests pass, mypy clean.
-
----
-
-#### US-13.5: Add Request Whitelist UI ✅
-**As a** media server owner
-**I want** to click a button to hide a request
-**So that** I can manage my request list from the UI
-
-**Acceptance Criteria:**
-- [x] Hide button appears on each request item (eye-slash icon)
-- [x] Duration picker opens (same as content: permanent, 3/6/12 months, custom)
-- [x] Hidden request removed from list after confirmation
-- [x] Loading state shown during API call
-- [x] Toast notification on success/error
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Files:**
-- `frontend/src/routes/issues/+page.svelte` - Add hide button, wire up to whitelist API
-
-**Note:** Completed 2026-01-14 - Hide button with eye-slash icon on REQUEST badges, duration picker modal, Hidden Requests tab on whitelist page. 220 backend tests pass, 138 frontend tests pass, 17 integration tests pass.
-
----
-
-#### US-13.6: Setting to Include/Exclude Unreleased Requests ✅
-**As a** media server owner
-**I want** to toggle whether unreleased content requests are shown
-**So that** I can focus on requests that should already be available
-
-**Acceptance Criteria:**
-- [x] New boolean setting `show_unreleased_requests` in UserSettings (default: false)
-- [x] Settings page shows toggle for "Show unreleased requests"
-- [x] When false, requests with future release dates are hidden
-- [x] When true, all requests are shown (with release date visible)
-- [x] Setting persists in database
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Database Migration:** Required (add `show_unreleased_requests` column to UserSettings)
-
-**Files:**
-- `backend/app/database.py` - Add `show_unreleased_requests` to `UserSettings`
-- `backend/app/services/content.py` - Check setting in `get_unavailable_requests()` filter
-- `backend/app/routers/settings.py` - Add field to settings endpoint
-- `backend/app/models/settings.py` - Add field to settings models
-- `frontend/src/routes/settings/+page.svelte` - Add toggle to settings UI
-
-**Note:** Completed 2026-01-14 - Toggle switch in Display section of Settings page. 246 backend tests pass (7 new display tests), 146 frontend tests pass (8 new display tests), 17 integration tests pass.
-
----
+- `frontend/src/routes/+page.svelte` - Add optional services card
+- `frontend/src/lib/components/OptionalServicesCard.svelte` - New component (optional)
 
 ### Non-Goals
-- Automatic request deletion from Jellyseerr (out of scope)
-- Request management (approve/deny) from this app
-- Notifications when requests become available
+- No separate /onboarding route (stays on dashboard)
+- No changes to signup/login flow itself
+- No forced configuration of Jellyseerr/Radarr/Sonarr
 
 ### Technical Considerations
-- US-13.1 makes US-12.4 obsolete (same fix, more comprehensive)
-- Database migrations should be combined where possible to reduce migration count
+- **Backend:** Derive `has_completed_first_sync` from `last_synced != null` in sync status
+- **Frontend:** Conditionally render checklist based on: `!jellyfin_configured || !has_synced`
+- **Dismissed state:** Store "dismissed optional services" in localStorage (no backend needed)
+- **Auto-sync:** Use existing `/api/sync` endpoint after Jellyfin save
 
 ---
 
-## Epic 14: User Documentation
+## Epic 19: Issues Page Search
 
 ### Overview
-Provide in-app help documentation in FAQ format to help users understand and use all features effectively.
+Add a search input to the Issues page that allows users to quickly find specific content by filtering the displayed items. Search is client-side for instant responsiveness.
 
 ### Goals
-- Help new users get started quickly
-- Answer common questions about each feature
-- Reduce support burden with self-service documentation
+- Allow users to quickly locate specific movies/shows in their issues list
+- Search across title, year, and requested_by fields
+- Maintain current tab filtering behavior (search operates within active tab)
 
 ### User Stories
 
-#### US-14.1: In-App FAQ Help Page ✅
-**As a** user
-**I want** an in-app help page with FAQs
-**So that** I can understand how to use all features without external documentation
+#### US-19.1: Search Issues by Text
+**As a** media server owner
+**I want** to search for content on the Issues page
+**So that** I can quickly find a specific movie or show without scrolling
 
 **Acceptance Criteria:**
-- [x] New route `/help` accessible from navigation header
-- [x] FAQ sections covering:
-  - Getting Started (connect Jellyfin/Jellyseerr, first sync)
-  - Dashboard (what each card means, how counts are calculated)
-  - Issues (Old Content, Large Movies, Language Issues, Unavailable Requests)
-  - Whitelists (how to protect content, temporary vs permanent, managing whitelists)
-  - Settings (threshold configuration, what each setting affects)
-- [x] Collapsible FAQ items (click question to reveal answer)
-- [x] Search/filter functionality to find specific topics
-- [x] Help link added to navigation header (question mark icon)
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Completed 2026-01-14 - Help page with 5 FAQ sections (18 FAQs total), collapsible items, search filter, Help link in sidebar. 176 frontend tests pass (30 new help tests).
+- [ ] Search input appears next to the "Issues" title/item count
+- [ ] Search filters items in real-time as user types (debounced ~300ms)
+- [ ] Search matches against: title (case-insensitive), production year, and requested_by (for Requests tab)
+- [ ] Search operates within the currently active tab filter (Old, Large, Language, Requests, or All)
+- [ ] Empty search shows all items for current tab
+- [ ] Item count updates to reflect filtered results (e.g., "3 of 219 items")
+- [ ] Total size updates to reflect filtered results
+- [ ] Search input has a clear (X) button when text is present
+- [ ] Placeholder text: "Search by title, year..."
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
 
 ### Non-Goals
-- API documentation (user docs only)
-- Video tutorials
-- External documentation site
+- Backend API changes (search is client-side only)
+- Persistent search state across page navigation
+- Advanced search syntax (AND/OR operators, field-specific queries)
+- Searching content outside of issues (library-wide search)
 
 ### Technical Considerations
-- Use collapsible `<details>` elements or accordion component
-- FAQ content can be stored in a static JSON/TS file for easy updates
-- Consider adding contextual help links from other pages to relevant FAQ sections
+- Use Svelte `$state()` for search input value
+- Debounce filtering to avoid excessive re-renders (~300ms)
+- Filter function should check: `name`, `production_year`, `requested_by`
+- Update `filteredItems` computed value that combines tab filter + search filter
+- Update displayed count/size based on filtered results
+
+### UI Design Notes
+- Search input should be compact, matching the existing design system
+- Position: right side of the header, aligned with "219 items · 727.1 GB" text
+- Use existing CSS variables for styling consistency
 
 ---
 
-## Epic 15: Backlog
+## Epic 20: Large Series Detection
 
 ### Overview
-Miscellaneous improvements including bug fixes, delete functionality with Radarr/Sonarr integration, and code cleanup.
+Extend the "Large Movies" feature to also detect TV series with oversized seasons. Currently, only movies are flagged as "large" (>13GB). This epic adds detection for series where any single season exceeds a configurable threshold (default 15GB).
 
 ### Goals
-- Fix known bugs (hidden requests display, auth loading delay)
-- Enable content deletion directly from dashboard via Radarr/Sonarr
-- Remove unused code
+- Flag TV series with any season larger than threshold
+- Provide a separate, user-configurable threshold for series (independent from movies)
+- Calculate season sizes efficiently via background task (not during main sync)
+- Unified "Large Content" view with movie/series filtering
 
 ### User Stories
 
-#### US-15.1: Fix Hidden Requests Showing TMDB IDs ✅
-**As a** user
-**I want** hidden requests to show actual movie/show titles
-**So that** I can identify what content I've hidden
+#### US-20.1: Large Season Threshold Setting
+**As a** media server owner
+**I want** to configure the threshold for large seasons separately from movies
+**So that** I can fine-tune detection based on my storage preferences
 
 **Acceptance Criteria:**
-- [x] Hidden Requests tab shows actual titles, not "TMDB-123456"
-- [x] Backend looks up title from `CachedJellyseerrRequest` table when whitelisting
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Fixed by adding title lookup in whitelist.py add_to_requests endpoint. When title starts with TMDB-, looks up CachedJellyseerrRequest and extracts title from raw_data.media (title/name/slug).
-
-**Root Cause:** Frontend passes `item.name` which may be the fallback `TMDB-{id}` string when real title unavailable.
+- [ ] Add `large_season_size_gb` field to UserSettings model (default: 15)
+- [ ] Create database migration for new column
+- [ ] `GET /api/settings` returns `large_season_size_gb` value
+- [ ] `POST /api/settings` accepts and saves `large_season_size_gb`
+- [ ] Settings page displays "Large season threshold (GB)" input below movie threshold
+- [ ] Input validates: integer, minimum 1GB
+- [ ] Help text: "Flag TV series if any season exceeds this size"
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: setting saves and loads correctly
 
 **Files:**
-- `backend/app/routers/whitelist.py` - Modify POST /api/whitelist/requests to fetch title from DB
-- `backend/app/services/content.py` - Add helper to get request title by jellyseerr_id
+- `backend/app/database.py` - Add field to UserSettings
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Include in GET/POST
+- `backend/app/models/settings.py` - Update Pydantic schemas
+- `frontend/src/routes/settings/+page.svelte` - Add input field
 
 ---
 
-#### US-15.2: Add Radarr Connection Settings ✅
-**As a** user
-**I want** to connect my Radarr instance
-**So that** I can delete movies directly from the dashboard
+#### US-20.2: Calculate and Store Season Sizes
+**As a** system
+**I want** to calculate TV series season sizes after sync completes
+**So that** large series detection has accurate data without slowing down the main sync
 
 **Acceptance Criteria:**
-- [x] Settings page has Radarr section: URL + API Key
-- [x] Backend validates connection by calling `GET /api/v3/system/status`
-- [x] Credentials stored encrypted in database
-- [x] Toast notification on success/error
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**API Reference:**
-- Auth: `X-Api-Key` header
-- Test endpoint: `GET /api/v3/system/status`
+- [ ] Add `largest_season_size_bytes` field to CachedMediaItem model (nullable BigInteger)
+- [ ] Create database migration for new column
+- [ ] New async function `calculate_season_sizes(db, user_id, server_url, api_key)`:
+  - Fetches all series for user from cache
+  - For each series, calls Jellyfin API: `GET /Items?ParentId={series_id}&IncludeItemTypes=Episode&Fields=MediaSources,ParentIndexNumber`
+  - Groups episodes by `ParentIndexNumber` (season number), sums sizes per season
+  - Stores the LARGEST season size in `largest_season_size_bytes`
+- [ ] Background task triggered AFTER main sync completes (not during)
+- [ ] Sync status includes new state: "calculating_sizes" (after "completed")
+- [ ] Progress logging: "Calculating season sizes for {n} series..."
+- [ ] Handles API errors gracefully (logs warning, continues to next series)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Integration test: trigger sync, verify season sizes populated
 
 **Files:**
-- `backend/app/database.py` - Add `radarr_server_url`, `radarr_api_key_encrypted` to UserSettings
-- `backend/app/routers/settings.py` - Add POST /api/settings/radarr endpoint
-- `backend/app/services/radarr.py` - New service for Radarr API calls
-- `frontend/src/routes/settings/+page.svelte` - Add Radarr form section
+- `backend/app/database.py` - Add field to CachedMediaItem
+- `backend/alembic/versions/` - New migration
+- `backend/app/services/sync.py` - Add `calculate_season_sizes()` function
+- `backend/app/services/sync.py` - Trigger after main sync in `run_full_sync()`
+- `backend/tests/test_sync_service.py` - Test season size calculation
 
-**Note:** Completed 2026-01-14
+**Technical Notes:**
+- Jellyfin API endpoint: `GET /Items?ParentId={series_id}&IncludeItemTypes=Episode&Recursive=true&Fields=MediaSources,ParentIndexNumber`
+- Episode size is at `MediaSources[0].Size`
+- Season number is at `ParentIndexNumber`
+- Reference: `original_script.py:1582` - `get_series_total_size()` function
 
 ---
 
-#### US-15.3: Add Sonarr Connection Settings ✅
+#### US-20.3: Large Series Detection Service
 **As a** user
-**I want** to connect my Sonarr instance
-**So that** I can delete TV series directly from the dashboard
+**I want** large series included in the content issues API
+**So that** I can see all my oversized content in one place
 
 **Acceptance Criteria:**
-- [x] Settings page has Sonarr section: URL + API Key
-- [x] Backend validates connection by calling `GET /api/v3/system/status`
-- [x] Credentials stored encrypted in database
-- [x] Toast notification on success/error
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**API Reference:**
-- Auth: `X-Api-Key` header
-- Test endpoint: `GET /api/v3/system/status`
+- [ ] New function `is_large_series(item, threshold_gb)` returns True if `largest_season_size_bytes >= threshold`
+- [ ] `get_content_summary()` includes large series in a combined count:
+  - Rename internal variable from `large_movies` to `large_content`
+  - Count includes both large movies AND large series
+  - Total size includes both
+- [ ] `get_content_issues()` with `filter=large` returns both movies and series
+- [ ] Each item includes new field: `largest_season_size_bytes` (null for movies)
+- [ ] Each item includes new field: `largest_season_size_formatted` (e.g., "18.5 GB")
+- [ ] Series items include issue badge "large" when flagged
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Test: large series appears in issues, large movie still appears
 
 **Files:**
-- `backend/app/database.py` - Add `sonarr_server_url`, `sonarr_api_key_encrypted` to UserSettings
-- `backend/app/routers/settings.py` - Add POST /api/settings/sonarr endpoint
-- `backend/app/services/sonarr.py` - New service for Sonarr API calls
-- `frontend/src/routes/settings/+page.svelte` - Add Sonarr form section
-
-**Note:** Completed 2026-01-14
+- `backend/app/services/content.py` - Add `is_large_series()`, update `get_content_summary()`, `get_content_issues()`
+- `backend/app/models/content.py` - Add fields to response schemas
+- `backend/tests/test_content.py` - Test large series detection
 
 ---
 
-#### US-15.4: Delete Movie from Radarr ✅
-**As a** user
-**I want** to delete a movie via the dashboard
-**So that** it's removed from Radarr and Jellyfin automatically
+#### US-20.4: Large Content UI with Filter
+**As a** media server owner
+**I want** to filter large content by movies or series
+**So that** I can focus on one type at a time
 
 **Acceptance Criteria:**
-- [x] Backend endpoint to delete movie by TMDB ID
-- [x] Finds Radarr movie ID via `GET /api/v3/movie?tmdbId={id}`
-- [x] Deletes via `DELETE /api/v3/movie/{id}?deleteFiles=true`
-- [x] Returns success/error response
-- [x] Deleting from Radarr with files auto-deletes from Jellyfin
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Depends on US-15.2 (completed). Files: backend/app/services/radarr.py, backend/app/routers/content.py
+- [ ] Dashboard card renamed from "Large Movies" to "Large Content"
+- [ ] Dashboard card shows combined count (movies + series)
+- [ ] Issues page "Large" tab shows both movies and series
+- [ ] Sub-filter buttons appear when Large tab selected: [All] [Movies] [Series]
+- [ ] Default sub-filter is "All"
+- [ ] Sub-filter is client-side (no API changes needed)
+- [ ] Series items display: name, largest season size (e.g., "Largest season: 18.5 GB")
+- [ ] Movie items display: name, file size (unchanged behavior)
+- [ ] Item count and total size update based on sub-filter
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: filter toggles work correctly
 
 **Files:**
-- `backend/app/services/radarr.py` - Add `delete_movie_by_tmdb_id()`
-- `backend/app/routers/content.py` - Add DELETE /api/content/movie/{tmdb_id}
+- `frontend/src/routes/+page.svelte` - Rename card label
+- `frontend/src/routes/issues/+page.svelte` - Add sub-filter UI, update display logic
+- `frontend/src/lib/components/IssueItem.svelte` - Show season size for series (if applicable)
+
+### Non-Goals
+- Per-season breakdown in UI (only show largest season size)
+- Deleting individual seasons (out of scope)
+- Real-time size calculation (always uses cached values)
+
+### Technical Considerations
+- **Jellyfin API:** Episodes don't have a direct "season" endpoint. Must fetch all episodes and group by `ParentIndexNumber`
+- **Performance:** With ~100 series, background calculation adds ~100 API calls (acceptable)
+- **Sync flow:** Main sync → Complete → Background task calculates sizes → Update status
+- **Original script reference:** `get_series_total_size()` at line 1582, but we calculate per-season, not total
 
 ---
 
-#### US-15.5: Delete Series from Sonarr ✅
-**As a** user
-**I want** to delete a TV series via the dashboard
-**So that** it's removed from Sonarr and Jellyfin automatically
+## Epic 21: Slack Notification Monitoring
 
-**Acceptance Criteria:**
-- [x] Backend endpoint to delete series by TMDB ID
-- [x] Finds Sonarr series via `GET /api/v3/series` (iterate to find tmdbId match)
-- [x] Deletes via `DELETE /api/v3/series/{id}?deleteFiles=true`
-- [x] Returns success/error response
-- [x] Deleting from Sonarr with files auto-deletes from Jellyfin
-- [x] Typecheck passes
-- [x] Unit tests pass
+### Overview
+Add admin monitoring via Slack notifications to track new user signups and sync failures. This helps the admin stay informed about app health and growth without checking logs.
 
-**Note:** Depends on US-15.3 (completed). Files: backend/app/services/sonarr.py, backend/app/routers/content.py
+### Goals
+- Get notified immediately when new users sign up
+- Get notified when sync operations fail for any user
+- Keep webhook configuration secure via environment variables
 
-**Files:**
-- `backend/app/services/sonarr.py` - Add `delete_series_by_tmdb_id()`
-- `backend/app/routers/content.py` - Add DELETE /api/content/series/{tmdb_id}
+### User Stories
 
----
-
-#### US-15.6: Delete Jellyseerr Request ✅
-**As a** user
-**I want** to delete a request from Jellyseerr
-**So that** it's removed from the requests list
-
-**Acceptance Criteria:**
-- [x] Backend endpoint to delete request by jellyseerr_id
-- [x] Calls `DELETE /api/v1/request/{requestId}` on Jellyseerr
-- [x] Returns success/error response (204 No Content on success)
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** API: X-Api-Key header, response: 204 No Content. Files: backend/app/services/jellyseerr.py, backend/app/routers/content.py
-
-**API Reference:**
-- Auth: `X-Api-Key` header
-- Response: 204 No Content
-
-**Files:**
-- `backend/app/services/jellyseerr.py` - Add `delete_request()`
-- `backend/app/routers/content.py` - Add DELETE /api/content/request/{jellyseerr_id}
-
----
-
-#### US-15.7: Delete Content UI ✅
-**As a** user
-**I want** a delete button on content items
-**So that** I can remove content without leaving the dashboard
-
-**Acceptance Criteria:**
-- [x] "Delete" button appears on content items in Issues view
-- [x] Button disabled/greyed if Radarr/Sonarr not configured
-- [x] Tooltip explains why disabled when not configured
-- [x] Confirmation modal with 2 checkboxes:
-  - "Delete from Radarr/Sonarr (removes files)" - default checked
-  - "Delete from Jellyseerr (removes request)" - default checked
-- [x] Loading state during deletion
-- [x] Toast notification on success/error
-- [x] Item removed from list after successful deletion
-- [x] For Movies: calls Radarr delete
-- [x] For Series: calls Sonarr delete
-- [x] If request exists: optionally deletes from Jellyseerr
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Depends on US-15.4, US-15.5, US-15.6. File: frontend/src/routes/issues/+page.svelte
-
-**Files:**
-- `frontend/src/routes/issues/+page.svelte` - Add delete button, modal, API calls
-
----
-
-#### US-15.8: Fix Auth Check Loading Delay ✅
-**As a** user
-**I want** public pages to load instantly
-**So that** I don't see a loading spinner on landing/login/register pages
-
-**Acceptance Criteria:**
-- [x] Landing page (`/`) renders immediately without loading state
-- [x] Login page (`/login`) renders immediately without loading state
-- [x] Register page (`/register`) renders immediately without loading state
-- [x] Protected routes still show loading while auth check runs
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Fixed by checking isPublicRoute before showing loading state in layout.svelte. Public routes (/, /login, /register) now render immediately. Updated E2E tests to reflect new expected behavior.
-
-**Root Cause:** Layout shows loading for ALL routes. Should only show loading on protected routes.
-
-**Files:**
-- `frontend/src/routes/+layout.svelte` - Change `{#if $auth.isLoading}` to `{#if $auth.isLoading && !isPublicRoute}`
-
----
-
-#### US-15.9: Remove Unused api.ts File ✅
+#### US-21.1: Slack Notification Service
 **As a** developer
-**I want** unused code removed
-**So that** the codebase is clean and maintainable
+**I want** a reusable Slack notification service
+**So that** I can send messages to different Slack channels
 
 **Acceptance Criteria:**
-- [x] `frontend/src/lib/api.ts` file deleted
-- [x] No import errors after deletion
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Deleted frontend/src/lib/api.ts. All exports (contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi) were unused.
-
-**Unused exports being removed:**
-- `contentApi` (getOldUnwatched, getLargeMovies, deleteContent)
-- `languageApi` (getIssues, triggerCheck)
-- `requestsApi` (getUnavailable, getInProgress, getRecentlyAvailable)
-- `whitelistApi` (getList, addItem, removeItem)
-- `settingsApi` (get, update)
-- `healthApi` (check)
+- [ ] Create `app/services/slack.py` with `send_slack_message(webhook_url, message)` function
+- [ ] Function accepts webhook URL and message dict (Slack Block Kit format)
+- [ ] Function handles HTTP errors gracefully (log error, don't crash app)
+- [ ] Function is async and non-blocking
+- [ ] Add `SLACK_WEBHOOK_NEW_USERS` and `SLACK_WEBHOOK_SYNC_FAILURES` to config
+- [ ] Webhooks are optional - if not configured, notifications are silently skipped
+- [ ] Unit tests mock HTTP calls and verify message format
+- [ ] Typecheck passes
+- [ ] Unit tests pass
 
 **Files:**
-- `frontend/src/lib/api.ts` - Delete entire file
+- `backend/app/services/slack.py` - New service
+- `backend/app/config.py` - Add webhook URL settings
+- `backend/tests/test_slack_service.py` - Unit tests
 
 ---
 
-#### US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting ✅
-**As a** media server owner
-**I want** Jellyseerr requests to be deleted when I delete content from any tab
-**So that** I don't have orphaned requests after deleting movies/series
+#### US-21.2: New User Signup Notifications
+**As an** admin
+**I want** to receive a Slack notification when someone signs up
+**So that** I can track user growth in real-time
 
 **Acceptance Criteria:**
-- [x] Backend looks up Jellyseerr request by TMDB ID + media_type from `cached_jellyseerr_requests` table
-- [x] Lookup only happens when `delete_from_jellyseerr=true` AND no `jellyseerr_request_id` provided
-- [x] If user unchecked "Delete from Jellyseerr" in modal, no lookup or deletion occurs
-- [x] If matching request found, delete it from Jellyseerr
-- [x] If no matching request exists, skip gracefully (not an error)
-- [x] Response message indicates whether Jellyseerr request was found and deleted
-- [x] Typecheck passes
-- [x] Unit tests pass
+- [ ] After successful user registration, send Slack notification
+- [ ] Message includes: user email, signup timestamp, total user count
+- [ ] Message uses Slack Block Kit for nice formatting
+- [ ] Notification is fire-and-forget (doesn't block registration response)
+- [ ] If webhook not configured, registration still works (no error)
+- [ ] Unit tests verify notification is sent with correct payload
+- [ ] Typecheck passes
+- [ ] Unit tests pass
 
-**Note:** Implemented _lookup_jellyseerr_request_by_tmdb() helper function. Both delete_movie and delete_series endpoints now look up Jellyseerr request by TMDB ID when no explicit request ID is provided. 5 new unit tests added.
-
-**Root Cause:** Backend only deletes from Jellyseerr when `jellyseerr_request_id` is provided. For items from Old/Large/Language tabs (Jellyfin content), this ID is not available. Backend should lookup the request by TMDB ID instead.
+**Message Format:**
+```
+:wave: New User Signup
+Email: user@example.com
+Signed up: 2025-01-15 14:30 UTC
+Total users: 42
+```
 
 **Files:**
-- `backend/app/routers/content.py` - Add helper to lookup request by TMDB ID, update delete_movie and delete_series
+- `backend/app/routers/auth.py` - Call Slack service after registration
+- `backend/tests/test_auth.py` - Add test for Slack notification
+
+---
+
+#### US-21.3: Sync Failure Notifications
+**As an** admin
+**I want** to receive a Slack notification when a user's sync fails
+**So that** I can investigate and help users with connection issues
+
+**Acceptance Criteria:**
+- [ ] When sync fails (Jellyfin or Jellyseerr), send Slack notification
+- [ ] Message includes: user email, which service failed, error message
+- [ ] Notification sent for both manual sync and scheduled (Celery) sync failures
+- [ ] Message is fire-and-forget (doesn't affect sync error handling)
+- [ ] If webhook not configured, sync failure handling still works
+- [ ] Unit tests verify notification is sent with correct payload
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Message Format:**
+```
+:warning: Sync Failed
+User: user@example.com
+Service: Jellyfin
+Error: Connection timeout after 30s
+Time: 2025-01-15 14:30 UTC
+```
+
+**Files:**
+- `backend/app/services/sync.py` - Call Slack service on failure
+- `backend/app/tasks.py` - Call Slack service on Celery task failure
+- `backend/tests/test_sync_service.py` - Add test for failure notification
 
 ### Non-Goals
-- Automatic deletion based on rules
-- Undo functionality for deletions
-- Batch deletion of multiple items
+- No admin UI to configure webhooks (env vars only)
+- No notification preferences per user (admin-only feature)
+- No retry logic for failed Slack deliveries
+- No rate limiting on notifications
 
 ### Technical Considerations
-- **Radarr API:** Auth via `X-Api-Key` header; find movie by `GET /api/v3/movie?tmdbId={id}`; delete via `DELETE /api/v3/movie/{id}?deleteFiles=true`
-- **Sonarr API:** Auth via `X-Api-Key` header; find series by iterating `GET /api/v3/series`; delete via `DELETE /api/v3/series/{id}?deleteFiles=true`
-- **Jellyseerr API:** Auth via `X-Api-Key` header; delete request via `DELETE /api/v1/request/{requestId}`
-- Deleting from Radarr/Sonarr with `deleteFiles=true` auto-removes from Jellyfin
+- **Slack Block Kit**: Use blocks for rich formatting (not plain text)
+- **Async HTTP**: Use `httpx` async client for non-blocking calls
+- **Error handling**: Log failures but never raise - notifications are best-effort
+- **Environment variables**:
+  - `SLACK_WEBHOOK_NEW_USERS` - Webhook for #new-users channel
+  - `SLACK_WEBHOOK_SYNC_FAILURES` - Webhook for #alerts channel
+
+### Environment Variables
+```env
+# Optional - if not set, notifications are disabled
+SLACK_WEBHOOK_NEW_USERS=https://hooks.slack.com/services/XXX/YYY/ZZZ
+SLACK_WEBHOOK_SYNC_FAILURES=https://hooks.slack.com/services/AAA/BBB/CCC
+```
 
 ---
 
-## Epic 16: Appearance Settings
+## Epic 22: Library Browser
 
 ### Overview
-Allow users to manually control the application's theme (light/dark mode) instead of relying solely on system preferences. The theme preference is stored in the database and syncs across devices.
+A new Library section that allows users to browse their complete Jellyfin media library. Unlike the Issues page which shows only problematic content, the Library shows everything - giving users a complete view of what's in their collection.
 
 ### Goals
-- Give users explicit control over light/dark mode
-- Support three options: Light, Dark, and System (follow OS preference)
-- Persist preference in user settings database
-- Apply theme preference across all pages instantly
+- Provide full visibility into the user's Jellyfin library
+- Enable quick discovery and search of specific content
+- Separate movies and series for easier browsing
+- Leverage existing cached data (no new sync logic needed)
 
 ### User Stories
 
-#### US-16.1: Theme Preference Backend ✅
+#### US-22.1: Library API Endpoint
 **As a** developer
-**I want** a backend endpoint to store theme preference
-**So that** the frontend can persist user's theme choice
+**I want** an API endpoint that returns all cached media
+**So that** the frontend can display the complete library
 
 **Acceptance Criteria:**
-- [x] Add `theme_preference` column to `UserSettings` model (enum: `light`, `dark`, `system`)
-- [x] Default value is `system` (follow OS preference)
-- [x] Create Alembic migration for the new column
-- [x] `GET /api/settings/display` includes `theme_preference` field
-- [x] `POST /api/settings/display` accepts `theme_preference` field
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Added theme_preference column (light/dark/system, default system) to UserSettings. Updated DisplayPreferences models and endpoints. 4 new tests added.
+- [ ] `GET /api/library` returns all cached media items for the user
+- [ ] Supports query params: `type=movie|series|all` (default: all)
+- [ ] Supports query params: `search=string` (searches name, case-insensitive)
+- [ ] Supports query params: `watched=true|false|all` (default: all)
+- [ ] Supports query params: `sort=name|year|size|date_added|last_watched` (default: name)
+- [ ] Supports query params: `order=asc|desc` (default: asc)
+- [ ] Supports query params: `min_year`, `max_year` for year range filter
+- [ ] Supports query params: `min_size_gb`, `max_size_gb` for size range filter
+- [ ] Returns: items[], total_count, total_size_bytes, total_size_formatted, service_urls
+- [ ] Each item includes: jellyfin_id, name, media_type, production_year, size_bytes, size_formatted, played, last_played_date, date_created, tmdb_id
+- [ ] Typecheck passes
+- [ ] Unit tests pass
 
 **Files:**
-- `backend/app/database.py` - Add `theme_preference` column to UserSettings
-- `backend/app/models/settings.py` - Add `theme_preference` to DisplayPreferences schemas
-- `backend/app/routers/settings.py` - Update display endpoints to handle theme_preference
-- `backend/alembic/versions/` - New migration file
+- `backend/app/routers/library.py` - New router
+- `backend/app/services/library.py` - New service
+- `backend/app/models/library.py` - Response schemas
+- `backend/app/main.py` - Register router
+- `backend/tests/test_library.py` - Unit tests
 
 ---
 
-#### US-16.2: Theme Store and Application ✅
-**As a** user
-**I want** my theme choice to be applied across the app
-**So that** I see consistent light/dark styling
+#### US-22.2: Library Page with Sub-tabs
+**As a** media server owner
+**I want** to browse my library with separate Movies and Series tabs
+**So that** I can explore my collection by content type
 
 **Acceptance Criteria:**
-- [x] Create theme store that reads user preference from API
-- [x] Apply theme via `data-theme` attribute on `<html>` element
-- [x] `data-theme="light"` forces light mode
-- [x] `data-theme="dark"` forces dark mode
-- [x] `data-theme="system"` (or no attribute) follows OS preference
-- [x] Theme persists across page navigation
-- [x] Theme loads correctly on page refresh
-- [x] Typecheck passes
-- [x] Unit tests pass
-
-**Note:** Created theme store with loadFromApi/saveToApi. CSS supports data-theme attribute for forced light/dark. Layout loads theme on auth. 10 new tests.
+- [ ] New route `/library` accessible from sidebar navigation
+- [ ] Sidebar shows "Library" menu item with appropriate icon (between Issues and Whitelist)
+- [ ] Page header shows "Library" with total item count and size
+- [ ] Sub-tabs: [All] [Movies] [Series] - filter by media type
+- [ ] Default sub-tab is "All"
+- [ ] Table displays: Name, Year, Size, Added, Last Watched
+- [ ] External service links (Jellyfin, TMDB) like Issues page
+- [ ] Empty state when library is empty (with link to Settings to configure Jellyfin)
+- [ ] Loading state while fetching data
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
 
 **Files:**
-- `frontend/src/lib/stores/theme.ts` - New theme store
-- `frontend/src/app.css` - Update CSS to use `[data-theme="light"]` and `[data-theme="dark"]` selectors
-- `frontend/src/routes/+layout.svelte` - Initialize theme store and apply to document
+- `frontend/src/routes/library/+page.svelte` - New page
+- `frontend/src/lib/components/Sidebar.svelte` - Add Library nav item
+- `frontend/src/lib/types.ts` - Add LibraryItem type
 
 ---
 
-#### US-16.3: Theme Toggle UI in Settings ✅
-**As a** user
-**I want** a theme selector in settings
-**So that** I can choose between light, dark, or system preference
+#### US-22.3: Library Search and Filters
+**As a** media server owner
+**I want** to search and filter my library
+**So that** I can quickly find specific content
 
 **Acceptance Criteria:**
-- [x] Settings page Display section has theme selector
-- [x] Three options: Light, Dark, System (default)
-- [x] Selector shows current preference
-- [x] Changing selection immediately updates the theme
-- [x] Saves preference to backend on change
-- [x] Toast notification on success/error
-- [x] Typecheck passes
-- [x] Unit tests pass
-- [x] Verify in browser using browser tools
-
-**Note:** Added theme selector with Light/Dark/System options. Saves to backend on change. Toast notification on success. 3 new tests. Verified in browser.
+- [ ] Search input in page header (searches as user types, debounced 300ms)
+- [ ] Search matches name (case-insensitive) and production year
+- [ ] Filter dropdown for watched status: All, Watched, Unwatched
+- [ ] Year range filter: min year and max year inputs
+- [ ] Size range filter: min size and max size (in GB)
+- [ ] Sort dropdown: Name, Year, Size, Date Added, Last Watched
+- [ ] Sort order toggle: Ascending/Descending
+- [ ] Filters persist while switching between All/Movies/Series tabs
+- [ ] Clear all filters button
+- [ ] Item count updates to reflect filtered results
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
 
 **Files:**
-- `frontend/src/routes/settings/+page.svelte` - Add theme selector to Display section
+- `frontend/src/routes/library/+page.svelte` - Add filter UI and logic
+
+---
+
+#### US-22.4: Library Sorting
+**As a** media server owner
+**I want** to sort my library by different columns
+**So that** I can organize the view to my preference
+
+**Acceptance Criteria:**
+- [ ] Clickable column headers for sorting (Name, Year, Size, Last Watched)
+- [ ] Visual indicator showing current sort column and direction
+- [ ] Click same column to toggle ascending/descending
+- [ ] Default sort: Name ascending
+- [ ] Sorting is server-side (API parameter) for performance with large libraries
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte` - Add sortable column headers
 
 ### Non-Goals
-- Custom color themes beyond light/dark
-- Per-page theme overrides
-- Time-based automatic theme switching
+- No whitelist/delete actions (this is browse-only, use Issues page for actions)
+- No pagination in v1 (will revisit if performance issues arise with large libraries)
+- No grid/poster view (table view only for v1)
+- No offline/PWA support
+- No export functionality
 
 ### Technical Considerations
-- **CSS Strategy:** Use CSS custom properties with `[data-theme]` attribute selectors to override the `prefers-color-scheme` media query
-- **Storage:** Theme preference stored in `user_settings` table, same as other display preferences
-- **Initial Load:** On app load, fetch user settings and apply theme before rendering to avoid flash of wrong theme
-- **Unauthenticated Users:** Default to system preference (no API call needed)
+- **Data Source:** All data comes from `CachedMediaItem` table (already synced)
+- **Performance:** With typical libraries of 500-2000 items, server-side filtering/sorting is sufficient
+- **Reuse:** Can reuse external link badge components from Issues page
+- **API Design:** Server-side filtering for watched status, year range, size range to support large libraries
+
+---
+
+## Epic 23: Added Date Column
+
+### Overview
+Display when content was added to the Jellyfin library on the Issues page and Library page. This helps users understand the age of their content and make better decisions about what to keep or remove.
+
+### Goals
+- Show "Added" date column on Issues page
+- Include "Added" column in Library page (when built)
+- Leverage existing `date_created` data from sync
+
+### User Stories
+
+#### US-23.1: Added Date Column on Issues Page
+**As a** media server owner
+**I want** to see when content was added to my library
+**So that** I can understand how long items have been in my collection
+
+**Acceptance Criteria:**
+- [ ] API includes `date_created` field in content issues response
+- [ ] Issues page table shows "Added" column after "Size" column
+- [ ] Displays date in user-friendly format (e.g., "Jan 15, 2024")
+- [ ] Shows "Unknown" if date_created is null
+- [ ] Column is sortable (client-side)
+- [ ] Column visible on all tabs (All, Old, Large, Language, Unavailable)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `backend/app/models/content.py` - Add `date_created` to ContentIssueItem schema
+- `backend/app/services/content.py` - Include `date_created` in response
+- `frontend/src/routes/issues/+page.svelte` - Add "Added" column to table
+
+### Non-Goals
+- No filtering by added date on Issues page (use Library for that)
+- No backend sorting by date_created (client-side only for Issues)
+
+### Technical Considerations
+- `date_created` already exists in `CachedMediaItem` model and is synced from Jellyfin
+- Format: ISO 8601 string from Jellyfin API (e.g., "2024-01-15T10:30:00Z")
+- Frontend should format using `toLocaleDateString()` or similar
+
+---
+
+## Epic 24: Auth Security
+
+### Overview
+Add rate limiting to authentication endpoints to protect against brute force password attacks. This is a security hardening measure that limits the number of login/register attempts from a single IP address.
+
+### Goals
+- Prevent brute force password attacks on login endpoint
+- Prevent automated account creation spam on register endpoint
+- Provide clear feedback to legitimate users who hit rate limits
+
+### User Stories
+
+#### US-24.1: Rate Limiting on Auth Endpoints
+**As a** system administrator
+**I want** login and registration endpoints to be rate-limited
+**So that** brute force attacks are mitigated
+
+**Acceptance Criteria:**
+- [ ] Rate limit of 10 requests per minute per IP address on `/api/auth/login`
+- [ ] Rate limit of 10 requests per minute per IP address on `/api/auth/register`
+- [ ] Rate-limited requests return HTTP 429 (Too Many Requests)
+- [ ] Response includes `Retry-After` header indicating seconds until reset
+- [ ] Response body includes clear error message: "Too many requests. Please try again in X seconds."
+- [ ] Rate limit uses in-memory storage (Redis not required for v1)
+- [ ] `/api/auth/me` endpoint is NOT rate-limited (authenticated requests only)
+- [ ] Rate limiting is disabled in test environment
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Manual test: verify 11th request within 60 seconds returns 429
+
+**Files:**
+- `backend/app/middleware/rate_limit.py` - New middleware/dependency for rate limiting
+- `backend/app/routers/auth.py` - Apply rate limit dependency to login/register
+- `backend/tests/test_auth.py` - Add rate limit tests
+
+### Non-Goals
+- Redis/distributed rate limiting (in-memory is sufficient for single-instance deployment)
+- Per-email rate limiting (IP-based only for v1)
+- Gradual backoff/tarpit (simple blocking for v1)
+- Admin UI to configure rate limits (hardcoded for now)
+
+### Technical Considerations
+- **Implementation option:** Use `slowapi` library (FastAPI-compatible) or custom middleware
+- **Storage:** In-memory dict with IP -> (count, window_start) for simplicity
+- **Thread safety:** Use `asyncio.Lock` for concurrent request handling
+- **Testing:** Mock time or use short windows in tests
+- **X-Forwarded-For:** Handle proxy scenarios (get real client IP from headers)
+
+---
+
+## Epic 25: Password Strength Indicator
+
+### Overview
+Display visual feedback during registration showing password strength based on length. Helps users create stronger passwords without enforcing any restrictions.
+
+### Goals
+- Guide users toward creating better passwords
+- Provide immediate visual feedback as they type
+- Keep the indicator simple and non-intrusive
+
+### User Stories
+
+#### US-25.1: Password Strength Indicator
+**As a** new user registering for an account
+**I want** to see a visual indicator of my password strength
+**So that** I can understand how secure my password is
+
+**Acceptance Criteria:**
+- [ ] Password input on registration page shows strength indicator below the field
+- [ ] Indicator is a horizontal progress bar that changes color based on strength
+- [ ] Strength levels based on length:
+  - Weak (red): 1-7 characters
+  - Medium (yellow): 8-11 characters
+  - Strong (green): 12+ characters
+- [ ] Bar fills proportionally: ~33% for weak, ~66% for medium, ~100% for strong
+- [ ] Indicator only appears when password field has content
+- [ ] Indicator updates in real-time as user types (no debounce needed)
+- [ ] Indicator is informational only - does NOT block form submission
+- [ ] Uses existing CSS color variables (--danger, --warning, --success or similar)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/register/+page.svelte` - Add strength indicator component
+
+### Non-Goals
+- No backend validation of password strength (purely frontend visual)
+- No complex strength algorithms (zxcvbn, etc.) - just length-based
+- No blocking weak passwords from submission
+- No password requirements checklist
+
+### Technical Considerations
+- Use Svelte reactive statements to compute strength from password length
+- Color transitions should be smooth (CSS transition)
+- Bar width calculated as percentage: `Math.min(100, (length / 12) * 100)`
+- Empty password = hidden indicator (not "weak")
+
+---
+
+#### US-25.2: Password Confirmation Field
+**As a** new user registering for an account
+**I want** to confirm my password by typing it twice
+**So that** I don't accidentally create an account with a typo in my password
+
+**Acceptance Criteria:**
+- [ ] Registration form adds "Confirm Password" input field after Password field
+- [ ] Confirm Password field is required
+- [ ] Form validates that Password and Confirm Password match
+- [ ] If passwords don't match, show error: "Passwords do not match"
+- [ ] Error appears below the Confirm Password field (not as a toast)
+- [ ] Submit button is disabled until passwords match (or validation runs on submit)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/register/+page.svelte` - Add confirm password field and validation
+
+---
+
+## Epic 26: Sync Resilience
+
+### Overview
+Add retry logic with exponential backoff to handle transient API failures during sync. Jellyfin and Jellyseerr APIs can occasionally fail due to timeouts, rate limits, or temporary network issues. Automatic retries improve sync reliability.
+
+### Goals
+- Automatically retry failed API calls during sync
+- Use exponential backoff to avoid overwhelming failing services
+- Provide clear failure messages when retries are exhausted
+
+### User Stories
+
+#### US-26.1: Sync Retry with Exponential Backoff
+**As a** user
+**I want** sync to automatically retry on transient failures
+**So that** temporary API issues don't require me to manually retry
+
+**Acceptance Criteria:**
+- [ ] Jellyfin API calls retry up to 3 times on failure (4 total attempts)
+- [ ] Jellyseerr API calls retry up to 3 times on failure (4 total attempts)
+- [ ] Retry delays use exponential backoff: 1s, 2s, 4s between retries
+- [ ] Only retry on transient errors: timeouts, 5xx errors, connection errors
+- [ ] Do NOT retry on: 401 (auth failed), 404 (not found), 400 (bad request)
+- [ ] Each retry attempt is logged: "Retry 1/3 for Jellyfin API after 1s..."
+- [ ] After all retries exhausted, sync status set to "failed" with error message
+- [ ] Error message includes which service failed and the error type
+- [ ] Successful retry continues sync normally (no partial state)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Test: mock API to fail twice then succeed, verify sync completes
+
+**Files:**
+- `backend/app/services/sync.py` - Add retry wrapper for API calls
+- `backend/app/services/jellyfin.py` - Use retry wrapper (if separate)
+- `backend/app/services/jellyseerr.py` - Use retry wrapper (if separate)
+- `backend/tests/test_sync_service.py` - Add retry tests
+
+### Non-Goals
+- Per-item retry (if one movie fails, don't retry the whole sync)
+- Configurable retry count/delays via settings
+- Circuit breaker pattern (v1 uses simple retry)
+- Retry notifications to user (just logging for now)
+
+### Technical Considerations
+- Use `tenacity` library for retry logic (cleaner than manual implementation)
+- Exponential backoff formula: `2^attempt * base_delay` where base_delay=1s
+- Wrap high-level fetch functions (not every HTTP call individually)
+- Consider adding jitter to backoff to prevent thundering herd
+- Retryable exceptions: `httpx.TimeoutException`, `httpx.ConnectError`, responses with 5xx status
+
+### Example Implementation Pattern
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+    before_sleep=lambda retry_state: logger.info(f"Retry {retry_state.attempt_number}/3...")
+)
+async def fetch_jellyfin_media(...):
+    ...
+```
+
+---
+
+## Epic 27: Test Coverage
+
+### Overview
+Improve automated test coverage with critical E2E tests for core user flows.
+
+### User Stories
+
+#### US-27.1: E2E Auth Flow Test
+**As a** developer
+**I want** an E2E test covering the complete authentication flow
+**So that** regressions in auth are caught automatically
+
+**Acceptance Criteria:**
+- [ ] E2E test covers: register new user → login → navigate to dashboard → navigate to settings → logout
+- [ ] Test uses unique email per run (e.g., `test-{timestamp}@example.com`)
+- [ ] Verifies dashboard loads after login (checks for expected element)
+- [ ] Verifies settings page loads and shows user info
+- [ ] Verifies logout redirects to login page
+- [ ] Verifies protected routes redirect to login when not authenticated
+- [ ] Test is idempotent (can run multiple times without cleanup)
+- [ ] Typecheck passes
+- [ ] E2E test passes
+
+**Files:**
+- `frontend/e2e/auth-flow.spec.ts` - New E2E test file
+
+---
+
+#### US-27.2: Sync Integration Tests with Mocked APIs
+**As a** developer
+**I want** integration tests that verify sync behavior with mocked Jellyfin/Jellyseerr responses
+**So that** I can test sync logic without requiring real external services
+
+**Acceptance Criteria:**
+- [ ] Test file `backend/tests/test_sync_integration.py` with mocked API responses
+- [ ] Mock Jellyfin API responses using `httpx` mock or `respx` library
+- [ ] Mock Jellyseerr API responses
+- [ ] Test: successful sync stores correct data in database
+- [ ] Test: partial Jellyfin data is handled correctly (missing fields)
+- [ ] Test: Jellyseerr down doesn't break Jellyfin sync
+- [ ] Test: API returning empty results creates empty cache (not error)
+- [ ] Mocks use realistic response structures from actual API documentation
+- [ ] Tests run without network access (fully offline)
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+**Files:**
+- `backend/tests/test_sync_integration.py` - New integration test file
+- `backend/tests/fixtures/jellyfin_responses.py` - Mock response data (optional)
+- `backend/tests/fixtures/jellyseerr_responses.py` - Mock response data (optional)
+
+### Non-Goals
+- Testing every form validation (unit tests cover that)
+- Visual regression testing
+
+---
+
+## Epic 28: Accessibility Improvements
+
+### Overview
+Improve accessibility for screen reader users by adding proper ARIA attributes to dynamic content.
+
+### User Stories
+
+#### US-28.1: Loading States Accessibility
+**As a** screen reader user
+**I want** loading states to be announced
+**So that** I know when content is being fetched
+
+**Acceptance Criteria:**
+- [ ] Add `aria-busy="true"` to parent containers during loading
+- [ ] Loading spinners have `aria-label="Loading"` or equivalent
+- [ ] Add `aria-live="polite"` regions for dynamic content updates
+- [ ] Dashboard loading state is accessible
+- [ ] Issues page loading state is accessible
+- [ ] Settings page loading state is accessible
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify with screen reader or accessibility inspector
+
+**Files:**
+- `frontend/src/routes/+page.svelte` - Dashboard accessibility
+- `frontend/src/routes/issues/+page.svelte` - Issues page accessibility
+- `frontend/src/routes/settings/+page.svelte` - Settings page accessibility
+
+### Non-Goals
+- Full WCAG 2.1 compliance audit
+- High contrast theme
 
 ---
 
 ## Checklist Summary
 
 ### Completed ✅ (73 stories)
-- [x] US-0.1: Hello World (Full Stack)
-- [x] US-0.2: Dockerize the Application
-- [x] US-0.3: Deploy to VPS
-- [x] US-1.1: User Registration
-- [x] US-1.2: User Login
-- [x] US-1.3: Protected Routes
-- [x] US-2.1: Configure Jellyfin Connection
-- [x] US-2.1.5: Backend Cleanup
-- [x] US-2.2: Configure Jellyseerr Connection
-- [x] US-2.3: Navigation Header
-- [x] US-7.1: Automatic Daily Data Sync
-- [x] US-7.1.5: Local Integration Test for Sync
-- [x] US-7.2: Manual Data Refresh
-- [x] US-3.1: View Old Unwatched Content
-- [x] US-3.2: Protect Content from Deletion
-- [x] US-3.3: Manage Content Whitelist
-- [x] US-D.1: Dashboard Summary Cards
-- [x] US-D.2: Dashboard Info Section
-- [x] US-D.3: Unified Issues View
-- [x] US-D.4: Multi-Issue Content Support
-- [x] US-D.5: Navigation Update
-- [x] US-D.6: Inline Badge Actions
-- [x] US-4.1: Large Movies Backend Service
-- [x] US-5.1: Language Issues Backend Service
-- [x] US-5.2: Mark Content as French-Only
-- [x] US-5.3: Exempt Content from Language Checks
-- [x] US-6.1: Unavailable Requests Backend Service
-- [x] US-V.1: Validate Old Content Filtering Logic
-- [x] US-V.2: Validate Large Movies Detection
-- [x] US-V.3: Validate Language Issues Detection
-- [x] US-V.4: Validate Unavailable Requests Detection
-- [x] US-6.3: Recently Available Content (INFO)
-- [x] US-8.1: Configure Thresholds
-- [x] US-UI.1: Design System Refinement
-- [x] US-9.1: Fix Page Titles
-- [x] US-9.2: Add Favicon
-- [x] US-9.3: Add CORS Production URL
-- [x] US-9.4: Add IMDB/TMDB Links to Content Items
-- [x] US-10.1: Add Celery Infrastructure
-- [x] US-10.2: Daily Sync Scheduler
-- [x] US-11.1: Add Expiration to Whitelist Schema
-- [x] US-11.2: Whitelist Expiration Logic
-- [x] US-11.3: Temporary Whitelist UI
-- [x] US-M.1: Landing Page Hero
-- [x] US-M.2: Feature Highlights
-- [x] US-M.3: Dashboard Preview
-- [x] US-M.4: Trust Section
-- [x] US-M.5: Auth Page CTAs
-- [x] US-12.1: Add Threshold Help Text
-- [x] US-12.2: Remove Multi-Issue Tab
-- [x] US-12.3: Fix TMDB Link Media Type
-- [x] US-12.5: External Links for All Issue Types
-- [x] US-12.6: Fix Watch Status Display
-- [x] US-13.1: Fix Title Extraction in Jellyseerr Sync
-- [x] US-13.2: Fix Frontend Request Item Display
-- [x] US-13.3: Add Release Date Column to Requests
-- [x] US-13.4: Add Jellyseerr Request Whitelist (Backend)
-- [x] US-13.5: Add Request Whitelist UI
-- [x] US-13.6: Setting to Include/Exclude Unreleased Requests
-- [x] US-14.1: In-App FAQ Help Page
-- [x] US-15.1: Fix Hidden Requests Showing TMDB IDs
-- [x] US-15.2: Add Radarr Connection Settings
-- [x] US-15.3: Add Sonarr Connection Settings
-- [x] US-15.4: Delete Movie from Radarr
-- [x] US-15.5: Delete Series from Sonarr
-- [x] US-15.6: Delete Jellyseerr Request
-- [x] US-15.7: Delete Content UI
-- [x] US-15.8: Fix Auth Check Loading Delay
-- [x] US-15.9: Remove Unused api.ts File
-- [x] US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
-- [x] US-16.1: Theme Preference Backend
-- [x] US-16.2: Theme Store and Application
-- [x] US-16.3: Theme Toggle UI in Settings
 
-### Pending (0 stories)
-All stories completed!
+See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for completed epics and stories.
+
+### Pending (26 stories)
+- [ ] US-17.1: Multi-User Watch Data Aggregation
+- [ ] US-17.2: Sync Progress Visibility
+- [ ] US-18.1: Show Setup Checklist for New Users
+- [ ] US-18.2: Auto-Sync After Jellyfin Configuration
+- [ ] US-18.3: Optional Services Prompt
+- [ ] US-19.1: Search Issues by Text
+- [ ] US-20.1: Large Season Threshold Setting
+- [ ] US-20.2: Calculate and Store Season Sizes
+- [ ] US-20.3: Large Series Detection Service
+- [ ] US-20.4: Large Content UI with Filter
+- [ ] US-21.1: Slack Notification Service
+- [ ] US-21.2: New User Signup Notifications
+- [ ] US-21.3: Sync Failure Notifications
+- [ ] US-23.1: Added Date Column on Issues Page
+- [ ] US-22.1: Library API Endpoint
+- [ ] US-22.2: Library Page with Sub-tabs
+- [ ] US-22.3: Library Search and Filters
+- [ ] US-22.4: Library Sorting
+- [ ] US-24.1: Rate Limiting on Auth Endpoints
+- [ ] US-25.1: Password Strength Indicator
+- [ ] US-26.1: Sync Retry with Exponential Backoff
+- [ ] US-25.2: Password Confirmation Field
+- [ ] US-17.3: Fix Mobile Sidebar Visual Overlap
+- [ ] US-27.1: E2E Auth Flow Test
+- [ ] US-27.2: Sync Integration Tests with Mocked APIs
+- [ ] US-28.1: Loading States Accessibility

@@ -24,7 +24,7 @@ wait_and_retry() {
   local reason="$1"
   echo ""
   echo "$reason"
-  echo "   Waiting 10 minutes before retry... ($(date))"
+  echo "   Waiting 1 minute before retry... ($(date))"
   sleep $RETRY_WAIT_SECONDS
   echo "🔄 Retrying..."
 }
@@ -113,20 +113,18 @@ for ((i=1; i<=$ITERATIONS; i++)); do
   section_header "Iteration $i of $ITERATIONS"
   run_ralph
 
-  # Integration review every 3 iterations
-  if (( i % 3 == 0 )); then
-    run_qa "Integration Review (iteration $i)"
-  fi
-
   # Check for completion
   if tail -100 "$LOGFILE" | grep -q "<promise>COMPLETE</promise>"; then
     echo ""
     echo "=========================================="
     echo "PRD complete after $i iterations!"
     echo "=========================================="
-    exit 0
+    break
   fi
 done
+
+# Final QA review after all iterations
+run_qa "Final Integration Review"
 
 echo ""
 echo "=========================================="

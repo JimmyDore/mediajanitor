@@ -1,6 +1,2 @@
-- Delete : Not working at all, only the content is deleted, not the request
-- Watched: Never => Not fixed 
-- Jellyseer connection validation not sure if it's working
-- Remove IMDB url => Redundant
-- Onboarding : After signup => Configure all your services, then trigger a sync
-- Monitoring : Send slack messages (set up VPS secret), when a sync fails, send a message to slack, when new users are added, send a message to slack
+Bugs : 
+- A tester demain, normalement c'est fix, mais j'attends d'avoir le added date pour delete un truc plus safe
