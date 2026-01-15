@@ -116,8 +116,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Root Cause: Frontend passes item.name which may be the fallback TMDB-{id} string. Files: backend/app/routers/whitelist.py, backend/app/services/content.py"
+      "passes": true,
+      "notes": "Fixed by adding title lookup in whitelist.py add_to_requests endpoint. When title starts with TMDB-, looks up CachedJellyseerrRequest and extracts title from raw_data.media (title/name/slug)."
     },
     {
       "id": "US-15.8",

@@ -3,9 +3,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import User, get_db
+from app.database import CachedJellyseerrRequest, User, get_db
 from app.models.content import (
     RequestWhitelistAddRequest,
     RequestWhitelistListResponse,
@@ -272,12 +273,45 @@ async def add_to_requests(
     Items in this whitelist are hidden from the unavailable requests list.
     Use this to hide requests you're intentionally waiting on.
     """
+    # If title looks like a TMDB ID fallback (e.g., "TMDB-123456"), look up actual title
+    title = request.title
+    if title.startswith("TMDB-"):
+        result = await db.execute(
+            select(CachedJellyseerrRequest).where(
+                CachedJellyseerrRequest.user_id == current_user.id,
+                CachedJellyseerrRequest.jellyseerr_id == request.jellyseerr_id,
+            )
+        )
+        cached_request = result.scalar_one_or_none()
+        if cached_request:
+            # Try to get title from various sources
+            if cached_request.title and not cached_request.title.startswith("TMDB-"):
+                title = cached_request.title
+            elif cached_request.raw_data:
+                # Try to extract from raw_data
+                raw_data = cached_request.raw_data
+                media = raw_data.get("media", {})
+                # Try title/name from media object first
+                extracted_title = (
+                    media.get("title")
+                    or media.get("name")
+                    or media.get("originalTitle")
+                    or media.get("originalName")
+                )
+                # Fallback to slug (human-readable URL segment)
+                if not extracted_title and media.get("externalServiceSlug"):
+                    slug = media.get("externalServiceSlug", "")
+                    # Convert slug to title: "the-new-years" -> "The New Years"
+                    extracted_title = slug.replace("-", " ").title()
+                if extracted_title:
+                    title = extracted_title
+
     try:
         await add_to_request_whitelist(
             db=db,
             user_id=current_user.id,
             jellyseerr_id=request.jellyseerr_id,
-            title=request.title,
+            title=title,
             media_type=request.media_type,
             expires_at=request.expires_at,
         )
@@ -290,7 +324,7 @@ async def add_to_requests(
     return WhitelistAddResponse(
         message="Added to request whitelist",
         jellyfin_id=str(request.jellyseerr_id),  # Reusing existing response model
-        name=request.title,
+        name=title,
     )
 
 
