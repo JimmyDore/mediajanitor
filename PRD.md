@@ -1395,36 +1395,40 @@ Fix usability issues on the Issues page and Settings page to improve clarity and
 
 ### User Stories
 
-#### US-12.1: Add Threshold Help Text
+#### US-12.1: Add Threshold Help Text ✅
 **As a** user
 **I want** to understand what each threshold setting does
 **So that** I can configure them correctly
 
 **Acceptance Criteria:**
-- [ ] "Flag content unwatched for" shows help text: "Used by: Old tab"
-- [ ] "Don't flag content newer than" shows help text: "Used by: Old tab (for never-watched items)"
-- [ ] "Flag movies larger than" shows help text: "Used by: Large tab"
-- [ ] Help text appears in subtle gray below each input
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] "Flag content unwatched for" shows help text: "Used by: Old tab"
+- [x] "Don't flag content newer than" shows help text: "Used by: Old tab (for never-watched items)"
+- [x] "Flag movies larger than" shows help text: "Used by: Large tab"
+- [x] Help text appears in subtle gray below each input
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added threshold-label-group wrapper and threshold-help class for subtle gray help text below each threshold input.
 
 **File:** `frontend/src/routes/settings/+page.svelte`
 
 ---
 
-#### US-12.2: Remove Multi-Issue Tab
+#### US-12.2: Remove Multi-Issue Tab ✅
 **As a** user
 **I want** a simpler Issues page
 **So that** I'm not confused by extra filters
 
 **Acceptance Criteria:**
-- [ ] Multi-Issue tab removed from Issues page filter tabs
-- [ ] URL parameter `?filter=multi` no longer supported (returns all issues or 400)
-- [ ] Backend API documentation updated to remove 'multi' filter option
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)
+- [x] Multi-Issue tab removed from Issues page filter tabs
+- [x] URL parameter `?filter=multi` no longer supported (returns all issues or 400)
+- [x] Backend API documentation updated to remove 'multi' filter option
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)
+
+**Note:** Removed multi filter from backend (content.py service and router docstrings) and frontend (FilterType type and filterLabels). Removed TestMultiIssueContent test class (4 tests). URL ?filter=multi gracefully falls back to showing all issues.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Remove 'multi' from FilterType
@@ -1433,18 +1437,20 @@ Fix usability issues on the Issues page and Settings page to improve clarity and
 
 ---
 
-#### US-12.3: Fix TMDB Link Media Type
+#### US-12.3: Fix TMDB Link Media Type ✅
 **As a** user
 **I want** TMDB links to work correctly
 **So that** I can check content details on TMDB
 
 **Acceptance Criteria:**
-- [ ] TMDB links work for Movies (link to `/movie/{id}`)
-- [ ] TMDB links work for TV Shows (link to `/tv/{id}`)
-- [ ] Handle both uppercase ("Movie", "Series") and lowercase ("movie", "tv") media types
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: click TMDB link on Requests tab → correct page opens
+- [x] TMDB links work for Movies (link to `/movie/{id}`)
+- [x] TMDB links work for TV Shows (link to `/tv/{id}`)
+- [x] Handle both uppercase ("Movie", "Series") and lowercase ("movie", "tv") media types
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: click TMDB link on Requests tab → correct page opens
+
+**Note:** Already fixed in US-13.2 commit. getTmdbUrl() now uses toLowerCase() to handle both 'Movie' and 'movie' media types. Verified: TV shows link to /tv/{id}, movies link to /movie/{id}.
 
 **Root cause:** `getTmdbUrl()` checks `item.media_type === 'Movie'` but request items use lowercase "movie".
 
@@ -1473,40 +1479,42 @@ Fix usability issues on the Issues page and Settings page to improve clarity and
 
 ---
 
-#### US-12.5: External Links for All Issue Types
+#### US-12.5: External Links for All Issue Types ✅
 **As a** user
 **I want** TMDB/IMDb links on all content items
 **So that** I can easily look up any flagged content
 
 **Acceptance Criteria:**
-- [ ] Old tab items show TMDB/IMDb links (where data exists)
-- [ ] Large tab items show TMDB/IMDb links (where data exists)
-- [ ] Language tab items show TMDB/IMDb links (where data exists)
-- [ ] Requests tab items show TMDB/IMDb links (already implemented, just needs fix from US-12.3)
-- [ ] External link icon appears next to title if TMDB or IMDb ID available
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: external links appear on items in all tabs
+- [x] Old tab items show TMDB/IMDb links (where data exists)
+- [x] Large tab items show TMDB/IMDb links (where data exists)
+- [x] Language tab items show TMDB/IMDb links (where data exists)
+- [x] Requests tab items show TMDB/IMDb links (already implemented, just needs fix from US-12.3)
+- [x] External link icon appears next to title if TMDB or IMDb ID available
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: external links appear on items in all tabs
 
-**Note:** Backend already extracts TMDB/IMDb IDs via `extract_provider_ids()`. Frontend already has `getTmdbUrl()` and `getImdbUrl()` functions. This story ensures links render consistently across all tabs.
+**Note:** Already implemented in US-9.4. Verified: Old, Language, Requests tabs all show TMDB/IMDb links. Large tab has 0 items but uses same rendering code.
 
 **File:** `frontend/src/routes/issues/+page.svelte` - Verify link rendering logic applies to all items
 
 ---
 
-#### US-12.6: Fix Watch Status Display
+#### US-12.6: Fix Watch Status Display ✅
 **As a** user
 **I want** to see accurate watch status for content items
 **So that** I can make informed decisions about what to delete
 
 **Acceptance Criteria:**
-- [ ] Items that have been watched show relative date (e.g., "3mo ago") or "Watched" if no date
-- [ ] Items never watched show "Never"
-- [ ] Backend returns `played` boolean in ContentIssueItem response
-- [ ] Frontend uses both `played` and `last_played_date` to determine display
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: watched items no longer show "Never"
+- [x] Items that have been watched show relative date (e.g., "3mo ago") or "Watched" if no date
+- [x] Items never watched show "Never"
+- [x] Backend returns `played` boolean in ContentIssueItem response
+- [x] Frontend uses both `played` and `last_played_date` to determine display
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: watched items no longer show "Never"
+
+**Note:** Added played boolean field to ContentIssueItem model and service. Updated frontend formatLastWatched() to use both played and last_played_date.
 
 **Root cause:** ContentIssueItem model missing `played` boolean field. Frontend only receives `last_played_date` which is often null even for watched items.
 
@@ -1758,17 +1766,19 @@ Miscellaneous improvements including bug fixes, delete functionality with Radarr
 
 ### User Stories
 
-#### US-15.1: Fix Hidden Requests Showing TMDB IDs
+#### US-15.1: Fix Hidden Requests Showing TMDB IDs ✅
 **As a** user
 **I want** hidden requests to show actual movie/show titles
 **So that** I can identify what content I've hidden
 
 **Acceptance Criteria:**
-- [ ] Hidden Requests tab shows actual titles, not "TMDB-123456"
-- [ ] Backend looks up title from `CachedJellyseerrRequest` table when whitelisting
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Hidden Requests tab shows actual titles, not "TMDB-123456"
+- [x] Backend looks up title from `CachedJellyseerrRequest` table when whitelisting
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Fixed by adding title lookup in whitelist.py add_to_requests endpoint. When title starts with TMDB-, looks up CachedJellyseerrRequest and extracts title from raw_data.media (title/name/slug).
 
 **Root Cause:** Frontend passes `item.name` which may be the fallback `TMDB-{id}` string when real title unavailable.
 
@@ -1931,19 +1941,21 @@ Miscellaneous improvements including bug fixes, delete functionality with Radarr
 
 ---
 
-#### US-15.8: Fix Auth Check Loading Delay
+#### US-15.8: Fix Auth Check Loading Delay ✅
 **As a** user
 **I want** public pages to load instantly
 **So that** I don't see a loading spinner on landing/login/register pages
 
 **Acceptance Criteria:**
-- [ ] Landing page (`/`) renders immediately without loading state
-- [ ] Login page (`/login`) renders immediately without loading state
-- [ ] Register page (`/register`) renders immediately without loading state
-- [ ] Protected routes still show loading while auth check runs
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Landing page (`/`) renders immediately without loading state
+- [x] Login page (`/login`) renders immediately without loading state
+- [x] Register page (`/register`) renders immediately without loading state
+- [x] Protected routes still show loading while auth check runs
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Fixed by checking isPublicRoute before showing loading state in layout.svelte. Public routes (/, /login, /register) now render immediately. Updated E2E tests to reflect new expected behavior.
 
 **Root Cause:** Layout shows loading for ALL routes. Should only show loading on protected routes.
 
@@ -1952,16 +1964,18 @@ Miscellaneous improvements including bug fixes, delete functionality with Radarr
 
 ---
 
-#### US-15.9: Remove Unused api.ts File
+#### US-15.9: Remove Unused api.ts File ✅
 **As a** developer
 **I want** unused code removed
 **So that** the codebase is clean and maintainable
 
 **Acceptance Criteria:**
-- [ ] `frontend/src/lib/api.ts` file deleted
-- [ ] No import errors after deletion
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] `frontend/src/lib/api.ts` file deleted
+- [x] No import errors after deletion
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Deleted frontend/src/lib/api.ts. All exports (contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi) were unused.
 
 **Unused exports being removed:**
 - `contentApi` (getOldUnwatched, getLargeMovies, deleteContent)
@@ -1976,20 +1990,22 @@ Miscellaneous improvements including bug fixes, delete functionality with Radarr
 
 ---
 
-#### US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
+#### US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting ✅
 **As a** media server owner
 **I want** Jellyseerr requests to be deleted when I delete content from any tab
 **So that** I don't have orphaned requests after deleting movies/series
 
 **Acceptance Criteria:**
-- [ ] Backend looks up Jellyseerr request by TMDB ID + media_type from `cached_jellyseerr_requests` table
-- [ ] Lookup only happens when `delete_from_jellyseerr=true` AND no `jellyseerr_request_id` provided
-- [ ] If user unchecked "Delete from Jellyseerr" in modal, no lookup or deletion occurs
-- [ ] If matching request found, delete it from Jellyseerr
-- [ ] If no matching request exists, skip gracefully (not an error)
-- [ ] Response message indicates whether Jellyseerr request was found and deleted
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Backend looks up Jellyseerr request by TMDB ID + media_type from `cached_jellyseerr_requests` table
+- [x] Lookup only happens when `delete_from_jellyseerr=true` AND no `jellyseerr_request_id` provided
+- [x] If user unchecked "Delete from Jellyseerr" in modal, no lookup or deletion occurs
+- [x] If matching request found, delete it from Jellyseerr
+- [x] If no matching request exists, skip gracefully (not an error)
+- [x] Response message indicates whether Jellyseerr request was found and deleted
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented _lookup_jellyseerr_request_by_tmdb() helper function. Both delete_movie and delete_series endpoints now look up Jellyseerr request by TMDB ID when no explicit request ID is provided. 5 new unit tests added.
 
 **Root Cause:** Backend only deletes from Jellyseerr when `jellyseerr_request_id` is provided. For items from Old/Large/Language tabs (Jellyfin content), this ID is not available. Backend should lookup the request by TMDB ID instead.
 
@@ -2022,19 +2038,21 @@ Allow users to manually control the application's theme (light/dark mode) instea
 
 ### User Stories
 
-#### US-16.1: Theme Preference Backend
+#### US-16.1: Theme Preference Backend ✅
 **As a** developer
 **I want** a backend endpoint to store theme preference
 **So that** the frontend can persist user's theme choice
 
 **Acceptance Criteria:**
-- [ ] Add `theme_preference` column to `UserSettings` model (enum: `light`, `dark`, `system`)
-- [ ] Default value is `system` (follow OS preference)
-- [ ] Create Alembic migration for the new column
-- [ ] `GET /api/settings/display` includes `theme_preference` field
-- [ ] `POST /api/settings/display` accepts `theme_preference` field
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Add `theme_preference` column to `UserSettings` model (enum: `light`, `dark`, `system`)
+- [x] Default value is `system` (follow OS preference)
+- [x] Create Alembic migration for the new column
+- [x] `GET /api/settings/display` includes `theme_preference` field
+- [x] `POST /api/settings/display` accepts `theme_preference` field
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Added theme_preference column (light/dark/system, default system) to UserSettings. Updated DisplayPreferences models and endpoints. 4 new tests added.
 
 **Files:**
 - `backend/app/database.py` - Add `theme_preference` column to UserSettings
@@ -2044,21 +2062,23 @@ Allow users to manually control the application's theme (light/dark mode) instea
 
 ---
 
-#### US-16.2: Theme Store and Application
+#### US-16.2: Theme Store and Application ✅
 **As a** user
 **I want** my theme choice to be applied across the app
 **So that** I see consistent light/dark styling
 
 **Acceptance Criteria:**
-- [ ] Create theme store that reads user preference from API
-- [ ] Apply theme via `data-theme` attribute on `<html>` element
-- [ ] `data-theme="light"` forces light mode
-- [ ] `data-theme="dark"` forces dark mode
-- [ ] `data-theme="system"` (or no attribute) follows OS preference
-- [ ] Theme persists across page navigation
-- [ ] Theme loads correctly on page refresh
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Create theme store that reads user preference from API
+- [x] Apply theme via `data-theme` attribute on `<html>` element
+- [x] `data-theme="light"` forces light mode
+- [x] `data-theme="dark"` forces dark mode
+- [x] `data-theme="system"` (or no attribute) follows OS preference
+- [x] Theme persists across page navigation
+- [x] Theme loads correctly on page refresh
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Created theme store with loadFromApi/saveToApi. CSS supports data-theme attribute for forced light/dark. Layout loads theme on auth. 10 new tests.
 
 **Files:**
 - `frontend/src/lib/stores/theme.ts` - New theme store
@@ -2067,21 +2087,23 @@ Allow users to manually control the application's theme (light/dark mode) instea
 
 ---
 
-#### US-16.3: Theme Toggle UI in Settings
+#### US-16.3: Theme Toggle UI in Settings ✅
 **As a** user
 **I want** a theme selector in settings
 **So that** I can choose between light, dark, or system preference
 
 **Acceptance Criteria:**
-- [ ] Settings page Display section has theme selector
-- [ ] Three options: Light, Dark, System (default)
-- [ ] Selector shows current preference
-- [ ] Changing selection immediately updates the theme
-- [ ] Saves preference to backend on change
-- [ ] Toast notification on success/error
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Settings page Display section has theme selector
+- [x] Three options: Light, Dark, System (default)
+- [x] Selector shows current preference
+- [x] Changing selection immediately updates the theme
+- [x] Saves preference to backend on change
+- [x] Toast notification on success/error
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added theme selector with Light/Dark/System options. Saves to backend on change. Toast notification on success. 3 new tests. Verified in browser.
 
 **Files:**
 - `frontend/src/routes/settings/+page.svelte` - Add theme selector to Display section
@@ -2101,7 +2123,7 @@ Allow users to manually control the application's theme (light/dark mode) instea
 
 ## Checklist Summary
 
-### Completed ✅ (61 stories)
+### Completed ✅ (73 stories)
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
 - [x] US-0.3: Deploy to VPS
@@ -2150,6 +2172,11 @@ Allow users to manually control the application's theme (light/dark mode) instea
 - [x] US-M.3: Dashboard Preview
 - [x] US-M.4: Trust Section
 - [x] US-M.5: Auth Page CTAs
+- [x] US-12.1: Add Threshold Help Text
+- [x] US-12.2: Remove Multi-Issue Tab
+- [x] US-12.3: Fix TMDB Link Media Type
+- [x] US-12.5: External Links for All Issue Types
+- [x] US-12.6: Fix Watch Status Display
 - [x] US-13.1: Fix Title Extraction in Jellyseerr Sync
 - [x] US-13.2: Fix Frontend Request Item Display
 - [x] US-13.3: Add Release Date Column to Requests
@@ -2157,23 +2184,19 @@ Allow users to manually control the application's theme (light/dark mode) instea
 - [x] US-13.5: Add Request Whitelist UI
 - [x] US-13.6: Setting to Include/Exclude Unreleased Requests
 - [x] US-14.1: In-App FAQ Help Page
+- [x] US-15.1: Fix Hidden Requests Showing TMDB IDs
 - [x] US-15.2: Add Radarr Connection Settings
 - [x] US-15.3: Add Sonarr Connection Settings
 - [x] US-15.4: Delete Movie from Radarr
 - [x] US-15.5: Delete Series from Sonarr
 - [x] US-15.6: Delete Jellyseerr Request
 - [x] US-15.7: Delete Content UI
+- [x] US-15.8: Fix Auth Check Loading Delay
+- [x] US-15.9: Remove Unused api.ts File
+- [x] US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
+- [x] US-16.1: Theme Preference Backend
+- [x] US-16.2: Theme Store and Application
+- [x] US-16.3: Theme Toggle UI in Settings
 
-### Pending (12 stories)
-- [ ] US-12.1: Add Threshold Help Text
-- [ ] US-12.2: Remove Multi-Issue Tab
-- [ ] US-12.3: Fix TMDB Link Media Type
-- [ ] US-12.5: External Links for All Issue Types
-- [ ] US-12.6: Fix Watch Status Display
-- [ ] US-15.1: Fix Hidden Requests Showing TMDB IDs
-- [ ] US-15.8: Fix Auth Check Loading Delay
-- [ ] US-15.9: Remove Unused api.ts File
-- [ ] US-15.10: Lookup Jellyseerr Request by TMDB ID When Deleting
-- [ ] US-16.1: Theme Preference Backend
-- [ ] US-16.2: Theme Store and Application
-- [ ] US-16.3: Theme Toggle UI in Settings
+### Pending (0 stories)
+All stories completed!

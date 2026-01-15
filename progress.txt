@@ -1275,10 +1275,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(theme): [US-16.2] add theme store and application
 
+### 2026-01-15: US-16.3 - Theme Toggle UI in Settings
+- Added theme selector in Settings page Display section:
+  - Three options: Light, Dark, System (default)
+  - Icons for each option (sun, moon, monitor)
+  - Selected option is highlighted
+  - Responsive design for mobile
+- Connected to theme store: saveToApi() on change
+- Toast notification on success ("Theme updated")
+- Changing selection immediately updates the theme
+- Theme persists across page navigation and refresh
+- 3 new tests in settings-display.test.ts for theme preference
+- 222 frontend tests pass, typecheck passes
+- Verified in browser: Light/Dark/System all work correctly
+- Files changed: frontend/src/routes/settings/+page.svelte, tests/settings-display.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-16.3] add theme toggle UI
+
 ## Current Status
 
-**Phase**: UX Fixes and Delete Improvements (In Progress)
-**Total Stories**: 55 stories (53 passes: true, 2 remaining)
+**Phase**: Epic 16 - Theme Preferences (COMPLETE)
+**Total Stories**: 55 stories (55 passes: true, 0 remaining)
 
 ## Notes
 

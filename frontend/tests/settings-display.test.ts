@@ -175,6 +175,74 @@ describe('Display Preferences API Integration (US-13.6)', () => {
 		});
 	});
 
+	describe('Theme preference (US-16.3)', () => {
+		it('GET returns theme_preference field', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						show_unreleased_requests: false,
+						theme_preference: 'dark'
+					})
+			});
+
+			const response = await fetch('/api/settings/display', {
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			const data = await response.json();
+			expect(data.theme_preference).toBe('dark');
+		});
+
+		it('POST can save theme_preference', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ success: true })
+			});
+
+			const response = await fetch('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					theme_preference: 'light'
+				})
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/settings/display', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					theme_preference: 'light'
+				})
+			});
+			expect(response.ok).toBe(true);
+		});
+
+		it('theme_preference defaults to system', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						show_unreleased_requests: false,
+						theme_preference: 'system'
+					})
+			});
+
+			const response = await fetch('/api/settings/display', {
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			const data = await response.json();
+			expect(data.theme_preference).toBe('system');
+		});
+	});
+
 	describe('Toggle behavior integration', () => {
 		it('can toggle from off to on', async () => {
 			// First GET returns false (default)

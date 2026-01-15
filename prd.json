@@ -202,8 +202,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": "File: frontend/src/routes/settings/+page.svelte"
+      "passes": true,
+      "notes": "Added theme selector with Light/Dark/System options. Saves to backend on change. Toast notification on success. 3 new tests. Verified in browser."
     }
   ]
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { theme, toasts, type ThemePreference } from '$lib/stores';
 
 	// Jellyfin form state
 	let jellyfinUrl = $state('');
@@ -56,9 +57,11 @@
 
 	// Display preferences state
 	let showUnreleasedRequests = $state(false);
+	let currentTheme = $state<ThemePreference>('system');
 	let displayError = $state<string | null>(null);
 	let displaySuccess = $state<string | null>(null);
 	let isDisplayLoading = $state(false);
+	let isThemeLoading = $state(false);
 
 	// Expand/collapse states
 	let jellyfinExpanded = $state(false);
@@ -159,6 +162,7 @@
 			if (displayResponse.ok) {
 				const data = await displayResponse.json();
 				showUnreleasedRequests = data.show_unreleased_requests;
+				currentTheme = data.theme_preference || 'system';
 			}
 		} catch (e) {
 			console.error('Failed to load settings:', e);
@@ -426,6 +430,22 @@
 		} finally {
 			isDisplayLoading = false;
 		}
+	}
+
+	async function handleThemeChange(newTheme: ThemePreference) {
+		if (newTheme === currentTheme) return;
+
+		isThemeLoading = true;
+		const success = await theme.saveToApi(newTheme);
+
+		if (success) {
+			currentTheme = newTheme;
+			toasts.add('Theme updated', 'success');
+		} else {
+			toasts.add('Failed to save theme preference', 'error');
+		}
+
+		isThemeLoading = false;
 	}
 
 	function extractDomain(url: string): string {
@@ -841,6 +861,61 @@
 			{#if displaySuccess}
 				<div class="inline-success">{displaySuccess}</div>
 			{/if}
+
+			<!-- Theme Selector -->
+			<div class="theme-row">
+				<div class="theme-info">
+					<span class="theme-label">Theme</span>
+					<span class="theme-description">Choose your preferred color scheme</span>
+				</div>
+				<div class="theme-selector" class:loading={isThemeLoading}>
+					<button
+						class="theme-option"
+						class:active={currentTheme === 'light'}
+						onclick={() => handleThemeChange('light')}
+						disabled={isThemeLoading}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="12" r="5"/>
+							<line x1="12" y1="1" x2="12" y2="3"/>
+							<line x1="12" y1="21" x2="12" y2="23"/>
+							<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+							<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+							<line x1="1" y1="12" x2="3" y2="12"/>
+							<line x1="21" y1="12" x2="23" y2="12"/>
+							<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+							<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+						</svg>
+						Light
+					</button>
+					<button
+						class="theme-option"
+						class:active={currentTheme === 'dark'}
+						onclick={() => handleThemeChange('dark')}
+						disabled={isThemeLoading}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+						</svg>
+						Dark
+					</button>
+					<button
+						class="theme-option"
+						class:active={currentTheme === 'system'}
+						onclick={() => handleThemeChange('system')}
+						disabled={isThemeLoading}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+							<line x1="8" y1="21" x2="16" y2="21"/>
+							<line x1="12" y1="17" x2="12" y2="21"/>
+						</svg>
+						System
+					</button>
+				</div>
+			</div>
+
+			<div class="divider"></div>
 
 			<div class="toggle-row">
 				<div class="toggle-info">
@@ -1268,6 +1343,79 @@
 		animation: spin 0.6s linear infinite;
 	}
 
+	/* Theme Selector */
+	.theme-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-3) 0;
+		gap: var(--space-4);
+	}
+
+	.theme-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.theme-label {
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+	}
+
+	.theme-description {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.theme-selector {
+		display: flex;
+		background: var(--bg-tertiary);
+		border-radius: var(--radius-md);
+		padding: 3px;
+		gap: 2px;
+	}
+
+	.theme-selector.loading {
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.theme-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		white-space: nowrap;
+	}
+
+	.theme-option:hover:not(:disabled) {
+		color: var(--text-primary);
+	}
+
+	.theme-option.active {
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+	}
+
+	.theme-option:disabled {
+		cursor: not-allowed;
+	}
+
+	.theme-option svg {
+		flex-shrink: 0;
+	}
+
 	/* Responsive */
 	@media (max-width: 600px) {
 		.settings-page {
@@ -1299,6 +1447,21 @@
 
 		.threshold-input input {
 			flex: 1;
+		}
+
+		.theme-row {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.theme-selector {
+			width: 100%;
+			justify-content: space-between;
+		}
+
+		.theme-option {
+			flex: 1;
+			justify-content: center;
 		}
 	}
 </style>
