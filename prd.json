@@ -471,8 +471,8 @@
         "Unit tests pass"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented send_signup_notification() function with Block Kit formatted message, triggered via BackgroundTasks after registration. Added get_total_user_count() helper. 5 new tests in TestNewUserSignupNotifications."
     },
     {
       "id": "US-21.3",

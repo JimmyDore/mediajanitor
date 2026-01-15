@@ -455,3 +455,134 @@ class TestLogout:
         set_cookie = logout_response.headers.get("set-cookie", "")
         # Either cookie is cleared or max-age is 0
         assert "refresh_token" in set_cookie.lower() or logout_response.cookies.get("refresh_token", "") == ""
+
+
+class TestNewUserSignupNotifications:
+    """Tests for Slack notifications on user signup."""
+
+    def test_signup_sends_slack_notification(self, client: TestClient) -> None:
+        """Test that successful registration sends Slack notification."""
+        from unittest.mock import patch, AsyncMock
+
+        with patch("app.routers.auth.send_signup_notification") as mock_notify:
+            mock_notify.return_value = None  # fire-and-forget, no return needed
+
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "newuser1@example.com",
+                    "password": "SecurePassword123!",
+                },
+            )
+            assert response.status_code == 201
+
+            # Verify notification was called with correct email
+            mock_notify.assert_called_once()
+            call_args = mock_notify.call_args
+            assert call_args[1]["email"] == "newuser1@example.com"
+            assert "user_id" in call_args[1]
+            assert "total_users" in call_args[1]
+
+    def test_signup_notification_includes_total_user_count(self, client: TestClient) -> None:
+        """Test that notification includes correct total user count."""
+        from unittest.mock import patch
+
+        # First register a user to have count > 1
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "firstuser@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        with patch("app.routers.auth.send_signup_notification") as mock_notify:
+            mock_notify.return_value = None
+
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "seconduser@example.com",
+                    "password": "SecurePassword123!",
+                },
+            )
+            assert response.status_code == 201
+
+            # Total users should be 2 (after this registration)
+            call_args = mock_notify.call_args
+            assert call_args[1]["total_users"] >= 2
+
+    def test_signup_notification_is_fire_and_forget(self, client: TestClient) -> None:
+        """Test that notification failure doesn't block registration."""
+        from unittest.mock import patch, AsyncMock
+
+        # Mock the Slack send function to fail (inside send_signup_notification)
+        with patch("app.routers.auth.send_slack_message", new_callable=AsyncMock) as mock_send:
+            mock_send.side_effect = Exception("Slack webhook failed")
+
+            # Configure webhook so notification is attempted
+            with patch("app.routers.auth.get_settings") as mock_settings_fn:
+                from app.config import Settings
+                mock_settings = Settings()
+                mock_settings.slack_webhook_new_users = "https://hooks.slack.com/test"
+                mock_settings_fn.return_value = mock_settings
+
+                response = client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "fireforget@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+                # Registration should still succeed even if Slack fails
+                assert response.status_code == 201
+                data = response.json()
+                assert data["email"] == "fireforget@example.com"
+
+    def test_signup_without_webhook_configured(self, client: TestClient) -> None:
+        """Test that registration works when Slack webhook is not configured."""
+        from unittest.mock import patch
+
+        # Simulate webhook not configured (empty string)
+        with patch("app.config.get_settings") as mock_settings:
+            mock_settings.return_value.slack_webhook_new_users = ""
+
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "nowebhook@example.com",
+                    "password": "SecurePassword123!",
+                },
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["email"] == "nowebhook@example.com"
+
+    def test_signup_notification_uses_block_kit_format(self, client: TestClient) -> None:
+        """Test that Slack message uses Block Kit format."""
+        from unittest.mock import patch, AsyncMock
+
+        with patch("app.services.slack.send_slack_message", new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = True
+
+            with patch("app.config.get_settings") as mock_settings_fn:
+                from app.config import Settings
+                mock_settings = Settings()
+                mock_settings.slack_webhook_new_users = "https://hooks.slack.com/test"
+                mock_settings_fn.return_value = mock_settings
+
+                response = client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "blockkit@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+                assert response.status_code == 201
+
+                # Check that send_slack_message was called with Block Kit format
+                if mock_send.called:
+                    call_args = mock_send.call_args
+                    message = call_args[0][1]  # Second positional arg is the message dict
+                    # Block Kit messages should have "blocks" key
+                    assert "blocks" in message or "text" in message

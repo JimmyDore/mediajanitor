@@ -1,9 +1,12 @@
 """Authentication router for user registration and login."""
 
-from datetime import timedelta
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -22,6 +25,9 @@ from app.services.auth import (
     rotate_refresh_token,
     validate_refresh_token,
 )
+from app.services.slack import send_slack_message
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -36,8 +42,81 @@ def _is_testing() -> bool:
     return os.environ.get("TESTING", "").lower() in ("1", "true", "yes")
 
 
+async def get_total_user_count(db: AsyncSession) -> int:
+    """Get the total number of registered users."""
+    result = await db.execute(select(func.count()).select_from(User))
+    return result.scalar() or 0
+
+
+async def send_signup_notification(email: str, user_id: int, total_users: int) -> None:
+    """
+    Send a Slack notification about a new user signup.
+
+    This is a fire-and-forget function - it logs errors but never raises.
+    """
+    settings = get_settings()
+    webhook_url = settings.slack_webhook_new_users
+
+    if not webhook_url:
+        # Webhook not configured, silently skip
+        return
+
+    signup_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # Create message in Slack Block Kit format
+    message = {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "🎉 New User Signup",
+                    "emoji": True,
+                }
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Email:*\n{email}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*User ID:*\n{user_id}"
+                    }
+                ]
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Signup Time:*\n{signup_time}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Total Users:*\n{total_users}"
+                    }
+                ]
+            }
+        ],
+        "text": f"New user signup: {email} (Total users: {total_users})"  # Fallback text
+    }
+
+    try:
+        await send_slack_message(webhook_url, message)
+    except Exception as e:
+        # Log but don't raise - this is fire-and-forget
+        logger.warning(f"Failed to send signup notification for {email}: {e}")
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)) -> UserResponse:
+async def register(
+    user_data: UserCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
     """Register a new user."""
     # Check if email already exists
     existing_user = await get_user_by_email_async(db, user_data.email)
@@ -49,6 +128,22 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)) ->
 
     # Create new user
     user = await create_user_async(db, user_data.email, user_data.password)
+
+    # Get total user count for notification (after this user is created)
+    total_users = await get_total_user_count(db)
+
+    # Send Slack notification (fire-and-forget using background task)
+    try:
+        background_tasks.add_task(
+            send_signup_notification,
+            email=user.email,
+            user_id=user.id,
+            total_users=total_users,
+        )
+    except Exception:
+        # Don't let notification failures affect registration
+        pass
+
     return UserResponse.model_validate(user)
 
 
