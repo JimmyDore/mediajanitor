@@ -20,9 +20,10 @@ async def validate_jellyseerr_connection(server_url: str, api_key: str) -> bool:
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Try to get status endpoint - requires authentication
+            # Use /auth/me endpoint - it requires authentication
+            # The /status endpoint does NOT require auth, so any URL would pass
             response = await client.get(
-                f"{server_url}/api/v1/status",
+                f"{server_url}/api/v1/auth/me",
                 headers={"X-Api-Key": api_key},
             )
             return response.status_code == 200
