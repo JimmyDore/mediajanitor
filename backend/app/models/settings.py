@@ -108,3 +108,35 @@ class DisplayPreferencesResponse(BaseModel):
     show_unreleased_requests: bool
     theme_preference: ThemePreference
     recently_available_days: int
+
+
+# User Nicknames
+
+
+class NicknameCreate(BaseModel):
+    """Request model for creating a nickname mapping."""
+
+    jellyseerr_username: str = Field(..., min_length=1, max_length=255)
+    display_name: str = Field(..., min_length=1, max_length=255)
+
+
+class NicknameUpdate(BaseModel):
+    """Request model for updating a nickname mapping."""
+
+    display_name: str = Field(..., min_length=1, max_length=255)
+
+
+class NicknameItem(BaseModel):
+    """Response model for a single nickname mapping."""
+
+    id: int
+    jellyseerr_username: str
+    display_name: str
+    created_at: str  # ISO format datetime
+
+
+class NicknameListResponse(BaseModel):
+    """Response model for nickname list."""
+
+    items: list[NicknameItem]
+    total_count: int

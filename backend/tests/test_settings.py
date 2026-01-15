@@ -1253,3 +1253,246 @@ class TestDisplayPreferences:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.json()["recently_available_days"] == 30
+
+
+class TestNicknameSettings:
+    """Tests for nickname mapping endpoints (US-31.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "nickname@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_list_nicknames_requires_auth(self, client: TestClient) -> None:
+        """Test that listing nicknames requires authentication."""
+        response = client.get("/api/settings/nicknames")
+        assert response.status_code == 401
+
+    def test_list_nicknames_returns_empty_list(self, client: TestClient) -> None:
+        """Test that new user has empty nickname list."""
+        token = self._get_auth_token(client, "nick_list_empty@example.com")
+
+        response = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total_count"] == 0
+
+    def test_create_nickname_requires_auth(self, client: TestClient) -> None:
+        """Test that creating nickname requires authentication."""
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "john_doe", "display_name": "John"},
+        )
+        assert response.status_code == 401
+
+    def test_create_nickname_success(self, client: TestClient) -> None:
+        """Test successful creation of nickname mapping."""
+        token = self._get_auth_token(client, "nick_create@example.com")
+
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "john_doe", "display_name": "John"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["jellyseerr_username"] == "john_doe"
+        assert data["display_name"] == "John"
+        assert "id" in data
+        assert "created_at" in data
+
+    def test_create_nickname_duplicate_returns_409(self, client: TestClient) -> None:
+        """Test that creating duplicate mapping returns 409 Conflict."""
+        token = self._get_auth_token(client, "nick_dup@example.com")
+
+        # Create first mapping
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "jane_doe", "display_name": "Jane"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 201
+
+        # Try to create duplicate
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "jane_doe", "display_name": "Janet"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 409
+        assert "already exists" in response.json()["detail"]
+
+    def test_list_nicknames_returns_all_mappings(self, client: TestClient) -> None:
+        """Test that list returns all created mappings."""
+        token = self._get_auth_token(client, "nick_list@example.com")
+
+        # Create multiple mappings
+        client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "alice", "display_name": "Alice"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "bob", "display_name": "Bobby"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        response = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        usernames = [item["jellyseerr_username"] for item in data["items"]]
+        # Should be alphabetically sorted
+        assert usernames == ["alice", "bob"]
+
+    def test_update_nickname_success(self, client: TestClient) -> None:
+        """Test successful update of nickname display name."""
+        token = self._get_auth_token(client, "nick_update@example.com")
+
+        # Create mapping
+        create_response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "charlie", "display_name": "Charlie"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        nickname_id = create_response.json()["id"]
+
+        # Update display name
+        response = client.put(
+            f"/api/settings/nicknames/{nickname_id}",
+            json={"display_name": "Chuck"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "Chuck"
+        assert data["jellyseerr_username"] == "charlie"
+
+    def test_update_nickname_not_found_returns_404(self, client: TestClient) -> None:
+        """Test that updating non-existent nickname returns 404."""
+        token = self._get_auth_token(client, "nick_update_404@example.com")
+
+        response = client.put(
+            "/api/settings/nicknames/99999",
+            json={"display_name": "Nobody"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_delete_nickname_success(self, client: TestClient) -> None:
+        """Test successful deletion of nickname mapping."""
+        token = self._get_auth_token(client, "nick_delete@example.com")
+
+        # Create mapping
+        create_response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "david", "display_name": "Dave"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        nickname_id = create_response.json()["id"]
+
+        # Delete mapping
+        response = client.delete(
+            f"/api/settings/nicknames/{nickname_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Verify it's gone
+        list_response = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert list_response.json()["total_count"] == 0
+
+    def test_delete_nickname_not_found_returns_404(self, client: TestClient) -> None:
+        """Test that deleting non-existent nickname returns 404."""
+        token = self._get_auth_token(client, "nick_delete_404@example.com")
+
+        response = client.delete(
+            "/api/settings/nicknames/99999",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_create_nickname_validates_empty_username(self, client: TestClient) -> None:
+        """Test that empty username is rejected."""
+        token = self._get_auth_token(client, "nick_valid_user@example.com")
+
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "", "display_name": "Test"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_create_nickname_validates_empty_display_name(self, client: TestClient) -> None:
+        """Test that empty display name is rejected."""
+        token = self._get_auth_token(client, "nick_valid_display@example.com")
+
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "valid_user", "display_name": ""},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_nicknames_are_user_isolated(self, client: TestClient) -> None:
+        """Test that nicknames are isolated per user."""
+        token1 = self._get_auth_token(client, "nick_user1@example.com")
+        token2 = self._get_auth_token(client, "nick_user2@example.com")
+
+        # User 1 creates a mapping
+        client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "shared_name", "display_name": "User1's Friend"},
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+
+        # User 2 can create same username mapping (different user)
+        response = client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "shared_name", "display_name": "User2's Friend"},
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert response.status_code == 201
+
+        # User 1 sees only their mapping
+        list1 = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+        assert list1.json()["total_count"] == 1
+        assert list1.json()["items"][0]["display_name"] == "User1's Friend"
+
+        # User 2 sees only their mapping
+        list2 = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert list2.json()["total_count"] == 1
+        assert list2.json()["items"][0]["display_name"] == "User2's Friend"

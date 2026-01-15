@@ -417,5 +417,74 @@ class TestIntegrationDisplaySettings:
             )
 
 
+class TestIntegrationNicknames:
+    """Integration tests for nickname mapping endpoints (US-31.3)."""
+
+    @pytest.fixture
+    def auth_headers(self):
+        """Get authentication headers by logging in."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/login",
+                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+            )
+            token = response.json()["access_token"]
+            return {"Authorization": f"Bearer {token}"}
+
+    def test_list_nicknames_endpoint(self, auth_headers):
+        """Test GET /api/settings/nicknames returns list."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/settings/nicknames", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            assert "items" in data
+            assert "total_count" in data
+            assert isinstance(data["items"], list)
+            assert isinstance(data["total_count"], int)
+
+    def test_nickname_crud_operations(self, auth_headers):
+        """Test create, read, update, delete for nicknames."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Create a nickname
+            response = client.post(
+                "/api/settings/nicknames",
+                headers=auth_headers,
+                json={
+                    "jellyseerr_username": "integration_test_user",
+                    "display_name": "Integration Test",
+                },
+            )
+            # 201 = created, 409 = already exists (both are acceptable)
+            assert response.status_code in [201, 409]
+
+            if response.status_code == 201:
+                nickname_id = response.json()["id"]
+
+                # Verify it appears in list
+                response = client.get("/api/settings/nicknames", headers=auth_headers)
+                assert response.status_code == 200
+                items = response.json()["items"]
+                usernames = [item["jellyseerr_username"] for item in items]
+                assert "integration_test_user" in usernames
+
+                # Update the nickname
+                response = client.put(
+                    f"/api/settings/nicknames/{nickname_id}",
+                    headers=auth_headers,
+                    json={"display_name": "Updated Integration Test"},
+                )
+                assert response.status_code == 200
+                assert response.json()["display_name"] == "Updated Integration Test"
+
+                # Delete the nickname
+                response = client.delete(
+                    f"/api/settings/nicknames/{nickname_id}",
+                    headers=auth_headers,
+                )
+                assert response.status_code == 200
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

@@ -16,6 +16,10 @@ from app.models.settings import (
     JellyfinSettingsResponse,
     JellyseerrSettingsCreate,
     JellyseerrSettingsResponse,
+    NicknameCreate,
+    NicknameItem,
+    NicknameListResponse,
+    NicknameUpdate,
     RadarrSettingsCreate,
     RadarrSettingsResponse,
     SettingsSaveResponse,
@@ -42,6 +46,12 @@ from app.services.sonarr import (
     get_user_sonarr_settings,
     save_sonarr_settings,
     validate_sonarr_connection,
+)
+from app.services.nicknames import (
+    create_nickname,
+    delete_nickname,
+    get_nicknames,
+    update_nickname,
 )
 
 # Default values for analysis preferences
@@ -417,4 +427,116 @@ async def save_display_preferences(
     return SettingsSaveResponse(
         success=True,
         message="Display preferences saved successfully.",
+    )
+
+
+# Nickname Endpoints
+
+
+@router.get("/nicknames", response_model=NicknameListResponse)
+async def list_nicknames(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NicknameListResponse:
+    """Get all nickname mappings for the user.
+
+    Nicknames allow mapping Jellyseerr usernames to friendly display names.
+    """
+    return await get_nicknames(db=db, user_id=current_user.id)
+
+
+@router.post("/nicknames", response_model=NicknameItem, status_code=201)
+async def create_nickname_mapping(
+    request: NicknameCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NicknameItem:
+    """Create a new nickname mapping.
+
+    Maps a Jellyseerr username to a friendly display name.
+    Each username can only have one mapping per user.
+    """
+    try:
+        entry = await create_nickname(
+            db=db,
+            user_id=current_user.id,
+            jellyseerr_username=request.jellyseerr_username,
+            display_name=request.display_name,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        )
+
+    return NicknameItem(
+        id=entry.id,
+        jellyseerr_username=entry.jellyseerr_username,
+        display_name=entry.display_name,
+        created_at=entry.created_at.isoformat() if entry.created_at else "",
+    )
+
+
+@router.put("/nicknames/{nickname_id}", response_model=NicknameItem)
+async def update_nickname_mapping(
+    nickname_id: int,
+    request: NicknameUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NicknameItem:
+    """Update an existing nickname mapping's display name."""
+    # First check if entry exists
+    result = await get_nicknames(db=db, user_id=current_user.id)
+    entry = next((item for item in result.items if item.id == nickname_id), None)
+
+    if not entry:
+        raise HTTPException(
+            status_code=404,
+            detail="Nickname mapping not found",
+        )
+
+    # Update the display name
+    success = await update_nickname(
+        db=db,
+        user_id=current_user.id,
+        nickname_id=nickname_id,
+        display_name=request.display_name,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Nickname mapping not found",
+        )
+
+    return NicknameItem(
+        id=entry.id,
+        jellyseerr_username=entry.jellyseerr_username,
+        display_name=request.display_name,
+        created_at=entry.created_at,
+    )
+
+
+@router.delete("/nicknames/{nickname_id}", response_model=SettingsSaveResponse)
+async def delete_nickname_mapping(
+    nickname_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Delete a nickname mapping."""
+    success = await delete_nickname(
+        db=db,
+        user_id=current_user.id,
+        nickname_id=nickname_id,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Nickname mapping not found",
+        )
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Nickname mapping deleted successfully.",
     )

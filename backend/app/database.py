@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, AsyncGenerator
 
-from sqlalchemy import Boolean, String, Integer, BigInteger, DateTime, Text, ForeignKey, create_engine, JSON
+from sqlalchemy import Boolean, String, Integer, BigInteger, DateTime, Text, ForeignKey, create_engine, JSON, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -204,6 +204,24 @@ class RefreshToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserNickname(Base):
+    """User nickname mapping for Jellyseerr usernames."""
+
+    __tablename__ = "user_nicknames"
+    __table_args__ = (
+        # Unique constraint: each jellyseerr_username maps once per user
+        UniqueConstraint("user_id", "jellyseerr_username", name="uq_user_nickname"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    jellyseerr_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
