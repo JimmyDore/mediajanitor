@@ -1378,10 +1378,33 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(auth): [US-32.2] add frontend token refresh implementation
 
+### 2026-01-15: US-32.3 - Auto-Redirect on Session Expiration
+- Added session expiration handling to authenticatedFetch:
+  - When refresh token fails (401), clear auth state and trigger redirect
+  - Redirect includes ?redirect=/original/path query param for return after login
+  - Session expiration handler is registered by layout component
+- Updated layout.svelte:
+  - Added redirectToLogin() helper function with optional redirect path
+  - Registered onSessionExpired handler showing toast "Session expired, please log in again"
+  - Protected routes now redirect with original path preserved
+- Updated login page:
+  - Reads ?redirect query param from URL
+  - After successful login, navigates to redirect path (defaults to /)
+  - If already authenticated, redirect to intended destination immediately
+- Frontend tests: 12 new tests for session expiration behavior (session-expiration.test.ts)
+  - Tests for 401 after failed refresh triggering session expiration
+  - Tests for redirect query param encoding/decoding
+  - Tests for protected vs public route handling
+- 244 frontend tests pass, typecheck passes
+- Verified in browser: login with ?redirect=/settings correctly redirects to /settings
+- Files changed: stores/index.ts, +layout.svelte, login/+page.svelte, session-expiration.test.ts, prd.json
+- Commits:
+  - feat(auth): [US-32.3] add auto-redirect on session expiration
+
 ## Current Status
 
-**Phase**: Epic 32 - Session Management (In Progress)
-**Total Stories**: 57 stories (57 passes: true, US-32.3 remaining)
+**Phase**: Epic 32 - Session Management (Complete)
+**Total Stories**: 58 stories (58 passes: true)
 
 ## Notes
 
