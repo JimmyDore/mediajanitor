@@ -1422,10 +1422,32 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-29.1] improve Issues table visual alignment
 
+### 2026-01-15: US-30.1 - Remove Currently Airing Placeholder
+- Removed all currently airing placeholder code:
+  - Backend: Removed GET /api/info/airing endpoint from info.py router
+  - Backend: Removed get_currently_airing() function from content.py service
+  - Models: Removed CurrentlyAiringItem and CurrentlyAiringResponse from content.py
+  - Models: Removed currently_airing field from ContentSummaryResponse
+  - Frontend: Deleted /info/airing route and page entirely
+  - Frontend: Removed 'currently airing' link from dashboard info section
+  - Frontend: Removed info-separator CSS class (no longer needed)
+- Updated tests:
+  - Backend: Removed 2 currently airing tests from test_content.py
+  - Backend: Updated test_integration.py to not check for currently_airing
+  - Frontend: Removed 4 currently airing tests from info.test.ts
+- Dashboard info section now shows only 'recently available'
+- 303 backend tests pass, mypy clean
+- 241 frontend tests pass, typecheck clean
+- 17 integration tests pass
+- Verified: /api/info/airing returns 404
+- Files changed: info.py, content.py, models/content.py, test_content.py, test_integration.py, +page.svelte (dashboard), info/airing/+page.svelte (deleted), info.test.ts
+- Commits:
+  - chore(cleanup): [US-30.1] remove currently airing placeholder
+
 ## Current Status
 
-**Phase**: Epic 29 - UI Improvements (In Progress)
-**Total Stories**: 59 stories (59 passes: true)
+**Phase**: Epic 30 - UI Cleanup (In Progress)
+**Total Stories**: 60 stories (60 passes: true)
 
 ## Notes
 
