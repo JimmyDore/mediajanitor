@@ -1,7 +1,147 @@
 {
   "project": "Media Janitor",
-  "branchName": "ralph/bug-fixes-and-features",
+  "branchName": "ralph/enhancements",
   "userStories": [
+    {
+      "id": "US-29.1",
+      "title": "Add Requester Column to Issues Table",
+      "story": "As a media server owner, I want to see who requested content in a dedicated table column, so that I can quickly scan and identify request patterns by user",
+      "acceptanceCriteria": [
+        "New 'Requester' column appears after the Name column",
+        "Column only shows when activeFilter === 'requests' (same pattern as Release column)",
+        "Column displays the username from requested_by field",
+        "Empty cell or — when requested_by is null",
+        "The inline 'by {username}' display in the name cell is removed",
+        "Column header is NOT sortable (optional enhancement for future)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-30.1",
+      "title": "Remove Currently Airing Placeholder",
+      "story": "As a user, I want the dashboard to only show implemented features, so that I'm not confused by links to empty pages",
+      "acceptanceCriteria": [
+        "Remove 'currently airing' link from dashboard info section",
+        "Remove /info/airing route and page entirely",
+        "Remove GET /api/info/airing endpoint",
+        "Remove get_currently_airing() function from content service",
+        "Remove CurrentlyAiringItem and CurrentlyAiringResponse models",
+        "Remove currently_airing from ContentSummaryResponse model",
+        "Update get_content_summary() to not include currently_airing",
+        "Remove related tests (backend and frontend)",
+        "Dashboard info section shows only 'recently available' (remove separator)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: dashboard no longer shows 'currently airing'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-31.1",
+      "title": "Recently Available Days Setting (Backend)",
+      "story": "As a media server owner, I want to configure how many days back to show recently available content, so that I can adjust the view to my notification frequency",
+      "acceptanceCriteria": [
+        "Add recently_available_days field to UserSettings model (integer, default 7)",
+        "Create database migration for new column",
+        "GET /api/settings returns recently_available_days value",
+        "POST /api/settings accepts and validates recently_available_days (range: 1-30)",
+        "GET /api/info/recent uses user's setting instead of hardcoded 7 days",
+        "GET /api/content/summary uses user's setting for recently_available count",
+        "Invalid values return 422 with clear error message",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-31.2",
+      "title": "Recently Available Days Setting (Frontend)",
+      "story": "As a media server owner, I want to set my 'recently available' days preference in the settings page, so that I can customize the time window",
+      "acceptanceCriteria": [
+        "Settings page shows 'Recently available days' input in a new 'Display' section",
+        "Input is a number field with min=1, max=30",
+        "Default value is 7 when not set",
+        "Help text: 'Show content that became available in the past N days'",
+        "Value saves successfully and persists on page reload",
+        "Recently Available page subtitle updates to reflect setting (e.g., 'past 14 days')",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-31.3",
+      "title": "User Nickname Mapping (Backend)",
+      "story": "As a media server owner, I want to store nickname mappings for Jellyseerr usernames, so that I can show friendly names in notifications",
+      "acceptanceCriteria": [
+        "Create new UserNickname model: id, user_id (FK), jellyseerr_username (string), display_name (string)",
+        "Create database migration for new table",
+        "Unique constraint on (user_id, jellyseerr_username) - each username maps once per user",
+        "GET /api/settings/nicknames returns list of all nickname mappings for user",
+        "POST /api/settings/nicknames creates a new mapping (body: {jellyseerr_username, display_name})",
+        "PUT /api/settings/nicknames/{id} updates an existing mapping",
+        "DELETE /api/settings/nicknames/{id} removes a mapping",
+        "409 Conflict if trying to create duplicate jellyseerr_username",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-31.4",
+      "title": "User Nickname Mapping (Frontend)",
+      "story": "As a media server owner, I want to manage nickname mappings in the settings page, so that I can assign friendly names to Jellyseerr users",
+      "acceptanceCriteria": [
+        "Settings page shows new 'User Nicknames' section below services configuration",
+        "Section displays table of existing mappings: Jellyseerr Username → Display Name",
+        "'Add nickname' button opens inline form with two inputs: username, display name",
+        "Each row has edit and delete buttons",
+        "Delete shows confirmation before removing",
+        "Empty state: 'No nicknames configured. Add nicknames to customize how requesters appear in notifications.'",
+        "Toast feedback on save/delete success/error",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-31.5",
+      "title": "Copy Output Grouped by Requester",
+      "story": "As a media server owner, I want the copy output to group content by requester with their display name, so that I can easily notify each person about their available content",
+      "acceptanceCriteria": [
+        "'Copy' button generates output grouped by requester (not by date)",
+        "Uses display_name from nickname mapping if configured, otherwise original Jellyseerr username",
+        "Format per requester: {display_name}:\\n  - {Title} ({Type}) - available since {Date}",
+        "Requesters sorted alphabetically",
+        "Items under each requester sorted by availability date (newest first)",
+        "Items without a requester grouped under 'Unknown' at the end",
+        "API endpoint GET /api/info/recent includes resolved display_name field",
+        "Frontend uses display_name for grouping and display in table",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: copy output shows correct grouping"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
     {
       "id": "US-17.1",
       "title": "Multi-User Watch Data Aggregation",
@@ -19,7 +159,7 @@
         "Unit tests pass",
         "Verify 'La Chambre de Mariana' shows correct watch date after sync"
       ],
-      "priority": 1,
+      "priority": 10,
       "passes": false,
       "notes": ""
     },
@@ -37,7 +177,7 @@
         "Unit tests pass",
         "Verify in browser: trigger sync and see progress updates"
       ],
-      "priority": 2,
+      "priority": 11,
       "passes": false,
       "notes": ""
     },
@@ -52,58 +192,6 @@
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using mobile viewport (Chrome DevTools device mode)"
-      ],
-      "priority": 3,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-18.1",
-      "title": "Show Setup Checklist for New Users",
-      "story": "As a new user who just signed up, I want to see a clear checklist of what to do next, so that I know how to get started with the app",
-      "acceptanceCriteria": [
-        "Dashboard shows 'Setup Checklist' card when Jellyfin not configured OR never synced",
-        "Checklist shows 2 steps: 'Connect Jellyfin' and 'Run First Sync'",
-        "Each step shows status: pending (gray), in-progress (blue), complete (green)",
-        "'Connect Jellyfin' step has button linking to /settings",
-        "Checklist hides when both steps are complete",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser"
-      ],
-      "priority": 10,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-18.2",
-      "title": "Auto-Sync After Jellyfin Configuration",
-      "story": "As a user who just configured Jellyfin, I want the first sync to start automatically, so that I don't have to figure out how to trigger it manually",
-      "acceptanceCriteria": [
-        "When Jellyfin settings saved successfully AND user has never synced, trigger sync automatically",
-        "Show 'Syncing...' state in checklist with spinner",
-        "On sync complete, show success message with item counts",
-        "Handle sync errors gracefully with retry option",
-        "First sync bypasses rate limit (or rate limit doesn't apply to first sync)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 11,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-18.3",
-      "title": "Optional Services Prompt",
-      "story": "As a user who completed basic setup, I want to see optional services I can configure, so that I can enhance my experience if I have Jellyseerr/Radarr/Sonarr",
-      "acceptanceCriteria": [
-        "After checklist complete, show dismissible 'Enhance your setup' card",
-        "Lists: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)",
-        "Each has 'Configure' link to /settings",
-        "User can dismiss card permanently (stored in localStorage)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser"
       ],
       "priority": 12,
       "passes": false,
@@ -132,6 +220,77 @@
       "notes": ""
     },
     {
+      "id": "US-23.1",
+      "title": "Added Date Column on Issues Page",
+      "story": "As a media server owner, I want to see when content was added to my library, so that I can understand how long items have been in my collection",
+      "acceptanceCriteria": [
+        "API includes date_created field in content issues response",
+        "Issues page table shows 'Added' column after 'Size' column",
+        "Displays date in user-friendly format (e.g., 'Jan 15, 2024')",
+        "Shows 'Unknown' if date_created is null",
+        "Column is sortable (client-side)",
+        "Column visible on all tabs (All, Old, Large, Language, Unavailable)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-18.1",
+      "title": "Show Setup Checklist for New Users",
+      "story": "As a new user who just signed up, I want to see a clear checklist of what to do next, so that I know how to get started with the app",
+      "acceptanceCriteria": [
+        "Dashboard shows 'Setup Checklist' card when Jellyfin not configured OR never synced",
+        "Checklist shows 2 steps: 'Connect Jellyfin' and 'Run First Sync'",
+        "Each step shows status: pending (gray), in-progress (blue), complete (green)",
+        "'Connect Jellyfin' step has button linking to /settings",
+        "Checklist hides when both steps are complete",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-18.2",
+      "title": "Auto-Sync After Jellyfin Configuration",
+      "story": "As a user who just configured Jellyfin, I want the first sync to start automatically, so that I don't have to figure out how to trigger it manually",
+      "acceptanceCriteria": [
+        "When Jellyfin settings saved successfully AND user has never synced, trigger sync automatically",
+        "Show 'Syncing...' state in checklist with spinner",
+        "On sync complete, show success message with item counts",
+        "Handle sync errors gracefully with retry option",
+        "First sync bypasses rate limit (or rate limit doesn't apply to first sync)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-18.3",
+      "title": "Optional Services Prompt",
+      "story": "As a user who completed basic setup, I want to see optional services I can configure, so that I can enhance my experience if I have Jellyseerr/Radarr/Sonarr",
+      "acceptanceCriteria": [
+        "After checklist complete, show dismissible 'Enhance your setup' card",
+        "Lists: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)",
+        "Each has 'Configure' link to /settings",
+        "User can dismiss card permanently (stored in localStorage)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
       "id": "US-20.1",
       "title": "Large Season Threshold Setting",
       "story": "As a media server owner, I want to configure the threshold for large seasons separately from movies, so that I can fine-tune detection based on my storage preferences",
@@ -147,7 +306,7 @@
         "Unit tests pass",
         "Verify in browser: setting saves and loads correctly"
       ],
-      "priority": 30,
+      "priority": 40,
       "passes": false,
       "notes": ""
     },
@@ -170,7 +329,7 @@
         "Unit tests pass",
         "Integration test: trigger sync, verify season sizes populated"
       ],
-      "priority": 31,
+      "priority": 41,
       "passes": false,
       "notes": ""
     },
@@ -189,7 +348,7 @@
         "Unit tests pass",
         "Test: large series appears in issues, large movie still appears"
       ],
-      "priority": 32,
+      "priority": 42,
       "passes": false,
       "notes": ""
     },
@@ -211,7 +370,7 @@
         "Unit tests pass",
         "Verify in browser: filter toggles work correctly"
       ],
-      "priority": 33,
+      "priority": 43,
       "passes": false,
       "notes": ""
     },
@@ -230,7 +389,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 40,
+      "priority": 50,
       "passes": false,
       "notes": ""
     },
@@ -248,7 +407,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 41,
+      "priority": 51,
       "passes": false,
       "notes": ""
     },
@@ -266,26 +425,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 42,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-23.1",
-      "title": "Added Date Column on Issues Page",
-      "story": "As a media server owner, I want to see when content was added to my library, so that I can understand how long items have been in my collection",
-      "acceptanceCriteria": [
-        "API includes date_created field in content issues response",
-        "Issues page table shows 'Added' column after 'Size' column",
-        "Displays date in user-friendly format (e.g., 'Jan 15, 2024')",
-        "Shows 'Unknown' if date_created is null",
-        "Column is sortable (client-side)",
-        "Column visible on all tabs (All, Old, Large, Language, Unavailable)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 50,
+      "priority": 52,
       "passes": false,
       "notes": ""
     },
@@ -412,7 +552,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 80,
+      "priority": 71,
       "passes": false,
       "notes": ""
     },
@@ -431,7 +571,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 81,
+      "priority": 72,
       "passes": false,
       "notes": ""
     },
@@ -453,7 +593,7 @@
         "Unit tests pass",
         "Test: mock API to fail twice then succeed, verify sync completes"
       ],
-      "priority": 90,
+      "priority": 80,
       "passes": false,
       "notes": ""
     },
@@ -472,7 +612,7 @@
         "Typecheck passes",
         "E2E test passes"
       ],
-      "priority": 91,
+      "priority": 90,
       "passes": false,
       "notes": ""
     },
@@ -493,7 +633,7 @@
         "Typecheck passes",
         "All tests pass"
       ],
-      "priority": 92,
+      "priority": 91,
       "passes": false,
       "notes": ""
     },

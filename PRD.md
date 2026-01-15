@@ -994,6 +994,265 @@ Improve accessibility for screen reader users by adding proper ARIA attributes t
 
 ---
 
+## Epic 29: Issues Table UX Improvements
+
+### Overview
+Improve the readability of the Issues table by moving the requester information from an inline display (cramped "by {username}" after the title) to a dedicated column that appears only on the Unavailable tab.
+
+### Goals
+- Improve table scanability by separating requester info from title
+- Maintain visual consistency with the existing Release column pattern
+- Keep the table compact on other tabs where requester info isn't relevant
+
+### User Stories
+
+#### US-29.1: Add Requester Column to Issues Table
+**As a** media server owner
+**I want** to see who requested content in a dedicated table column
+**So that** I can quickly scan and identify request patterns by user
+
+**Acceptance Criteria:**
+- [ ] New "Requester" column appears after the Name column
+- [ ] Column only shows when `activeFilter === 'requests'` (same pattern as Release column)
+- [ ] Column displays the username from `requested_by` field
+- [ ] Empty cell or `—` when `requested_by` is null
+- [ ] The inline "by {username}" display in the name cell is removed
+- [ ] Column header is NOT sortable (optional enhancement for future)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+### Non-Goals
+- Adding requester info to non-request items
+- Backend API changes (data already includes `requested_by`)
+- Filtering by requester (future enhancement)
+- Sorting by requester (future enhancement)
+
+### Technical Considerations
+- **Frontend-only change** to `frontend/src/routes/issues/+page.svelte`
+- Follow existing pattern from `col-release` which is conditionally shown for requests tab only
+- `requested_by` field already exists in `ContentIssueItem` interface (line 23)
+- Remove lines 821-823 that currently show inline "by {requested_by}" after the name
+
+---
+
+## Epic 30: Remove Currently Airing Placeholder
+
+### Overview
+Remove the "Currently Airing" feature which was never implemented. The dashboard currently shows "0 currently airing" linking to an empty page, which is confusing to users. This epic cleans up the placeholder code.
+
+### Goals
+- Remove confusing "0 currently airing" from dashboard
+- Clean up unused backend code, routes, and tests
+- Simplify the codebase by removing dead code
+
+### User Stories
+
+#### US-30.1: Remove Currently Airing Placeholder
+**As a** user
+**I want** the dashboard to only show implemented features
+**So that** I'm not confused by links to empty pages
+
+**Acceptance Criteria:**
+- [ ] Remove "currently airing" link from dashboard info section
+- [ ] Remove `/info/airing` route and page entirely
+- [ ] Remove `GET /api/info/airing` endpoint
+- [ ] Remove `get_currently_airing()` function from content service
+- [ ] Remove `CurrentlyAiringItem` and `CurrentlyAiringResponse` models
+- [ ] Remove `currently_airing` from `ContentSummaryResponse` model
+- [ ] Update `get_content_summary()` to not include `currently_airing`
+- [ ] Remove related tests (backend and frontend)
+- [ ] Dashboard info section shows only "recently available" (remove separator)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: dashboard no longer shows "currently airing"
+
+### Non-Goals
+- Implementing the feature (can be added later if needed)
+- Changing any other dashboard functionality
+
+### Technical Considerations
+
+**Files to modify:**
+- `frontend/src/routes/+page.svelte` - Remove currently_airing from info section
+- `frontend/src/routes/info/airing/+page.svelte` - DELETE entire file
+- `frontend/tests/info.test.ts` - Remove currently_airing tests
+- `backend/app/routers/info.py` - Remove `/airing` endpoint
+- `backend/app/services/content.py` - Remove `get_currently_airing()` function
+- `backend/app/models/content.py` - Remove `CurrentlyAiringItem`, `CurrentlyAiringResponse`, update `ContentSummaryResponse`
+- `backend/tests/test_content.py` - Remove currently_airing tests
+
+**Cleanup pattern:**
+1. Start with backend models (remove types)
+2. Update service (remove function)
+3. Update router (remove endpoint)
+4. Update frontend (remove UI + route)
+5. Clean up tests last
+
+---
+
+## Epic 31: Recently Available Enhancements
+
+### Overview
+Improve the "Recently Available" page to better serve its primary purpose: notifying users who requested content that it's now available. This includes configurable time window, user nickname mapping for friendly names in notifications, and copy output grouped by requester.
+
+### Goals
+- Make the "days back" threshold configurable per user
+- Allow users to map Jellyseerr usernames to friendly display names
+- Generate copy output grouped by requester for easy notification
+- Improve the notification workflow for media server owners
+
+### User Stories
+
+#### US-31.1: Recently Available Days Setting (Backend)
+**As a** media server owner
+**I want** to configure how many days back to show recently available content
+**So that** I can adjust the view to my notification frequency
+
+**Acceptance Criteria:**
+- [ ] Add `recently_available_days` field to UserSettings model (integer, default 7)
+- [ ] Create database migration for new column
+- [ ] `GET /api/settings` returns `recently_available_days` value
+- [ ] `POST /api/settings` accepts and validates `recently_available_days` (range: 1-30)
+- [ ] `GET /api/info/recent` uses user's setting instead of hardcoded 7 days
+- [ ] `GET /api/content/summary` uses user's setting for `recently_available` count
+- [ ] Invalid values return 422 with clear error message
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `backend/app/database.py` - Add field to UserSettings
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Include in GET/POST
+- `backend/app/models/settings.py` - Update Pydantic schemas
+- `backend/app/services/content.py` - Update `get_recently_available()` and `get_content_summary()`
+- `backend/tests/test_settings.py` - Validation tests
+
+---
+
+#### US-31.2: Recently Available Days Setting (Frontend)
+**As a** media server owner
+**I want** to set my "recently available" days preference in the settings page
+**So that** I can customize the time window
+
+**Acceptance Criteria:**
+- [ ] Settings page shows "Recently available days" input in a new "Display" section
+- [ ] Input is a number field with min=1, max=30
+- [ ] Default value is 7 when not set
+- [ ] Help text: "Show content that became available in the past N days"
+- [ ] Value saves successfully and persists on page reload
+- [ ] Recently Available page subtitle updates to reflect setting (e.g., "past 14 days")
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Add input field
+- `frontend/src/routes/info/recent/+page.svelte` - Fetch setting and display in subtitle
+
+---
+
+#### US-31.3: User Nickname Mapping (Backend)
+**As a** media server owner
+**I want** to store nickname mappings for Jellyseerr usernames
+**So that** I can show friendly names in notifications
+
+**Acceptance Criteria:**
+- [ ] Create new `UserNickname` model: `id`, `user_id` (FK), `jellyseerr_username` (string), `display_name` (string)
+- [ ] Create database migration for new table
+- [ ] Unique constraint on (`user_id`, `jellyseerr_username`) - each username maps once per user
+- [ ] `GET /api/settings/nicknames` returns list of all nickname mappings for user
+- [ ] `POST /api/settings/nicknames` creates a new mapping (body: `{jellyseerr_username, display_name}`)
+- [ ] `PUT /api/settings/nicknames/{id}` updates an existing mapping
+- [ ] `DELETE /api/settings/nicknames/{id}` removes a mapping
+- [ ] 409 Conflict if trying to create duplicate jellyseerr_username
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `backend/app/database.py` - Add UserNickname model
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Add nickname CRUD endpoints
+- `backend/app/models/settings.py` - Add NicknameCreate, NicknameResponse schemas
+- `backend/tests/test_settings.py` - CRUD tests
+
+---
+
+#### US-31.4: User Nickname Mapping (Frontend)
+**As a** media server owner
+**I want** to manage nickname mappings in the settings page
+**So that** I can assign friendly names to Jellyseerr users
+
+**Acceptance Criteria:**
+- [ ] Settings page shows new "User Nicknames" section below services configuration
+- [ ] Section displays table of existing mappings: Jellyseerr Username → Display Name
+- [ ] "Add nickname" button opens inline form with two inputs: username, display name
+- [ ] Each row has edit and delete buttons
+- [ ] Delete shows confirmation before removing
+- [ ] Empty state: "No nicknames configured. Add nicknames to customize how requesters appear in notifications."
+- [ ] Toast feedback on save/delete success/error
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Add nicknames section with CRUD UI
+
+---
+
+#### US-31.5: Copy Output Grouped by Requester
+**As a** media server owner
+**I want** the copy output to group content by requester with their display name
+**So that** I can easily notify each person about their available content
+
+**Acceptance Criteria:**
+- [ ] "Copy" button generates output grouped by requester (not by date)
+- [ ] Uses display_name from nickname mapping if configured, otherwise original Jellyseerr username
+- [ ] Format per requester:
+  ```
+  {display_name}:
+    - {Title} ({Type}) - available since {Date}
+  ```
+- [ ] Requesters sorted alphabetically
+- [ ] Items under each requester sorted by availability date (newest first)
+- [ ] Items without a requester grouped under "Unknown" at the end
+- [ ] API endpoint `GET /api/info/recent` includes resolved `display_name` field
+- [ ] Frontend uses `display_name` for grouping and display in table
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: copy output shows correct grouping
+
+**Example output:**
+```
+Recently Available (3 items):
+
+Fab:
+  - 2 Alone in Paris (Movie) - available since Jan 11
+  - The Serpent (TV) - available since Jan 11
+
+John:
+  - Inception (Movie) - available since Jan 10
+```
+
+**Files:**
+- `backend/app/services/content.py` - Add `display_name` resolution to `get_recently_available()`
+- `backend/app/models/content.py` - Add `display_name` to `RecentlyAvailableItem`
+- `frontend/src/routes/info/recent/+page.svelte` - Update copy function, show display_name in table
+
+### Non-Goals
+- Many-to-1 username mapping (multiple usernames → one person)
+- Auto-detecting Jellyseerr usernames (user must manually add)
+- Actually sending notifications (just copy for manual paste)
+- Per-requester filtering on the Recently Available page
+
+### Technical Considerations
+- **Database:** New `UserNickname` table with FK to users
+- **API pattern:** Follow existing settings endpoint patterns for CRUD
+- **Display name resolution:** Done at API level so both table and copy use same resolved name
+- **Settings page structure:** Add new "Display" section for recently_available_days, new "User Nicknames" section for mappings
+
+---
+
 ## Checklist Summary
 
 ### Completed ✅ (73 stories)
@@ -1027,3 +1286,10 @@ See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for completed epics and stories.
 - [ ] US-27.1: E2E Auth Flow Test
 - [ ] US-27.2: Sync Integration Tests with Mocked APIs
 - [ ] US-28.1: Loading States Accessibility
+- [ ] US-29.1: Add Requester Column to Issues Table
+- [ ] US-30.1: Remove Currently Airing Placeholder
+- [ ] US-31.1: Recently Available Days Setting (Backend)
+- [ ] US-31.2: Recently Available Days Setting (Frontend)
+- [ ] US-31.3: User Nickname Mapping (Backend)
+- [ ] US-31.4: User Nickname Mapping (Frontend)
+- [ ] US-31.5: Copy Output Grouped by Requester
