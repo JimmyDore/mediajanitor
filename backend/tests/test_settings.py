@@ -1003,6 +1003,7 @@ class TestDisplayPreferences:
         assert response.status_code == 200
         data = response.json()
         assert data["show_unreleased_requests"] is False
+        assert data["theme_preference"] == "system"
 
     def test_get_display_preferences_requires_auth(self, client: TestClient) -> None:
         """Test that getting display preferences requires authentication."""
@@ -1108,3 +1109,61 @@ class TestDisplayPreferences:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.json()["show_unreleased_requests"] is False
+
+    def test_get_display_preferences_theme_default(self, client: TestClient) -> None:
+        """Test that default theme_preference is 'system'."""
+        token = self._get_auth_token(client, "theme_default@example.com")
+
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["theme_preference"] == "system"
+
+    def test_save_theme_preference_light(self, client: TestClient) -> None:
+        """Test saving theme_preference to 'light'."""
+        token = self._get_auth_token(client, "theme_light@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={"theme_preference": "light"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify it's saved
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["theme_preference"] == "light"
+
+    def test_save_theme_preference_dark(self, client: TestClient) -> None:
+        """Test saving theme_preference to 'dark'."""
+        token = self._get_auth_token(client, "theme_dark@example.com")
+
+        client.post(
+            "/api/settings/display",
+            json={"theme_preference": "dark"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        response = client.get(
+            "/api/settings/display",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["theme_preference"] == "dark"
+
+    def test_theme_preference_invalid_value_rejected(self, client: TestClient) -> None:
+        """Test that invalid theme_preference values are rejected."""
+        token = self._get_auth_token(client, "theme_invalid@example.com")
+
+        response = client.post(
+            "/api/settings/display",
+            json={"theme_preference": "invalid"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        # Pydantic should reject invalid literal values
+        assert response.status_code == 422

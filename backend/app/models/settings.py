@@ -1,6 +1,12 @@
 """Pydantic models for settings endpoints."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, HttpUrl
+
+
+# Theme preference type
+ThemePreference = Literal["light", "dark", "system"]
 
 
 class JellyfinSettingsCreate(BaseModel):
@@ -92,9 +98,11 @@ class DisplayPreferencesCreate(BaseModel):
     """Request model for saving display preferences."""
 
     show_unreleased_requests: bool | None = None
+    theme_preference: ThemePreference | None = None
 
 
 class DisplayPreferencesResponse(BaseModel):
     """Response model for display preferences."""
 
     show_unreleased_requests: bool
+    theme_preference: ThemePreference

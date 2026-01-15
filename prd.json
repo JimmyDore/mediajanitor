@@ -164,8 +164,8 @@
         "Unit tests pass"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "Files: backend/app/database.py, backend/app/models/settings.py, backend/app/routers/settings.py, backend/alembic/versions/"
+      "passes": true,
+      "notes": "Added theme_preference column (light/dark/system, default system) to UserSettings. Updated DisplayPreferences models and endpoints. 4 new tests added."
     },
     {
       "id": "US-16.2",

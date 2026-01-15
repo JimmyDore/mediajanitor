@@ -1240,10 +1240,28 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - chore(cleanup): [US-15.9] remove unused api.ts file
 
+### 2026-01-15: US-16.1 - Theme Preference Backend
+- Added theme_preference column to UserSettings model:
+  - String(10) with default "system"
+  - Valid values: "light", "dark", "system"
+- Created Alembic migration: add_theme_preference_to_user_settings
+- Updated DisplayPreferencesCreate/DisplayPreferencesResponse models:
+  - Added theme_preference field with Literal type
+- Updated GET/POST /api/settings/display endpoints to include theme_preference
+- 4 new tests for theme_preference:
+  - test_get_display_preferences_theme_default
+  - test_save_theme_preference_light
+  - test_save_theme_preference_dark
+  - test_theme_preference_invalid_value_rejected
+- 289 backend tests pass, mypy clean
+- Files changed: database.py, models/settings.py, routers/settings.py, test_settings.py, alembic migration
+- Commits:
+  - feat(settings): [US-16.1] add theme preference backend
+
 ## Current Status
 
 **Phase**: UX Fixes and Delete Improvements (In Progress)
-**Total Stories**: 55 stories (51 passes: true, 4 remaining)
+**Total Stories**: 55 stories (52 passes: true, 3 remaining)
 
 ## Notes
 

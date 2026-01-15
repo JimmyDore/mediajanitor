@@ -374,10 +374,16 @@ async def get_display_preferences(
     settings = result.scalar_one_or_none()
 
     # Return user values or defaults
+    # Cast theme_preference to the Literal type (stored as string in DB)
+    theme_pref = settings.theme_preference if settings else "system"
+    # Validate the stored value is a valid theme
+    if theme_pref not in ("light", "dark", "system"):
+        theme_pref = "system"
     return DisplayPreferencesResponse(
         show_unreleased_requests=(
             settings.show_unreleased_requests if settings else False
         ),
+        theme_preference=theme_pref,  # type: ignore[arg-type]
     )
 
 
@@ -396,6 +402,8 @@ async def save_display_preferences(
     # Only update fields that were provided
     if prefs.show_unreleased_requests is not None:
         settings.show_unreleased_requests = prefs.show_unreleased_requests
+    if prefs.theme_preference is not None:
+        settings.theme_preference = prefs.theme_preference
 
     return SettingsSaveResponse(
         success=True,
