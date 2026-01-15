@@ -1,8 +1,7 @@
-
-- Sonarr link not working
+- Sonarr link not present on request
 - Delete : Not working at all, only the content is deleted, not the request
 - Watched: Never => Not fixed 
-- Requests : still showing TMDB ids
 - Jellyseer connection validation not sure if it's working
 - Remove IMDB url => Redundant
 - Onboarding : After signup => Configure all your services, then trigger a sync
+- Monitoring : Send slack messages (set up VPS secret), when a sync fails, send a message to slack, when new users are added, send a message to slack
