@@ -341,7 +341,7 @@
 		old: 'Old',
 		large: 'Large',
 		language: 'Language',
-		requests: 'Requests'
+		requests: 'Unavailable'
 	};
 
 	function isRequestItem(item: ContentIssueItem): boolean {
