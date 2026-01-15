@@ -316,8 +316,8 @@
         "Verify in browser"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Setup Checklist shows when Jellyfin not configured OR never synced. Steps show pending/in-progress/complete status. Go to Settings link on step 1, Start Sync button on step 2 when Jellyfin configured. Hides when both complete."
     },
     {
       "id": "US-18.2",

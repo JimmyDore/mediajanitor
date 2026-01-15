@@ -49,14 +49,40 @@
 		recently_available: InfoCategorySummary;
 	}
 
+	interface JellyfinSettings {
+		server_url: string | null;
+		api_key_configured: boolean;
+	}
+
 	let syncStatus = $state<SyncStatus | null>(null);
 	let syncLoading = $state(false);
 	let toastMessage = $state<string | null>(null);
 	let toastType = $state<'success' | 'error'>('success');
 	let contentSummary = $state<ContentSummary | null>(null);
 	let summaryLoading = $state(true);
+	let jellyfinSettings = $state<JellyfinSettings | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds during sync
+
+	// Computed: Show checklist when Jellyfin not configured OR never synced
+	const showSetupChecklist = $derived(
+		jellyfinSettings !== null &&
+			syncStatus !== null &&
+			(jellyfinSettings.api_key_configured === false || syncStatus.last_synced === null)
+	);
+
+	// Computed: Step statuses
+	const jellyfinStepStatus = $derived<'pending' | 'complete'>(
+		jellyfinSettings?.api_key_configured ? 'complete' : 'pending'
+	);
+
+	const syncStepStatus = $derived<'pending' | 'in-progress' | 'complete'>(
+		syncStatus?.last_synced !== null
+			? 'complete'
+			: syncStatus?.is_syncing
+				? 'in-progress'
+				: 'pending'
+	);
 
 	function formatDate(isoString: string): string {
 		const date = new Date(isoString);
@@ -137,6 +163,17 @@
 		}
 	}
 
+	async function fetchJellyfinSettings() {
+		try {
+			const response = await authenticatedFetch('/api/settings/jellyfin');
+			if (response.ok) {
+				jellyfinSettings = await response.json();
+			}
+		} catch {
+			// Ignore errors - will show as not configured
+		}
+	}
+
 	async function triggerSync() {
 		if (syncLoading) return;
 
@@ -196,7 +233,7 @@
 
 	onMount(async () => {
 		try {
-			await Promise.all([fetchSyncStatus(), fetchContentSummary()]);
+			await Promise.all([fetchSyncStatus(), fetchContentSummary(), fetchJellyfinSettings()]);
 			// If sync is already in progress (e.g., page refresh during sync), start polling
 			if (syncStatus?.is_syncing) {
 				syncLoading = true;
@@ -251,6 +288,55 @@
 				{/if}
 			</button>
 		</header>
+
+		{#if showSetupChecklist}
+			<!-- Setup Checklist -->
+			<section class="setup-checklist">
+				<h2 class="section-label">Setup Checklist</h2>
+				<div class="checklist-card">
+					<div class="checklist-step step-{jellyfinStepStatus}">
+						<span class="step-indicator">
+							{#if jellyfinStepStatus === 'complete'}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="20 6 9 17 4 12"/>
+								</svg>
+							{:else}
+								<span class="step-number">1</span>
+							{/if}
+						</span>
+						<div class="step-content">
+							<span class="step-title">Connect Jellyfin</span>
+							{#if jellyfinStepStatus === 'pending'}
+								<a href="/settings" class="step-link">Go to Settings</a>
+							{/if}
+						</div>
+					</div>
+					<div class="checklist-step step-{syncStepStatus}">
+						<span class="step-indicator">
+							{#if syncStepStatus === 'complete'}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="20 6 9 17 4 12"/>
+								</svg>
+							{:else if syncStepStatus === 'in-progress'}
+								<span class="step-spinner"></span>
+							{:else}
+								<span class="step-number">2</span>
+							{/if}
+						</span>
+						<div class="step-content">
+							<span class="step-title">Run First Sync</span>
+							{#if syncStepStatus === 'in-progress'}
+								<span class="step-status">Syncing...</span>
+							{:else if syncStepStatus === 'pending' && jellyfinStepStatus === 'complete'}
+								<button class="step-action" onclick={triggerSync} disabled={syncLoading}>
+									Start Sync
+								</button>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</section>
+		{/if}
 
 		{#if error}
 		<div class="error-banner">
@@ -381,6 +467,124 @@
 		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
+	}
+
+	/* Setup Checklist */
+	.setup-checklist {
+		margin-bottom: var(--space-8);
+	}
+
+	.checklist-card {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+	}
+
+	.checklist-step {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) 0;
+	}
+
+	.checklist-step:not(:last-child) {
+		border-bottom: 1px solid var(--border);
+	}
+
+	.step-indicator {
+		width: 24px;
+		height: 24px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.step-pending .step-indicator {
+		background: var(--bg-hover);
+		color: var(--text-muted);
+	}
+
+	.step-in-progress .step-indicator {
+		background: var(--accent-light, rgba(59, 130, 246, 0.1));
+		color: var(--accent);
+	}
+
+	.step-complete .step-indicator {
+		background: var(--success-light, rgba(34, 197, 94, 0.1));
+		color: var(--success, #22c55e);
+	}
+
+	.step-number {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-semibold);
+	}
+
+	.step-spinner {
+		width: 14px;
+		height: 14px;
+		border: 2px solid transparent;
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	.step-content {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+	}
+
+	.step-title {
+		font-size: var(--font-size-md);
+		color: var(--text-primary);
+	}
+
+	.step-pending .step-title {
+		color: var(--text-secondary);
+	}
+
+	.step-complete .step-title {
+		color: var(--text-muted);
+	}
+
+	.step-link {
+		font-size: var(--font-size-sm);
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.step-link:hover {
+		text-decoration: underline;
+	}
+
+	.step-action {
+		font-size: var(--font-size-sm);
+		padding: var(--space-1) var(--space-3);
+		background: var(--accent);
+		color: white;
+		border: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: opacity var(--transition-fast);
+	}
+
+	.step-action:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.step-action:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.step-status {
+		font-size: var(--font-size-sm);
+		color: var(--accent);
 	}
 
 	/* Error Banner */
