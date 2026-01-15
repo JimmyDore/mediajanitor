@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     filter_recent_releases: bool = True
     recent_release_months_cutoff: int = 3
 
+    # Slack Notifications (optional)
+    slack_webhook_new_users: str = ""
+    slack_webhook_sync_failures: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
