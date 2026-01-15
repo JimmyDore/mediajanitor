@@ -191,6 +191,12 @@ class SyncStatus(Base):
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_items_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requests_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Progress tracking (for UI feedback during sync)
+    current_step: Mapped[str | None] = mapped_column(String(100), nullable=True)  # e.g., "fetching_users", "syncing_media"
+    total_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_step_progress: Mapped[int | None] = mapped_column(Integer, nullable=True)  # e.g., user 3 of 10
+    current_step_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class RefreshToken(Base):

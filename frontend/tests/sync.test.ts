@@ -202,5 +202,94 @@ describe('Sync API Integration', () => {
 			expect(data.last_synced).toBeNull();
 			expect(data.status).toBeNull();
 		});
+
+		it('sync status API includes is_syncing field when not syncing', async () => {
+			const statusData = {
+				last_synced: '2024-01-15T10:30:00Z',
+				status: 'success',
+				is_syncing: false,
+				media_items_count: 200,
+				requests_count: 50,
+				error: null,
+				progress: null
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(statusData)
+			});
+
+			const response = await fetch('/api/sync/status', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.is_syncing).toBe(false);
+			expect(data.progress).toBeNull();
+		});
+
+		it('sync status API returns progress when sync is in progress', async () => {
+			const statusData = {
+				last_synced: null,
+				status: null,
+				is_syncing: true,
+				media_items_count: null,
+				requests_count: null,
+				error: null,
+				progress: {
+					current_step: 'syncing_media',
+					total_steps: 2,
+					current_step_progress: 3,
+					current_step_total: 10,
+					current_user_name: 'John'
+				}
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(statusData)
+			});
+
+			const response = await fetch('/api/sync/status', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.is_syncing).toBe(true);
+			expect(data.progress).not.toBeNull();
+			expect(data.progress.current_step).toBe('syncing_media');
+			expect(data.progress.total_steps).toBe(2);
+			expect(data.progress.current_step_progress).toBe(3);
+			expect(data.progress.current_step_total).toBe(10);
+			expect(data.progress.current_user_name).toBe('John');
+		});
+
+		it('sync status API returns syncing_requests step', async () => {
+			const statusData = {
+				last_synced: null,
+				status: null,
+				is_syncing: true,
+				media_items_count: null,
+				requests_count: null,
+				error: null,
+				progress: {
+					current_step: 'syncing_requests',
+					total_steps: 2,
+					current_step_progress: null,
+					current_step_total: null,
+					current_user_name: null
+				}
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(statusData)
+			});
+
+			const response = await fetch('/api/sync/status', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.is_syncing).toBe(true);
+			expect(data.progress.current_step).toBe('syncing_requests');
+		});
 	});
 });

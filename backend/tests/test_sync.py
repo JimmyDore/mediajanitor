@@ -338,7 +338,7 @@ class TestSyncService:
     """Test sync service functions."""
 
     @pytest.mark.asyncio
-    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.fetch_jellyfin_media_with_progress")
     @patch("app.services.sync.fetch_jellyseerr_requests")
     async def test_run_user_sync_fetches_and_caches_data(
         self,
@@ -406,7 +406,7 @@ class TestSyncService:
             await session.commit()
 
             # Mock API failure
-            with patch("app.services.sync.fetch_jellyfin_media", side_effect=Exception("API Error")):
+            with patch("app.services.sync.fetch_jellyfin_media_with_progress", side_effect=Exception("API Error")):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                     result = await run_user_sync(session, user.id)
 
@@ -414,7 +414,7 @@ class TestSyncService:
             assert "error" in result
 
     @pytest.mark.asyncio
-    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.fetch_jellyfin_media_with_progress")
     async def test_sync_clears_old_cache_before_storing_new(
         self,
         mock_jellyfin: AsyncMock,
@@ -834,3 +834,176 @@ class TestMultiUserWatchDataAggregation:
         assert len(items) == 2
         movie_names = {item["Name"] for item in items}
         assert movie_names == {"Movie A", "Movie B"}
+
+
+class TestSyncProgressTracking:
+    """Test sync progress tracking (US-17.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "progress@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_sync_status_includes_progress_fields(self, client: TestClient) -> None:
+        """GET /api/sync/status should include is_syncing and progress fields."""
+        token = self._get_auth_token(client, "progress1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/sync/status", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should have is_syncing field
+        assert "is_syncing" in data
+        assert data["is_syncing"] is False  # Not syncing yet
+
+        # Should have progress field (null when not syncing)
+        assert "progress" in data
+        assert data["progress"] is None
+
+    @pytest.mark.asyncio
+    async def test_sync_status_model_has_progress_columns(self, client: TestClient) -> None:
+        """SyncStatus model should have progress tracking columns."""
+        async with TestingAsyncSessionLocal() as session:
+            status = SyncStatus(
+                user_id=999,
+                last_sync_started=datetime.now(timezone.utc),
+                last_sync_status="in_progress",
+                current_step="syncing_media",
+                total_steps=2,
+                current_step_progress=3,
+                current_step_total=10,
+                current_user_name="John",
+            )
+            session.add(status)
+            await session.commit()
+
+            assert status.id is not None
+            assert status.current_step == "syncing_media"
+            assert status.total_steps == 2
+            assert status.current_step_progress == 3
+            assert status.current_step_total == 10
+            assert status.current_user_name == "John"
+
+    @pytest.mark.asyncio
+    async def test_update_sync_progress_updates_progress_fields(
+        self, client: TestClient
+    ) -> None:
+        """update_sync_progress should update only progress fields."""
+        from app.services.sync import update_sync_status, update_sync_progress, get_sync_status
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="progress_test@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            # Create initial sync status
+            await update_sync_status(
+                session, user.id, "in_progress", started=True,
+                current_step="syncing_media", total_steps=2
+            )
+
+            # Update progress
+            await update_sync_progress(
+                session, user.id,
+                current_step_progress=5,
+                current_step_total=10,
+                current_user_name="TestUser"
+            )
+
+            # Verify progress was updated
+            status = await get_sync_status(session, user.id)
+            assert status is not None
+            assert status.current_step == "syncing_media"  # Unchanged
+            assert status.current_step_progress == 5
+            assert status.current_step_total == 10
+            assert status.current_user_name == "TestUser"
+
+    @pytest.mark.asyncio
+    async def test_sync_completion_clears_progress_fields(
+        self, client: TestClient
+    ) -> None:
+        """When sync completes, progress fields should be cleared."""
+        from app.services.sync import update_sync_status, update_sync_progress, get_sync_status
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="progress_clear@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            # Start sync with progress
+            await update_sync_status(
+                session, user.id, "in_progress", started=True,
+                current_step="syncing_media", total_steps=2
+            )
+            await update_sync_progress(
+                session, user.id,
+                current_step_progress=5,
+                current_step_total=10,
+                current_user_name="TestUser"
+            )
+
+            # Complete sync
+            await update_sync_status(
+                session, user.id, "success",
+                media_count=100, requests_count=50
+            )
+
+            # Verify progress fields were cleared
+            status = await get_sync_status(session, user.id)
+            assert status is not None
+            assert status.current_step is None
+            assert status.total_steps is None
+            assert status.current_step_progress is None
+            assert status.current_step_total is None
+            assert status.current_user_name is None
+
+    def test_sync_status_returns_progress_when_syncing(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/sync/status should return progress when sync is active."""
+        # Register user via API (proper password hash)
+        token = self._get_auth_token(client, "progress_api@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # First request creates sync status with null values
+        response = client.get("/api/sync/status", headers=headers)
+        assert response.status_code == 200
+
+        # Now manually set progress in DB by mocking a sync in progress
+        # We'll patch get_sync_status to return a mock with progress
+        mock_status = SyncStatus(
+            user_id=1,
+            last_sync_started=datetime.now(timezone.utc),
+            current_step="syncing_media",
+            total_steps=2,
+            current_step_progress=3,
+            current_step_total=10,
+            current_user_name="John",
+        )
+
+        with patch("app.routers.sync.get_sync_status", return_value=mock_status):
+            response = client.get("/api/sync/status", headers=headers)
+            assert response.status_code == 200
+            data = response.json()
+
+            assert data["is_syncing"] is True
+            assert data["progress"] is not None
+            assert data["progress"]["current_step"] == "syncing_media"
+            assert data["progress"]["total_steps"] == 2
+            assert data["progress"]["current_step_progress"] == 3
+            assert data["progress"]["current_step_total"] == 10
+            assert data["progress"]["current_user_name"] == "John"

@@ -293,6 +293,130 @@ async def fetch_jellyfin_media(
         raise
 
 
+async def fetch_jellyfin_media_with_progress(
+    server_url: str, api_key: str, db: AsyncSession, user_id: int
+) -> list[dict[str, Any]]:
+    """
+    Fetch all movies and series from Jellyfin API with progress updates.
+
+    Same as fetch_jellyfin_media but updates sync progress in database
+    for frontend polling.
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        # Fetch list of users
+        users = await fetch_jellyfin_users(server_url, api_key)
+
+        if not users:
+            logger.warning("No users found in Jellyfin")
+            return []
+
+        total_users = len(users)
+        logger.info(f"Found {total_users} Jellyfin users, fetching items for each...")
+
+        # Update progress with total user count
+        await update_sync_progress(
+            db, user_id,
+            current_step="syncing_media",
+            current_step_progress=0,
+            current_step_total=total_users,
+            current_user_name=None
+        )
+
+        # Dictionary to store items by ID with watch data from all users
+        items_dict: dict[str, dict[str, Any]] = {}
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # Process users sequentially to update progress (with some parallelism)
+            # Batch users in groups of 3 for better progress visibility
+            batch_size = 3
+            for batch_start in range(0, total_users, batch_size):
+                batch_end = min(batch_start + batch_size, total_users)
+                batch_users = users[batch_start:batch_end]
+
+                # Update progress to show first user in current batch
+                first_user_name = batch_users[0].get("Name", "Unknown")
+                await update_sync_progress(
+                    db, user_id,
+                    current_step_progress=batch_start + 1,
+                    current_user_name=first_user_name
+                )
+
+                # Create tasks for this batch
+                tasks = [
+                    fetch_user_items(
+                        client,
+                        server_url,
+                        api_key,
+                        user["Id"],
+                        user.get("Name", "Unknown"),
+                        batch_start + idx + 1,
+                        total_users,
+                    )
+                    for idx, user in enumerate(batch_users)
+                ]
+
+                # Execute batch in parallel
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Process results from this batch
+                for user, result in zip(batch_users, results):
+                    if isinstance(result, Exception):
+                        logger.warning(f"Failed to fetch items for user {user.get('Name', 'Unknown')}: {result}")
+                        continue
+
+                    user_items = cast(list[dict[str, Any]], result)
+
+                    for item in user_items:
+                        item_id = item.get("Id")
+                        if not item_id:
+                            continue
+
+                        # First time seeing this item - store it
+                        if item_id not in items_dict:
+                            # Create a copy without UserData (we'll aggregate UserData separately)
+                            item_copy = item.copy()
+                            item_copy.pop("UserData", None)
+                            items_dict[item_id] = {
+                                "item": item_copy,
+                                "user_data_list": [],
+                            }
+
+                        # Add this user's watch data
+                        user_data = item.get("UserData", {})
+                        if user_data.get("PlayCount", 0) > 0 or user_data.get("Played", False):
+                            items_dict[item_id]["user_data_list"].append(user_data)
+
+        # Convert back to list with aggregated UserData
+        result_items: list[dict[str, Any]] = []
+        for item_id, data in items_dict.items():
+            item = data["item"].copy()
+            user_data_list = data["user_data_list"]
+
+            # Aggregate watch data from all users
+            aggregated = aggregate_user_watch_data(user_data_list)
+
+            # Create aggregated UserData in Jellyfin format
+            item["UserData"] = {
+                "Played": aggregated["played"],
+                "PlayCount": aggregated["play_count"],
+                "LastPlayedDate": aggregated["last_played_date"],
+            }
+
+            result_items.append(item)
+
+        logger.info(f"Aggregated {len(result_items)} media items from {total_users} users")
+        return result_items
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Jellyfin API error: {e.response.status_code}")
+        raise
+    except httpx.RequestError as e:
+        logger.error(f"Jellyfin connection error: {e}")
+        raise
+
+
 def extract_title_from_request(req: dict[str, Any]) -> str:
     """
     Extract title from a Jellyseerr request using embedded data.
@@ -538,6 +662,11 @@ async def update_sync_status(
     media_count: int | None = None,
     requests_count: int | None = None,
     started: bool = False,
+    current_step: str | None = None,
+    total_steps: int | None = None,
+    current_step_progress: int | None = None,
+    current_step_total: int | None = None,
+    current_user_name: str | None = None,
 ) -> None:
     """Update sync status for a user."""
     result = await db.execute(
@@ -550,12 +679,24 @@ async def update_sync_status(
     if sync_status:
         if started:
             sync_status.last_sync_started = now
+            # Reset progress fields when starting
+            sync_status.current_step = current_step
+            sync_status.total_steps = total_steps
+            sync_status.current_step_progress = None
+            sync_status.current_step_total = None
+            sync_status.current_user_name = None
         else:
             sync_status.last_sync_completed = now
             sync_status.last_sync_status = status
             sync_status.last_sync_error = error
             sync_status.media_items_count = media_count
             sync_status.requests_count = requests_count
+            # Clear progress fields when complete
+            sync_status.current_step = None
+            sync_status.total_steps = None
+            sync_status.current_step_progress = None
+            sync_status.current_step_total = None
+            sync_status.current_user_name = None
     else:
         sync_status = SyncStatus(
             user_id=user_id,
@@ -565,10 +706,41 @@ async def update_sync_status(
             last_sync_error=error,
             media_items_count=media_count,
             requests_count=requests_count,
+            current_step=current_step if started else None,
+            total_steps=total_steps if started else None,
+            current_step_progress=None,
+            current_step_total=None,
+            current_user_name=None,
         )
         db.add(sync_status)
 
     await db.flush()
+
+
+async def update_sync_progress(
+    db: AsyncSession,
+    user_id: int,
+    current_step: str | None = None,
+    current_step_progress: int | None = None,
+    current_step_total: int | None = None,
+    current_user_name: str | None = None,
+) -> None:
+    """Update sync progress for a user (without changing overall status)."""
+    result = await db.execute(
+        select(SyncStatus).where(SyncStatus.user_id == user_id)
+    )
+    sync_status = result.scalar_one_or_none()
+
+    if sync_status:
+        if current_step is not None:
+            sync_status.current_step = current_step
+        if current_step_progress is not None:
+            sync_status.current_step_progress = current_step_progress
+        if current_step_total is not None:
+            sync_status.current_step_total = current_step_total
+        if current_user_name is not None:
+            sync_status.current_user_name = current_user_name
+        await db.flush()
 
 
 async def get_sync_status(db: AsyncSession, user_id: int) -> SyncStatus | None:
@@ -587,6 +759,8 @@ async def run_user_sync(
 
     Fetches data from Jellyfin and Jellyseerr (if configured),
     and caches it in the database.
+
+    Updates progress in sync_status table for frontend polling.
     """
     # Get user settings
     result = await db.execute(
@@ -602,18 +776,25 @@ async def run_user_sync(
             "requests_synced": 0,
         }
 
-    # Mark sync as started
-    await update_sync_status(db, user_id, "in_progress", started=True)
+    # Determine total steps (1 for Jellyfin, +1 if Jellyseerr configured)
+    has_jellyseerr = settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted
+    total_steps = 2 if has_jellyseerr else 1
+
+    # Mark sync as started with initial progress
+    await update_sync_status(
+        db, user_id, "in_progress", started=True,
+        current_step="syncing_media", total_steps=total_steps
+    )
 
     media_count = 0
     requests_count = 0
     error_message = None
 
     try:
-        # Fetch and cache Jellyfin data
+        # Fetch and cache Jellyfin data with progress updates
         jellyfin_api_key = decrypt_value(settings.jellyfin_api_key_encrypted)
-        items = await fetch_jellyfin_media(
-            settings.jellyfin_server_url, jellyfin_api_key
+        items = await fetch_jellyfin_media_with_progress(
+            settings.jellyfin_server_url, jellyfin_api_key, db, user_id
         )
         media_count = await cache_media_items(db, user_id, items)
         logger.info(f"Cached {media_count} media items for user {user_id}")
@@ -634,6 +815,12 @@ async def run_user_sync(
     try:
         # Fetch and cache Jellyseerr data (if configured)
         if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+            # Update progress to syncing requests
+            await update_sync_progress(
+                db, user_id, current_step="syncing_requests",
+                current_step_progress=None, current_step_total=None, current_user_name=None
+            )
+
             jellyseerr_api_key = decrypt_value(settings.jellyseerr_api_key_encrypted)
             requests_data = await fetch_jellyseerr_requests(
                 settings.jellyseerr_server_url, jellyseerr_api_key

@@ -27,14 +27,26 @@ class SyncResponse(BaseModel):
     error: str | None = None
 
 
+class SyncProgressInfo(BaseModel):
+    """Progress info during an active sync."""
+
+    current_step: str | None = None  # "syncing_media" or "syncing_requests"
+    total_steps: int | None = None  # 1 or 2 (Jellyfin only, or Jellyfin + Jellyseerr)
+    current_step_progress: int | None = None  # e.g., user 3 of 10
+    current_step_total: int | None = None  # e.g., 10 total users
+    current_user_name: str | None = None  # e.g., "John"
+
+
 class SyncStatusResponse(BaseModel):
     """Response model for sync status."""
 
     last_synced: str | None
     status: str | None
+    is_syncing: bool = False  # True when sync is in progress
     media_items_count: int | None = None
     requests_count: int | None = None
     error: str | None = None
+    progress: SyncProgressInfo | None = None  # Only present when is_syncing=True
 
 
 @router.post("", response_model=SyncResponse)
@@ -87,13 +99,31 @@ async def get_user_sync_status(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SyncStatusResponse:
-    """Get the sync status for the current user."""
+    """Get the sync status for the current user.
+
+    Returns progress info when a sync is in progress, allowing
+    the frontend to poll for updates and display progress.
+    """
     sync_status = await get_sync_status(db, current_user.id)
 
     if not sync_status:
         return SyncStatusResponse(
             last_synced=None,
             status=None,
+        )
+
+    # Check if sync is currently in progress
+    is_syncing = sync_status.current_step is not None
+
+    # Build progress info if syncing
+    progress = None
+    if is_syncing:
+        progress = SyncProgressInfo(
+            current_step=sync_status.current_step,
+            total_steps=sync_status.total_steps,
+            current_step_progress=sync_status.current_step_progress,
+            current_step_total=sync_status.current_step_total,
+            current_user_name=sync_status.current_user_name,
         )
 
     return SyncStatusResponse(
@@ -103,7 +133,9 @@ async def get_user_sync_status(
             else None
         ),
         status=sync_status.last_sync_status,
+        is_syncing=is_syncing,
         media_items_count=sync_status.media_items_count,
         requests_count=sync_status.requests_count,
         error=sync_status.last_sync_error,
+        progress=progress,
     )

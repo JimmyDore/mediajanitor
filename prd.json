@@ -241,8 +241,8 @@
         "Verify in browser: trigger sync and see progress updates"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added progress tracking fields to SyncStatus model, update_sync_progress() function, modified fetch_jellyfin_media_with_progress() to update per-user progress during batch processing, frontend polls /api/sync/status every 2s during sync and displays progress message"
     },
     {
       "id": "US-17.3",

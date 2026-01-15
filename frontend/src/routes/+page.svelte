@@ -1,17 +1,27 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { auth, authenticatedFetch } from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import Landing from '$lib/components/Landing.svelte';
 
 	let error = $state<string | null>(null);
 
+	interface SyncProgressInfo {
+		current_step: string | null;
+		total_steps: number | null;
+		current_step_progress: number | null;
+		current_step_total: number | null;
+		current_user_name: string | null;
+	}
+
 	interface SyncStatus {
 		last_synced: string | null;
 		status: string | null;
+		is_syncing: boolean;
 		media_items_count: number | null;
 		requests_count: number | null;
 		error: string | null;
+		progress: SyncProgressInfo | null;
 	}
 
 	interface SyncResponse {
@@ -45,6 +55,8 @@
 	let toastType = $state<'success' | 'error'>('success');
 	let contentSummary = $state<ContentSummary | null>(null);
 	let summaryLoading = $state(true);
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds during sync
 
 	function formatDate(isoString: string): string {
 		const date = new Date(isoString);
@@ -67,6 +79,38 @@
 		setTimeout(() => {
 			toastMessage = null;
 		}, 5000);
+	}
+
+	function formatProgressMessage(progress: SyncProgressInfo): string {
+		if (progress.current_step === 'syncing_media') {
+			if (progress.current_step_progress && progress.current_step_total) {
+				const userName = progress.current_user_name || 'user';
+				return `Fetching user ${progress.current_step_progress}/${progress.current_step_total}: ${userName}...`;
+			}
+			return 'Syncing media...';
+		}
+		if (progress.current_step === 'syncing_requests') {
+			return 'Syncing requests...';
+		}
+		return 'Syncing...';
+	}
+
+	function startPolling() {
+		if (pollInterval) return; // Already polling
+		pollInterval = setInterval(async () => {
+			await fetchSyncStatus();
+			// Stop polling when sync is complete
+			if (syncStatus && !syncStatus.is_syncing) {
+				stopPolling();
+			}
+		}, POLL_INTERVAL_MS);
+	}
+
+	function stopPolling() {
+		if (pollInterval) {
+			clearInterval(pollInterval);
+			pollInterval = null;
+		}
 	}
 
 	async function fetchSyncStatus() {
@@ -97,6 +141,9 @@
 		if (syncLoading) return;
 
 		syncLoading = true;
+		// Start polling immediately to show progress
+		startPolling();
+
 		try {
 			const response = await authenticatedFetch('/api/sync', {
 				method: 'POST'
@@ -105,16 +152,19 @@
 			if (response.status === 429) {
 				const data = await response.json();
 				showToast(data.detail || 'Rate limited. Please wait before syncing again.', 'error');
+				stopPolling();
 				return;
 			}
 
 			if (!response.ok) {
 				const data = await response.json();
 				showToast(data.detail || 'Sync failed', 'error');
+				stopPolling();
 				return;
 			}
 
 			const data: SyncResponse = await response.json();
+			stopPolling();
 			await fetchSyncStatus();
 			await fetchContentSummary();
 
@@ -130,6 +180,7 @@
 			}
 		} catch {
 			showToast('Failed to sync data', 'error');
+			stopPolling();
 		} finally {
 			syncLoading = false;
 		}
@@ -146,9 +197,18 @@
 	onMount(async () => {
 		try {
 			await Promise.all([fetchSyncStatus(), fetchContentSummary()]);
+			// If sync is already in progress (e.g., page refresh during sync), start polling
+			if (syncStatus?.is_syncing) {
+				syncLoading = true;
+				startPolling();
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to fetch';
 		}
+	});
+
+	onDestroy(() => {
+		stopPolling();
 	});
 </script>
 
@@ -169,7 +229,9 @@
 		<header class="page-header">
 			<div class="header-left">
 				<h1>Dashboard</h1>
-				{#if syncStatus?.last_synced}
+				{#if syncStatus?.is_syncing && syncStatus.progress}
+					<span class="sync-progress">{formatProgressMessage(syncStatus.progress)}</span>
+				{:else if syncStatus?.last_synced}
 					<span class="sync-time">Updated {formatDate(syncStatus.last_synced)}</span>
 				{/if}
 			</div>
@@ -280,6 +342,12 @@
 	.sync-time {
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
+	}
+
+	.sync-progress {
+		font-size: var(--font-size-sm);
+		color: var(--accent);
+		font-weight: var(--font-weight-medium);
 	}
 
 	.btn-refresh {
