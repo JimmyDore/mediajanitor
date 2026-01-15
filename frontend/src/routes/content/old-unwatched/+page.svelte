@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { authenticatedFetch } from '$lib/stores';
 
 	// Redirect to unified issues view - backwards compatibility
 	onMount(() => {
@@ -80,22 +81,13 @@
 	}
 
 	async function protectContent(item: OldUnwatchedItem) {
-		const token = localStorage.getItem('access_token');
-		if (!token) {
-			showToast('Not authenticated', 'error');
-			return;
-		}
-
 		// Add to protecting set to show loading state
 		protectingIds = new Set([...protectingIds, item.jellyfin_id]);
 
 		try {
-			const response = await fetch('/api/whitelist/content', {
+			const response = await authenticatedFetch('/api/whitelist/content', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					jellyfin_id: item.jellyfin_id,
 					name: item.name,
@@ -157,15 +149,7 @@
 
 	async function fetchOldUnwatchedContent() {
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				error = 'Not authenticated';
-				return;
-			}
-
-			const response = await fetch('/api/content/old-unwatched', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch('/api/content/old-unwatched');
 
 			if (response.status === 401) {
 				error = 'Session expired. Please log in again.';

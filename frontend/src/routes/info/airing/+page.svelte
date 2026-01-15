@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { authenticatedFetch } from '$lib/stores';
 
 	interface InProgressSeason {
 		season_number: number;
@@ -31,16 +32,7 @@
 
 	onMount(async () => {
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				error = 'Not authenticated';
-				loading = false;
-				return;
-			}
-
-			const response = await fetch('/api/info/airing', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch('/api/info/airing');
 
 			if (!response.ok) {
 				if (response.status === 401) {

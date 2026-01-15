@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { authenticatedFetch } from '$lib/stores';
 
 	interface RecentlyAvailableItem {
 		jellyseerr_id: number;
@@ -100,16 +101,7 @@
 
 	onMount(async () => {
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				error = 'Not authenticated';
-				loading = false;
-				return;
-			}
-
-			const response = await fetch('/api/info/recent', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch('/api/info/recent');
 
 			if (!response.ok) {
 				if (response.status === 401) {

@@ -28,7 +28,8 @@
 			const response = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
+				body: JSON.stringify({ email, password }),
+				credentials: 'include' // Include cookies for refresh token
 			});
 
 			if (!response.ok) {
@@ -37,8 +38,9 @@
 			}
 
 			const data = await response.json();
-			// Store token in localStorage
-			localStorage.setItem('access_token', data.access_token);
+			// Store token in memory (more secure than localStorage)
+			// Refresh token is stored in httpOnly cookie by the server
+			auth.setToken(data.access_token, data.expires_in);
 
 			// Update auth state and redirect
 			await auth.checkAuth();

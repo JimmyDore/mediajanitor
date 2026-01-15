@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { authenticatedFetch } from '$lib/stores';
 
 	interface WhitelistItem {
 		id: number;
@@ -108,15 +109,11 @@
 	}
 
 	async function removeItem(item: WhitelistItem | RequestWhitelistItem) {
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		removingIds = new Set([...removingIds, item.id]);
 
 		try {
-			const response = await fetch(`${getApiPath()}/${item.id}`, {
-				method: 'DELETE',
-				headers: { Authorization: `Bearer ${token}` }
+			const response = await authenticatedFetch(`${getApiPath()}/${item.id}`, {
+				method: 'DELETE'
 			});
 
 			if (!response.ok) { showToast('Failed to remove', 'error'); return; }
@@ -148,15 +145,12 @@
 	}
 
 	async function fetchAll() {
-		const token = localStorage.getItem('access_token');
-		if (!token) return;
-
 		try {
 			const [p, f, e, r] = await Promise.all([
-				fetch('/api/whitelist/content', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/whitelist/french-only', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/whitelist/language-exempt', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/whitelist/requests', { headers: { Authorization: `Bearer ${token}` } })
+				authenticatedFetch('/api/whitelist/content'),
+				authenticatedFetch('/api/whitelist/french-only'),
+				authenticatedFetch('/api/whitelist/language-exempt'),
+				authenticatedFetch('/api/whitelist/requests')
 			]);
 
 			if (p.ok) protectedData = await p.json();

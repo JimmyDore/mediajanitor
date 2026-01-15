@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { auth } from '$lib/stores';
+	import { auth, authenticatedFetch } from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import Landing from '$lib/components/Landing.svelte';
 
@@ -72,12 +72,7 @@
 
 	async function fetchSyncStatus() {
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) return;
-
-			const response = await fetch('/api/sync/status', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch('/api/sync/status');
 			if (response.ok) {
 				syncStatus = await response.json();
 			}
@@ -88,12 +83,7 @@
 
 	async function fetchContentSummary() {
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) return;
-
-			const response = await fetch('/api/content/summary', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch('/api/content/summary');
 			if (response.ok) {
 				contentSummary = await response.json();
 			}
@@ -109,15 +99,8 @@
 
 		syncLoading = true;
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) {
-				showToast('Not authenticated', 'error');
-				return;
-			}
-
-			const response = await fetch('/api/sync', {
-				method: 'POST',
-				headers: { Authorization: `Bearer ${token}` }
+			const response = await authenticatedFetch('/api/sync', {
+				method: 'POST'
 			});
 
 			if (response.status === 429) {

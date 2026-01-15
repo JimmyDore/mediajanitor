@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { authenticatedFetch } from '$lib/stores';
 
 	interface ContentIssueItem {
 		jellyfin_id: string;
@@ -171,9 +172,6 @@
 
 		deletingIds = new Set([...deletingIds, item.jellyfin_id]);
 
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		try {
 			// Determine endpoint and build request body
 			const endpoint = isMovie ? `/api/content/movie/${tmdbId}` : `/api/content/series/${tmdbId}`;
@@ -195,9 +193,9 @@
 				jellyseerr_request_id: jellyseerrRequestId
 			};
 
-			const response = await fetch(endpoint, {
+			const response = await authenticatedFetch(endpoint, {
 				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(requestBody)
 			});
 
@@ -246,13 +244,9 @@
 
 		deletingIds = new Set([...deletingIds, item.jellyfin_id]);
 
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		try {
-			const response = await fetch(`/api/content/request/${jellyseerrId}`, {
-				method: 'DELETE',
-				headers: { Authorization: `Bearer ${token}` }
+			const response = await authenticatedFetch(`/api/content/request/${jellyseerrId}`, {
+				method: 'DELETE'
 			});
 
 			if (response.status === 401) { showToast('Session expired', 'error'); return; }
@@ -282,14 +276,11 @@
 	}
 
 	async function fetchConfigStatus() {
-		const token = localStorage.getItem('access_token');
-		if (!token) return;
-
 		try {
 			const [radarrRes, sonarrRes, jellyseerrRes] = await Promise.all([
-				fetch('/api/settings/radarr', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/settings/sonarr', { headers: { Authorization: `Bearer ${token}` } }),
-				fetch('/api/settings/jellyseerr', { headers: { Authorization: `Bearer ${token}` } })
+				authenticatedFetch('/api/settings/radarr'),
+				authenticatedFetch('/api/settings/sonarr'),
+				authenticatedFetch('/api/settings/jellyseerr')
 			]);
 
 			if (radarrRes.ok) {
@@ -412,15 +403,12 @@
 	}
 
 	async function protectContentWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		protectingIds = new Set([...protectingIds, item.jellyfin_id]);
 
 		try {
-			const response = await fetch('/api/whitelist/content', {
+			const response = await authenticatedFetch('/api/whitelist/content', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
@@ -449,15 +437,12 @@
 	}
 
 	async function markAsFrenchOnlyWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		frenchOnlyIds = new Set([...frenchOnlyIds, item.jellyfin_id]);
 
 		try {
-			const response = await fetch('/api/whitelist/french-only', {
+			const response = await authenticatedFetch('/api/whitelist/french-only', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
@@ -493,15 +478,12 @@
 	}
 
 	async function markAsLanguageExemptWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		languageExemptIds = new Set([...languageExemptIds, item.jellyfin_id]);
 
 		try {
-			const response = await fetch('/api/whitelist/language-exempt', {
+			const response = await authenticatedFetch('/api/whitelist/language-exempt', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
@@ -537,9 +519,6 @@
 	}
 
 	async function hideRequestWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
-		const token = localStorage.getItem('access_token');
-		if (!token) { showToast('Not authenticated', 'error'); return; }
-
 		hidingRequestIds = new Set([...hidingRequestIds, item.jellyfin_id]);
 
 		// Extract numeric jellyseerr_id from "request-{id}" format
@@ -547,9 +526,9 @@
 		const jellyseerrId = jellyseerrIdMatch ? parseInt(jellyseerrIdMatch[1], 10) : parseInt(item.jellyfin_id, 10);
 
 		try {
-			const response = await fetch('/api/whitelist/requests', {
+			const response = await authenticatedFetch('/api/whitelist/requests', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ jellyseerr_id: jellyseerrId, title: item.name, media_type: item.media_type, expires_at: expiresAt })
 			});
 
@@ -641,13 +620,8 @@
 		loading = true;
 		error = null;
 		try {
-			const token = localStorage.getItem('access_token');
-			if (!token) { error = 'Not authenticated'; return; }
-
 			const filterParam = filter === 'all' ? '' : `?filter=${filter}`;
-			const response = await fetch(`/api/content/issues${filterParam}`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await authenticatedFetch(`/api/content/issues${filterParam}`);
 
 			if (response.status === 401) { error = 'Session expired'; return; }
 			if (!response.ok) { error = 'Failed to fetch issues'; return; }

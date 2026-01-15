@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { theme, toasts, type ThemePreference } from '$lib/stores';
+	import { theme, toasts, authenticatedFetch, type ThemePreference } from '$lib/stores';
 
 	// Jellyfin form state
 	let jellyfinUrl = $state('');
@@ -80,12 +80,8 @@
 
 	async function loadCurrentSettings() {
 		try {
-			const token = localStorage.getItem('access_token');
-
 			// Load Jellyfin settings
-			const jellyfinResponse = await fetch('/api/settings/jellyfin', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const jellyfinResponse = await authenticatedFetch('/api/settings/jellyfin');
 
 			if (jellyfinResponse.ok) {
 				const data = await jellyfinResponse.json();
@@ -99,9 +95,7 @@
 			}
 
 			// Load Jellyseerr settings
-			const jellyseerrResponse = await fetch('/api/settings/jellyseerr', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const jellyseerrResponse = await authenticatedFetch('/api/settings/jellyseerr');
 
 			if (jellyseerrResponse.ok) {
 				const data = await jellyseerrResponse.json();
@@ -115,9 +109,7 @@
 			}
 
 			// Load Radarr settings
-			const radarrResponse = await fetch('/api/settings/radarr', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const radarrResponse = await authenticatedFetch('/api/settings/radarr');
 
 			if (radarrResponse.ok) {
 				const data = await radarrResponse.json();
@@ -129,9 +121,7 @@
 			}
 
 			// Load Sonarr settings
-			const sonarrResponse = await fetch('/api/settings/sonarr', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const sonarrResponse = await authenticatedFetch('/api/settings/sonarr');
 
 			if (sonarrResponse.ok) {
 				const data = await sonarrResponse.json();
@@ -143,9 +133,7 @@
 			}
 
 			// Load analysis preferences
-			const analysisResponse = await fetch('/api/settings/analysis', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const analysisResponse = await authenticatedFetch('/api/settings/analysis');
 
 			if (analysisResponse.ok) {
 				const data = await analysisResponse.json();
@@ -155,9 +143,7 @@
 			}
 
 			// Load display preferences
-			const displayResponse = await fetch('/api/settings/display', {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const displayResponse = await authenticatedFetch('/api/settings/display');
 
 			if (displayResponse.ok) {
 				const data = await displayResponse.json();
@@ -178,13 +164,9 @@
 		isJellyfinLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/jellyfin', {
+			const response = await authenticatedFetch('/api/settings/jellyfin', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					server_url: jellyfinUrl,
 					api_key: jellyfinApiKey
@@ -217,13 +199,9 @@
 		isJellyseerrLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/jellyseerr', {
+			const response = await authenticatedFetch('/api/settings/jellyseerr', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					server_url: jellyseerrUrl,
 					api_key: jellyseerrApiKey
@@ -256,13 +234,9 @@
 		isRadarrLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/radarr', {
+			const response = await authenticatedFetch('/api/settings/radarr', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					server_url: radarrUrl,
 					api_key: radarrApiKey
@@ -295,13 +269,9 @@
 		isSonarrLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/sonarr', {
+			const response = await authenticatedFetch('/api/settings/sonarr', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					server_url: sonarrUrl,
 					api_key: sonarrApiKey
@@ -334,13 +304,9 @@
 		isAnalysisLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/analysis', {
+			const response = await authenticatedFetch('/api/settings/analysis', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					old_content_months: oldContentMonths,
 					min_age_months: minAgeMonths,
@@ -369,10 +335,8 @@
 		isAnalysisLoading = true;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/analysis', {
-				method: 'DELETE',
-				headers: { Authorization: `Bearer ${token}` }
+			const response = await authenticatedFetch('/api/settings/analysis', {
+				method: 'DELETE'
 			});
 
 			const data = await response.json();
@@ -403,13 +367,9 @@
 		showUnreleasedRequests = !showUnreleasedRequests;
 
 		try {
-			const token = localStorage.getItem('access_token');
-			const response = await fetch('/api/settings/display', {
+			const response = await authenticatedFetch('/api/settings/display', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					show_unreleased_requests: showUnreleasedRequests
 				})
