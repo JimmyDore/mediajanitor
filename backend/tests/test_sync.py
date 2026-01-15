@@ -617,3 +617,220 @@ class TestSyncRateLimiting:
         # User 2 should still be able to sync
         response2 = client.post("/api/sync", headers=headers2)
         assert response2.status_code == 200
+
+
+class TestMultiUserWatchDataAggregation:
+    """Test multi-user watch data aggregation (US-17.1)."""
+
+    @pytest.mark.asyncio
+    async def test_aggregate_watch_data_played_true_if_any_user_watched(
+        self,
+    ) -> None:
+        """played should be True if ANY user has watched the content."""
+        from app.services.sync import aggregate_user_watch_data
+
+        # User 1 has not watched, User 2 has watched
+        user_data_list = [
+            {"Played": False, "PlayCount": 0, "LastPlayedDate": None},
+            {"Played": True, "PlayCount": 2, "LastPlayedDate": "2024-01-15T10:00:00Z"},
+        ]
+
+        result = aggregate_user_watch_data(user_data_list)
+
+        assert result["played"] is True
+
+    @pytest.mark.asyncio
+    async def test_aggregate_watch_data_last_played_uses_most_recent(
+        self,
+    ) -> None:
+        """last_played_date should be the most recent date across all users."""
+        from app.services.sync import aggregate_user_watch_data
+
+        user_data_list = [
+            {"Played": True, "PlayCount": 1, "LastPlayedDate": "2024-01-10T10:00:00Z"},
+            {"Played": True, "PlayCount": 1, "LastPlayedDate": "2024-02-20T15:30:00Z"},
+            {"Played": True, "PlayCount": 1, "LastPlayedDate": "2024-01-25T08:00:00Z"},
+        ]
+
+        result = aggregate_user_watch_data(user_data_list)
+
+        assert result["last_played_date"] == "2024-02-20T15:30:00Z"
+
+    @pytest.mark.asyncio
+    async def test_aggregate_watch_data_play_count_sums_all_users(
+        self,
+    ) -> None:
+        """play_count should sum all users' play counts."""
+        from app.services.sync import aggregate_user_watch_data
+
+        user_data_list = [
+            {"Played": True, "PlayCount": 3, "LastPlayedDate": "2024-01-10T10:00:00Z"},
+            {"Played": True, "PlayCount": 5, "LastPlayedDate": "2024-01-15T10:00:00Z"},
+            {"Played": False, "PlayCount": 0, "LastPlayedDate": None},
+        ]
+
+        result = aggregate_user_watch_data(user_data_list)
+
+        assert result["play_count"] == 8
+
+    @pytest.mark.asyncio
+    async def test_aggregate_watch_data_handles_no_watches(
+        self,
+    ) -> None:
+        """Should return False/0/None if no user has watched."""
+        from app.services.sync import aggregate_user_watch_data
+
+        user_data_list = [
+            {"Played": False, "PlayCount": 0, "LastPlayedDate": None},
+            {"Played": False, "PlayCount": 0, "LastPlayedDate": None},
+        ]
+
+        result = aggregate_user_watch_data(user_data_list)
+
+        assert result["played"] is False
+        assert result["play_count"] == 0
+        assert result["last_played_date"] is None
+
+    @pytest.mark.asyncio
+    async def test_aggregate_watch_data_handles_empty_list(
+        self,
+    ) -> None:
+        """Should handle empty user data list gracefully."""
+        from app.services.sync import aggregate_user_watch_data
+
+        result = aggregate_user_watch_data([])
+
+        assert result["played"] is False
+        assert result["play_count"] == 0
+        assert result["last_played_date"] is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_all_users_returns_users_list(
+        self,
+    ) -> None:
+        """fetch_jellyfin_users should return list of users from API."""
+        from app.services.sync import fetch_jellyfin_users
+        import httpx
+
+        users_response = [
+            {"Id": "user1", "Name": "John"},
+            {"Id": "user2", "Name": "Jane"},
+            {"Id": "user3", "Name": "Bob"},
+        ]
+
+        async def mock_get(*args, **kwargs):
+            response = httpx.Response(200, json=users_response)
+            response.raise_for_status = lambda: None
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            users = await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert len(users) == 3
+        assert users[0]["Name"] == "John"
+        assert users[1]["Name"] == "Jane"
+        assert users[2]["Name"] == "Bob"
+
+    @pytest.mark.asyncio
+    @patch("app.services.sync.fetch_jellyfin_users")
+    @patch("app.services.sync.fetch_user_items")
+    async def test_fetch_all_users_media_aggregates_watch_data(
+        self,
+        mock_fetch_user_items: AsyncMock,
+        mock_fetch_users: AsyncMock,
+    ) -> None:
+        """fetch_all_users_media should aggregate watch data from all users."""
+        from app.services.sync import fetch_all_users_media
+
+        # Two users
+        mock_fetch_users.return_value = [
+            {"Id": "user1", "Name": "John"},
+            {"Id": "user2", "Name": "Jane"},
+        ]
+
+        # Same movie seen by both users, different watch data
+        # User 1: watched once 2 weeks ago
+        # User 2: watched 3 times, most recent yesterday
+        user1_items = [
+            {
+                "Id": "movie1",
+                "Name": "Test Movie",
+                "Type": "Movie",
+                "ProductionYear": 2023,
+                "UserData": {
+                    "Played": True,
+                    "PlayCount": 1,
+                    "LastPlayedDate": "2024-01-01T10:00:00Z",
+                },
+            }
+        ]
+        user2_items = [
+            {
+                "Id": "movie1",
+                "Name": "Test Movie",
+                "Type": "Movie",
+                "ProductionYear": 2023,
+                "UserData": {
+                    "Played": True,
+                    "PlayCount": 3,
+                    "LastPlayedDate": "2024-01-15T14:30:00Z",
+                },
+            }
+        ]
+
+        mock_fetch_user_items.side_effect = [user1_items, user2_items]
+
+        items = await fetch_all_users_media("http://jellyfin.local", "api-key")
+
+        # Should have one item with aggregated data
+        assert len(items) == 1
+        item = items[0]
+        user_data = item["UserData"]
+
+        # Aggregated: played=True, play_count=4, last_played_date=most recent
+        assert user_data["Played"] is True
+        assert user_data["PlayCount"] == 4
+        assert user_data["LastPlayedDate"] == "2024-01-15T14:30:00Z"
+
+    @pytest.mark.asyncio
+    @patch("app.services.sync.fetch_jellyfin_users")
+    @patch("app.services.sync.fetch_user_items")
+    async def test_fetch_all_users_media_with_unmatched_items(
+        self,
+        mock_fetch_user_items: AsyncMock,
+        mock_fetch_users: AsyncMock,
+    ) -> None:
+        """Items only in one user's library should still be included."""
+        from app.services.sync import fetch_all_users_media
+
+        mock_fetch_users.return_value = [
+            {"Id": "user1", "Name": "John"},
+            {"Id": "user2", "Name": "Jane"},
+        ]
+
+        # User 1 has Movie A, User 2 has Movie B (no overlap)
+        user1_items = [
+            {
+                "Id": "movieA",
+                "Name": "Movie A",
+                "Type": "Movie",
+                "UserData": {"Played": True, "PlayCount": 2, "LastPlayedDate": "2024-01-10T10:00:00Z"},
+            }
+        ]
+        user2_items = [
+            {
+                "Id": "movieB",
+                "Name": "Movie B",
+                "Type": "Movie",
+                "UserData": {"Played": False, "PlayCount": 0, "LastPlayedDate": None},
+            }
+        ]
+
+        mock_fetch_user_items.side_effect = [user1_items, user2_items]
+
+        items = await fetch_all_users_media("http://jellyfin.local", "api-key")
+
+        # Should have both movies
+        assert len(items) == 2
+        movie_names = {item["Name"] for item in items}
+        assert movie_names == {"Movie A", "Movie B"}

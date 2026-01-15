@@ -1,8 +1,9 @@
 """Sync service for fetching and caching data from Jellyfin and Jellyseerr."""
 
+import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 import httpx
 from sqlalchemy import select, delete
@@ -17,6 +18,216 @@ from app.database import (
 from app.services.encryption import decrypt_value
 
 logger = logging.getLogger(__name__)
+
+
+class AggregatedWatchData(TypedDict):
+    """Aggregated watch data from multiple users."""
+
+    played: bool
+    play_count: int
+    last_played_date: str | None
+
+
+def aggregate_user_watch_data(user_data_list: list[dict[str, Any]]) -> AggregatedWatchData:
+    """
+    Aggregate watch data from multiple Jellyfin users.
+
+    Args:
+        user_data_list: List of UserData dicts from different users
+
+    Returns:
+        AggregatedWatchData with:
+        - played: True if ANY user has watched
+        - play_count: Sum of all users' play counts
+        - last_played_date: Most recent date across all users
+    """
+    played = False
+    total_play_count = 0
+    latest_played_date: str | None = None
+
+    for user_data in user_data_list:
+        if user_data.get("Played", False):
+            played = True
+
+        play_count = user_data.get("PlayCount", 0)
+        total_play_count += play_count
+
+        last_played = user_data.get("LastPlayedDate")
+        if last_played:
+            if latest_played_date is None or last_played > latest_played_date:
+                latest_played_date = last_played
+
+    return {
+        "played": played,
+        "play_count": total_play_count,
+        "last_played_date": latest_played_date,
+    }
+
+
+async def fetch_jellyfin_users(
+    server_url: str, api_key: str
+) -> list[dict[str, Any]]:
+    """
+    Fetch all users from Jellyfin API.
+
+    Returns list of user dicts with Id and Name.
+    """
+    server_url = server_url.rstrip("/")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{server_url}/Users",
+            headers={"X-Emby-Token": api_key},
+        )
+        response.raise_for_status()
+        users: list[dict[str, Any]] = response.json()
+        return users
+
+
+async def fetch_user_items(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    user_id: str,
+    user_name: str,
+    user_index: int,
+    total_users: int,
+) -> list[dict[str, Any]]:
+    """
+    Fetch all movies and series for a specific Jellyfin user.
+
+    Args:
+        client: Shared httpx client
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+        user_id: User's Jellyfin ID
+        user_name: User's display name (for logging)
+        user_index: 1-based index of user being processed
+        total_users: Total number of users
+
+    Returns list of media items with UserData for this user.
+    """
+    logger.info(f"Fetching user {user_index}/{total_users}: {user_name}")
+
+    params: dict[str, str | int] = {
+        "UserId": user_id,
+        "IncludeItemTypes": "Movie,Series",
+        "Recursive": "true",
+        "Fields": "DateCreated,DateLastSaved,UserData,Path,Overview,Genres,Studios,People,ProductionYear,DateLastMediaAdded,MediaSources,ProviderIds",
+        "SortBy": "SortName",
+        "SortOrder": "Ascending",
+        "StartIndex": 0,
+        "Limit": 10000,
+    }
+
+    response = await client.get(
+        f"{server_url}/Users/{user_id}/Items",
+        headers={"X-Emby-Token": api_key},
+        params=params,
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    items: list[dict[str, Any]] = data.get("Items", [])
+    logger.info(f"User {user_name}: {len(items)} items")
+    return items
+
+
+async def fetch_all_users_media(
+    server_url: str, api_key: str
+) -> list[dict[str, Any]]:
+    """
+    Fetch media from all Jellyfin users and aggregate watch data.
+
+    Uses asyncio.gather() to parallelize user fetches (6-15 users expected).
+
+    Watch data aggregation:
+    - played = True if ANY user has watched
+    - last_played_date = most recent date across all users
+    - play_count = sum of all users' play counts
+
+    Returns list of media items with aggregated UserData.
+    """
+    server_url = server_url.rstrip("/")
+
+    # Fetch list of users
+    users = await fetch_jellyfin_users(server_url, api_key)
+
+    if not users:
+        logger.warning("No users found in Jellyfin")
+        return []
+
+    logger.info(f"Found {len(users)} Jellyfin users, fetching items for each...")
+
+    # Dictionary to store items by ID with watch data from all users
+    items_dict: dict[str, dict[str, Any]] = {}
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        # Create tasks for all users
+        tasks = [
+            fetch_user_items(
+                client,
+                server_url,
+                api_key,
+                user["Id"],
+                user.get("Name", "Unknown"),
+                idx + 1,
+                len(users),
+            )
+            for idx, user in enumerate(users)
+        ]
+
+        # Execute all user fetches in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results from each user
+        for user, result in zip(users, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch items for user {user.get('Name', 'Unknown')}: {result}")
+                continue
+
+            user_items = cast(list[dict[str, Any]], result)
+
+            for item in user_items:
+                item_id = item.get("Id")
+                if not item_id:
+                    continue
+
+                # First time seeing this item - store it
+                if item_id not in items_dict:
+                    # Create a copy without UserData (we'll aggregate UserData separately)
+                    item_copy = item.copy()
+                    item_copy.pop("UserData", None)
+                    items_dict[item_id] = {
+                        "item": item_copy,
+                        "user_data_list": [],
+                    }
+
+                # Add this user's watch data
+                user_data = item.get("UserData", {})
+                if user_data.get("PlayCount", 0) > 0 or user_data.get("Played", False):
+                    items_dict[item_id]["user_data_list"].append(user_data)
+
+    # Convert back to list with aggregated UserData
+    result_items: list[dict[str, Any]] = []
+    for item_id, data in items_dict.items():
+        item = data["item"].copy()
+        user_data_list = data["user_data_list"]
+
+        # Aggregate watch data from all users
+        aggregated = aggregate_user_watch_data(user_data_list)
+
+        # Create aggregated UserData in Jellyfin format
+        item["UserData"] = {
+            "Played": aggregated["played"],
+            "PlayCount": aggregated["play_count"],
+            "LastPlayedDate": aggregated["last_played_date"],
+        }
+
+        result_items.append(item)
+
+    logger.info(f"Aggregated {len(result_items)} media items from {len(users)} users")
+    return result_items
 
 
 async def fetch_media_details(
@@ -63,54 +274,17 @@ async def fetch_jellyfin_media(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
     """
-    Fetch all movies and series from Jellyfin API.
+    Fetch all movies and series from Jellyfin API with multi-user watch data.
 
-    Based on original_script.py:get_movies_and_shows_for_user
+    This function fetches items from ALL Jellyfin users and aggregates watch data:
+    - played = True if ANY user has watched
+    - last_played_date = most recent date across all users
+    - play_count = sum of all users' play counts
+
+    Based on original_script.py:aggregate_all_user_data
     """
-    server_url = server_url.rstrip("/")
-
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # First get users to find an admin user for fetching library
-            users_response = await client.get(
-                f"{server_url}/Users",
-                headers={"X-Emby-Token": api_key},
-            )
-            users_response.raise_for_status()
-            users = users_response.json()
-
-            if not users:
-                logger.warning("No users found in Jellyfin")
-                return []
-
-            # Use the first admin user or first user
-            user = users[0]
-            user_id = user["Id"]
-
-            # Fetch items with relevant fields
-            params = {
-                "UserId": user_id,
-                "IncludeItemTypes": "Movie,Series",
-                "Recursive": "true",
-                "Fields": "DateCreated,DateLastSaved,UserData,Path,Overview,Genres,Studios,People,ProductionYear,DateLastMediaAdded,MediaSources,ProviderIds",
-                "SortBy": "SortName",
-                "SortOrder": "Ascending",
-                "StartIndex": 0,
-                "Limit": 10000,
-            }
-
-            response = await client.get(
-                f"{server_url}/Users/{user_id}/Items",
-                headers={"X-Emby-Token": api_key},
-                params=params,
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            items: list[dict[str, Any]] = data.get("Items", [])
-            logger.info(f"Fetched {len(items)} media items from Jellyfin")
-            return items
-
+        return await fetch_all_users_media(server_url, api_key)
     except httpx.HTTPStatusError as e:
         logger.error(f"Jellyfin API error: {e.response.status_code}")
         raise
