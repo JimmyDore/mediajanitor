@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { auth } from '$lib/stores';
+	import { auth, theme } from '$lib/stores';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 
 	let { children } = $props();
@@ -17,6 +17,11 @@
 	onMount(async () => {
 		// Check if user is authenticated
 		const isAuthenticated = await auth.checkAuth();
+
+		// Load theme preference if authenticated
+		if (isAuthenticated) {
+			await theme.loadFromApi();
+		}
 
 		// Subscribe to page changes to handle route protection
 		page.subscribe(($page) => {

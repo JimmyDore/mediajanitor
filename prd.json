@@ -183,8 +183,8 @@
         "Unit tests pass"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "Files: frontend/src/lib/stores/theme.ts, frontend/src/app.css, frontend/src/routes/+layout.svelte"
+      "passes": true,
+      "notes": "Created theme store with loadFromApi/saveToApi. CSS supports data-theme attribute for forced light/dark. Layout loads theme on auth. 10 new tests."
     },
     {
       "id": "US-16.3",

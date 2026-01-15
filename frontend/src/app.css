@@ -91,8 +91,9 @@
 	--info-light: rgba(2, 132, 199, 0.1);
 }
 
+/* Dark mode variables */
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root:not([data-theme="light"]) {
 		/* Semantic Colors - Dark Mode */
 		--bg-primary: var(--gray-900);
 		--bg-secondary: var(--gray-800);
@@ -122,6 +123,38 @@
 		--info: #0ea5e9;
 		--info-light: rgba(14, 165, 233, 0.15);
 	}
+}
+
+/* Force dark mode when data-theme="dark" */
+:root[data-theme="dark"] {
+	/* Semantic Colors - Dark Mode */
+	--bg-primary: var(--gray-900);
+	--bg-secondary: var(--gray-800);
+	--bg-tertiary: var(--gray-700);
+	--bg-hover: var(--gray-700);
+
+	--text-primary: var(--gray-50);
+	--text-secondary: var(--gray-400);
+	--text-muted: var(--gray-500);
+
+	/* Borders at 10-15% white opacity for dark mode */
+	--border: rgba(255, 255, 255, 0.12);
+	--border-subtle: rgba(255, 255, 255, 0.06);
+
+	/* Accent adjusted for dark mode */
+	--accent: #3b82f6;
+	--accent-hover: #60a5fa;
+	--accent-light: rgba(59, 130, 246, 0.15);
+
+	/* Status colors (desaturated for dark mode) */
+	--success: #22c55e;
+	--success-light: rgba(34, 197, 94, 0.15);
+	--warning: #eab308;
+	--warning-light: rgba(234, 179, 8, 0.15);
+	--danger: #ef4444;
+	--danger-light: rgba(239, 68, 68, 0.15);
+	--info: #0ea5e9;
+	--info-light: rgba(14, 165, 233, 0.15);
 }
 
 /* ==========================================================================

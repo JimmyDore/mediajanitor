@@ -122,3 +122,92 @@ function createToastStore() {
 }
 
 export const toasts = createToastStore();
+
+// Theme preference
+export type ThemePreference = 'light' | 'dark' | 'system';
+
+interface ThemeState {
+	preference: ThemePreference;
+	isLoading: boolean;
+}
+
+function createThemeStore() {
+	const { subscribe, set, update } = writable<ThemeState>({
+		preference: 'system',
+		isLoading: true
+	});
+
+	// Apply theme to document
+	const applyTheme = (preference: ThemePreference) => {
+		if (typeof document === 'undefined') return;
+
+		const html = document.documentElement;
+		if (preference === 'system') {
+			html.removeAttribute('data-theme');
+		} else {
+			html.setAttribute('data-theme', preference);
+		}
+	};
+
+	return {
+		subscribe,
+		applyTheme,
+		setPreference: (preference: ThemePreference) => {
+			update((state) => ({ ...state, preference }));
+			applyTheme(preference);
+		},
+		loadFromApi: async () => {
+			if (typeof localStorage === 'undefined') {
+				set({ preference: 'system', isLoading: false });
+				return;
+			}
+
+			const token = localStorage.getItem('access_token');
+			if (!token) {
+				set({ preference: 'system', isLoading: false });
+				return;
+			}
+
+			try {
+				const response = await fetch('/api/settings/display', {
+					headers: { Authorization: `Bearer ${token}` }
+				});
+				if (response.ok) {
+					const data = await response.json();
+					const preference = data.theme_preference as ThemePreference;
+					applyTheme(preference);
+					set({ preference, isLoading: false });
+				} else {
+					set({ preference: 'system', isLoading: false });
+				}
+			} catch {
+				set({ preference: 'system', isLoading: false });
+			}
+		},
+		saveToApi: async (preference: ThemePreference): Promise<boolean> => {
+			const token = localStorage?.getItem('access_token');
+			if (!token) return false;
+
+			try {
+				const response = await fetch('/api/settings/display', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${token}`
+					},
+					body: JSON.stringify({ theme_preference: preference })
+				});
+				if (response.ok) {
+					update((state) => ({ ...state, preference }));
+					applyTheme(preference);
+					return true;
+				}
+				return false;
+			} catch {
+				return false;
+			}
+		}
+	};
+}
+
+export const theme = createThemeStore();

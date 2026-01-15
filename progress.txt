@@ -1258,10 +1258,27 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-16.1] add theme preference backend
 
+### 2026-01-15: US-16.2 - Theme Store and Application
+- Created theme store in frontend/src/lib/stores/index.ts:
+  - loadFromApi() fetches theme_preference from GET /api/settings/display
+  - saveToApi() sends theme_preference to POST /api/settings/display
+  - applyTheme() sets data-theme attribute on <html> element
+  - setPreference() updates store and applies theme
+- Updated app.css to support data-theme attribute:
+  - data-theme="light" forces light mode
+  - data-theme="dark" forces dark mode
+  - No attribute (system) follows OS preference via prefers-color-scheme
+- Updated layout.svelte to load theme after authentication
+- 10 new tests for theme store (theme.test.ts)
+- 219 frontend tests pass, typecheck passes
+- Files changed: stores/index.ts, app.css, +layout.svelte, theme.test.ts
+- Commits:
+  - feat(theme): [US-16.2] add theme store and application
+
 ## Current Status
 
 **Phase**: UX Fixes and Delete Improvements (In Progress)
-**Total Stories**: 55 stories (52 passes: true, 3 remaining)
+**Total Stories**: 55 stories (53 passes: true, 2 remaining)
 
 ## Notes
 
