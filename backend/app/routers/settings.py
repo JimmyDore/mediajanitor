@@ -58,6 +58,7 @@ from app.services.nicknames import (
 DEFAULT_OLD_CONTENT_MONTHS = 4
 DEFAULT_MIN_AGE_MONTHS = 3
 DEFAULT_LARGE_MOVIE_SIZE_GB = 13
+DEFAULT_LARGE_SEASON_SIZE_GB = 15
 # Default value for display preferences
 DEFAULT_RECENTLY_AVAILABLE_DAYS = 7
 
@@ -317,6 +318,11 @@ async def get_analysis_preferences(
             if settings and settings.large_movie_size_gb is not None
             else DEFAULT_LARGE_MOVIE_SIZE_GB
         ),
+        large_season_size_gb=(
+            settings.large_season_size_gb
+            if settings and settings.large_season_size_gb is not None
+            else DEFAULT_LARGE_SEASON_SIZE_GB
+        ),
     )
 
 
@@ -339,6 +345,8 @@ async def save_analysis_preferences(
         settings.min_age_months = prefs.min_age_months
     if prefs.large_movie_size_gb is not None:
         settings.large_movie_size_gb = prefs.large_movie_size_gb
+    if prefs.large_season_size_gb is not None:
+        settings.large_season_size_gb = prefs.large_season_size_gb
 
     return SettingsSaveResponse(
         success=True,
@@ -361,6 +369,7 @@ async def reset_analysis_preferences(
         settings.old_content_months = None
         settings.min_age_months = None
         settings.large_movie_size_gb = None
+        settings.large_season_size_gb = None
 
     return SettingsSaveResponse(
         success=True,

@@ -370,8 +370,8 @@
         "Verify in browser: setting saves and loads correctly"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added large_season_size_gb to UserSettings model with Alembic migration, updated GET/POST /api/settings/analysis endpoints, added frontend input with validation (1-100 GB)"
     },
     {
       "id": "US-20.2",

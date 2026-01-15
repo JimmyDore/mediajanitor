@@ -50,6 +50,7 @@ class UserSettings(Base):
     old_content_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     min_age_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     large_movie_size_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    large_season_size_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Display preferences
     show_unreleased_requests: Mapped[bool] = mapped_column(Boolean, default=False)
     theme_preference: Mapped[str] = mapped_column(String(10), default="system")  # light, dark, system

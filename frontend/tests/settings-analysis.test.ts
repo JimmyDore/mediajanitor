@@ -23,7 +23,8 @@ describe('Analysis Preferences API Integration', () => {
 					Promise.resolve({
 						old_content_months: 4,
 						min_age_months: 3,
-						large_movie_size_gb: 13
+						large_movie_size_gb: 13,
+						large_season_size_gb: 15
 					})
 			});
 
@@ -40,6 +41,7 @@ describe('Analysis Preferences API Integration', () => {
 			expect(data.old_content_months).toBe(4);
 			expect(data.min_age_months).toBe(3);
 			expect(data.large_movie_size_gb).toBe(13);
+			expect(data.large_season_size_gb).toBe(15);
 		});
 
 		it('returns user custom values when configured', async () => {
@@ -49,7 +51,8 @@ describe('Analysis Preferences API Integration', () => {
 					Promise.resolve({
 						old_content_months: 8,
 						min_age_months: 1,
-						large_movie_size_gb: 20
+						large_movie_size_gb: 20,
+						large_season_size_gb: 25
 					})
 			});
 
@@ -61,6 +64,7 @@ describe('Analysis Preferences API Integration', () => {
 			expect(data.old_content_months).toBe(8);
 			expect(data.min_age_months).toBe(1);
 			expect(data.large_movie_size_gb).toBe(20);
+			expect(data.large_season_size_gb).toBe(25);
 		});
 
 		it('returns 401 when not authenticated', async () => {
@@ -97,7 +101,8 @@ describe('Analysis Preferences API Integration', () => {
 				body: JSON.stringify({
 					old_content_months: 6,
 					min_age_months: 2,
-					large_movie_size_gb: 15
+					large_movie_size_gb: 15,
+					large_season_size_gb: 20
 				})
 			});
 
@@ -110,13 +115,38 @@ describe('Analysis Preferences API Integration', () => {
 				body: JSON.stringify({
 					old_content_months: 6,
 					min_age_months: 2,
-					large_movie_size_gb: 15
+					large_movie_size_gb: 15,
+					large_season_size_gb: 20
 				})
 			});
 			expect(response.ok).toBe(true);
 
 			const data = await response.json();
 			expect(data.success).toBe(true);
+		});
+
+		it('saves large_season_size_gb as partial update', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						success: true,
+						message: 'Analysis preferences saved successfully.'
+					})
+			});
+
+			const response = await fetch('/api/settings/analysis', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer test-token'
+				},
+				body: JSON.stringify({
+					large_season_size_gb: 25
+				})
+			});
+
+			expect(response.ok).toBe(true);
 		});
 
 		it('supports partial updates', async () => {

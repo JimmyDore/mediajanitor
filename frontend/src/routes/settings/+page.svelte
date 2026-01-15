@@ -55,6 +55,7 @@
 	let oldContentMonths = $state(4);
 	let minAgeMonths = $state(3);
 	let largeMovieSizeGb = $state(13);
+	let largeSeasonSizeGb = $state(15);
 	let analysisError = $state<string | null>(null);
 	let analysisSuccess = $state<string | null>(null);
 	let isAnalysisLoading = $state(false);
@@ -98,6 +99,7 @@
 	const DEFAULT_OLD_CONTENT_MONTHS = 4;
 	const DEFAULT_MIN_AGE_MONTHS = 3;
 	const DEFAULT_LARGE_MOVIE_SIZE_GB = 13;
+	const DEFAULT_LARGE_SEASON_SIZE_GB = 15;
 
 	onMount(async () => {
 		await loadCurrentSettings();
@@ -165,6 +167,7 @@
 				oldContentMonths = data.old_content_months;
 				minAgeMonths = data.min_age_months;
 				largeMovieSizeGb = data.large_movie_size_gb;
+				largeSeasonSizeGb = data.large_season_size_gb ?? 15;
 			}
 
 			// Load display preferences
@@ -471,7 +474,8 @@
 				body: JSON.stringify({
 					old_content_months: oldContentMonths,
 					min_age_months: minAgeMonths,
-					large_movie_size_gb: largeMovieSizeGb
+					large_movie_size_gb: largeMovieSizeGb,
+					large_season_size_gb: largeSeasonSizeGb
 				})
 			});
 
@@ -509,6 +513,7 @@
 			oldContentMonths = DEFAULT_OLD_CONTENT_MONTHS;
 			minAgeMonths = DEFAULT_MIN_AGE_MONTHS;
 			largeMovieSizeGb = DEFAULT_LARGE_MOVIE_SIZE_GB;
+			largeSeasonSizeGb = DEFAULT_LARGE_SEASON_SIZE_GB;
 
 			analysisSuccess = 'Reset to defaults';
 			setTimeout(() => analysisSuccess = null, 3000);
@@ -1182,6 +1187,24 @@
 							type="number"
 							id="large-size"
 							bind:value={largeMovieSizeGb}
+							min="1"
+							max="100"
+							required
+						/>
+						<span class="unit">GB</span>
+					</div>
+				</div>
+
+				<div class="threshold-row">
+					<div class="threshold-label-group">
+						<label for="large-season-size">Flag TV series if any season exceeds</label>
+						<span class="threshold-help">Used by: Large tab</span>
+					</div>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="large-season-size"
+							bind:value={largeSeasonSizeGb}
 							min="1"
 							max="100"
 							required

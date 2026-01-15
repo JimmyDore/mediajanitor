@@ -970,6 +970,92 @@ class TestAnalysisPreferences:
         )
         assert response.status_code == 422
 
+    def test_get_analysis_preferences_large_season_default(
+        self, client: TestClient
+    ) -> None:
+        """Test that default large_season_size_gb is 15."""
+        token = self._get_auth_token(client, "large_season_default@example.com")
+
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["large_season_size_gb"] == 15
+
+    def test_save_large_season_size_gb_success(self, client: TestClient) -> None:
+        """Test saving large_season_size_gb."""
+        token = self._get_auth_token(client, "large_season_save@example.com")
+
+        response = client.post(
+            "/api/settings/analysis",
+            json={"large_season_size_gb": 20},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify it's saved
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["large_season_size_gb"] == 20
+
+    def test_large_season_size_gb_validates_min(self, client: TestClient) -> None:
+        """Test that large_season_size_gb validates minimum of 1."""
+        token = self._get_auth_token(client, "large_season_min@example.com")
+
+        response = client.post(
+            "/api/settings/analysis",
+            json={"large_season_size_gb": 0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_large_season_size_gb_validates_max(self, client: TestClient) -> None:
+        """Test that large_season_size_gb validates maximum of 100."""
+        token = self._get_auth_token(client, "large_season_max@example.com")
+
+        response = client.post(
+            "/api/settings/analysis",
+            json={"large_season_size_gb": 101},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_large_season_size_gb_accepts_boundary_values(
+        self, client: TestClient
+    ) -> None:
+        """Test that large_season_size_gb accepts 1 and 100."""
+        token = self._get_auth_token(client, "large_season_boundary@example.com")
+
+        # Test min boundary (1)
+        response = client.post(
+            "/api/settings/analysis",
+            json={"large_season_size_gb": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["large_season_size_gb"] == 1
+
+        # Test max boundary (100)
+        response = client.post(
+            "/api/settings/analysis",
+            json={"large_season_size_gb": 100},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/analysis",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["large_season_size_gb"] == 100
+
 
 class TestDisplayPreferences:
     """Tests for display preferences endpoints (US-13.6)."""

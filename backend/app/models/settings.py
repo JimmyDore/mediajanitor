@@ -81,6 +81,7 @@ class AnalysisPreferencesCreate(BaseModel):
     old_content_months: int | None = Field(default=None, ge=1, le=24)
     min_age_months: int | None = Field(default=None, ge=0, le=12)
     large_movie_size_gb: int | None = Field(default=None, ge=1, le=100)
+    large_season_size_gb: int | None = Field(default=None, ge=1, le=100)
 
 
 class AnalysisPreferencesResponse(BaseModel):
@@ -89,6 +90,7 @@ class AnalysisPreferencesResponse(BaseModel):
     old_content_months: int
     min_age_months: int
     large_movie_size_gb: int
+    large_season_size_gb: int
 
 
 # Display Preferences
