@@ -15,6 +15,7 @@ from app.models.content import (
     DeleteContentResponse,
     DeleteRequestResponse,
     OldUnwatchedResponse,
+    ServiceUrls,
 )
 from app.services.auth import get_current_user
 from app.services.content import (
@@ -93,6 +94,15 @@ async def get_issues(
     Each item includes a list of all applicable issues.
     Results are sorted by size (largest first) for content, by request date for requests.
     """
+    # Get user settings for service URLs
+    settings = await _get_user_settings(db, current_user.id)
+    service_urls = ServiceUrls(
+        jellyfin_url=settings.jellyfin_server_url if settings else None,
+        jellyseerr_url=settings.jellyseerr_server_url if settings else None,
+        radarr_url=settings.radarr_server_url if settings else None,
+        sonarr_url=settings.sonarr_server_url if settings else None,
+    )
+
     # Requests filter converts to unified format
     if filter == "requests":
         request_items = await get_unavailable_requests(db, current_user.id)
@@ -109,6 +119,7 @@ async def get_issues(
                 path=None,
                 issues=req.issues,
                 tmdb_id=str(req.tmdb_id) if req.tmdb_id else None,
+                jellyseerr_request_id=req.jellyseerr_id,  # Request items have their own ID
                 # Request-specific fields
                 requested_by=req.requested_by,
                 request_date=req.request_date,
@@ -122,9 +133,12 @@ async def get_issues(
             total_count=len(unified_items),
             total_size_bytes=0,
             total_size_formatted="0 B",
+            service_urls=service_urls,
         )
 
-    return await get_content_issues(db, current_user.id, filter)
+    response = await get_content_issues(db, current_user.id, filter)
+    response.service_urls = service_urls
+    return response
 
 
 # US-15.4, US-15.5, US-15.6: Delete content endpoints

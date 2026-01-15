@@ -17,6 +17,7 @@
 		language_issues: string[] | null;
 		tmdb_id: string | null;
 		imdb_id: string | null;
+		jellyseerr_request_id: number | null;  // Matching Jellyseerr request ID (for reconciliation)
 		// Request-specific fields
 		requested_by: string | null;
 		request_date: string | null;
@@ -24,11 +25,19 @@
 		release_date: string | null;  // Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
 	}
 
+	interface ServiceUrls {
+		jellyfin_url: string | null;
+		jellyseerr_url: string | null;
+		radarr_url: string | null;
+		sonarr_url: string | null;
+	}
+
 	interface ContentIssuesResponse {
 		items: ContentIssueItem[];
 		total_count: number;
 		total_size_bytes: number;
 		total_size_formatted: string;
+		service_urls: ServiceUrls | null;
 	}
 
 	interface SettingsConfigStatus {
@@ -168,9 +177,13 @@
 			// Determine endpoint and build request body
 			const endpoint = isMovie ? `/api/content/movie/${tmdbId}` : `/api/content/series/${tmdbId}`;
 
-			// Extract jellyseerr_id from request-{id} format if it's a request item
+			// Get jellyseerr_request_id: either from reconciliation or from request-{id} format
 			let jellyseerrRequestId: number | null = null;
-			if (item.jellyfin_id.startsWith('request-')) {
+			if (item.jellyseerr_request_id) {
+				// Use the reconciled ID (available for Jellyfin items with matching Jellyseerr requests)
+				jellyseerrRequestId = item.jellyseerr_request_id;
+			} else if (item.jellyfin_id.startsWith('request-')) {
+				// Extract from jellyfin_id prefix (for request items)
 				jellyseerrRequestId = parseInt(item.jellyfin_id.replace('request-', ''), 10);
 			}
 
@@ -580,6 +593,41 @@
 		return `https://www.imdb.com/title/${item.imdb_id}`;
 	}
 
+	function getJellyfinUrl(item: ContentIssueItem): string | null {
+		// Only show for Jellyfin content (not request items)
+		if (isRequestItem(item)) return null;
+		const baseUrl = data?.service_urls?.jellyfin_url;
+		if (!baseUrl || !item.jellyfin_id) return null;
+		// Jellyfin web URL pattern: /web/index.html#!/details?id={jellyfin_id}
+		return `${baseUrl.replace(/\/$/, '')}/web/index.html#!/details?id=${item.jellyfin_id}`;
+	}
+
+	function getJellyseerrUrl(item: ContentIssueItem): string | null {
+		const baseUrl = data?.service_urls?.jellyseerr_url;
+		if (!baseUrl || !item.tmdb_id) return null;
+		// Jellyseerr URL pattern: /movie/{tmdb_id} or /tv/{tmdb_id}
+		const mediaType = item.media_type.toLowerCase() === 'movie' ? 'movie' : 'tv';
+		return `${baseUrl.replace(/\/$/, '')}/${mediaType}/${item.tmdb_id}`;
+	}
+
+	function getRadarrUrl(item: ContentIssueItem): string | null {
+		// Only show for movies
+		if (item.media_type.toLowerCase() !== 'movie') return null;
+		const baseUrl = data?.service_urls?.radarr_url;
+		if (!baseUrl || !item.tmdb_id) return null;
+		// Radarr URL pattern for movie details (using TMDB ID): /movie/{tmdb_id}
+		return `${baseUrl.replace(/\/$/, '')}/movie/${item.tmdb_id}`;
+	}
+
+	function getSonarrUrl(item: ContentIssueItem): string | null {
+		// Only show for series
+		if (item.media_type.toLowerCase() !== 'series' && item.media_type.toLowerCase() !== 'tv') return null;
+		const baseUrl = data?.service_urls?.sonarr_url;
+		if (!baseUrl || !item.tmdb_id) return null;
+		// Sonarr URL pattern for series (using TMDB ID): /series/{tmdb_id}
+		return `${baseUrl.replace(/\/$/, '')}/series/${item.tmdb_id}`;
+	}
+
 	function formatSize(sizeBytes: number): string {
 		if (sizeBytes === 0) return '0 B';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -747,18 +795,34 @@
 											</span>
 										{/if}
 										<span class="external-links">
+											{#if getJellyfinUrl(item)}
+												<a href={getJellyfinUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Jellyfin">
+													<span class="service-badge-text jellyfin">JF</span>
+												</a>
+											{/if}
+											{#if getJellyseerrUrl(item)}
+												<a href={getJellyseerrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Jellyseerr">
+													<span class="service-badge-text jellyseerr">JS</span>
+												</a>
+											{/if}
+											{#if getRadarrUrl(item)}
+												<a href={getRadarrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Radarr">
+													<span class="service-badge-text radarr">RD</span>
+												</a>
+											{/if}
+											{#if getSonarrUrl(item)}
+												<a href={getSonarrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Sonarr">
+													<span class="service-badge-text sonarr">SN</span>
+												</a>
+											{/if}
 											{#if getTmdbUrl(item)}
-												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link" title="View on TMDB">
-													<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-														<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-														<polyline points="15 3 21 3 21 9"/>
-														<line x1="10" y1="14" x2="21" y2="3"/>
-													</svg>
+												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on TMDB">
+													<span class="service-badge-text tmdb">TMDB</span>
 												</a>
 											{/if}
 											{#if getImdbUrl(item)}
-												<a href={getImdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link" title="View on IMDB">
-													<span class="imdb-badge">IMDb</span>
+												<a href={getImdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on IMDB">
+													<span class="service-badge-text imdb">IMDb</span>
 												</a>
 											{/if}
 										</span>
@@ -1237,6 +1301,49 @@
 		padding: 1px 3px;
 		border-radius: 2px;
 		letter-spacing: -0.02em;
+	}
+
+	/* Service badge styles for external links */
+	.service-badge {
+		text-decoration: none;
+	}
+
+	.service-badge-text {
+		font-size: 9px;
+		font-weight: var(--font-weight-bold);
+		padding: 1px 4px;
+		border-radius: 2px;
+		letter-spacing: -0.02em;
+	}
+
+	.service-badge-text.jellyfin {
+		background: #00a4dc;
+		color: #fff;
+	}
+
+	.service-badge-text.jellyseerr {
+		background: #7b68ee;
+		color: #fff;
+	}
+
+	.service-badge-text.radarr {
+		background: #ffc230;
+		color: #000;
+	}
+
+	.service-badge-text.sonarr {
+		background: #3fc;
+		color: #000;
+	}
+
+	.service-badge-text.tmdb {
+		background: #01b4e4;
+		color: #fff;
+	}
+
+	.service-badge-text.imdb {
+		background: #f5c518;
+		color: #000;
 	}
 
 	.col-issues {

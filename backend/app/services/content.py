@@ -1110,10 +1110,35 @@ async def get_content_issues(
     # Calculate totals
     total_size_bytes = sum(item.size_bytes or 0 for item, _, _ in items_with_issues)
 
+    # Build reconciliation map: (tmdb_id, media_type) -> jellyseerr_request_id
+    # This allows us to link Jellyfin items with their Jellyseerr requests
+    jellyseerr_map: dict[tuple[int, str], int] = {}
+    requests_result = await db.execute(
+        select(CachedJellyseerrRequest.tmdb_id, CachedJellyseerrRequest.media_type, CachedJellyseerrRequest.jellyseerr_id)
+        .where(CachedJellyseerrRequest.user_id == user_id)
+        .where(CachedJellyseerrRequest.tmdb_id.isnot(None))
+    )
+    for row in requests_result:
+        # Normalize media_type: Jellyfin uses "Movie"/"Series", Jellyseerr uses "movie"/"tv"
+        jellyseerr_media_type = row.media_type  # "movie" or "tv"
+        jellyseerr_map[(row.tmdb_id, jellyseerr_media_type)] = row.jellyseerr_id
+
     # Convert to response models
     response_items = []
     for item, issues, language_issues_detail in items_with_issues:
         tmdb_id, imdb_id = extract_provider_ids(item)
+
+        # Look up matching Jellyseerr request
+        jellyseerr_request_id = None
+        if tmdb_id:
+            try:
+                tmdb_id_int = int(tmdb_id)
+                # Normalize media type for lookup: "Movie" -> "movie", "Series" -> "tv"
+                normalized_media_type = "movie" if item.media_type == "Movie" else "tv"
+                jellyseerr_request_id = jellyseerr_map.get((tmdb_id_int, normalized_media_type))
+            except (ValueError, TypeError):
+                pass
+
         response_items.append(
             ContentIssueItem(
                 jellyfin_id=item.jellyfin_id,
@@ -1129,6 +1154,7 @@ async def get_content_issues(
                 language_issues=language_issues_detail if language_issues_detail else None,
                 tmdb_id=tmdb_id,
                 imdb_id=imdb_id,
+                jellyseerr_request_id=jellyseerr_request_id,
             )
         )
 

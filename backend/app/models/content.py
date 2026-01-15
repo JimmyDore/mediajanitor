@@ -129,6 +129,15 @@ class CurrentlyAiringResponse(BaseModel):
 # US-D.3: Unified Issues View models
 
 
+class ServiceUrls(BaseModel):
+    """Service URLs for constructing external links."""
+
+    jellyfin_url: str | None = None
+    jellyseerr_url: str | None = None
+    radarr_url: str | None = None
+    sonarr_url: str | None = None
+
+
 class ContentIssueItem(BaseModel):
     """Response model for a single content item with issues."""
 
@@ -145,6 +154,7 @@ class ContentIssueItem(BaseModel):
     language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
     tmdb_id: str | None = None  # TMDB ID for external links
     imdb_id: str | None = None  # IMDB ID for external links
+    jellyseerr_request_id: int | None = None  # Matching Jellyseerr request ID (for reconciliation)
     # Request-specific fields (only populated for items with "request" issue)
     requested_by: str | None = None  # Who requested it
     request_date: str | None = None  # When it was requested
@@ -159,6 +169,7 @@ class ContentIssuesResponse(BaseModel):
     total_count: int
     total_size_bytes: int
     total_size_formatted: str
+    service_urls: ServiceUrls | None = None  # URLs for external links
 
 
 # US-6.1: Unavailable Requests models
