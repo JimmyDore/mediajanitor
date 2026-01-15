@@ -518,10 +518,34 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(content): [US-20.3] add large series detection service
 
+### 2026-01-15: US-20.4 - Large Content UI with Filter
+- Renamed dashboard card from 'Large Movies' to 'Large Content'
+- Added sub-filter buttons [All/Movies/Series] to Issues page Large tab
+- Sub-filter appears only when Large tab is selected
+- Default sub-filter is 'All', showing both movies and series
+- Client-side filtering: no API changes needed
+- Added helper functions isMovieItem(), isSeriesItem(), applyLargeSubFilter()
+- Series items display "Largest season: X GB" in size column
+- Movies continue to display regular file size
+- Item count and total size update dynamically based on sub-filter
+- Reset sub-filter to 'all' when changing tabs
+- Added largest_season_size_bytes and largest_season_size_formatted to ContentIssueItem interface
+- CSS: .sub-filter-nav and .sub-filter-btn styles, .size-with-label for series display
+- 15 new tests in large-content.test.ts:
+  - API response tests for large movies and series
+  - Sub-filter logic tests (all, movies, series)
+  - Size calculations with sub-filter
+- 2 new tests in issues.test.ts for largest_season_size fields
+- 340 frontend tests pass (+17 new), typecheck clean
+- Verified in browser: sub-filter buttons work, toggle correctly, don't appear on other tabs
+- Files changed: +page.svelte (dashboard), issues/+page.svelte, issues.test.ts, large-content.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-20.4] add large content filtering UI
+
 ## Current Status
 
-**Phase**: Epic 20 - Large Content Analysis (In Progress)
-**Total Stories**: 41 stories (26 passes: true, 15 remaining)
+**Phase**: Epic 20 - Large Content Analysis (Complete)
+**Total Stories**: 41 stories (27 passes: true, 14 remaining)
 
 ## Notes
 
