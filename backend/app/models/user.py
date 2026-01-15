@@ -31,3 +31,17 @@ class Token(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+
+
+class TokenWithRefresh(BaseModel):
+    """Schema for JWT token response with refresh token (login response)."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # Access token expiration in seconds
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refresh token request (optional - can use cookie)."""
+
+    refresh_token: str | None = None

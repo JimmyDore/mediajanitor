@@ -5,10 +5,14 @@ Using sync sessions here would mask async/await bugs that only appear
 in production Docker. See CLAUDE.md "Async/Sync Consistency" section.
 """
 
+import os
 from typing import AsyncGenerator, Generator
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Set TESTING environment variable to adjust cookie settings
+os.environ["TESTING"] = "1"
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 

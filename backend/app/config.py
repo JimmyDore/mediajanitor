@@ -32,7 +32,8 @@ class Settings(BaseSettings):
 
     # Authentication
     secret_key: str = "your-secret-key-change-in-production"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 15  # Short-lived (15 minutes)
+    refresh_token_expire_days: int = 30  # Long-lived (30 days)
 
     # Content Analysis Settings
     old_content_months_cutoff: int = 4

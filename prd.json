@@ -20,8 +20,8 @@
         "Unit tests pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented refresh token with rotation, httpOnly cookie storage, and logout endpoint"
     },
     {
       "id": "US-32.2",

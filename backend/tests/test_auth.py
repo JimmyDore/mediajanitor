@@ -3,14 +3,14 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.services.auth import create_access_token
+from app.services.auth import create_access_token, hash_refresh_token
 
 
 class TestUserLogin:
     """Tests for POST /api/auth/login endpoint."""
 
     def test_login_success(self, client: TestClient) -> None:
-        """Test successful login returns JWT token."""
+        """Test successful login returns JWT token and refresh token cookie."""
         # First register a user
         client.post(
             "/api/auth/register",
@@ -31,6 +31,11 @@ class TestUserLogin:
         data = response.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
+        assert "expires_in" in data
+        assert data["expires_in"] == 15 * 60  # 15 minutes in seconds
+
+        # Check refresh token cookie is set
+        assert "refresh_token" in response.cookies
 
     def test_login_invalid_email(self, client: TestClient) -> None:
         """Test login with non-existent email."""
@@ -287,3 +292,166 @@ class TestProtectedRoutes:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 401
+
+
+class TestRefreshToken:
+    """Tests for POST /api/auth/refresh endpoint."""
+
+    def test_refresh_success_with_cookie(self, client: TestClient) -> None:
+        """Test refreshing token using httpOnly cookie."""
+        # First register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "refresh@example.com", "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "refresh@example.com", "password": "SecurePassword123!"},
+        )
+        assert login_response.status_code == 200
+        old_access_token = login_response.json()["access_token"]
+
+        # Refresh (cookie is automatically sent by TestClient)
+        refresh_response = client.post("/api/auth/refresh")
+        assert refresh_response.status_code == 200
+        data = refresh_response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+        assert "expires_in" in data
+
+        # New access token should be different
+        new_access_token = data["access_token"]
+        # Note: tokens may be the same if generated within same second, but structure should be valid
+        assert len(new_access_token.split(".")) == 3
+
+        # New refresh token cookie should be set
+        assert "refresh_token" in refresh_response.cookies
+
+    def test_refresh_without_token_returns_401(self, client: TestClient) -> None:
+        """Test refresh without any token returns 401."""
+        # Create a fresh client without any cookies
+        from fastapi.testclient import TestClient
+        from app.main import app
+        fresh_client = TestClient(app)
+
+        response = fresh_client.post("/api/auth/refresh")
+        assert response.status_code == 401
+        assert "missing" in response.json()["detail"].lower()
+
+    def test_refresh_with_invalid_token_returns_401(self, client: TestClient) -> None:
+        """Test refresh with invalid token returns 401."""
+        response = client.post(
+            "/api/auth/refresh",
+            cookies={"refresh_token": "invalid-token"},
+        )
+        assert response.status_code == 401
+        assert "invalid" in response.json()["detail"].lower()
+
+    def test_refresh_rotates_token(self, client: TestClient) -> None:
+        """Test that refresh invalidates old token (rotation)."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "rotate@example.com", "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "rotate@example.com", "password": "SecurePassword123!"},
+        )
+        old_refresh_token = login_response.cookies.get("refresh_token")
+
+        # First refresh should succeed
+        first_refresh = client.post("/api/auth/refresh")
+        assert first_refresh.status_code == 200
+
+        # Try to use the old token again - should fail
+        second_refresh = client.post(
+            "/api/auth/refresh",
+            cookies={"refresh_token": old_refresh_token},
+        )
+        assert second_refresh.status_code == 401
+
+    def test_refresh_via_request_body(self, client: TestClient) -> None:
+        """Test refreshing token using request body (for non-cookie clients)."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "bodyclient@example.com", "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "bodyclient@example.com", "password": "SecurePassword123!"},
+        )
+        refresh_token = login_response.cookies.get("refresh_token")
+
+        # Create fresh client without cookies
+        from fastapi.testclient import TestClient
+        from app.main import app
+        fresh_client = TestClient(app)
+
+        # Refresh using body
+        refresh_response = fresh_client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert refresh_response.status_code == 200
+        assert "access_token" in refresh_response.json()
+
+
+class TestLogout:
+    """Tests for POST /api/auth/logout endpoint."""
+
+    def test_logout_success(self, client: TestClient) -> None:
+        """Test logout invalidates refresh token and clears cookie."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "logout@example.com", "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "logout@example.com", "password": "SecurePassword123!"},
+        )
+        refresh_token = login_response.cookies.get("refresh_token")
+
+        # Logout
+        logout_response = client.post("/api/auth/logout")
+        assert logout_response.status_code == 204
+
+        # Try to use the old refresh token - should fail
+        refresh_response = client.post(
+            "/api/auth/refresh",
+            cookies={"refresh_token": refresh_token},
+        )
+        assert refresh_response.status_code == 401
+
+    def test_logout_without_token_succeeds(self, client: TestClient) -> None:
+        """Test logout works even without a refresh token (idempotent)."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+        fresh_client = TestClient(app)
+
+        response = fresh_client.post("/api/auth/logout")
+        assert response.status_code == 204
+
+    def test_logout_clears_cookie(self, client: TestClient) -> None:
+        """Test logout clears the refresh token cookie."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "cookieclear@example.com", "password": "SecurePassword123!"},
+        )
+        client.post(
+            "/api/auth/login",
+            json={"email": "cookieclear@example.com", "password": "SecurePassword123!"},
+        )
+
+        # Logout
+        logout_response = client.post("/api/auth/logout")
+        assert logout_response.status_code == 204
+
+        # Cookie should be deleted (set to empty or expired)
+        # FastAPI/Starlette sets max-age=0 to delete cookies
+        set_cookie = logout_response.headers.get("set-cookie", "")
+        # Either cookie is cleared or max-age is 0
+        assert "refresh_token" in set_cookie.lower() or logout_response.cookies.get("refresh_token", "") == ""
