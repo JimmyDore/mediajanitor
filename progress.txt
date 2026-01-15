@@ -1444,10 +1444,28 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - chore(cleanup): [US-30.1] remove currently airing placeholder
 
+### 2026-01-15: US-31.1 - Recently Available Days Setting (Backend)
+- Added recently_available_days field to UserSettings model (nullable Integer, default: 7)
+- Created Alembic migration for new column
+- Extended GET /api/settings/display to return recently_available_days
+- Extended POST /api/settings/display to accept recently_available_days (range: 1-30)
+- Created get_user_recently_available_days() helper function in content service
+- Updated get_recently_available() to use user's setting instead of hardcoded 7 days
+- Updated get_recently_available_count() to use user's setting for summary
+- Invalid values return 422 with validation error
+- 5 new unit tests for display preferences (recently_available_days)
+- 3 new unit tests for info/recent and content/summary using user setting
+- 2 new integration tests for display settings
+- 294 backend unit tests pass, 19 integration tests pass, mypy clean
+- Verified in Docker: GET/POST /api/settings/display with recently_available_days works
+- Files changed: database.py, models/settings.py, routers/settings.py, services/content.py, test_content.py, test_integration.py, test_settings.py, alembic migration
+- Commits:
+  - feat(settings): [US-31.1] add recently available days setting
+
 ## Current Status
 
-**Phase**: Epic 30 - UI Cleanup (In Progress)
-**Total Stories**: 60 stories (60 passes: true)
+**Phase**: Epic 31 - Display Settings (In Progress)
+**Total Stories**: 61 stories (61 passes: true)
 
 ## Notes
 
