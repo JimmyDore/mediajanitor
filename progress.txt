@@ -1513,10 +1513,25 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-31.3] add user nickname mapping backend
 
+### 2026-01-15: US-31.4 - User Nickname Mapping (Frontend)
+- Added User Nicknames section to Settings page below services configuration
+- Implemented table view showing Jellyseerr Username → Display Name mappings
+- Added inline add form with two inputs: jellyseerr username, display name
+- Added inline edit mode for updating display names only
+- Added delete confirmation mode showing "Delete this nickname?" before removal
+- Implemented empty state message: "No nicknames configured. Add nicknames to customize how requesters appear in notifications."
+- Added toast feedback for all CRUD operations (add, edit, delete success/error)
+- Created 14 new frontend unit tests in settings-nicknames.test.ts
+- Frontend typecheck passes, 260 unit tests pass
+- Verified in browser: add, edit, delete, confirmation all working
+- Files changed: routes/settings/+page.svelte, tests/settings-nicknames.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-31.4] add user nickname mapping frontend
+
 ## Current Status
 
 **Phase**: Epic 31 - Display Settings (In Progress)
-**Total Stories**: 63 stories (63 passes: true)
+**Total Stories**: 64 stories (64 passes: true)
 
 ## Notes
 
