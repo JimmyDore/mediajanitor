@@ -1116,10 +1116,125 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(help): [US-14.1] add in-app FAQ help page
 
+### 2026-01-14: US-15.10 - Lookup Jellyseerr Request by TMDB ID When Deleting
+- Added _lookup_jellyseerr_request_by_tmdb() helper function in content.py:
+  - Looks up Jellyseerr request ID by TMDB ID + media_type from cached_jellyseerr_requests table
+  - Returns jellyseerr_id if found, None otherwise
+- Updated delete_movie endpoint:
+  - When delete_from_jellyseerr=true and no jellyseerr_request_id provided, looks up by TMDB ID
+  - Uses media_type="movie" for lookup
+  - Response message includes "No request found" when no match exists
+- Updated delete_series endpoint:
+  - Same logic as delete_movie but uses media_type="tv" for lookup
+- Behavior:
+  - Lookup only happens when delete_from_jellyseerr=true AND no explicit jellyseerr_request_id
+  - If user unchecks 'Delete from Jellyseerr' checkbox, no lookup occurs
+  - Explicitly provided jellyseerr_request_id takes precedence over lookup
+  - If no matching request found, deletion is skipped gracefully (not an error)
+- 5 new unit tests:
+  - test_delete_movie_looks_up_jellyseerr_request_by_tmdb_id
+  - test_delete_series_looks_up_jellyseerr_request_by_tmdb_id
+  - test_delete_movie_no_jellyseerr_request_found_skips_gracefully
+  - test_delete_movie_skips_lookup_when_jellyseerr_unchecked
+  - test_delete_movie_uses_provided_request_id_over_lookup
+- 275 backend tests pass (270 unit + 5 new), 17 integration tests pass, mypy clean
+- Files changed: backend/app/routers/content.py, backend/tests/test_delete_content.py, prd.json
+- Commits:
+  - feat(content): [US-15.10] lookup Jellyseerr request by TMDB ID when deleting
+
+### 2026-01-14: US-12.1 - Add Threshold Help Text
+- Added help text below each threshold input in Settings page:
+  - "Flag content unwatched for" → "Used by: Old tab"
+  - "Don't flag content newer than" → "Used by: Old tab (for never-watched items)"
+  - "Flag movies larger than" → "Used by: Large tab"
+- Added CSS classes:
+  - `.threshold-label-group`: flexbox column container for label + help text
+  - `.threshold-help`: subtle gray text (--text-muted color, --font-size-sm)
+- 209 frontend tests pass, typecheck passes
+- Verified in browser: help text appears in subtle gray below each input
+- Files changed: frontend/src/routes/settings/+page.svelte, prd.json
+- Commits:
+  - feat(settings): [US-12.1] add threshold help text
+
+### 2026-01-15: US-12.2 - Remove Multi-Issue Tab
+- Removed 'multi' filter from backend API:
+  - Updated docstring in content.py router (removed multi from filter list)
+  - Removed filter_type == "multi" check from get_content_issues() service
+- Removed Multi-Issue tab from frontend:
+  - Removed 'multi' from FilterType union type
+  - Removed 'multi: Multi-Issue' from filterLabels
+  - Updated filter validation in $effect to exclude 'multi'
+- Removed TestMultiIssueContent test class (4 tests):
+  - test_filter_multi_returns_only_items_with_multiple_issues
+  - test_multi_filter_excludes_whitelisted_from_old_count
+  - test_content_with_all_issues_returned_for_multi
+  - test_sort_by_issue_count_in_api
+- URL param ?filter=multi gracefully falls back to showing all issues
+- 285 backend tests pass (-4 removed), 209 frontend tests pass
+- Verified in browser: only 5 tabs remain (All, Old, Large, Language, Requests)
+- Files changed: backend/app/routers/content.py, backend/app/services/content.py, backend/tests/test_content.py, frontend/src/routes/issues/+page.svelte
+- Commits:
+  - feat(issues): [US-12.2] remove Multi-Issue tab
+
+### 2026-01-15: US-12.3 - Fix TMDB Link Media Type
+- Verified this was already fixed in US-13.2 commit (611cd7d)
+- getTmdbUrl() uses toLowerCase() to handle both 'Movie' and 'movie' media types
+- Verified in browser: TV shows link to /tv/{id}, movies link to /movie/{id}
+- No code changes needed - marked as passes: true
+
+### 2026-01-15: US-12.5 - External Links for All Issue Types
+- Verified already implemented in US-9.4
+- Verified in browser: Old, Language, Requests tabs all show TMDB/IMDb links
+- Large tab has 0 items but uses same rendering code
+- No code changes needed - marked as passes: true
+
+### 2026-01-15: US-12.6 - Fix Watch Status Display
+- Added `played` boolean field to ContentIssueItem model (backend/app/models/content.py)
+- Updated service to include played field when building response (backend/app/services/content.py)
+- Updated frontend formatLastWatched() to accept played parameter
+- Display logic now:
+  - If last_played_date exists → show relative date (e.g., "3mo")
+  - If played is true but no date → show "Watched"
+  - Otherwise → show "Never"
+- 285 backend tests pass, 209 frontend tests pass
+- Verified in browser: items correctly show Never/Watched/date
+- Files changed: backend/app/models/content.py, backend/app/services/content.py, frontend/src/routes/issues/+page.svelte
+- Commits:
+  - feat(issues): [US-12.6] add played field for accurate watch status
+
+### 2026-01-15: US-15.1 - Fix Hidden Requests Showing TMDB IDs
+- Modified add_to_requests endpoint in whitelist.py
+- When title starts with "TMDB-", look up CachedJellyseerrRequest
+- Extract actual title from:
+  1. cached_request.title (if not TMDB fallback)
+  2. raw_data.media.title/name/originalTitle/originalName
+  3. raw_data.media.externalServiceSlug (converted to title case)
+- 285 backend tests pass, typecheck passes
+- Verified in browser: new hidden requests show actual titles (e.g., "The New Years")
+- Files changed: backend/app/routers/whitelist.py
+- Commits:
+  - feat(whitelist): [US-15.1] lookup actual title when hiding requests
+
+### 2026-01-15: US-15.8 - Fix Auth Check Loading Delay
+- Modified layout.svelte to check isPublicRoute before showing loading state
+- Public routes (/, /login, /register) now render immediately without loading spinner
+- Protected routes continue to show loading state while auth check runs
+- Updated E2E tests to reflect new expected behavior:
+  - hello.spec.ts: Test landing page content instead of loading state
+  - protected-routes.spec.ts: Test landing page on home for unauthenticated users
+  - header.spec.ts: Updated selectors for sidebar navigation (was header element)
+  - register.spec.ts: Updated button text from "Sign Up" to "Create Free Account"
+  - settings.spec.ts: Updated selectors for current page structure (Connections heading)
+- 209 frontend tests pass, typecheck passes
+- 20 E2E tests pass
+- Files changed: frontend/src/routes/+layout.svelte, frontend/e2e/*.spec.ts, prd.json
+- Commits:
+  - feat(auth): [US-15.8] fix auth check loading delay on public routes
+
 ## Current Status
 
-**Phase**: Epic 14 - Help & Documentation (Complete)
-**Total Stories**: 52 stories (52 passes: true, 0 remaining)
+**Phase**: UX Fixes and Delete Improvements (In Progress)
+**Total Stories**: 55 stories (50 passes: true, 5 remaining)
 
 ## Notes
 

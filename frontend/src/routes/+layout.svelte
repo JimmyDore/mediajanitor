@@ -35,7 +35,8 @@
 	});
 </script>
 
-{#if $auth.isLoading}
+{#if $auth.isLoading && !isPublicRoute}
+	<!-- Only show loading for protected routes -->
 	<div class="app">
 		<main class="content content-centered">
 			<div class="loading">Loading...</div>

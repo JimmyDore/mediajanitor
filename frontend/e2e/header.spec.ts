@@ -32,34 +32,39 @@ test.describe('Navigation Header (Smoke Tests)', () => {
 		});
 	});
 
-	test('header displays on protected pages with logo, nav links, and logout', async ({ page }) => {
+	test('sidebar displays on protected pages with logo, nav links, and user menu', async ({ page }) => {
 		await page.goto('/');
 
-		const header = page.locator('header');
-		await expect(header.getByText('Media Janitor')).toBeVisible();
-		await expect(header.getByRole('link', { name: /dashboard/i })).toBeVisible();
-		await expect(header.getByRole('link', { name: /settings/i })).toBeVisible();
-		await expect(header.getByRole('button', { name: /log out/i })).toBeVisible();
+		const sidebar = page.locator('aside.sidebar');
+		await expect(sidebar.getByText('Media Janitor')).toBeVisible();
+		await expect(sidebar.getByRole('link', { name: /dashboard/i })).toBeVisible();
+		await expect(sidebar.getByRole('link', { name: /settings/i })).toBeVisible();
+		// User menu is accessible via user button
+		await expect(sidebar.locator('.user-btn')).toBeVisible();
 	});
 
 	test('navigation links work', async ({ page }) => {
 		await page.goto('/');
 
 		// Navigate to settings
-		const header = page.locator('header');
-		await header.getByRole('link', { name: /settings/i }).click();
+		const sidebar = page.locator('aside.sidebar');
+		await sidebar.getByRole('link', { name: /settings/i }).click();
 		await expect(page).toHaveURL('/settings');
 
 		// Navigate back to dashboard
-		await header.getByRole('link', { name: /dashboard/i }).click();
+		await sidebar.getByRole('link', { name: /dashboard/i }).click();
 		await expect(page).not.toHaveURL('/settings');
 	});
 
-	test('header does not appear on public pages', async ({ page }) => {
+	test('sidebar does not appear on public pages when logged out', async ({ page }) => {
+		// Clear the mock auth to test logged-out state
+		await page.evaluate(() => localStorage.removeItem('access_token'));
+
+		// Sidebar should not appear for unauthenticated users on public pages
 		await page.goto('/login');
-		await expect(page.getByText('Media Janitor')).not.toBeVisible();
+		await expect(page.locator('aside.sidebar')).not.toBeVisible();
 
 		await page.goto('/register');
-		await expect(page.getByText('Media Janitor')).not.toBeVisible();
+		await expect(page.locator('aside.sidebar')).not.toBeVisible();
 	});
 });

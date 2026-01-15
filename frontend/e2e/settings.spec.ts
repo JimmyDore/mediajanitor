@@ -19,11 +19,7 @@ test.describe('Settings Page (Smoke Tests)', () => {
 	});
 
 	test('settings page renders with connection sections', async ({ page }) => {
-		await page.goto('/login');
-		await page.evaluate(() => {
-			localStorage.setItem('access_token', 'mock-token-for-ui-testing');
-		});
-
+		// Set up mocks BEFORE any navigation
 		await page.route('**/api/auth/me', async (route) => {
 			await route.fulfill({
 				status: 200,
@@ -48,9 +44,16 @@ test.describe('Settings Page (Smoke Tests)', () => {
 			});
 		});
 
+		// Set token in localStorage before going to settings
+		await page.goto('/login');
+		await page.evaluate(() => {
+			localStorage.setItem('access_token', 'mock-token-for-ui-testing');
+		});
+
 		await page.goto('/settings');
 
 		await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
-		await expect(page.getByRole('heading', { name: /jellyfin connection/i })).toBeVisible();
+		await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+		await expect(page.getByText('Jellyfin')).toBeVisible();
 	});
 });

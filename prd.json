@@ -133,8 +133,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "Root Cause: Layout shows loading for ALL routes. Should only show loading on protected routes. File: frontend/src/routes/+layout.svelte"
+      "passes": true,
+      "notes": "Fixed by checking isPublicRoute before showing loading state in layout.svelte. Public routes (/, /login, /register) now render immediately. Updated E2E tests to reflect new expected behavior."
     },
     {
       "id": "US-15.9",

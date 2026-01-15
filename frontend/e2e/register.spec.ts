@@ -6,7 +6,7 @@ test.describe('Registration Page', () => {
 
 		await expect(page.getByLabel(/email/i)).toBeVisible();
 		await expect(page.getByLabel(/password/i)).toBeVisible();
-		await expect(page.getByRole('button', { name: /sign up/i })).toBeVisible();
+		await expect(page.getByRole('button', { name: /create free account/i })).toBeVisible();
 	});
 
 	test('password field has minlength validation', async ({ page }) => {

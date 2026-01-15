@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Protected Routes', () => {
-	test('unauthenticated user is redirected to login from home', async ({ page }) => {
+	test('unauthenticated user sees landing page on home', async ({ page }) => {
 		// Clear any stored tokens
 		await page.goto('/');
 		await page.evaluate(() => localStorage.removeItem('access_token'));
@@ -9,11 +9,8 @@ test.describe('Protected Routes', () => {
 		// Navigate to home page
 		await page.goto('/');
 
-		// Wait for redirect to login page
-		await page.waitForURL('/login', { timeout: 5000 });
-
-		// Verify we're on login page
-		await expect(page.getByRole('heading', { name: /log in/i })).toBeVisible();
+		// Landing page is a public route, so it renders immediately without loading
+		await expect(page.getByText('Keep Your Media Library Clean')).toBeVisible();
 	});
 
 	test('login page is accessible without authentication', async ({ page }) => {
@@ -32,14 +29,15 @@ test.describe('Protected Routes', () => {
 		await expect(page.getByLabel(/email/i)).toBeVisible();
 	});
 
-	test('shows loading state while checking authentication', async ({ page }) => {
-		// Go to home page
+	test('public routes render immediately without loading state', async ({ page }) => {
+		// Go to home page (public route)
 		await page.goto('/');
 
-		// Should show loading state initially or redirect quickly
+		// Public routes should NOT show loading - they render immediately
 		const hasLoading = await page.getByText('Loading...').isVisible().catch(() => false);
-		const hasLoginRedirect = page.url().includes('/login');
+		expect(hasLoading).toBe(false);
 
-		expect(hasLoading || hasLoginRedirect).toBe(true);
+		// Should show landing page content immediately
+		await expect(page.getByText('Keep Your Media Library Clean')).toBeVisible();
 	});
 });
