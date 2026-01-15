@@ -9,15 +9,90 @@ import httpx
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import (
+    User,
     UserSettings,
     CachedMediaItem,
     CachedJellyseerrRequest,
     SyncStatus,
 )
 from app.services.encryption import decrypt_value
+from app.services.slack import send_slack_message
 
 logger = logging.getLogger(__name__)
+
+
+async def send_sync_failure_notification(
+    user_email: str,
+    service: str,
+    error_message: str,
+) -> None:
+    """
+    Send a Slack notification about a sync failure.
+
+    This is a fire-and-forget function - it logs errors but never raises.
+
+    Args:
+        user_email: Email of the user whose sync failed
+        service: Name of the service that failed (e.g., "Jellyfin", "Jellyseerr")
+        error_message: The error message describing the failure
+    """
+    settings = get_settings()
+    webhook_url = settings.slack_webhook_sync_failures
+
+    if not webhook_url:
+        # Webhook not configured, silently skip
+        return
+
+    failure_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # Create message in Slack Block Kit format
+    message = {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"⚠️ {service} Sync Failed",
+                    "emoji": True,
+                }
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*User:*\n{user_email}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Service:*\n{service}"
+                    }
+                ]
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Time:*\n{failure_time}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Error:*\n```{error_message[:200]}```"
+                    }
+                ]
+            }
+        ],
+        "text": f"Sync failed for {user_email}: {service} - {error_message}"  # Fallback text
+    }
+
+    try:
+        await send_slack_message(webhook_url, message)
+    except Exception as e:
+        # Log but don't raise - this is fire-and-forget
+        logger.warning(f"Failed to send sync failure notification for {user_email}: {e}")
 
 
 class AggregatedWatchData(TypedDict):
@@ -909,6 +984,7 @@ async def run_user_sync(
     and caches it in the database.
 
     Updates progress in sync_status table for frontend polling.
+    Sends Slack notifications on sync failures.
     """
     # Get user settings
     result = await db.execute(
@@ -923,6 +999,13 @@ async def run_user_sync(
             "media_items_synced": 0,
             "requests_synced": 0,
         }
+
+    # Get user email for notifications
+    user_result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    user_email = user.email if user else f"user_{user_id}"
 
     # Determine total steps (1 for Jellyfin, +1 if Jellyseerr configured)
     has_jellyseerr = settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted
@@ -962,6 +1045,15 @@ async def run_user_sync(
         await update_sync_status(
             db, user_id, "failed", error=error_message, media_count=0, requests_count=0
         )
+        # Send sync failure notification (fire-and-forget)
+        try:
+            await send_sync_failure_notification(
+                user_email=user_email,
+                service="Jellyfin",
+                error_message=str(e),
+            )
+        except Exception:
+            pass  # Don't let notification failure affect sync error handling
         return {
             "status": "failed",
             "error": error_message,
@@ -989,6 +1081,15 @@ async def run_user_sync(
         # Jellyseerr sync failure is not critical - we still have Jellyfin data
         error_message = f"Jellyseerr sync failed: {str(e)}"
         logger.warning(error_message)
+        # Send sync failure notification (fire-and-forget)
+        try:
+            await send_sync_failure_notification(
+                user_email=user_email,
+                service="Jellyseerr",
+                error_message=str(e),
+            )
+        except Exception:
+            pass  # Don't let notification failure affect sync error handling
 
     # Update sync status
     final_status = "success" if not error_message else "partial"

@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.celery_app import celery_app
-from app.database import UserSettings, async_session_maker
-from app.services.sync import run_user_sync
+from app.database import User, UserSettings, async_session_maker
+from app.services.sync import run_user_sync, send_sync_failure_notification
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,52 @@ async def _run_sync_for_user(user_id: int) -> dict[str, Any]:
     """Run sync for a single user (async helper)."""
     async with async_session_maker() as session:
         return await run_user_sync(session, user_id)
+
+
+async def _get_user_email(user_id: int) -> str | None:
+    """Get user email by ID (async helper)."""
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        return user.email if user else None
+
+
+def send_sync_failure_notification_for_celery(
+    user_id: int,
+    error_message: str,
+) -> None:
+    """
+    Send sync failure notification from a Celery task.
+
+    This is a synchronous wrapper that runs the async notification function
+    in a new event loop. It's fire-and-forget - errors are logged but not raised.
+
+    Args:
+        user_id: The user ID whose sync failed
+        error_message: The error message describing the failure
+    """
+    async def _send_notification() -> None:
+        user_email = await _get_user_email(user_id)
+        if not user_email:
+            user_email = f"user_{user_id}"
+
+        await send_sync_failure_notification(
+            user_email=user_email,
+            service="Scheduled Sync",
+            error_message=error_message,
+        )
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_send_notification())
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"Failed to send sync failure notification for user {user_id}: {e}")
 
 
 @celery_app.task(bind=True, name="test_task")  # type: ignore[untyped-decorator]
@@ -96,4 +142,9 @@ def sync_user(self: Any, user_id: int) -> dict[str, Any]:
         return result
     except Exception as e:
         logger.error(f"Sync failed for user {user_id}: {e}")
+        # Send sync failure notification (fire-and-forget)
+        send_sync_failure_notification_for_celery(
+            user_id=user_id,
+            error_message=str(e),
+        )
         return {"status": "failed", "error": str(e), "user_id": user_id}

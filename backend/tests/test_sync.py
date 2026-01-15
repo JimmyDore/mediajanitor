@@ -1485,3 +1485,232 @@ class TestSyncCalculatingSizesState:
 
             assert data["is_syncing"] is True
             assert data["progress"]["current_step"] == "calculating_sizes"
+
+
+class TestSyncFailureNotifications:
+    """Tests for Slack notifications on sync failures (US-21.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "syncfail@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_jellyfin_sync_failure_sends_notification(self, client: TestClient) -> None:
+        """Jellyfin sync failure should trigger Slack notification."""
+        from unittest.mock import patch, AsyncMock
+        from app.services.sync import run_user_sync
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="jf_fail_notify@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+            await session.commit()
+
+            # Mock Jellyfin to fail
+            with patch("app.services.sync.fetch_jellyfin_media_with_progress") as mock_fetch:
+                mock_fetch.side_effect = Exception("Jellyfin connection failed")
+                with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                    with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
+                        result = await run_user_sync(session, user.id)
+
+                        # Sync should have failed
+                        assert result["status"] == "failed"
+                        assert "Jellyfin" in result["error"]
+
+                        # Notification should have been called
+                        mock_notify.assert_called_once()
+                        call_kwargs = mock_notify.call_args[1]
+                        assert call_kwargs["user_email"] == "jf_fail_notify@example.com"
+                        assert call_kwargs["service"] == "Jellyfin"
+                        assert "Jellyfin connection failed" in call_kwargs["error_message"]
+
+    @pytest.mark.asyncio
+    async def test_jellyseerr_sync_failure_sends_notification(self, client: TestClient) -> None:
+        """Jellyseerr sync failure should trigger Slack notification."""
+        from unittest.mock import patch, AsyncMock
+        from app.services.sync import run_user_sync
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="js_fail_notify@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+                jellyseerr_server_url="http://jellyseerr.local",
+                jellyseerr_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+            await session.commit()
+
+            # Mock Jellyfin to succeed, Jellyseerr to fail
+            with patch("app.services.sync.fetch_jellyfin_media_with_progress") as mock_jf:
+                mock_jf.return_value = []
+                with patch("app.services.sync.fetch_jellyseerr_requests") as mock_js:
+                    mock_js.side_effect = Exception("Jellyseerr API error")
+                    with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                        with patch("app.services.sync.calculate_season_sizes"):
+                            with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
+                                result = await run_user_sync(session, user.id)
+
+                                # Sync should be partial (Jellyfin succeeded, Jellyseerr failed)
+                                assert result["status"] == "partial"
+                                assert "Jellyseerr" in result["error"]
+
+                                # Notification should have been called for Jellyseerr failure
+                                mock_notify.assert_called_once()
+                                call_kwargs = mock_notify.call_args[1]
+                                assert call_kwargs["user_email"] == "js_fail_notify@example.com"
+                                assert call_kwargs["service"] == "Jellyseerr"
+                                assert "Jellyseerr API error" in call_kwargs["error_message"]
+
+    @pytest.mark.asyncio
+    async def test_sync_failure_notification_is_fire_and_forget(self, client: TestClient) -> None:
+        """Notification failure should not affect sync error handling."""
+        from unittest.mock import patch, AsyncMock
+        from app.services.sync import run_user_sync
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="ff_fail_notify@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+            await session.commit()
+
+            # Mock Jellyfin to fail and notification to also fail
+            with patch("app.services.sync.fetch_jellyfin_media_with_progress") as mock_fetch:
+                mock_fetch.side_effect = Exception("Jellyfin connection failed")
+                with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                    with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
+                        mock_notify.side_effect = Exception("Slack webhook failed")
+
+                        # Sync should complete (with failure) even if notification fails
+                        result = await run_user_sync(session, user.id)
+
+                        assert result["status"] == "failed"
+                        assert "Jellyfin" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_sync_failure_notification_without_webhook_configured(self, client: TestClient) -> None:
+        """Sync failure should work when Slack webhook is not configured."""
+        from unittest.mock import patch
+        from app.services.sync import run_user_sync, send_sync_failure_notification
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="no_webhook_fail@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+            await session.commit()
+
+            # Mock webhook not configured
+            with patch("app.services.sync.get_settings") as mock_settings:
+                mock_settings.return_value.slack_webhook_sync_failures = ""
+                with patch("app.services.sync.fetch_jellyfin_media_with_progress") as mock_fetch:
+                    mock_fetch.side_effect = Exception("Jellyfin connection failed")
+                    with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                        result = await run_user_sync(session, user.id)
+
+                        # Sync should complete even with no webhook
+                        assert result["status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_sync_failure_notification_uses_block_kit_format(self, client: TestClient) -> None:
+        """Sync failure notification should use Slack Block Kit format."""
+        from unittest.mock import patch, AsyncMock
+        from app.services.sync import send_sync_failure_notification
+
+        with patch("app.services.sync.send_slack_message", new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = True
+
+            with patch("app.services.sync.get_settings") as mock_settings_fn:
+                from app.config import Settings
+                mock_settings = Settings()
+                mock_settings.slack_webhook_sync_failures = "https://hooks.slack.com/test"
+                mock_settings_fn.return_value = mock_settings
+
+                await send_sync_failure_notification(
+                    user_email="test@example.com",
+                    service="Jellyfin",
+                    error_message="Connection timed out"
+                )
+
+                # Should have called send_slack_message with Block Kit format
+                mock_send.assert_called_once()
+                call_args = mock_send.call_args
+                message = call_args[0][1]  # Second positional arg is the message dict
+                # Block Kit messages should have "blocks" key
+                assert "blocks" in message
+                assert "text" in message  # Fallback text
+
+    def test_celery_sync_user_failure_sends_notification(self, client: TestClient) -> None:
+        """Celery sync_user task failure should trigger Slack notification."""
+        from unittest.mock import patch, AsyncMock, MagicMock
+        from app.celery_app import celery_app
+        from app.tasks import sync_user
+
+        # Set eager mode for testing
+        celery_app.conf.task_always_eager = True
+        celery_app.conf.task_eager_propagates = True
+
+        try:
+            with patch("app.tasks._run_sync_for_user") as mock_run_sync:
+                # Simulate sync failure
+                mock_run_sync.side_effect = Exception("Sync failed with error")
+
+                with patch("app.tasks.send_sync_failure_notification_for_celery") as mock_notify:
+                    result = sync_user(123)  # user_id = 123
+
+                    # Result should indicate failure
+                    assert result["status"] == "failed"
+                    assert "error" in result
+
+                    # Notification should have been called
+                    mock_notify.assert_called_once()
+                    call_kwargs = mock_notify.call_args[1]
+                    assert call_kwargs["user_id"] == 123
+                    assert "Sync failed with error" in call_kwargs["error_message"]
+        finally:
+            celery_app.conf.task_always_eager = False
+            celery_app.conf.task_eager_propagates = False
