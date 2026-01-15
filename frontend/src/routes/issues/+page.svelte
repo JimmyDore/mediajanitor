@@ -730,6 +730,9 @@
 									Name {sortField === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
 								</button>
 							</th>
+							{#if activeFilter === 'requests'}
+								<th class="col-requester">Requester</th>
+							{/if}
 							<th class="col-issues">
 								<button class="sort-btn" onclick={() => toggleSort('issues')}>
 									Issues {sortField === 'issues' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -756,10 +759,8 @@
 							<tr>
 								<td class="col-name">
 									<div class="name-cell">
-										<span class="item-name">{item.name}</span>
-										{#if item.production_year}
-											<span class="item-year">{item.production_year}</span>
-										{/if}
+										<span class="item-name" title={item.name}>{item.name}</span>
+										<span class="item-year">{item.production_year ?? '—'}</span>
 										{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
 											<span class="missing-seasons" title="Missing seasons">
 												S{item.missing_seasons.join(', S')}
@@ -792,11 +793,13 @@
 												</a>
 											{/if}
 										</span>
-										{#if isRequestItem(item) && item.requested_by}
-											<span class="requested-by">by {item.requested_by}</span>
-										{/if}
 									</div>
 								</td>
+								{#if activeFilter === 'requests'}
+									<td class="col-requester">
+										{item.requested_by ?? '—'}
+									</td>
+								{/if}
 								<td class="col-issues">
 									<div class="badge-groups">
 										{#each item.issues as issue}
@@ -1202,11 +1205,12 @@
 
 	/* Columns */
 	.col-name {
-		width: 40%;
+		width: 35%;
 	}
 
 	.name-cell {
-		display: flex;
+		display: grid;
+		grid-template-columns: 1fr auto auto auto;
 		align-items: baseline;
 		gap: var(--space-2);
 	}
@@ -1214,23 +1218,31 @@
 	.item-name {
 		font-weight: var(--font-weight-medium);
 		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
 	}
 
 	.item-year {
 		font-size: var(--font-size-sm);
+		font-family: var(--font-mono);
 		color: var(--text-muted);
+		white-space: nowrap;
+		min-width: 40px;
+		text-align: right;
+	}
+
+	.col-requester {
+		width: 12%;
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
 	}
 
 	.missing-seasons {
 		font-size: var(--font-size-xs);
 		color: var(--warning);
 		font-weight: var(--font-weight-medium);
-	}
-
-	.requested-by {
-		font-size: var(--font-size-xs);
-		color: var(--text-muted);
-		font-style: italic;
 	}
 
 	.text-muted {
