@@ -1401,10 +1401,31 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(auth): [US-32.3] add auto-redirect on session expiration
 
+### 2026-01-15: US-29.1 - Issues Table Name Column Improvements
+- Refactored Issues table Name column layout for better visual alignment:
+  - Changed from flexbox to CSS grid layout with fixed columns
+  - Year now displays at fixed horizontal position (40px min-width, right-aligned)
+  - Year uses monospace font for consistent digit alignment
+  - Shows "—" when year is null (instead of hiding)
+- Added title truncation with ellipsis:
+  - Long titles truncate with CSS text-overflow: ellipsis
+  - Native title tooltip shows full text on hover
+- Added new Requester column for Unavailable tab:
+  - Column header and data cells conditionally rendered when filter=requests
+  - Displays username from requested_by field, or "—" if null
+  - Follows same conditional pattern as Release column
+- Removed inline 'by {username}' display from name cell
+- Service badges now align consistently across rows (using grid auto columns)
+- 244 frontend tests pass, typecheck passes
+- Verified in browser: both All and Unavailable tabs display correctly
+- Files changed: frontend/src/routes/issues/+page.svelte, prd.json
+- Commits:
+  - feat(ui): [US-29.1] improve Issues table visual alignment
+
 ## Current Status
 
-**Phase**: Epic 32 - Session Management (Complete)
-**Total Stories**: 58 stories (58 passes: true)
+**Phase**: Epic 29 - UI Improvements (In Progress)
+**Total Stories**: 59 stories (59 passes: true)
 
 ## Notes
 
