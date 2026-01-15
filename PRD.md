@@ -997,27 +997,30 @@ Improve accessibility for screen reader users by adding proper ARIA attributes t
 ## Epic 29: Issues Table UX Improvements
 
 ### Overview
-Improve the readability of the Issues table by moving the requester information from an inline display (cramped "by {username}" after the title) to a dedicated column that appears only on the Unavailable tab.
+Improve the visual alignment and readability of the Issues table. The Name column currently has alignment issues: year and service badges shift horizontally based on title length, creating a ragged, hard-to-scan layout. This epic restructures the Name cell for consistent alignment and adds a dedicated Requester column for the Unavailable tab.
 
 ### Goals
-- Improve table scanability by separating requester info from title
-- Maintain visual consistency with the existing Release column pattern
-- Keep the table compact on other tabs where requester info isn't relevant
+- Fix year/badge misalignment across all rows (all tabs)
+- Improve table scanability with consistent visual structure
+- Separate requester info from title into dedicated column (Unavailable tab only)
+- Reduce visual noise from competing badge colors
 
 ### User Stories
 
-#### US-29.1: Add Requester Column to Issues Table
+#### US-29.1: Issues Table Name Column Improvements
 **As a** media server owner
-**I want** to see who requested content in a dedicated table column
-**So that** I can quickly scan and identify request patterns by user
+**I want** the Issues table to have consistent visual alignment
+**So that** I can quickly scan and compare items across rows
 
 **Acceptance Criteria:**
-- [ ] New "Requester" column appears after the Name column
-- [ ] Column only shows when `activeFilter === 'requests'` (same pattern as Release column)
-- [ ] Column displays the username from `requested_by` field
-- [ ] Empty cell or `—` when `requested_by` is null
+- [ ] Year displays at a fixed horizontal position (not flowing after variable-length titles)
+- [ ] Service badges (JF, JS, RD, TMDB) align consistently across all rows
+- [ ] Long titles truncate with ellipsis instead of wrapping to multiple lines
+- [ ] On hover, truncated titles show full text via title tooltip
+- [ ] New "Requester" column appears after Name column (only on Unavailable tab)
+- [ ] Requester column follows same pattern as Release column (conditional display)
+- [ ] Column displays username from `requested_by` field, or `—` if null
 - [ ] The inline "by {username}" display in the name cell is removed
-- [ ] Column header is NOT sortable (optional enhancement for future)
 - [ ] Typecheck passes
 - [ ] Unit tests pass
 - [ ] Verify in browser using browser tools
@@ -1027,12 +1030,15 @@ Improve the readability of the Issues table by moving the requester information 
 - Backend API changes (data already includes `requested_by`)
 - Filtering by requester (future enhancement)
 - Sorting by requester (future enhancement)
+- Changing service badge colors (defer to future enhancement)
 
 ### Technical Considerations
 - **Frontend-only change** to `frontend/src/routes/issues/+page.svelte`
-- Follow existing pattern from `col-release` which is conditionally shown for requests tab only
-- `requested_by` field already exists in `ContentIssueItem` interface (line 23)
-- Remove lines 821-823 that currently show inline "by {requested_by}" after the name
+- Restructure `.name-cell` from flex to CSS Grid with fixed zones: `[Title (1fr)] [Year (auto)] [Badges (auto)]`
+- Add `text-overflow: ellipsis` and `white-space: nowrap` to `.item-name` for truncation
+- Add `title={item.name}` attribute for hover tooltip on truncated names
+- Follow existing pattern from `col-release` for conditional Requester column
+- `requested_by` field already exists in `ContentIssueItem` interface
 
 ---
 
@@ -1253,13 +1259,123 @@ John:
 
 ---
 
+## Epic 32: Session Management & Auth UX
+
+### Overview
+Improve authentication experience by extending session duration with refresh tokens and automatically redirecting users to login when their session expires. Currently, sessions expire after 30 minutes forcing frequent re-logins, and expired sessions still allow frontend navigation with failing API calls.
+
+### Goals
+- Reduce login friction with long-lived sessions (30 days)
+- Implement refresh token mechanism for secure session renewal
+- Auto-redirect to login on session expiration instead of showing toast errors
+- Clean up stale auth state so users can't navigate with expired sessions
+
+### User Stories
+
+#### US-32.1: Refresh Token Backend Implementation
+**As a** user
+**I want** my session to last 30 days with automatic renewal
+**So that** I don't have to log in multiple times a day
+
+**Acceptance Criteria:**
+- [ ] New `RefreshToken` model: `id`, `user_id` (FK), `token` (hashed), `expires_at`, `created_at`
+- [ ] Create database migration for refresh_tokens table
+- [ ] Access token expiration reduced to 15 minutes (short-lived)
+- [ ] Refresh token expiration set to 30 days (long-lived)
+- [ ] `POST /api/auth/login` returns both `access_token` and `refresh_token`
+- [ ] `POST /api/auth/refresh` accepts refresh_token, returns new access_token + new refresh_token
+- [ ] Old refresh token is invalidated when new one is issued (rotation)
+- [ ] Invalid/expired refresh token returns 401
+- [ ] Refresh token stored as httpOnly cookie (more secure than localStorage)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `backend/app/database.py` - Add RefreshToken model
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/auth.py` - Update login, add refresh endpoint
+- `backend/app/models/user.py` - Add TokenResponse schema with both tokens
+- `backend/app/services/auth.py` - New service for token generation/validation
+- `backend/tests/test_auth.py` - Refresh token tests
+
+---
+
+#### US-32.2: Frontend Token Refresh
+**As a** user
+**I want** my session to auto-renew in the background
+**So that** I stay logged in without interruption
+
+**Acceptance Criteria:**
+- [ ] Login stores refresh_token in httpOnly cookie (set by backend)
+- [ ] Access token stored in memory (not localStorage) for security
+- [ ] Auth store includes `refreshAccessToken()` method
+- [ ] API calls that receive 401 automatically attempt token refresh
+- [ ] If refresh succeeds, retry original request with new token
+- [ ] If refresh fails (401), redirect to login page
+- [ ] Proactive refresh: refresh token 1 minute before access token expires
+- [ ] Logout calls `POST /api/auth/logout` to invalidate refresh token
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Files:**
+- `frontend/src/lib/stores/index.ts` - Update auth store with refresh logic
+- `frontend/src/lib/api.ts` - New API wrapper with auto-refresh interceptor
+- `frontend/src/routes/login/+page.svelte` - Update to handle new token format
+- `backend/app/routers/auth.py` - Add logout endpoint to invalidate refresh token
+- `frontend/tests/auth.test.ts` - Token refresh tests
+
+---
+
+#### US-32.3: Auto-Redirect on Session Expiration
+**As a** user
+**I want** to be automatically redirected to login when my session fully expires
+**So that** I don't see broken pages with failed API calls
+
+**Acceptance Criteria:**
+- [ ] When refresh token fails (401), user is redirected to `/login`
+- [ ] Auth state is fully cleared before redirect (no stale isAuthenticated)
+- [ ] Redirect includes `?redirect=/original/path` query param
+- [ ] After successful login, redirect back to original path
+- [ ] Toast message shows "Session expired, please log in again"
+- [ ] No more "Session expired" errors while staying on page
+- [ ] Protected routes immediately redirect if not authenticated (no content flash)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: let session expire → automatic redirect to login
+
+**Files:**
+- `frontend/src/lib/api.ts` - Handle 401 with redirect
+- `frontend/src/routes/+layout.svelte` - Improve route protection
+- `frontend/src/routes/login/+page.svelte` - Handle redirect query param
+- `frontend/src/lib/stores/index.ts` - Clear auth state properly
+
+---
+
+### Non-Goals
+- "Remember me" checkbox (all sessions are 30 days)
+- Multiple device session management (revoke other sessions)
+- Session activity tracking/listing
+- IP-based session binding
+
+### Technical Considerations
+- **Security:** Refresh tokens in httpOnly cookies prevent XSS token theft. Access tokens in memory prevent persistence attacks.
+- **Token rotation:** Each refresh invalidates old token, limiting damage from token leak.
+- **Race conditions:** If multiple tabs refresh simultaneously, handle gracefully (only first succeeds, others retry).
+- **Backward compatibility:** First deploy keeps old 30-min tokens working until they expire naturally.
+- **Cookie settings:** `SameSite=Strict`, `Secure=true` in production, `Path=/api/auth`.
+
+---
+
 ## Checklist Summary
 
 ### Completed ✅ (73 stories)
 
 See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for completed epics and stories.
 
-### Pending (26 stories)
+### Pending (29 stories)
+- [ ] US-32.1: Refresh Token Backend Implementation
+- [ ] US-32.2: Frontend Token Refresh
+- [ ] US-32.3: Auto-Redirect on Session Expiration
 - [ ] US-17.1: Multi-User Watch Data Aggregation
 - [ ] US-17.2: Sync Progress Visibility
 - [ ] US-18.1: Show Setup Checklist for New Users

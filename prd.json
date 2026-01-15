@@ -1,23 +1,86 @@
 {
   "project": "Media Janitor",
-  "branchName": "ralph/enhancements",
+  "branchName": "ralph/session-management",
   "userStories": [
     {
-      "id": "US-29.1",
-      "title": "Add Requester Column to Issues Table",
-      "story": "As a media server owner, I want to see who requested content in a dedicated table column, so that I can quickly scan and identify request patterns by user",
+      "id": "US-32.1",
+      "title": "Refresh Token Backend Implementation",
+      "story": "As a user, I want my session to last 30 days with automatic renewal, so that I don't have to log in multiple times a day",
       "acceptanceCriteria": [
-        "New 'Requester' column appears after the Name column",
-        "Column only shows when activeFilter === 'requests' (same pattern as Release column)",
-        "Column displays the username from requested_by field",
-        "Empty cell or — when requested_by is null",
+        "New RefreshToken model: id, user_id (FK), token (hashed), expires_at, created_at",
+        "Create database migration for refresh_tokens table",
+        "Access token expiration reduced to 15 minutes (short-lived)",
+        "Refresh token expiration set to 30 days (long-lived)",
+        "POST /api/auth/login returns both access_token and refresh_token",
+        "POST /api/auth/refresh accepts refresh_token, returns new access_token + new refresh_token",
+        "Old refresh token is invalidated when new one is issued (rotation)",
+        "Invalid/expired refresh token returns 401",
+        "Refresh token stored as httpOnly cookie (more secure than localStorage)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-32.2",
+      "title": "Frontend Token Refresh",
+      "story": "As a user, I want my session to auto-renew in the background, so that I stay logged in without interruption",
+      "acceptanceCriteria": [
+        "Login stores refresh_token in httpOnly cookie (set by backend)",
+        "Access token stored in memory (not localStorage) for security",
+        "Auth store includes refreshAccessToken() method",
+        "API calls that receive 401 automatically attempt token refresh",
+        "If refresh succeeds, retry original request with new token",
+        "If refresh fails (401), redirect to login page",
+        "Proactive refresh: refresh token 1 minute before access token expires",
+        "Logout calls POST /api/auth/logout to invalidate refresh token",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-32.3",
+      "title": "Auto-Redirect on Session Expiration",
+      "story": "As a user, I want to be automatically redirected to login when my session fully expires, so that I don't see broken pages with failed API calls",
+      "acceptanceCriteria": [
+        "When refresh token fails (401), user is redirected to /login",
+        "Auth state is fully cleared before redirect (no stale isAuthenticated)",
+        "Redirect includes ?redirect=/original/path query param",
+        "After successful login, redirect back to original path",
+        "Toast message shows 'Session expired, please log in again'",
+        "No more 'Session expired' errors while staying on page",
+        "Protected routes immediately redirect if not authenticated (no content flash)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: let session expire → automatic redirect to login"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-29.1",
+      "title": "Issues Table Name Column Improvements",
+      "story": "As a media server owner, I want the Issues table to have consistent visual alignment, so that I can quickly scan and compare items across rows",
+      "acceptanceCriteria": [
+        "Year displays at a fixed horizontal position (not flowing after variable-length titles)",
+        "Service badges (JF, JS, RD, TMDB) align consistently across all rows",
+        "Long titles truncate with ellipsis instead of wrapping to multiple lines",
+        "On hover, truncated titles show full text via title tooltip",
+        "New 'Requester' column appears after Name column (only on Unavailable tab)",
+        "Requester column follows same pattern as Release column (conditional display)",
+        "Column displays username from requested_by field, or — if null",
         "The inline 'by {username}' display in the name cell is removed",
-        "Column header is NOT sortable (optional enhancement for future)",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 1,
+      "priority": 10,
       "passes": false,
       "notes": ""
     },
@@ -39,7 +102,7 @@
         "Unit tests pass",
         "Verify in browser: dashboard no longer shows 'currently airing'"
       ],
-      "priority": 2,
+      "priority": 11,
       "passes": false,
       "notes": ""
     },
@@ -58,7 +121,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 3,
+      "priority": 12,
       "passes": false,
       "notes": ""
     },
@@ -77,7 +140,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 4,
+      "priority": 13,
       "passes": false,
       "notes": ""
     },
@@ -97,7 +160,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 5,
+      "priority": 14,
       "passes": false,
       "notes": ""
     },
@@ -117,7 +180,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 6,
+      "priority": 15,
       "passes": false,
       "notes": ""
     },
@@ -138,7 +201,7 @@
         "Unit tests pass",
         "Verify in browser: copy output shows correct grouping"
       ],
-      "priority": 7,
+      "priority": 16,
       "passes": false,
       "notes": ""
     },
@@ -159,7 +222,7 @@
         "Unit tests pass",
         "Verify 'La Chambre de Mariana' shows correct watch date after sync"
       ],
-      "priority": 10,
+      "priority": 20,
       "passes": false,
       "notes": ""
     },
@@ -177,7 +240,7 @@
         "Unit tests pass",
         "Verify in browser: trigger sync and see progress updates"
       ],
-      "priority": 11,
+      "priority": 21,
       "passes": false,
       "notes": ""
     },
@@ -193,7 +256,7 @@
         "Unit tests pass",
         "Verify in browser using mobile viewport (Chrome DevTools device mode)"
       ],
-      "priority": 12,
+      "priority": 22,
       "passes": false,
       "notes": ""
     },
@@ -215,7 +278,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 20,
+      "priority": 30,
       "passes": false,
       "notes": ""
     },
@@ -234,7 +297,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 21,
+      "priority": 31,
       "passes": false,
       "notes": ""
     },
@@ -252,7 +315,7 @@
         "Unit tests pass",
         "Verify in browser"
       ],
-      "priority": 30,
+      "priority": 40,
       "passes": false,
       "notes": ""
     },
@@ -269,7 +332,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 31,
+      "priority": 41,
       "passes": false,
       "notes": ""
     },
@@ -286,7 +349,7 @@
         "Unit tests pass",
         "Verify in browser"
       ],
-      "priority": 32,
+      "priority": 42,
       "passes": false,
       "notes": ""
     },
@@ -306,7 +369,7 @@
         "Unit tests pass",
         "Verify in browser: setting saves and loads correctly"
       ],
-      "priority": 40,
+      "priority": 50,
       "passes": false,
       "notes": ""
     },
@@ -329,7 +392,7 @@
         "Unit tests pass",
         "Integration test: trigger sync, verify season sizes populated"
       ],
-      "priority": 41,
+      "priority": 51,
       "passes": false,
       "notes": ""
     },
@@ -348,7 +411,7 @@
         "Unit tests pass",
         "Test: large series appears in issues, large movie still appears"
       ],
-      "priority": 42,
+      "priority": 52,
       "passes": false,
       "notes": ""
     },
@@ -370,7 +433,7 @@
         "Unit tests pass",
         "Verify in browser: filter toggles work correctly"
       ],
-      "priority": 43,
+      "priority": 53,
       "passes": false,
       "notes": ""
     },
@@ -389,7 +452,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 50,
+      "priority": 60,
       "passes": false,
       "notes": ""
     },
@@ -407,7 +470,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 51,
+      "priority": 61,
       "passes": false,
       "notes": ""
     },
@@ -425,7 +488,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 52,
+      "priority": 62,
       "passes": false,
       "notes": ""
     },
@@ -447,7 +510,7 @@
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 60,
+      "priority": 70,
       "passes": false,
       "notes": ""
     },
@@ -469,7 +532,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 61,
+      "priority": 71,
       "passes": false,
       "notes": ""
     },
@@ -492,7 +555,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 62,
+      "priority": 72,
       "passes": false,
       "notes": ""
     },
@@ -510,7 +573,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 63,
+      "priority": 73,
       "passes": false,
       "notes": ""
     },
@@ -531,7 +594,7 @@
         "Unit tests pass",
         "Manual test: verify 11th request within 60 seconds returns 429"
       ],
-      "priority": 70,
+      "priority": 80,
       "passes": false,
       "notes": ""
     },
@@ -552,7 +615,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 71,
+      "priority": 81,
       "passes": false,
       "notes": ""
     },
@@ -571,7 +634,7 @@
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 72,
+      "priority": 82,
       "passes": false,
       "notes": ""
     },
@@ -593,7 +656,7 @@
         "Unit tests pass",
         "Test: mock API to fail twice then succeed, verify sync completes"
       ],
-      "priority": 80,
+      "priority": 90,
       "passes": false,
       "notes": ""
     },
@@ -612,7 +675,7 @@
         "Typecheck passes",
         "E2E test passes"
       ],
-      "priority": 90,
+      "priority": 100,
       "passes": false,
       "notes": ""
     },
@@ -633,7 +696,7 @@
         "Typecheck passes",
         "All tests pass"
       ],
-      "priority": 91,
+      "priority": 101,
       "passes": false,
       "notes": ""
     },
@@ -652,7 +715,7 @@
         "Unit tests pass",
         "Verify with screen reader or accessibility inspector"
       ],
-      "priority": 95,
+      "priority": 110,
       "passes": false,
       "notes": ""
     }
