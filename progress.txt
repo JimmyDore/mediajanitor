@@ -441,10 +441,26 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(onboarding): [US-18.2] add auto-sync after Jellyfin configuration
 
+### 2026-01-15: US-18.3 - Optional Services Prompt
+- Added dismissible "Enhance your setup" card to Dashboard
+- Card shows after setup checklist complete but optional services not configured
+- Fetches Jellyseerr, Radarr, Sonarr settings via API
+- Displays only unconfigured services with Configure link to /settings
+- Service descriptions: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)
+- Dismiss button (X) persists state in localStorage (mediajanitor_enhance_setup_dismissed)
+- Card visibility computed via showEnhanceSetup derived state
+- fetchOptionalServicesSettings() fetches all three services in parallel
+- loadEnhanceSetupDismissed() and dismissEnhanceSetup() handle localStorage
+- 15 new tests in enhance-setup.test.ts for visibility and dismiss logic
+- 324 frontend tests pass, typecheck clean
+- Files changed: frontend/src/routes/+page.svelte, frontend/tests/enhance-setup.test.ts, prd.json
+- Commits:
+  - feat(onboarding): [US-18.3] add optional services prompt after setup
+
 ## Current Status
 
-**Phase**: Epic 18 - User Onboarding (In Progress)
-**Total Stories**: 41 stories (22 passes: true, 19 remaining)
+**Phase**: Epic 18 - User Onboarding (Complete)
+**Total Stories**: 41 stories (23 passes: true, 18 remaining)
 
 ## Notes
 
