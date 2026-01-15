@@ -352,6 +352,18 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-17.2] add sync progress visibility
 
+### 2026-01-15: US-17.3 - Fix Mobile Sidebar Visual Overlap
+- Fixed sidebar showing a blue strip on mobile when closed
+- Root cause: transform: translateX(-100%) only moved the element visually but didn't hide it
+- Added visibility: hidden when sidebar is not open on mobile (< 768px)
+- Added visibility: visible when sidebar.open class is applied
+- Sidebar now completely hidden when closed, opens/closes correctly
+- 266 frontend tests pass, typecheck clean
+- Verified in browser: no blue strip visible, hamburger menu works
+- Files changed: frontend/src/lib/components/Sidebar.svelte, prd.json
+- Commits:
+  - fix(ui): [US-17.3] hide mobile sidebar completely when closed
+
 ## Current Status
 
 **Phase**: Epic 17 - Sync Improvements (In Progress)
