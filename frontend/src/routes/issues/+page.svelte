@@ -589,10 +589,6 @@
 		return `https://www.themoviedb.org/${mediaType}/${item.tmdb_id}`;
 	}
 
-	function getImdbUrl(item: ContentIssueItem): string | null {
-		if (!item.imdb_id) return null;
-		return `https://www.imdb.com/title/${item.imdb_id}`;
-	}
 
 	function getJellyfinUrl(item: ContentIssueItem): string | null {
 		// Only show for Jellyfin content (not request items)
@@ -819,11 +815,6 @@
 											{#if getTmdbUrl(item)}
 												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on TMDB">
 													<span class="service-badge-text tmdb">TMDB</span>
-												</a>
-											{/if}
-											{#if getImdbUrl(item)}
-												<a href={getImdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on IMDB">
-													<span class="service-badge-text imdb">IMDb</span>
 												</a>
 											{/if}
 										</span>
@@ -1294,15 +1285,6 @@
 		opacity: 1;
 	}
 
-	.imdb-badge {
-		font-size: 9px;
-		font-weight: var(--font-weight-bold);
-		background: #f5c518;
-		color: #000;
-		padding: 1px 3px;
-		border-radius: 2px;
-		letter-spacing: -0.02em;
-	}
 
 	/* Service badge styles for external links */
 	.service-badge {
@@ -1342,10 +1324,6 @@
 		color: #fff;
 	}
 
-	.service-badge-text.imdb {
-		background: #f5c518;
-		color: #000;
-	}
 
 	.col-issues {
 		width: 30%;
