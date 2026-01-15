@@ -383,10 +383,26 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(issues): [US-19.1] add search filtering for Issues page
 
+### 2026-01-15: US-23.1 - Added Date Column on Issues Page
+- Added date_created field to ContentIssueItem Pydantic model
+- Updated get_content_issues() in content service to include date_created from CachedMediaItem
+- Added 'Added' column to Issues table (positioned after Size column)
+- Implemented formatDateCreated() function for user-friendly date display (e.g., "Jan 15, 2024")
+- Added 'added' to SortField type and implemented sorting in getSortedItems()
+- Added CSS styling for .col-added (12% width, right-aligned)
+- Column shows "—" for request items (they have no date_created)
+- Responsive: column hidden on mobile (< 768px) alongside Watched column
+- 3 new frontend unit tests for date_created field handling
+- 345 backend tests pass, 293 frontend tests pass, typecheck clean
+- Verified in browser: column displays correctly, sorting works
+- Files changed: backend/app/models/content.py, backend/app/services/content.py, frontend/src/routes/issues/+page.svelte, frontend/tests/issues.test.ts, prd.json
+- Commits:
+  - feat(issues): [US-23.1] add Added date column to Issues page
+
 ## Current Status
 
 **Phase**: Epic 17 - Sync Improvements (In Progress)
-**Total Stories**: 66 stories (67 passes: true)
+**Total Stories**: 41 stories (20 passes: true, 21 remaining)
 
 ## Notes
 
