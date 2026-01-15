@@ -457,10 +457,23 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(onboarding): [US-18.3] add optional services prompt after setup
 
+### 2026-01-15: US-20.1 - Large Season Threshold Setting
+- Added large_season_size_gb field to UserSettings model (default: 15GB)
+- Created Alembic migration for new column
+- Updated GET/POST /api/settings/analysis endpoints to include large_season_size_gb
+- Updated DELETE /api/settings/analysis to reset the new field
+- Added frontend input "Flag TV series if any season exceeds" with 1-100 GB validation
+- Added 5 new backend tests for large_season_size_gb (default, save, min/max validation, boundary)
+- Added 2 new frontend tests for API contract
+- All 352 backend tests pass, 325 frontend tests pass
+- Files changed: backend/app/database.py, backend/app/models/settings.py, backend/app/routers/settings.py, backend/tests/test_settings.py, backend/alembic/versions/208afe3608f2*, frontend/src/routes/settings/+page.svelte, frontend/tests/settings-analysis.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-20.1] add large season threshold setting
+
 ## Current Status
 
-**Phase**: Epic 18 - User Onboarding (Complete)
-**Total Stories**: 41 stories (23 passes: true, 18 remaining)
+**Phase**: Epic 20 - Large Content Analysis (In Progress)
+**Total Stories**: 41 stories (24 passes: true, 17 remaining)
 
 ## Notes
 
