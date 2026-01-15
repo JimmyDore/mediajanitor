@@ -618,6 +618,80 @@ class TestSyncRateLimiting:
         response2 = client.post("/api/sync", headers=headers2)
         assert response2.status_code == 200
 
+    @patch("app.routers.sync.run_user_sync")
+    @patch("app.routers.sync.get_sync_status")
+    def test_force_bypasses_rate_limit_for_first_sync(
+        self, mock_get_status: AsyncMock, mock_run_sync: AsyncMock, client: TestClient
+    ) -> None:
+        """POST /api/sync with force=true should bypass rate limit for first sync (US-18.2)."""
+        mock_run_sync.return_value = {
+            "status": "success",
+            "media_items_synced": 10,
+            "requests_synced": 5,
+        }
+
+        # Mock a sync status that was just started but never completed (first sync)
+        from datetime import timedelta
+        recent_sync_time = datetime.now(timezone.utc) - timedelta(seconds=30)
+        mock_status = SyncStatus(
+            user_id=1,
+            last_sync_started=recent_sync_time,
+            last_sync_completed=None,  # Never completed = first sync
+            last_sync_status=None,
+        )
+        mock_get_status.return_value = mock_status
+
+        token = self._get_auth_token(client, "force1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Configure Jellyfin
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers,
+            )
+
+        # With force=true and first sync, should succeed despite recent sync_started
+        response = client.post(
+            "/api/sync",
+            json={"force": True},
+            headers=headers,
+        )
+        assert response.status_code == 200
+
+    @patch("app.services.sync.fetch_jellyfin_media")
+    @patch("app.services.sync.decrypt_value")
+    def test_force_does_not_bypass_rate_limit_for_subsequent_syncs(
+        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+    ) -> None:
+        """POST /api/sync with force=true should NOT bypass rate limit if already synced before."""
+        mock_decrypt.return_value = "decrypted-key"
+        mock_fetch.return_value = []
+
+        token = self._get_auth_token(client, "force2@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Configure Jellyfin
+        with patch("app.routers.settings.validate_jellyfin_connection", return_value=True):
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "http://jellyfin.local", "api_key": "test-key"},
+                headers=headers,
+            )
+
+        # First sync completes normally
+        response1 = client.post("/api/sync", headers=headers)
+        assert response1.status_code == 200
+
+        # Second sync with force=true should still be rate limited since user has synced before
+        response2 = client.post(
+            "/api/sync",
+            json={"force": True},
+            headers=headers,
+        )
+        assert response2.status_code == 429
+
 
 class TestMultiUserWatchDataAggregation:
     """Test multi-user watch data aggregation (US-17.1)."""

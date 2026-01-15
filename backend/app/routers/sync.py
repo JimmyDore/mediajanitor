@@ -49,10 +49,17 @@ class SyncStatusResponse(BaseModel):
     progress: SyncProgressInfo | None = None  # Only present when is_syncing=True
 
 
+class SyncRequest(BaseModel):
+    """Request model for sync operation."""
+
+    force: bool = False  # Bypass rate limit for first sync
+
+
 @router.post("", response_model=SyncResponse)
 async def trigger_sync(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    request: SyncRequest | None = None,
 ) -> SyncResponse:
     """
     Trigger a data sync for the current user.
@@ -61,10 +68,14 @@ async def trigger_sync(
     and caches it in the database.
 
     Rate limited to 1 sync per 5 minutes per user.
+    First sync (when user has never synced) bypasses rate limit when force=True.
     """
-    # Check rate limit
+    # Check rate limit (bypass if force=True and user has never synced)
     sync_status = await get_sync_status(db, current_user.id)
-    if sync_status and sync_status.last_sync_started:
+    is_first_sync = sync_status is None or sync_status.last_sync_completed is None
+    should_bypass_rate_limit = request and request.force and is_first_sync
+
+    if not should_bypass_rate_limit and sync_status and sync_status.last_sync_started:
         time_since_sync = datetime.now(timezone.utc) - sync_status.last_sync_started.replace(tzinfo=timezone.utc)
         rate_limit = timedelta(minutes=SYNC_RATE_LIMIT_MINUTES)
         if time_since_sync < rate_limit:

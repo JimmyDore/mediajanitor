@@ -62,6 +62,7 @@
 	let summaryLoading = $state(true);
 	let jellyfinSettings = $state<JellyfinSettings | null>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let autoSyncTriggered = $state(false);  // Track if we've already triggered auto-sync
 	const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds during sync
 
 	// Computed: Show checklist when Jellyfin not configured OR never synced
@@ -76,13 +77,32 @@
 		jellyfinSettings?.api_key_configured ? 'complete' : 'pending'
 	);
 
-	const syncStepStatus = $derived<'pending' | 'in-progress' | 'complete'>(
+	const syncStepStatus = $derived<'pending' | 'in-progress' | 'complete' | 'error'>(
 		syncStatus?.last_synced !== null
 			? 'complete'
 			: syncStatus?.is_syncing
 				? 'in-progress'
-				: 'pending'
+				: syncStatus?.status === 'failed'
+					? 'error'
+					: 'pending'
 	);
+
+	// Should auto-trigger sync: Jellyfin configured, never synced, not already syncing
+	const shouldAutoSync = $derived(
+		jellyfinSettings?.api_key_configured === true &&
+		syncStatus !== null &&
+		syncStatus.last_synced === null &&
+		!syncStatus.is_syncing &&
+		!autoSyncTriggered
+	);
+
+	// Auto-trigger first sync when conditions are met
+	$effect(() => {
+		if (shouldAutoSync) {
+			autoSyncTriggered = true;
+			triggerSync(true);  // force=true to bypass rate limit for first sync
+		}
+	});
 
 	function formatDate(isoString: string): string {
 		const date = new Date(isoString);
@@ -174,7 +194,7 @@
 		}
 	}
 
-	async function triggerSync() {
+	async function triggerSync(force: boolean = false) {
 		if (syncLoading) return;
 
 		syncLoading = true;
@@ -183,7 +203,9 @@
 
 		try {
 			const response = await authenticatedFetch('/api/sync', {
-				method: 'POST'
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ force })
 			});
 
 			if (response.status === 429) {
@@ -274,7 +296,7 @@
 			</div>
 			<button
 				class="btn-refresh"
-				onclick={triggerSync}
+				onclick={() => triggerSync()}
 				disabled={syncLoading}
 				aria-label="Refresh data"
 			>
@@ -319,6 +341,11 @@
 								</svg>
 							{:else if syncStepStatus === 'in-progress'}
 								<span class="step-spinner"></span>
+							{:else if syncStepStatus === 'error'}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="18" y1="6" x2="6" y2="18"/>
+									<line x1="6" y1="6" x2="18" y2="18"/>
+								</svg>
 							{:else}
 								<span class="step-number">2</span>
 							{/if}
@@ -327,8 +354,15 @@
 							<span class="step-title">Run First Sync</span>
 							{#if syncStepStatus === 'in-progress'}
 								<span class="step-status">Syncing...</span>
+							{:else if syncStepStatus === 'error'}
+								<div class="step-error">
+									<span class="step-error-text">{syncStatus?.error || 'Sync failed'}</span>
+									<button class="step-action step-retry" onclick={() => triggerSync(true)} disabled={syncLoading}>
+										Retry
+									</button>
+								</div>
 							{:else if syncStepStatus === 'pending' && jellyfinStepStatus === 'complete'}
-								<button class="step-action" onclick={triggerSync} disabled={syncLoading}>
+								<button class="step-action" onclick={() => triggerSync(true)} disabled={syncLoading}>
 									Start Sync
 								</button>
 							{/if}
@@ -517,6 +551,11 @@
 		color: var(--success, #22c55e);
 	}
 
+	.step-error .step-indicator {
+		background: var(--danger-light, rgba(239, 68, 68, 0.1));
+		color: var(--danger, #ef4444);
+	}
+
 	.step-number {
 		font-size: var(--font-size-sm);
 		font-weight: var(--font-weight-semibold);
@@ -585,6 +624,26 @@
 	.step-status {
 		font-size: var(--font-size-sm);
 		color: var(--accent);
+	}
+
+	.step-error {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	.step-error-text {
+		font-size: var(--font-size-sm);
+		color: var(--danger, #ef4444);
+	}
+
+	.step-retry {
+		background: var(--danger, #ef4444);
+	}
+
+	.step-retry:hover:not(:disabled) {
+		background: var(--danger-hover, #dc2626);
 	}
 
 	/* Error Banner */

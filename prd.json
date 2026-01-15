@@ -333,8 +333,8 @@
         "Unit tests pass"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added force parameter to POST /api/sync to bypass rate limit for first sync. Settings page navigates to dashboard after first Jellyfin config. Dashboard auto-triggers sync via $effect when Jellyfin configured + never synced. Checklist shows error state with Retry button on sync failure."
     },
     {
       "id": "US-18.3",

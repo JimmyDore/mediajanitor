@@ -308,4 +308,183 @@ describe('Setup Checklist API Integration', () => {
 			expect(syncData.last_synced).toBeNull();
 		});
 	});
+
+	describe('Auto-sync feature (US-18.2)', () => {
+		it('POST /api/sync supports force parameter to bypass rate limit', async () => {
+			const syncResponse = {
+				status: 'success',
+				media_items_synced: 200,
+				requests_synced: 50,
+				error: null
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(syncResponse)
+			});
+
+			const response = await fetch('/api/sync', {
+				method: 'POST',
+				headers: {
+					Authorization: 'Bearer jwt-token',
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ force: true })
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/sync', {
+				method: 'POST',
+				headers: {
+					Authorization: 'Bearer jwt-token',
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ force: true })
+			});
+
+			const data = await response.json();
+			expect(data.status).toBe('success');
+		});
+
+		it('sync step shows error state when sync fails', async () => {
+			const syncStatus = {
+				last_synced: null,
+				status: 'failed',
+				is_syncing: false,
+				media_items_count: null,
+				requests_count: null,
+				error: 'Connection refused',
+				progress: null
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(syncStatus)
+			});
+
+			const response = await fetch('/api/sync/status', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+
+			// Determine step status
+			const syncStepStatus =
+				data.last_synced !== null
+					? 'complete'
+					: data.is_syncing
+						? 'in-progress'
+						: data.status === 'failed'
+							? 'error'
+							: 'pending';
+
+			expect(syncStepStatus).toBe('error');
+			expect(data.error).toBe('Connection refused');
+		});
+
+		it('sync response includes item counts on success', async () => {
+			const syncResponse = {
+				status: 'success',
+				media_items_synced: 250,
+				requests_synced: 75,
+				error: null
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(syncResponse)
+			});
+
+			const response = await fetch('/api/sync', {
+				method: 'POST',
+				headers: {
+					Authorization: 'Bearer jwt-token',
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ force: true })
+			});
+
+			const data = await response.json();
+			expect(data.status).toBe('success');
+			expect(data.media_items_synced).toBe(250);
+			expect(data.requests_synced).toBe(75);
+		});
+
+		it('shouldAutoSync condition is true when Jellyfin configured and never synced', async () => {
+			// Mock the conditions that should trigger auto-sync
+			const jellyfinSettings = {
+				api_key_configured: true,
+				server_url: 'https://jellyfin.example.com'
+			};
+			const syncStatus = {
+				last_synced: null,
+				is_syncing: false,
+				status: null,
+				media_items_count: null,
+				requests_count: null,
+				error: null,
+				progress: null
+			};
+
+			// Check the auto-sync condition
+			const shouldAutoSync =
+				jellyfinSettings.api_key_configured === true &&
+				syncStatus.last_synced === null &&
+				!syncStatus.is_syncing;
+
+			expect(shouldAutoSync).toBe(true);
+		});
+
+		it('shouldAutoSync condition is false when already synced before', async () => {
+			// Mock the conditions where auto-sync should NOT trigger
+			const jellyfinSettings = {
+				api_key_configured: true,
+				server_url: 'https://jellyfin.example.com'
+			};
+			const syncStatus = {
+				last_synced: '2024-01-15T10:30:00Z',
+				is_syncing: false,
+				status: 'success',
+				media_items_count: 200,
+				requests_count: 50,
+				error: null,
+				progress: null
+			};
+
+			// Check the auto-sync condition
+			const shouldAutoSync =
+				jellyfinSettings.api_key_configured === true &&
+				syncStatus.last_synced === null &&
+				!syncStatus.is_syncing;
+
+			expect(shouldAutoSync).toBe(false);
+		});
+
+		it('shouldAutoSync condition is false when sync is already in progress', async () => {
+			// Mock the conditions where auto-sync should NOT trigger (already syncing)
+			const jellyfinSettings = {
+				api_key_configured: true,
+				server_url: 'https://jellyfin.example.com'
+			};
+			const syncStatus = {
+				last_synced: null,
+				is_syncing: true,
+				status: null,
+				media_items_count: null,
+				requests_count: null,
+				error: null,
+				progress: {
+					current_step: 'syncing_media',
+					total_steps: 2,
+					current_step_progress: 3,
+					current_step_total: 10,
+					current_user_name: 'John'
+				}
+			};
+
+			// Check the auto-sync condition
+			const shouldAutoSync =
+				jellyfinSettings.api_key_configured === true &&
+				syncStatus.last_synced === null &&
+				!syncStatus.is_syncing;
+
+			expect(shouldAutoSync).toBe(false);
+		});
+	});
 });

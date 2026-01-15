@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { theme, toasts, authenticatedFetch, type ThemePreference } from '$lib/stores';
 
 	// Jellyfin form state
@@ -13,6 +14,9 @@
 	// Jellyfin current settings state
 	let hasJellyfinConfigured = $state(false);
 	let currentJellyfinUrl = $state<string | null>(null);
+
+	// Sync status for auto-sync
+	let hasNeverSynced = $state(true);
 
 	// Jellyseerr form state
 	let jellyseerrUrl = $state('');
@@ -175,6 +179,13 @@
 
 			// Load nicknames
 			await loadNicknames();
+
+			// Load sync status to check if user has never synced
+			const syncResponse = await authenticatedFetch('/api/sync/status');
+			if (syncResponse.ok) {
+				const syncData = await syncResponse.json();
+				hasNeverSynced = syncData.last_synced === null;
+			}
 		} catch (e) {
 			console.error('Failed to load settings:', e);
 		} finally {
@@ -319,10 +330,21 @@
 			}
 
 			jellyfinSuccess = 'Connected';
+			const wasFirstConfiguration = !hasJellyfinConfigured;
 			hasJellyfinConfigured = true;
 			currentJellyfinUrl = jellyfinUrl;
 			jellyfinApiKey = '';
 			jellyfinExpanded = false;
+
+			// Auto-sync after first Jellyfin configuration if user has never synced
+			if (wasFirstConfiguration && hasNeverSynced) {
+				jellyfinSuccess = 'Connected - starting sync...';
+				// Navigate to dashboard where sync will be shown in checklist
+				toasts.add('Jellyfin connected! Starting first sync...', 'success');
+				goto('/');
+				return;
+			}
+
 			setTimeout(() => jellyfinSuccess = null, 3000);
 		} catch (e) {
 			jellyfinError = e instanceof Error ? e.message : 'Failed to save settings';
