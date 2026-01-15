@@ -4764,3 +4764,218 @@ class TestRequestWhitelist:
         response = client.get("/api/content/summary", headers=headers)
         assert response.status_code == 200
         assert response.json()["unavailable_requests"]["count"] == 1
+
+
+class TestRecentlyAvailableDisplayName:
+    """Test display_name resolution in GET /api/info/recent endpoint (US-31.5)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "recent-dn@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_recently_available_includes_display_name_field(
+        self, client: TestClient
+    ) -> None:
+        """Should include display_name field in response items."""
+        token = self._get_auth_token(client, "recent-dn1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9001,
+                tmdb_id=90001,
+                media_type="movie",
+                status=5,
+                title="Test Movie",
+                requested_by="john_doe",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert "display_name" in data["items"][0]
+        # Without nickname mapping, display_name should equal requested_by
+        assert data["items"][0]["display_name"] == "john_doe"
+        assert data["items"][0]["requested_by"] == "john_doe"
+
+    @pytest.mark.asyncio
+    async def test_recently_available_resolves_nickname_to_display_name(
+        self, client: TestClient
+    ) -> None:
+        """Should resolve nickname mapping to display_name."""
+        from app.database import UserNickname
+
+        token = self._get_auth_token(client, "recent-dn2@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create nickname mapping
+            nickname = UserNickname(
+                user_id=user_id,
+                jellyseerr_username="john_doe",
+                display_name="John",
+            )
+            session.add(nickname)
+
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9002,
+                tmdb_id=90002,
+                media_type="movie",
+                status=5,
+                title="Test Movie 2",
+                requested_by="john_doe",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        # display_name should be resolved from nickname mapping
+        assert data["items"][0]["display_name"] == "John"
+        # requested_by should still be original username
+        assert data["items"][0]["requested_by"] == "john_doe"
+
+    @pytest.mark.asyncio
+    async def test_recently_available_null_requester_has_null_display_name(
+        self, client: TestClient
+    ) -> None:
+        """Should return null display_name when requested_by is null."""
+        token = self._get_auth_token(client, "recent-dn3@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9003,
+                tmdb_id=90003,
+                media_type="movie",
+                status=5,
+                title="Test Movie 3",
+                requested_by=None,  # No requester
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["display_name"] is None
+        assert data["items"][0]["requested_by"] is None
+
+    @pytest.mark.asyncio
+    async def test_recently_available_multiple_requesters_with_nicknames(
+        self, client: TestClient
+    ) -> None:
+        """Should resolve nicknames for multiple different requesters."""
+        from app.database import UserNickname
+
+        token = self._get_auth_token(client, "recent-dn4@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create nickname mappings for some users
+            nickname1 = UserNickname(
+                user_id=user_id,
+                jellyseerr_username="alice_j",
+                display_name="Alice",
+            )
+            nickname2 = UserNickname(
+                user_id=user_id,
+                jellyseerr_username="bob_smith",
+                display_name="Bob",
+            )
+            session.add_all([nickname1, nickname2])
+
+            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+
+            # Request from alice_j (has nickname)
+            request1 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9004,
+                tmdb_id=90004,
+                media_type="movie",
+                status=5,
+                title="Alice Movie",
+                requested_by="alice_j",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            # Request from bob_smith (has nickname)
+            request2 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9005,
+                tmdb_id=90005,
+                media_type="movie",
+                status=5,
+                title="Bob Movie",
+                requested_by="bob_smith",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            # Request from charlie (no nickname)
+            request3 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9006,
+                tmdb_id=90006,
+                media_type="movie",
+                status=5,
+                title="Charlie Movie",
+                requested_by="charlie",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add_all([request1, request2, request3])
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 3
+
+        # Find each item by title and verify display_name
+        items_by_title = {item["title"]: item for item in data["items"]}
+
+        assert items_by_title["Alice Movie"]["display_name"] == "Alice"
+        assert items_by_title["Alice Movie"]["requested_by"] == "alice_j"
+
+        assert items_by_title["Bob Movie"]["display_name"] == "Bob"
+        assert items_by_title["Bob Movie"]["requested_by"] == "bob_smith"
+
+        assert items_by_title["Charlie Movie"]["display_name"] == "charlie"
+        assert items_by_title["Charlie Movie"]["requested_by"] == "charlie"

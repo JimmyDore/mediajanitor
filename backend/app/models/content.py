@@ -101,6 +101,7 @@ class RecentlyAvailableItem(BaseModel):
     media_type: str  # "movie" or "tv"
     availability_date: str
     requested_by: str | None = None
+    display_name: str | None = None  # Resolved from nickname mapping, or same as requested_by
 
 
 class RecentlyAvailableResponse(BaseModel):

@@ -94,7 +94,8 @@ describe('Info API Integration', () => {
 						title: 'Test Movie',
 						media_type: 'movie',
 						availability_date: '2026-01-10T12:00:00+00:00',
-						requested_by: 'test_user'
+						requested_by: 'test_user',
+						display_name: 'Test User'
 					}
 				],
 				total_count: 1
@@ -114,6 +115,97 @@ describe('Info API Integration', () => {
 			expect(item).toHaveProperty('title');
 			expect(item).toHaveProperty('media_type');
 			expect(item).toHaveProperty('availability_date');
+			expect(item).toHaveProperty('display_name');
+		});
+
+		it('returns display_name resolved from nickname mapping', async () => {
+			const recentData = {
+				items: [
+					{
+						jellyseerr_id: 1001,
+						title: 'Test Movie',
+						media_type: 'movie',
+						availability_date: '2026-01-10T12:00:00+00:00',
+						requested_by: 'john_doe',
+						display_name: 'John'
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(recentData)
+			});
+
+			const response = await fetch('/api/info/recent', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.requested_by).toBe('john_doe');
+			expect(item.display_name).toBe('John');
+		});
+
+		it('returns display_name same as requested_by when no nickname mapping', async () => {
+			const recentData = {
+				items: [
+					{
+						jellyseerr_id: 1001,
+						title: 'Test Movie',
+						media_type: 'movie',
+						availability_date: '2026-01-10T12:00:00+00:00',
+						requested_by: 'charlie',
+						display_name: 'charlie'
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(recentData)
+			});
+
+			const response = await fetch('/api/info/recent', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.requested_by).toBe('charlie');
+			expect(item.display_name).toBe('charlie');
+		});
+
+		it('returns null display_name when requested_by is null', async () => {
+			const recentData = {
+				items: [
+					{
+						jellyseerr_id: 1001,
+						title: 'Test Movie',
+						media_type: 'movie',
+						availability_date: '2026-01-10T12:00:00+00:00',
+						requested_by: null,
+						display_name: null
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(recentData)
+			});
+
+			const response = await fetch('/api/info/recent', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.requested_by).toBeNull();
+			expect(item.display_name).toBeNull();
 		});
 
 		it('handles network errors', async () => {

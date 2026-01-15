@@ -911,6 +911,43 @@ def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
     return parse_jellyfin_datetime(date_str)
 
 
+async def get_nickname_map(db: AsyncSession, user_id: int) -> dict[str, str]:
+    """Get a mapping of jellyseerr_username -> display_name for a user.
+
+    Returns a dict where keys are Jellyseerr usernames and values are display names.
+    """
+    from app.database import UserNickname
+
+    result = await db.execute(
+        select(UserNickname).where(UserNickname.user_id == user_id)
+    )
+    nicknames = result.scalars().all()
+
+    return {n.jellyseerr_username: n.display_name for n in nicknames}
+
+
+def resolve_display_name(
+    requested_by: str | None,
+    nickname_map: dict[str, str],
+) -> str | None:
+    """Resolve the display name for a requester.
+
+    If the requester has a nickname mapping, return the display name.
+    Otherwise, return the original requested_by value.
+    If requested_by is None, return None.
+
+    Args:
+        requested_by: The Jellyseerr username
+        nickname_map: Dict mapping usernames to display names
+
+    Returns:
+        The resolved display name, or None if requested_by is None
+    """
+    if requested_by is None:
+        return None
+    return nickname_map.get(requested_by, requested_by)
+
+
 async def get_recently_available(
     db: AsyncSession,
     user_id: int,
@@ -924,6 +961,7 @@ async def get_recently_available(
         days_back: Number of days to look back. If None, uses user's setting.
 
     Returns items sorted by date, newest first.
+    Includes display_name field resolved from user's nickname mappings.
     """
     if days_back is None:
         days_back = await get_user_recently_available_days(db, user_id)
@@ -934,6 +972,9 @@ async def get_recently_available(
         )
     )
     all_requests = result.scalars().all()
+
+    # Get nickname mappings for resolving display names
+    nickname_map = await get_nickname_map(db, user_id)
 
     now = datetime.now(timezone.utc)
     cutoff_date = now - timedelta(days=days_back)
@@ -964,6 +1005,7 @@ async def get_recently_available(
             media_type=request.media_type,
             availability_date=availability_date.isoformat(),
             requested_by=request.requested_by,
+            display_name=resolve_display_name(request.requested_by, nickname_map),
         )
         for availability_date, request in recent_items
     ]

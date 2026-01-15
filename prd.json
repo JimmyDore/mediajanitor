@@ -202,8 +202,8 @@
         "Verify in browser: copy output shows correct grouping"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added display_name field to RecentlyAvailableItem model, implemented get_nickname_map() and resolve_display_name() in content service, updated frontend copy function to group by requester"
     },
     {
       "id": "US-17.1",

@@ -8,6 +8,7 @@
 		media_type: string;
 		availability_date: string;
 		requested_by: string | null;
+		display_name: string | null;
 	}
 
 	interface RecentlyAvailableResponse {
@@ -15,14 +16,19 @@
 		total_count: number;
 	}
 
-	interface GroupedItems {
+	interface GroupedByDate {
 		date: string;
 		dateFormatted: string;
 		items: RecentlyAvailableItem[];
 	}
 
+	interface GroupedByRequester {
+		displayName: string;
+		items: RecentlyAvailableItem[];
+	}
+
 	let data = $state<RecentlyAvailableResponse | null>(null);
-	let groupedData = $state<GroupedItems[]>([]);
+	let groupedData = $state<GroupedByDate[]>([]);
 	let recentlyAvailableDays = $state(7);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -44,6 +50,14 @@
 		});
 	}
 
+	function formatDateForCopy(isoString: string): string {
+		const date = new Date(isoString);
+		return date.toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric'
+		});
+	}
+
 	function getDateKey(isoString: string): string {
 		const date = new Date(isoString);
 		const year = date.getFullYear();
@@ -57,7 +71,7 @@
 		setTimeout(() => toast = null, 3000);
 	}
 
-	function groupItemsByDate(items: RecentlyAvailableItem[]): GroupedItems[] {
+	function groupItemsByDate(items: RecentlyAvailableItem[]): GroupedByDate[] {
 		const groups: Map<string, RecentlyAvailableItem[]> = new Map();
 
 		for (const item of items) {
@@ -77,15 +91,50 @@
 			}));
 	}
 
+	function groupItemsByRequester(items: RecentlyAvailableItem[]): GroupedByRequester[] {
+		const groups: Map<string, RecentlyAvailableItem[]> = new Map();
+
+		for (const item of items) {
+			// Use display_name for grouping, fall back to 'Unknown' for null
+			const groupKey = item.display_name ?? 'Unknown';
+			if (!groups.has(groupKey)) {
+				groups.set(groupKey, []);
+			}
+			groups.get(groupKey)!.push(item);
+		}
+
+		// Sort items within each group by availability date (newest first)
+		for (const groupItems of groups.values()) {
+			groupItems.sort((a, b) => b.availability_date.localeCompare(a.availability_date));
+		}
+
+		// Convert to array and sort alphabetically, with 'Unknown' at the end
+		const result = Array.from(groups.entries())
+			.sort((a, b) => {
+				if (a[0] === 'Unknown') return 1;
+				if (b[0] === 'Unknown') return -1;
+				return a[0].toLowerCase().localeCompare(b[0].toLowerCase());
+			})
+			.map(([displayName, items]) => ({
+				displayName,
+				items
+			}));
+
+		return result;
+	}
+
 	async function copyList() {
 		if (!data?.items.length) return;
 
+		const groupedByRequester = groupItemsByRequester(data.items);
 		const lines: string[] = [];
-		for (const group of groupedData) {
-			lines.push(`${group.dateFormatted}:`);
+
+		for (const group of groupedByRequester) {
+			lines.push(`${group.displayName}:`);
 			for (const item of group.items) {
 				const type = item.media_type === 'tv' ? 'TV' : 'Movie';
-				lines.push(`  - ${item.title} (${type})`);
+				const availableDate = formatDateForCopy(item.availability_date);
+				lines.push(`  - ${item.title} (${type}) - available since ${availableDate}`);
 			}
 			lines.push('');
 		}
@@ -199,7 +248,7 @@
 										</span>
 									</td>
 									<td class="col-requester">
-										{item.requested_by || '-'}
+										{item.display_name || '—'}
 									</td>
 								</tr>
 							{/each}
