@@ -50,8 +50,8 @@
         "Verify in browser: only 5 tabs remain (All, Old, Large, Language, Requests)"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Files: frontend/src/routes/issues/+page.svelte, backend/app/routers/content.py, backend/app/services/content.py"
+      "passes": true,
+      "notes": "Removed multi filter from backend (content.py service and router docstrings) and frontend (FilterType type and filterLabels). Removed TestMultiIssueContent test class (4 tests). URL ?filter=multi gracefully falls back to showing all issues."
     },
     {
       "id": "US-12.3",

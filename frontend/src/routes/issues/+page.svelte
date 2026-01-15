@@ -36,7 +36,7 @@
 		jellyseerr_configured: boolean;
 	}
 
-	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests' | 'multi';
+	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
 	type SortField = 'name' | 'size' | 'date' | 'issues';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
@@ -316,7 +316,7 @@
 
 	$effect(() => {
 		const urlFilter = $page.url.searchParams.get('filter');
-		if (urlFilter && ['all', 'old', 'large', 'language', 'requests', 'multi'].includes(urlFilter)) {
+		if (urlFilter && ['all', 'old', 'large', 'language', 'requests'].includes(urlFilter)) {
 			activeFilter = urlFilter as FilterType;
 		}
 	});
@@ -326,8 +326,7 @@
 		old: 'Old',
 		large: 'Large',
 		language: 'Language',
-		requests: 'Requests',
-		multi: 'Multi-Issue'
+		requests: 'Requests'
 	};
 
 	function isRequestItem(item: ContentIssueItem): boolean {
