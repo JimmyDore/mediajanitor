@@ -434,8 +434,8 @@
         "Verify in browser: filter toggles work correctly"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Renamed dashboard card to 'Large Content', added sub-filter buttons [All/Movies/Series] to Issues Large tab with client-side filtering, series items display 'Largest season: X GB', added 15 new tests in large-content.test.ts and 2 tests in issues.test.ts"
     },
     {
       "id": "US-21.1",

@@ -21,6 +21,9 @@
 		imdb_id: string | null;
 		sonarr_title_slug: string | null;  // Sonarr titleSlug for external links (e.g., "arcane")
 		jellyseerr_request_id: number | null;  // Matching Jellyseerr request ID (for reconciliation)
+		// Series-specific fields for large content detection
+		largest_season_size_bytes: number | null;  // For series only - largest season size
+		largest_season_size_formatted: string | null;  // Formatted version (e.g., "18.5 GB")
 		// Request-specific fields
 		requested_by: string | null;
 		request_date: string | null;
@@ -50,6 +53,7 @@
 	}
 
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
+	type LargeSubFilter = 'all' | 'movies' | 'series';
 	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
@@ -71,6 +75,7 @@
 	let hidingRequestIds = $state<Set<string>>(new Set());
 	let deletingIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
+	let largeSubFilter = $state<LargeSubFilter>('all');
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
 
@@ -147,9 +152,33 @@
 		return false;
 	}
 
+	function isMovieItem(item: ContentIssueItem): boolean {
+		const type = item.media_type.toLowerCase();
+		return type === 'movie';
+	}
+
+	function isSeriesItem(item: ContentIssueItem): boolean {
+		const type = item.media_type.toLowerCase();
+		return type === 'series' || type === 'tv';
+	}
+
+	function applyLargeSubFilter(items: ContentIssueItem[]): ContentIssueItem[] {
+		if (activeFilter !== 'large' || largeSubFilter === 'all') {
+			return items;
+		}
+		if (largeSubFilter === 'movies') {
+			return items.filter(item => isMovieItem(item));
+		}
+		if (largeSubFilter === 'series') {
+			return items.filter(item => isSeriesItem(item));
+		}
+		return items;
+	}
+
 	function getFilteredItems(items: ContentIssueItem[]): ContentIssueItem[] {
-		if (!debouncedSearchQuery.trim()) return items;
-		return items.filter(item => matchesSearch(item, debouncedSearchQuery));
+		let filtered = applyLargeSubFilter(items);
+		if (!debouncedSearchQuery.trim()) return filtered;
+		return filtered.filter(item => matchesSearch(item, debouncedSearchQuery));
 	}
 
 	function getFilteredStats(items: ContentIssueItem[]): { count: number; sizeBytes: number } {
@@ -704,6 +733,8 @@
 
 	function setFilter(filter: FilterType) {
 		activeFilter = filter;
+		// Reset sub-filter when changing tabs
+		largeSubFilter = 'all';
 		const url = filter === 'all' ? '/issues' : `/issues?filter=${filter}`;
 		goto(url, { replaceState: true });
 		fetchIssues(filter);
@@ -806,6 +837,33 @@
 			</button>
 		{/each}
 	</nav>
+
+	<!-- Sub-filter for Large tab -->
+	{#if activeFilter === 'large'}
+		<div class="sub-filter-nav">
+			<button
+				class="sub-filter-btn"
+				class:active={largeSubFilter === 'all'}
+				onclick={() => largeSubFilter = 'all'}
+			>
+				All
+			</button>
+			<button
+				class="sub-filter-btn"
+				class:active={largeSubFilter === 'movies'}
+				onclick={() => largeSubFilter = 'movies'}
+			>
+				Movies
+			</button>
+			<button
+				class="sub-filter-btn"
+				class:active={largeSubFilter === 'series'}
+				onclick={() => largeSubFilter = 'series'}
+			>
+				Series
+			</button>
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="loading">
@@ -991,6 +1049,11 @@
 								<td class="col-size">
 									{#if isRequestItem(item)}
 										<span class="text-muted">—</span>
+									{:else if isSeriesItem(item) && item.largest_season_size_formatted}
+										<span class="size-with-label" title="Largest season size">
+											<span class="size-label">Largest season:</span>
+											<span class="size-value">{item.largest_season_size_formatted}</span>
+										</span>
 									{:else}
 										{item.size_formatted}
 									{/if}
@@ -1281,6 +1344,36 @@
 	.filter-tab.active {
 		color: var(--text-primary);
 		border-bottom-color: var(--accent);
+	}
+
+	/* Sub-filter nav for Large tab */
+	.sub-filter-nav {
+		display: flex;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+	}
+
+	.sub-filter-btn {
+		padding: var(--space-1) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.sub-filter-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.sub-filter-btn.active {
+		background: var(--accent);
+		color: white;
+		border-color: var(--accent);
 	}
 
 	/* Loading & Error */
@@ -1578,11 +1671,30 @@
 	}
 
 	.col-size {
-		width: 10%;
+		width: 12%;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Size display for series with largest season */
+	.size-with-label {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 1px;
+		line-height: 1.2;
+	}
+
+	.size-label {
+		font-size: var(--font-size-xs);
+		font-family: var(--font-sans);
+		color: var(--text-muted);
+	}
+
+	.size-value {
+		font-family: var(--font-mono);
 	}
 
 	.col-added {

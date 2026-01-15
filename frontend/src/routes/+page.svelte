@@ -526,7 +526,7 @@
 
 					<button class="stat-card" onclick={() => navigateToIssues('large')}>
 						<div class="stat-value">{contentSummary?.large_movies.count ?? 0}</div>
-						<div class="stat-label">Large Movies</div>
+						<div class="stat-label">Large Content</div>
 						{#if contentSummary && contentSummary.large_movies.count > 0}
 							<div class="stat-meta">{contentSummary.large_movies.total_size_formatted}</div>
 						{/if}

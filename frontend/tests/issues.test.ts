@@ -743,5 +743,81 @@ describe('Unified Issues API Integration', () => {
 			expect(item.date_created).toBe('2023-03-20T14:45:00Z');
 			expect(item.media_type).toBe('Series');
 		});
+
+		it('returns largest_season_size fields for series items (US-20.4)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'series-large-season',
+						name: 'Series With Large Season',
+						media_type: 'Series',
+						production_year: 2021,
+						size_bytes: 80000000000,
+						size_formatted: '74.5 GB',
+						last_played_date: '2024-01-15T10:00:00Z',
+						path: '/media/tv/Series With Large Season',
+						date_created: '2023-03-20T14:45:00Z',
+						issues: ['large'],
+						largest_season_size_bytes: 18500000000,
+						largest_season_size_formatted: '17.2 GB'
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 80000000000,
+				total_size_formatted: '74.5 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=large', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.largest_season_size_bytes).toBe(18500000000);
+			expect(item.largest_season_size_formatted).toBe('17.2 GB');
+		});
+
+		it('returns null largest_season_size fields for movie items (US-20.4)', async () => {
+			const issuesResponse = {
+				items: [
+					{
+						jellyfin_id: 'movie-large',
+						name: 'Large Movie',
+						media_type: 'Movie',
+						production_year: 2022,
+						size_bytes: 25000000000,
+						size_formatted: '23.3 GB',
+						last_played_date: '2024-01-15T10:00:00Z',
+						path: '/media/movies/Large Movie',
+						date_created: '2023-03-20T14:45:00Z',
+						issues: ['large'],
+						largest_season_size_bytes: null,
+						largest_season_size_formatted: null
+					}
+				],
+				total_count: 1,
+				total_size_bytes: 25000000000,
+				total_size_formatted: '23.3 GB'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(issuesResponse)
+			});
+
+			const response = await fetch('/api/content/issues?filter=large', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.largest_season_size_bytes).toBeNull();
+			expect(item.largest_season_size_formatted).toBeNull();
+		});
 	});
 });
