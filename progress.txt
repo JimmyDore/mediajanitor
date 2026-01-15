@@ -1231,10 +1231,19 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(auth): [US-15.8] fix auth check loading delay on public routes
 
+### 2026-01-15: US-15.9 - Remove Unused api.ts File
+- Verified api.ts exports are not imported anywhere in the codebase
+- Deleted frontend/src/lib/api.ts
+- Removed exports: contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi, ApiError
+- 209 frontend tests pass, typecheck passes
+- Files changed: frontend/src/lib/api.ts (deleted), prd.json
+- Commits:
+  - chore(cleanup): [US-15.9] remove unused api.ts file
+
 ## Current Status
 
 **Phase**: UX Fixes and Delete Improvements (In Progress)
-**Total Stories**: 55 stories (50 passes: true, 5 remaining)
+**Total Stories**: 55 stories (51 passes: true, 4 remaining)
 
 ## Notes
 

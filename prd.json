@@ -147,8 +147,8 @@
         "Unit tests pass"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": "Unused exports: contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi. File: frontend/src/lib/api.ts"
+      "passes": true,
+      "notes": "Deleted frontend/src/lib/api.ts. All exports (contentApi, languageApi, requestsApi, whitelistApi, settingsApi, healthApi) were unused."
     },
     {
       "id": "US-16.1",
