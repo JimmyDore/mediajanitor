@@ -490,10 +490,38 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-20.2] calculate and store season sizes
 
+### 2026-01-15: US-20.3 - Large Series Detection Service
+- Implemented is_large_series() function:
+  - Returns True if largest_season_size_bytes >= threshold_gb * 1024^3
+  - Returns False for movies or when largest_season_size_bytes is None
+  - Default threshold: 15GB (configurable per user)
+- Added large_season_size_gb to UserThresholds dataclass
+- Updated get_user_thresholds() to include large_season_size_gb setting
+- Updated get_content_summary() to count both large movies AND large series:
+  - Changed large_movies_items to large_content_items
+  - Includes both is_large_movie() and is_large_series() checks
+- Updated get_item_issues() to detect large series:
+  - Added elif is_large_series() check after is_large_movie()
+  - Series with large seasons get 'large' badge
+- Updated get_content_issues() to include largest_season_size fields:
+  - Added largest_season_size_bytes (null for movies)
+  - Added largest_season_size_formatted (e.g., "18.5 GB")
+- Added fields to ContentIssueItem Pydantic model
+- 11 new tests in TestLargeSeriesDetection class covering:
+  - is_large_series() function unit tests (5 tests)
+  - Content summary with large series (2 tests)
+  - Content issues filter=large returns movies and series (1 test)
+  - Field presence in API response (2 tests)
+  - Issues badge verification (1 test)
+- 371 backend tests pass (+11 new), 21 integration tests pass, mypy clean
+- Files changed: models/content.py, services/content.py, tests/test_content.py, prd.json
+- Commits:
+  - feat(content): [US-20.3] add large series detection service
+
 ## Current Status
 
 **Phase**: Epic 20 - Large Content Analysis (In Progress)
-**Total Stories**: 41 stories (25 passes: true, 16 remaining)
+**Total Stories**: 41 stories (26 passes: true, 15 remaining)
 
 ## Notes
 
