@@ -419,10 +419,32 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(dashboard): [US-18.1] add setup checklist for new users
 
+### 2026-01-15: US-18.2 - Auto-Sync After Jellyfin Configuration
+- Added SyncRequest Pydantic model with force: bool parameter
+- Updated POST /api/sync to accept force parameter in request body
+- First sync (last_sync_completed is None) bypasses rate limit when force=True
+- Subsequent syncs cannot bypass rate limit even with force=True
+- Settings page detects if user has never synced via GET /api/sync/status
+- After first Jellyfin config + never synced, shows toast and navigates to dashboard
+- Dashboard auto-triggers sync via $effect when:
+  - Jellyfin configured (api_key_configured=true)
+  - Never synced (last_synced=null)
+  - Not currently syncing (is_syncing=false)
+  - Not already triggered (autoSyncTriggered flag)
+- Added 'error' state to syncStepStatus for failed syncs
+- Checklist shows error state with Retry button when sync fails
+- triggerSync() now accepts force parameter for first sync bypass
+- 2 new backend tests for force parameter behavior
+- 6 new frontend tests for auto-sync feature and error state
+- 349 backend tests pass, 309 frontend tests pass, typecheck clean
+- Files changed: backend/app/routers/sync.py, backend/tests/test_sync.py, frontend/src/routes/+page.svelte, frontend/src/routes/settings/+page.svelte, frontend/tests/setup-checklist.test.ts, prd.json
+- Commits:
+  - feat(onboarding): [US-18.2] add auto-sync after Jellyfin configuration
+
 ## Current Status
 
 **Phase**: Epic 18 - User Onboarding (In Progress)
-**Total Stories**: 41 stories (21 passes: true, 20 remaining)
+**Total Stories**: 41 stories (22 passes: true, 19 remaining)
 
 ## Notes
 
