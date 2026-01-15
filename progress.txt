@@ -1482,10 +1482,41 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-31.2] add recently available days frontend setting
 
+### 2026-01-15: US-31.3 - User Nickname Mapping (Backend)
+- Created UserNickname database model with fields:
+  - id, user_id (FK), jellyseerr_username, display_name, created_at
+  - UniqueConstraint on (user_id, jellyseerr_username)
+- Created Alembic migration: add_user_nicknames_table
+- Added Pydantic models in models/settings.py:
+  - NicknameCreate: Request model for creating mappings
+  - NicknameUpdate: Request model for updating display_name
+  - NicknameItem: Response model for single mapping
+  - NicknameListResponse: Response model for list
+- Implemented service functions in services/nicknames.py:
+  - create_nickname(): Creates new mapping, raises ValueError on duplicate
+  - get_nicknames(): Returns all mappings for user, alphabetically sorted
+  - update_nickname(): Updates display_name by ID
+  - delete_nickname(): Deletes mapping by ID
+- Implemented REST endpoints in routers/settings.py:
+  - GET /api/settings/nicknames: List all mappings for user
+  - POST /api/settings/nicknames: Create new mapping (201 Created)
+  - PUT /api/settings/nicknames/{id}: Update mapping display_name
+  - DELETE /api/settings/nicknames/{id}: Delete mapping
+- 409 Conflict returned when trying to create duplicate username mapping
+- 404 Not Found returned when updating/deleting non-existent mapping
+- Empty string validation rejects jellyseerr_username="" and display_name=""
+- User isolation: each user has separate namespace for mappings
+- 13 unit tests in TestNicknameSettings class
+- 2 integration tests for CRUD operations
+- 307 backend unit tests pass, 21 integration tests pass, mypy clean
+- Files changed: database.py, models/settings.py, routers/settings.py, services/nicknames.py, test_settings.py, test_integration.py, alembic migration
+- Commits:
+  - feat(settings): [US-31.3] add user nickname mapping backend
+
 ## Current Status
 
-**Phase**: Epic 31 - Display Settings (Complete)
-**Total Stories**: 62 stories (62 passes: true)
+**Phase**: Epic 31 - Display Settings (In Progress)
+**Total Stories**: 63 stories (63 passes: true)
 
 ## Notes
 
