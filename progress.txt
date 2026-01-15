@@ -470,10 +470,30 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(settings): [US-20.1] add large season threshold setting
 
+### 2026-01-15: US-20.2 - Calculate and Store Season Sizes
+- Added largest_season_size_bytes field to CachedMediaItem model (nullable BigInteger)
+- Created Alembic migration for new column
+- Implemented fetch_series_seasons() to get seasons from Jellyfin API
+- Implemented fetch_season_episodes() to get episodes with MediaSources for size calculation
+- Implemented calculate_season_total_size() to sum episode sizes in a season
+- Implemented calculate_season_sizes() async function that:
+  - Fetches all series from user's cache
+  - For each series, fetches seasons and episodes from Jellyfin API
+  - Calculates total size for each season, stores largest
+  - Handles API errors gracefully (logs warning, continues to next series)
+- Trigger calculate_season_sizes after media sync completes
+- Added calculating_sizes progress step in sync status for UI feedback
+- Progress logging: "Calculating season sizes for {n} series..."
+- 8 new unit tests: TestCalculateSeasonSizes and TestSyncCalculatingSizesState
+- All 360 backend tests pass, 21 integration tests pass, mypy clean
+- Files changed: database.py, services/sync.py, tests/test_sync.py, prd.json, alembic migration
+- Commits:
+  - feat(sync): [US-20.2] calculate and store season sizes
+
 ## Current Status
 
 **Phase**: Epic 20 - Large Content Analysis (In Progress)
-**Total Stories**: 41 stories (24 passes: true, 17 remaining)
+**Total Stories**: 41 stories (25 passes: true, 16 remaining)
 
 ## Notes
 
