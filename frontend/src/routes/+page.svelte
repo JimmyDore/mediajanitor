@@ -54,6 +54,12 @@
 		api_key_configured: boolean;
 	}
 
+	interface ServiceSettings {
+		api_key_configured: boolean;
+	}
+
+	const ENHANCE_SETUP_DISMISSED_KEY = 'mediajanitor_enhance_setup_dismissed';
+
 	let syncStatus = $state<SyncStatus | null>(null);
 	let syncLoading = $state(false);
 	let toastMessage = $state<string | null>(null);
@@ -61,6 +67,10 @@
 	let contentSummary = $state<ContentSummary | null>(null);
 	let summaryLoading = $state(true);
 	let jellyfinSettings = $state<JellyfinSettings | null>(null);
+	let jellyseerrSettings = $state<ServiceSettings | null>(null);
+	let radarrSettings = $state<ServiceSettings | null>(null);
+	let sonarrSettings = $state<ServiceSettings | null>(null);
+	let enhanceSetupDismissed = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let autoSyncTriggered = $state(false);  // Track if we've already triggered auto-sync
 	const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds during sync
@@ -70,6 +80,22 @@
 		jellyfinSettings !== null &&
 			syncStatus !== null &&
 			(jellyfinSettings.api_key_configured === false || syncStatus.last_synced === null)
+	);
+
+	// Computed: Show enhance setup card when setup complete but optional services not configured
+	const showEnhanceSetup = $derived(
+		!showSetupChecklist &&
+			jellyfinSettings !== null &&
+			syncStatus !== null &&
+			jellyfinSettings.api_key_configured === true &&
+			syncStatus.last_synced !== null &&
+			!enhanceSetupDismissed &&
+			jellyseerrSettings !== null &&
+			radarrSettings !== null &&
+			sonarrSettings !== null &&
+			(jellyseerrSettings.api_key_configured === false ||
+				radarrSettings.api_key_configured === false ||
+				sonarrSettings.api_key_configured === false)
 	);
 
 	// Computed: Step statuses
@@ -194,6 +220,52 @@
 		}
 	}
 
+	async function fetchOptionalServicesSettings() {
+		try {
+			const [jellyseerrRes, radarrRes, sonarrRes] = await Promise.all([
+				authenticatedFetch('/api/settings/jellyseerr'),
+				authenticatedFetch('/api/settings/radarr'),
+				authenticatedFetch('/api/settings/sonarr')
+			]);
+
+			if (jellyseerrRes.ok) {
+				jellyseerrSettings = await jellyseerrRes.json();
+			} else {
+				jellyseerrSettings = { api_key_configured: false };
+			}
+
+			if (radarrRes.ok) {
+				radarrSettings = await radarrRes.json();
+			} else {
+				radarrSettings = { api_key_configured: false };
+			}
+
+			if (sonarrRes.ok) {
+				sonarrSettings = await sonarrRes.json();
+			} else {
+				sonarrSettings = { api_key_configured: false };
+			}
+		} catch {
+			// Ignore errors - will show as not configured
+			jellyseerrSettings = { api_key_configured: false };
+			radarrSettings = { api_key_configured: false };
+			sonarrSettings = { api_key_configured: false };
+		}
+	}
+
+	function loadEnhanceSetupDismissed() {
+		if (typeof localStorage !== 'undefined') {
+			enhanceSetupDismissed = localStorage.getItem(ENHANCE_SETUP_DISMISSED_KEY) === 'true';
+		}
+	}
+
+	function dismissEnhanceSetup() {
+		enhanceSetupDismissed = true;
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(ENHANCE_SETUP_DISMISSED_KEY, 'true');
+		}
+	}
+
 	async function triggerSync(force: boolean = false) {
 		if (syncLoading) return;
 
@@ -254,8 +326,16 @@
 	}
 
 	onMount(async () => {
+		// Load localStorage state synchronously first
+		loadEnhanceSetupDismissed();
+
 		try {
-			await Promise.all([fetchSyncStatus(), fetchContentSummary(), fetchJellyfinSettings()]);
+			await Promise.all([
+				fetchSyncStatus(),
+				fetchContentSummary(),
+				fetchJellyfinSettings(),
+				fetchOptionalServicesSettings()
+			]);
 			// If sync is already in progress (e.g., page refresh during sync), start polling
 			if (syncStatus?.is_syncing) {
 				syncLoading = true;
@@ -367,6 +447,53 @@
 								</button>
 							{/if}
 						</div>
+					</div>
+				</div>
+			</section>
+		{/if}
+
+		{#if showEnhanceSetup}
+			<!-- Enhance Your Setup -->
+			<section class="enhance-setup">
+				<div class="enhance-card">
+					<div class="enhance-header">
+						<h2 class="enhance-title">Enhance your setup</h2>
+						<button class="enhance-dismiss" onclick={dismissEnhanceSetup} aria-label="Dismiss">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="18" y1="6" x2="6" y2="18"/>
+								<line x1="6" y1="6" x2="18" y2="18"/>
+							</svg>
+						</button>
+					</div>
+					<p class="enhance-description">Connect optional services to unlock more features</p>
+					<div class="enhance-services">
+						{#if jellyseerrSettings && !jellyseerrSettings.api_key_configured}
+							<div class="enhance-service">
+								<div class="service-info">
+									<span class="service-name">Jellyseerr</span>
+									<span class="service-description">Track media requests and availability</span>
+								</div>
+								<a href="/settings" class="service-link">Configure</a>
+							</div>
+						{/if}
+						{#if radarrSettings && !radarrSettings.api_key_configured}
+							<div class="enhance-service">
+								<div class="service-info">
+									<span class="service-name">Radarr</span>
+									<span class="service-description">Movie collection management</span>
+								</div>
+								<a href="/settings" class="service-link">Configure</a>
+							</div>
+						{/if}
+						{#if sonarrSettings && !sonarrSettings.api_key_configured}
+							<div class="enhance-service">
+								<div class="service-info">
+									<span class="service-name">Sonarr</span>
+									<span class="service-description">TV series management</span>
+								</div>
+								<a href="/settings" class="service-link">Configure</a>
+							</div>
+						{/if}
 					</div>
 				</div>
 			</section>
@@ -644,6 +771,99 @@
 
 	.step-retry:hover:not(:disabled) {
 		background: var(--danger-hover, #dc2626);
+	}
+
+	/* Enhance Setup Card */
+	.enhance-setup {
+		margin-bottom: var(--space-8);
+	}
+
+	.enhance-card {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+	}
+
+	.enhance-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: var(--space-1);
+	}
+
+	.enhance-title {
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-semibold);
+		color: var(--text-primary);
+	}
+
+	.enhance-dismiss {
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.enhance-dismiss:hover {
+		background: var(--bg-hover);
+		color: var(--text-secondary);
+	}
+
+	.enhance-description {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		margin-bottom: var(--space-4);
+	}
+
+	.enhance-services {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.enhance-service {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-3);
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+	}
+
+	.service-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.service-name {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+	}
+
+	.service-description {
+		font-size: var(--font-size-xs);
+		color: var(--text-muted);
+	}
+
+	.service-link {
+		font-size: var(--font-size-sm);
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.service-link:hover {
+		text-decoration: underline;
 	}
 
 	/* Error Banner */

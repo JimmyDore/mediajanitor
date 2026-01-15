@@ -350,8 +350,8 @@
         "Verify in browser"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented dismissible Enhance your setup card showing after checklist complete. Fetches optional service settings and displays only unconfigured services with Configure links. Dismiss state persisted in localStorage. 15 new tests in enhance-setup.test.ts."
     },
     {
       "id": "US-20.1",
