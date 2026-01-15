@@ -364,6 +364,25 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - fix(ui): [US-17.3] hide mobile sidebar completely when closed
 
+### 2026-01-15: US-19.1 - Search Issues by Text
+- Added search input to Issues page header below title/stats
+- Implemented debounced filtering (300ms) using setTimeout
+- Search matches against:
+  - Title (case-insensitive)
+  - Production year
+  - requested_by field (for Unavailable/Requests tab)
+- Item count updates to show "X of Y items" format when search is active
+- Total size updates to reflect filtered results
+- Added clear (X) button that appears when search text is present
+- Search operates within currently active tab filter
+- CSS: search-container with search-input and search-clear button
+- 24 new frontend unit tests in issues-search.test.ts
+- 290 frontend tests pass, typecheck clean
+- Verified in browser: search by title, year, and requester all work correctly
+- Files changed: frontend/src/routes/issues/+page.svelte, frontend/tests/issues-search.test.ts, prd.json
+- Commits:
+  - feat(issues): [US-19.1] add search filtering for Issues page
+
 ## Current Status
 
 **Phase**: Epic 17 - Sync Improvements (In Progress)

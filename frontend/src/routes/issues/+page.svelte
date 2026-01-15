@@ -73,6 +73,11 @@
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
 
+	// Search state
+	let searchQuery = $state('');
+	let debouncedSearchQuery = $state('');
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 	// Configuration status
 	let configStatus = $state<SettingsConfigStatus>({
 		radarr_configured: false,
@@ -100,6 +105,57 @@
 		{ value: '1year', label: '1 Year' },
 		{ value: 'custom', label: 'Custom Date' }
 	];
+
+	// Search handlers
+	function handleSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		searchQuery = target.value;
+
+		// Debounce the search
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
+		searchDebounceTimer = setTimeout(() => {
+			debouncedSearchQuery = searchQuery;
+		}, 300);
+	}
+
+	function clearSearch() {
+		searchQuery = '';
+		debouncedSearchQuery = '';
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+			searchDebounceTimer = null;
+		}
+	}
+
+	function matchesSearch(item: ContentIssueItem, query: string): boolean {
+		if (!query.trim()) return true;
+
+		const lowerQuery = query.toLowerCase().trim();
+
+		// Match against title
+		if (item.name.toLowerCase().includes(lowerQuery)) return true;
+
+		// Match against production year
+		if (item.production_year && item.production_year.toString().includes(lowerQuery)) return true;
+
+		// Match against requested_by (for Requests tab)
+		if (item.requested_by && item.requested_by.toLowerCase().includes(lowerQuery)) return true;
+
+		return false;
+	}
+
+	function getFilteredItems(items: ContentIssueItem[]): ContentIssueItem[] {
+		if (!debouncedSearchQuery.trim()) return items;
+		return items.filter(item => matchesSearch(item, debouncedSearchQuery));
+	}
+
+	function getFilteredStats(items: ContentIssueItem[]): { count: number; sizeBytes: number } {
+		const filtered = getFilteredItems(items);
+		const sizeBytes = filtered.reduce((sum, item) => sum + (item.size_bytes || 0), 0);
+		return { count: filtered.length, sizeBytes };
+	}
 
 	function getExpirationDate(duration: DurationOption, customDateValue: string): string | null {
 		if (duration === 'permanent') return null;
@@ -691,9 +747,31 @@
 		<div class="header-main">
 			<h1>Issues</h1>
 			{#if data && !loading}
+				{@const filteredStats = getFilteredStats(data.items)}
 				<span class="header-stats">
-					{data.total_count} items · {data.total_size_formatted}
+					{#if debouncedSearchQuery.trim()}
+						{filteredStats.count} of {data.total_count} items · {formatSize(filteredStats.sizeBytes)}
+					{:else}
+						{data.total_count} items · {data.total_size_formatted}
+					{/if}
 				</span>
+			{/if}
+		</div>
+		<div class="search-container">
+			<input
+				type="text"
+				class="search-input"
+				placeholder="Search by title, year..."
+				value={searchQuery}
+				oninput={handleSearchInput}
+			/>
+			{#if searchQuery}
+				<button class="search-clear" onclick={clearSearch} aria-label="Clear search">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="18" y1="6" x2="6" y2="18"/>
+						<line x1="6" y1="6" x2="18" y2="18"/>
+					</svg>
+				</button>
 			{/if}
 		</div>
 	</header>
@@ -720,6 +798,8 @@
 	{:else if data}
 		{#if data.items.length === 0}
 			<div class="empty">No issues found</div>
+		{:else if getFilteredItems(data.items).length === 0}
+			<div class="empty">No matching items found</div>
 		{:else}
 			<div class="table-container">
 				<table class="issues-table">
@@ -755,7 +835,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each getSortedItems(data.items) as item}
+						{#each getSortedItems(getFilteredItems(data.items)) as item}
 							<tr>
 								<td class="col-name">
 									<div class="name-cell">
@@ -1088,6 +1168,59 @@
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
 		font-family: var(--font-mono);
+	}
+
+	/* Search input */
+	.search-container {
+		position: relative;
+		margin-top: var(--space-3);
+	}
+
+	.search-input {
+		width: 100%;
+		max-width: 300px;
+		padding: var(--space-2) var(--space-3);
+		padding-right: var(--space-8);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-secondary);
+		color: var(--text-primary);
+		font-size: var(--font-size-sm);
+		transition: all var(--transition-fast);
+	}
+
+	.search-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.search-input:focus {
+		outline: none;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 2px var(--accent-light);
+	}
+
+	.search-clear {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		background: var(--bg-tertiary);
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.search-clear:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	/* Filter nav - underline style */
