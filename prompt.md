@@ -42,4 +42,5 @@
 
 If all stories have `passes: true`, output <promise>COMPLETE</promise>.
 
-ONLY DO ONE STORY AT A TIME.
+**CRITICAL: STOP AFTER ONE STORY.**
+After completing steps 1-15 for ONE story, you MUST stop immediately. Do NOT look for the next story. Do NOT continue working. The script will start a fresh session for the next story. This is essential for memory management.

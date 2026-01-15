@@ -9,8 +9,7 @@ LOGFILE="ralph-output.log"
 
 # Prompts
 QA_PROMPT="Use /exploratory-qa skill to review the application for cross-cutting concerns"
-RALPH_PROMPT="@prompt.md
-If all tasks in PRD.md are complete, output <promise>COMPLETE</promise>."
+RALPH_PROMPT="@prompt.md"
 
 # --- Helper functions ---
 
