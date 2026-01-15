@@ -399,10 +399,30 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(issues): [US-23.1] add Added date column to Issues page
 
+### 2026-01-15: US-18.1 - Show Setup Checklist for New Users
+- Added Setup Checklist component to Dashboard for new user onboarding
+- Checklist shows when Jellyfin not configured OR user has never synced
+- Two steps displayed:
+  1. "Connect Jellyfin" - links to /settings page
+  2. "Run First Sync" - shows "Start Sync" button when Jellyfin is configured
+- Step states with visual indicators:
+  - pending: gray circle with step number
+  - in-progress: blue spinner (for sync step)
+  - complete: green checkmark
+- Added JellyfinSettings interface and fetchJellyfinSettings() function
+- Added $derived computed properties for showSetupChecklist, jellyfinStepStatus, syncStepStatus
+- Checklist hides automatically when both steps are complete
+- 10 new unit tests in setup-checklist.test.ts for API integration
+- 303 frontend tests pass, typecheck clean
+- Verified in browser: checklist shows for new users, hides for configured users
+- Files changed: frontend/src/routes/+page.svelte, frontend/tests/setup-checklist.test.ts, prd.json
+- Commits:
+  - feat(dashboard): [US-18.1] add setup checklist for new users
+
 ## Current Status
 
-**Phase**: Epic 17 - Sync Improvements (In Progress)
-**Total Stories**: 41 stories (20 passes: true, 21 remaining)
+**Phase**: Epic 18 - User Onboarding (In Progress)
+**Total Stories**: 41 stories (21 passes: true, 20 remaining)
 
 ## Notes
 
