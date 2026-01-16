@@ -54,7 +54,7 @@
 
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
 	type LargeSubFilter = 'all' | 'movies' | 'series';
-	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added' | 'requester' | 'release';
+	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added' | 'requester' | 'release' | 'watched';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
 	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'request';
@@ -788,6 +788,27 @@
 					else if (relA && !relB) comparison = -1;
 					else comparison = relA - relB;
 					break;
+				case 'watched':
+					// Sort by watched status: date > "Watched" (no date) > "Never"
+					// Priority: 1 = has date, 2 = played without date, 3 = never
+					function getWatchPriority(item: ContentIssueItem): number {
+						if (item.last_played_date) return 1;
+						if (item.played) return 2;
+						return 3;
+					}
+					const priorityA = getWatchPriority(a);
+					const priorityB = getWatchPriority(b);
+					if (priorityA !== priorityB) {
+						// Different priorities: in DESC, lower number comes first
+						comparison = priorityA - priorityB;
+					} else if (priorityA === 1) {
+						// Both have dates: sort by date
+						const watchedDateA = new Date(a.last_played_date!).getTime();
+						const watchedDateB = new Date(b.last_played_date!).getTime();
+						comparison = watchedDateA - watchedDateB;
+					}
+					// Same priority without dates: maintain stable order (comparison = 0)
+					break;
 			}
 			return sortOrder === 'asc' ? comparison : -comparison;
 		});
@@ -934,9 +955,15 @@
 								</th>
 							{/if}
 							<th class="col-watched">
-								<button class="sort-btn" onclick={() => toggleSort('date')}>
-									{activeFilter === 'requests' ? 'Requested' : 'Watched'} {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-								</button>
+								{#if activeFilter === 'requests'}
+									<button class="sort-btn" onclick={() => toggleSort('date')}>
+										Requested {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									</button>
+								{:else}
+									<button class="sort-btn" onclick={() => toggleSort('watched')}>
+										Watched {sortField === 'watched' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									</button>
+								{/if}
 							</th>
 							<th class="col-actions"></th>
 						</tr>

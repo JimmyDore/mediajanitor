@@ -125,8 +125,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added 'watched' sort field to SortField type. Implemented three-tier sorting in getSortedItems: priority 1 (has date) → priority 2 (played=true, no date) → priority 3 (never watched). Descending shows most recent first, ascending shows never-watched first. Column header now uses 'watched' field instead of 'date' for non-requests tabs."
     },
     {
       "id": "US-35.2",
