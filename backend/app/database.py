@@ -108,6 +108,7 @@ class CachedJellyseerrRequest(Base):
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "movie" or "tv"
     status: Mapped[int] = mapped_column(Integer, nullable=False)  # Jellyseerr status code
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    title_fr: Mapped[str | None] = mapped_column(String(500), nullable=True)  # French title from TMDB
     requested_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     release_date: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Movie releaseDate or TV firstAirDate

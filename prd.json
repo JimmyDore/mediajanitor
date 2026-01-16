@@ -338,7 +338,7 @@
         "Verify after sync: `title_fr` column populated in database"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

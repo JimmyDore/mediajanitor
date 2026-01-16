@@ -53,7 +53,32 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 38 - Title Language Preference (In Progress)
-**Total Stories**: 47 stories (2 passes: true, 45 remaining)
+**Total Stories**: 47 stories (3 passes: true, 44 remaining)
+
+---
+
+## 2026-01-16: US-38.2 - Store French Titles During Sync
+
+### Summary
+Added ability to fetch and store French titles during sync, enabling future display of content in French.
+
+### Files Changed
+- `backend/app/database.py` - Added `title_fr` column to `CachedJellyseerrRequest` model
+- `backend/app/services/sync.py` - Added `language` parameter to `fetch_media_details()`, added `extract_french_title_from_request()` helper, updated sync to fetch both English and French titles
+- `backend/tests/test_sync.py` - Added tests for French title extraction and fetch_media_details with language
+- `backend/alembic/versions/20260116_192531_*.py` - Migration for `title_fr` column
+
+### Key Implementation Details
+- `fetch_media_details()` now accepts `language` parameter (default: "en")
+- During sync, the service makes two API calls per media item: one for English, one for French
+- French titles are stored in `title_fr` (movies use `title_fr`, TV shows use `name_fr` from media details)
+- `extract_french_title_from_request()` extracts French title from media object
+- Missing French titles are stored as None (graceful degradation)
+- Uses separate caches for EN and FR to avoid duplicate lookups
+
+### Learnings
+- The Jellyseerr API accepts a `language` parameter to fetch localized titles from TMDB
+- Caching both languages separately prevents redundant API calls for the same TMDB ID
 
 ---
 

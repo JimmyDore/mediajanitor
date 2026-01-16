@@ -351,6 +351,7 @@ async def fetch_media_details(
     api_key: str,
     tmdb_id: int,
     media_type: str,
+    language: str = "en",
 ) -> dict[str, Any]:
     """
     Fetch media details (including title) from Jellyseerr API.
@@ -361,6 +362,7 @@ async def fetch_media_details(
         api_key: Jellyseerr API key
         tmdb_id: TMDB ID of the media
         media_type: "movie" or "tv"
+        language: Language code for titles (default: "en")
 
     Returns dict with title and other media info, or empty dict on failure.
     """
@@ -370,18 +372,18 @@ async def fetch_media_details(
         response = await client.get(
             f"{server_url}/api/v1/{endpoint}/{tmdb_id}",
             headers={"X-Api-Key": api_key},
-            params={"language": "en"},
+            params={"language": language},
         )
         if response.status_code == 200:
             data: dict[str, Any] = response.json()
             return data
         else:
             logger.warning(
-                f"Failed to fetch {media_type} details for TMDB {tmdb_id}: {response.status_code}"
+                f"Failed to fetch {media_type} details for TMDB {tmdb_id} (language={language}): {response.status_code}"
             )
             return {}
     except (httpx.RequestError, httpx.TimeoutException) as e:
-        logger.warning(f"Error fetching {media_type} details for TMDB {tmdb_id}: {e}")
+        logger.warning(f"Error fetching {media_type} details for TMDB {tmdb_id} (language={language}): {e}")
         return {}
 
 
@@ -563,6 +565,20 @@ def extract_title_from_request(req: dict[str, Any]) -> str:
     return "Unknown"
 
 
+def extract_french_title_from_request(req: dict[str, Any]) -> str | None:
+    """
+    Extract French title from a Jellyseerr request using embedded data.
+
+    Returns None if no French title is available.
+    """
+    media = req.get("media", {})
+
+    # French titles are stored as title_fr (movies) or name_fr (TV)
+    title_fr = media.get("title_fr") or media.get("name_fr")
+
+    return str(title_fr) if title_fr else None
+
+
 def extract_release_date_from_request(req: dict[str, Any]) -> str | None:
     """
     Extract release date from a Jellyseerr request using embedded data.
@@ -638,8 +654,10 @@ async def fetch_jellyseerr_requests(
             logger.info(f"Fetched {len(all_requests)} requests from Jellyseerr")
 
             # Enrich requests with titles from media detail endpoints
-            # Use a cache to avoid duplicate lookups for the same TMDB ID
-            title_cache: dict[tuple[str, int], dict[str, Any]] = {}
+            # Use caches to avoid duplicate lookups for the same TMDB ID
+            # Cache key format: (media_type, tmdb_id)
+            title_cache_en: dict[tuple[str, int], dict[str, Any]] = {}
+            title_cache_fr: dict[tuple[str, int], dict[str, Any]] = {}
 
             for req in all_requests:
                 media = req.get("media", {})
@@ -650,26 +668,44 @@ async def fetch_jellyseerr_requests(
                     continue
 
                 cache_key = (media_type, tmdb_id)
-                if cache_key not in title_cache:
-                    details = await fetch_media_details(
-                        client, server_url, api_key, tmdb_id, media_type
+
+                # Fetch English title (default)
+                if cache_key not in title_cache_en:
+                    details_en = await fetch_media_details(
+                        client, server_url, api_key, tmdb_id, media_type, language="en"
                     )
-                    title_cache[cache_key] = details
+                    title_cache_en[cache_key] = details_en
+
+                # Fetch French title
+                if cache_key not in title_cache_fr:
+                    details_fr = await fetch_media_details(
+                        client, server_url, api_key, tmdb_id, media_type, language="fr"
+                    )
+                    title_cache_fr[cache_key] = details_fr
 
                 # Merge title info into the media object
-                details = title_cache[cache_key]
-                if details:
+                details_en = title_cache_en[cache_key]
+                details_fr = title_cache_fr[cache_key]
+
+                if details_en:
                     # Movies have 'title', TV shows have 'name'
                     if media_type == "movie":
-                        media["title"] = details.get("title")
-                        media["originalTitle"] = details.get("originalTitle")
-                        media["releaseDate"] = details.get("releaseDate")
+                        media["title"] = details_en.get("title")
+                        media["originalTitle"] = details_en.get("originalTitle")
+                        media["releaseDate"] = details_en.get("releaseDate")
                     else:  # tv
-                        media["name"] = details.get("name")
-                        media["originalName"] = details.get("originalName")
-                        media["firstAirDate"] = details.get("firstAirDate")
+                        media["name"] = details_en.get("name")
+                        media["originalName"] = details_en.get("originalName")
+                        media["firstAirDate"] = details_en.get("firstAirDate")
 
-            logger.info(f"Enriched {len(title_cache)} unique media items with titles")
+                # Add French titles (using same keys but with _fr suffix)
+                if details_fr:
+                    if media_type == "movie":
+                        media["title_fr"] = details_fr.get("title")
+                    else:  # tv
+                        media["name_fr"] = details_fr.get("name")
+
+            logger.info(f"Enriched {len(title_cache_en)} unique media items with English and French titles")
             return all_requests
 
     except httpx.HTTPStatusError as e:
@@ -903,6 +939,9 @@ async def cache_jellyseerr_requests(
         # Extract title using fallback chain (from embedded data, no extra API calls)
         title = extract_title_from_request(req)
 
+        # Extract French title (may be None if not available)
+        title_fr = extract_french_title_from_request(req)
+
         # Extract release date (movies: releaseDate, TV: firstAirDate)
         release_date = extract_release_date_from_request(req)
 
@@ -914,6 +953,7 @@ async def cache_jellyseerr_requests(
             media_type=media.get("mediaType", "unknown"),
             status=req.get("status", 0),
             title=title,
+            title_fr=title_fr,
             requested_by=requested_by.get("displayName"),
             created_at_source=req.get("createdAt"),
             release_date=release_date,

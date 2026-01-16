@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database import User, UserSettings, CachedMediaItem, CachedJellyseerrRequest, SyncStatus
-from app.services.sync import extract_title_from_request, extract_release_date_from_request
+from app.services.sync import extract_title_from_request, extract_release_date_from_request, extract_french_title_from_request
 from tests.conftest import TestingAsyncSessionLocal
 
 
@@ -181,6 +181,84 @@ class TestExtractReleaseDateFromRequest:
         assert extract_release_date_from_request(request) == "2026-07-15T00:00:00.000Z"
 
 
+class TestExtractFrenchTitleFromRequest:
+    """Test French title extraction from Jellyseerr request data (US-38.2)."""
+
+    def test_extracts_title_fr_for_movies(self) -> None:
+        """Movies should use 'title_fr' field."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "title": "The Matrix",
+                "title_fr": "Matrix",
+                "tmdbId": 603,
+            }
+        }
+        assert extract_french_title_from_request(request) == "Matrix"
+
+    def test_extracts_name_fr_for_tv_shows(self) -> None:
+        """TV shows should use 'name_fr' field."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+                "name": "Breaking Bad",
+                "name_fr": "Breaking Bad",
+                "tmdbId": 1396,
+            }
+        }
+        assert extract_french_title_from_request(request) == "Breaking Bad"
+
+    def test_returns_none_when_no_french_title_for_movie(self) -> None:
+        """Should return None if no French title available for movie."""
+        request = {
+            "media": {
+                "mediaType": "movie",
+                "title": "The Matrix",
+                "tmdbId": 603,
+            }
+        }
+        assert extract_french_title_from_request(request) is None
+
+    def test_returns_none_when_no_french_title_for_tv(self) -> None:
+        """Should return None if no French title available for TV."""
+        request = {
+            "media": {
+                "mediaType": "tv",
+                "name": "Breaking Bad",
+                "tmdbId": 1396,
+            }
+        }
+        assert extract_french_title_from_request(request) is None
+
+    def test_returns_none_for_empty_media(self) -> None:
+        """Should return None if media object is empty."""
+        request = {"media": {}}
+        assert extract_french_title_from_request(request) is None
+
+    def test_returns_none_for_empty_request(self) -> None:
+        """Should return None for empty request."""
+        assert extract_french_title_from_request({}) is None
+
+    def test_title_fr_takes_precedence_over_name_fr(self) -> None:
+        """'title_fr' should take precedence over 'name_fr' (for edge cases)."""
+        request = {
+            "media": {
+                "title_fr": "Titre Français",
+                "name_fr": "Nom Français",
+            }
+        }
+        assert extract_french_title_from_request(request) == "Titre Français"
+
+    def test_handles_non_string_values(self) -> None:
+        """Should convert non-string title values to strings."""
+        request = {
+            "media": {
+                "title_fr": 123,  # Numeric title (edge case)
+            }
+        }
+        assert extract_french_title_from_request(request) == "123"
+
+
 class TestSyncModels:
     """Test database models for caching."""
 
@@ -246,6 +324,50 @@ class TestSyncModels:
             await session.commit()
             assert request.id is not None
             assert request.release_date == "2026-07-15"
+
+    @pytest.mark.asyncio
+    async def test_cached_jellyseerr_request_has_title_fr_column(self, client: TestClient) -> None:
+        """CachedJellyseerrRequest should have title_fr column (US-38.2)."""
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=1,
+                jellyseerr_id=125,
+                tmdb_id=890,
+                media_type="movie",
+                status=2,
+                title="The Matrix",
+                title_fr="Matrix",  # New French title column
+                requested_by="TestUser",
+                created_at_source="2024-01-01T10:00:00Z",
+                raw_data={"full": "request"},
+            )
+            session.add(request)
+            await session.commit()
+            assert request.id is not None
+            assert request.title == "The Matrix"
+            assert request.title_fr == "Matrix"
+
+    @pytest.mark.asyncio
+    async def test_cached_jellyseerr_request_title_fr_can_be_null(self, client: TestClient) -> None:
+        """CachedJellyseerrRequest.title_fr should allow null values (US-38.2)."""
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=1,
+                jellyseerr_id=126,
+                tmdb_id=891,
+                media_type="movie",
+                status=2,
+                title="Inception",
+                title_fr=None,  # No French title available
+                requested_by="TestUser",
+                created_at_source="2024-01-01T10:00:00Z",
+                raw_data={"full": "request"},
+            )
+            session.add(request)
+            await session.commit()
+            assert request.id is not None
+            assert request.title == "Inception"
+            assert request.title_fr is None
 
     @pytest.mark.asyncio
     async def test_sync_status_model_exists(self, client: TestClient) -> None:
@@ -1948,3 +2070,94 @@ class TestSyncRetryWithBackoff:
         assert len(users) == 2
         assert users[0]["Name"] == "John"
         assert users[1]["Name"] == "Jane"
+
+
+class TestFetchMediaDetailsWithLanguage:
+    """Test fetch_media_details with language parameter (US-38.2)."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_media_details_uses_language_parameter(self) -> None:
+        """fetch_media_details should pass language to API."""
+        import httpx
+        from app.services.sync import fetch_media_details
+
+        captured_params: dict = {}
+
+        async def mock_get(self, url, **kwargs):
+            nonlocal captured_params
+            captured_params = kwargs.get("params", {})
+            response = httpx.Response(200, json={"title": "Test Movie"})
+            return response
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+                await fetch_media_details(
+                    client, "http://jellyseerr.local", "api-key", 123, "movie", language="fr"
+                )
+
+        assert captured_params.get("language") == "fr"
+
+    @pytest.mark.asyncio
+    async def test_fetch_media_details_default_language_is_english(self) -> None:
+        """fetch_media_details should default to English language."""
+        import httpx
+        from app.services.sync import fetch_media_details
+
+        captured_params: dict = {}
+
+        async def mock_get(self, url, **kwargs):
+            nonlocal captured_params
+            captured_params = kwargs.get("params", {})
+            response = httpx.Response(200, json={"title": "Test Movie"})
+            return response
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+                await fetch_media_details(
+                    client, "http://jellyseerr.local", "api-key", 123, "movie"
+                )
+
+        assert captured_params.get("language") == "en"
+
+    @pytest.mark.asyncio
+    async def test_fetch_media_details_returns_french_title_when_requested(self) -> None:
+        """fetch_media_details should return French title when language=fr."""
+        import httpx
+        from app.services.sync import fetch_media_details
+
+        async def mock_get(self, url, **kwargs):
+            params = kwargs.get("params", {})
+            if params.get("language") == "fr":
+                return httpx.Response(200, json={"title": "Matrix"})  # French title
+            return httpx.Response(200, json={"title": "The Matrix"})  # English title
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+                result_en = await fetch_media_details(
+                    client, "http://jellyseerr.local", "api-key", 123, "movie", language="en"
+                )
+                result_fr = await fetch_media_details(
+                    client, "http://jellyseerr.local", "api-key", 123, "movie", language="fr"
+                )
+
+        assert result_en.get("title") == "The Matrix"
+        assert result_fr.get("title") == "Matrix"
+
+    @pytest.mark.asyncio
+    async def test_fetch_media_details_handles_missing_french_title(self) -> None:
+        """fetch_media_details should handle cases where French title is unavailable."""
+        import httpx
+        from app.services.sync import fetch_media_details
+
+        async def mock_get(self, url, **kwargs):
+            # Return 404 when French title not available
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+                result = await fetch_media_details(
+                    client, "http://jellyseerr.local", "api-key", 123, "movie", language="fr"
+                )
+
+        # Should return empty dict on failure
+        assert result == {}
