@@ -2,7 +2,7 @@ Prd
 - Series episodes are buggy for the recent released
 
 Manual
-- add in ralph.md process morning : /prd-sync, review progress.txt/Progress.md, /prd-archive, /review-suggestions, manual qa(/prd or auto fix), /ralph-init 
+- add in ralph.md process morning : /prd-sync, review progress.txt/PRD.md, /prd-archive, /review-suggestions, manual qa(/prd or auto fix), /ralph-init 
 - Delete : A tester demain, normalement c'est fix, mais j'attends 
 d'avoir le added date pour delete un truc plus safe
 - DB backup 
