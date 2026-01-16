@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, AsyncGenerator
 
-from sqlalchemy import Boolean, String, Integer, BigInteger, DateTime, Text, ForeignKey, create_engine, JSON, UniqueConstraint
+from sqlalchemy import Boolean, String, Integer, BigInteger, DateTime, Text, ForeignKey, create_engine, JSON, UniqueConstraint, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -243,11 +243,39 @@ if DATABASE_URL.startswith("sqlite:///"):
 else:
     ASYNC_DATABASE_URL = DATABASE_URL
 
-async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
+# Configure SQLite for better concurrency
+connect_args = {}
+if ASYNC_DATABASE_URL.startswith("sqlite"):
+    # Enable WAL mode for concurrent read/write access
+    # Set timeout to 30 seconds for lock acquisition
+    connect_args = {
+        "check_same_thread": False,
+        "timeout": 30.0,
+    }
+
+async_engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    echo=False,
+    connect_args=connect_args,
+    pool_pre_ping=True,  # Verify connections before using
+    pool_size=10,  # Max number of connections in pool
+    max_overflow=20,  # Allow up to 20 additional connections beyond pool_size
+)
+
 async_session_maker = async_sessionmaker(async_engine, expire_on_commit=False)
 
 # Sync engine for migrations/seeding
 sync_engine = create_engine(DATABASE_URL.replace("+aiosqlite", ""), echo=False)
+
+
+async def init_db_settings() -> None:
+    """Initialize database settings (e.g., WAL mode for SQLite)."""
+    if ASYNC_DATABASE_URL.startswith("sqlite"):
+        async with async_engine.begin() as conn:
+            # Enable WAL mode for better concurrency
+            await conn.execute(text("PRAGMA journal_mode=WAL;"))
+            # Set busy timeout to 30 seconds
+            await conn.execute(text("PRAGMA busy_timeout=30000;"))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

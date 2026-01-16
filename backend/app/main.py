@@ -6,13 +6,14 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import init_db
+from app.database import init_db, init_db_settings
 from app.routers import auth, content, info, library, settings, sync, whitelist
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize database on startup."""
+    await init_db_settings()  # Configure WAL mode before creating tables
     await init_db()
     yield
 
