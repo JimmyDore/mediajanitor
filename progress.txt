@@ -53,7 +53,50 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 34 - UI Improvements (In Progress)
-**Total Stories**: 47 stories (10 passes: true, 37 remaining)
+**Total Stories**: 47 stories (11 passes: true, 36 remaining)
+
+---
+
+## 2026-01-16: US-34.3 - Add Sorting to Requester and Release Columns
+
+### Summary
+Added sorting functionality to Requester and Release columns on the Unavailable tab of the Issues page.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added 'requester' and 'release' to SortField type, sorting logic, and clickable column headers
+
+### Key Implementation Details
+- Added `requester` and `release` to the `SortField` type union
+- Implemented `requester` sorting: alphabetical comparison with nulls sorted last
+- Implemented `release` sorting: date comparison with nulls sorted last
+- Wrapped Requester and Release column headers with sort buttons
+- Sort indicators (↑/↓) appear on active sort column
+- Both columns default to descending order when first clicked
+
+### Verification
+- 411 frontend unit tests pass
+- svelte-check passes (0 errors)
+- Verified in browser using Puppeteer: both columns sort correctly in asc/desc order
+
+---
+
+## 2026-01-16: US-34.2 - Normalize Table Header Casing
+
+### Summary
+Changed table headers from ALL CAPS to Title Case for a more professional appearance.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Removed text-transform: uppercase from table header CSS
+
+### Key Implementation Details
+- Removed `text-transform: uppercase` and `letter-spacing: 0.05em` from `.issues-table th` CSS rule
+- Headers now display as written in HTML: Name, Requester, Issues, Size, Added, Release, Requested/Watched
+- Badge text (OLD, LANGUAGE, etc.) still uses uppercase via separate `.badge` CSS rule
+
+### Verification
+- 411 frontend unit tests pass
+- svelte-check passes (0 errors)
+- Verified in Docker: all headers display in Title Case
 
 ---
 

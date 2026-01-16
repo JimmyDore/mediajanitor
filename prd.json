@@ -106,8 +106,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added 'requester' and 'release' to SortField type. Implemented sorting logic: requester sorts alphabetically with nulls last, release sorts by date with nulls last. Both column headers wrapped in sort buttons with sort indicators."
     },
     {
       "id": "US-35.1",

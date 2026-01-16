@@ -54,7 +54,7 @@
 
 	type FilterType = 'all' | 'old' | 'large' | 'language' | 'requests';
 	type LargeSubFilter = 'all' | 'movies' | 'series';
-	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added';
+	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added' | 'requester' | 'release';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
 	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'request';
@@ -772,6 +772,22 @@
 					comparison = addedA - addedB;
 					break;
 				case 'issues': comparison = a.issues.length - b.issues.length; break;
+				case 'requester':
+					// Sort alphabetically by requester name (nulls last)
+					const reqA = a.requested_by?.toLowerCase() ?? '';
+					const reqB = b.requested_by?.toLowerCase() ?? '';
+					if (!reqA && reqB) comparison = 1;
+					else if (reqA && !reqB) comparison = -1;
+					else comparison = reqA.localeCompare(reqB);
+					break;
+				case 'release':
+					// Sort by release date (nulls last)
+					const relA = a.release_date ? new Date(a.release_date).getTime() : 0;
+					const relB = b.release_date ? new Date(b.release_date).getTime() : 0;
+					if (!relA && relB) comparison = 1;
+					else if (relA && !relB) comparison = -1;
+					else comparison = relA - relB;
+					break;
 			}
 			return sortOrder === 'asc' ? comparison : -comparison;
 		});
@@ -887,7 +903,11 @@
 								</button>
 							</th>
 							{#if activeFilter === 'requests'}
-								<th class="col-requester">Requester</th>
+								<th class="col-requester">
+									<button class="sort-btn" onclick={() => toggleSort('requester')}>
+										Requester {sortField === 'requester' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									</button>
+								</th>
 							{/if}
 							{#if activeFilter !== 'requests'}
 								<th class="col-issues">
@@ -907,7 +927,11 @@
 								</button>
 							</th>
 							{#if activeFilter === 'requests'}
-								<th class="col-release">Release</th>
+								<th class="col-release">
+									<button class="sort-btn" onclick={() => toggleSort('release')}>
+										Release {sortField === 'release' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									</button>
+								</th>
 							{/if}
 							<th class="col-watched">
 								<button class="sort-btn" onclick={() => toggleSort('date')}>
