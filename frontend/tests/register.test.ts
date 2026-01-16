@@ -110,3 +110,96 @@ describe('Password Validation', () => {
 		expect(validatePassword('SecurePassword123!')).toBeNull();
 	});
 });
+
+describe('Password Strength Indicator', () => {
+	type PasswordStrength = 'weak' | 'medium' | 'strong';
+
+	function getPasswordStrength(pwd: string): PasswordStrength {
+		if (pwd.length >= 12) {
+			return 'strong';
+		} else if (pwd.length >= 8) {
+			return 'medium';
+		}
+		return 'weak';
+	}
+
+	function getStrengthLabel(strength: PasswordStrength): string {
+		switch (strength) {
+			case 'weak':
+				return 'Weak';
+			case 'medium':
+				return 'Medium';
+			case 'strong':
+				return 'Strong';
+		}
+	}
+
+	describe('getPasswordStrength', () => {
+		it('returns weak for passwords with 1-7 characters', () => {
+			expect(getPasswordStrength('a')).toBe('weak');
+			expect(getPasswordStrength('abc')).toBe('weak');
+			expect(getPasswordStrength('1234567')).toBe('weak');
+		});
+
+		it('returns medium for passwords with 8-11 characters', () => {
+			expect(getPasswordStrength('12345678')).toBe('medium');
+			expect(getPasswordStrength('password1')).toBe('medium');
+			expect(getPasswordStrength('12345678901')).toBe('medium');
+		});
+
+		it('returns strong for passwords with 12+ characters', () => {
+			expect(getPasswordStrength('123456789012')).toBe('strong');
+			expect(getPasswordStrength('SecurePassword123!')).toBe('strong');
+			expect(getPasswordStrength('verylongpassword')).toBe('strong');
+		});
+
+		it('boundary: 7 chars is weak, 8 chars is medium', () => {
+			expect(getPasswordStrength('1234567')).toBe('weak');
+			expect(getPasswordStrength('12345678')).toBe('medium');
+		});
+
+		it('boundary: 11 chars is medium, 12 chars is strong', () => {
+			expect(getPasswordStrength('12345678901')).toBe('medium');
+			expect(getPasswordStrength('123456789012')).toBe('strong');
+		});
+	});
+
+	describe('getStrengthLabel', () => {
+		it('returns correct labels for each strength level', () => {
+			expect(getStrengthLabel('weak')).toBe('Weak');
+			expect(getStrengthLabel('medium')).toBe('Medium');
+			expect(getStrengthLabel('strong')).toBe('Strong');
+		});
+	});
+
+	describe('strength indicator visibility', () => {
+		it('should show indicator only when password has content', () => {
+			// Simulating the $derived logic: passwordStrength = password.length > 0 ? getPasswordStrength(password) : null
+			const getPasswordStrengthOrNull = (pwd: string) => pwd.length > 0 ? getPasswordStrength(pwd) : null;
+
+			expect(getPasswordStrengthOrNull('')).toBeNull();
+			expect(getPasswordStrengthOrNull('a')).toBe('weak');
+			expect(getPasswordStrengthOrNull('password')).toBe('medium');
+		});
+	});
+
+	describe('strength bar fill percentages', () => {
+		function getStrengthFillPercentage(strength: PasswordStrength): number {
+			if (strength === 'weak') return 33;
+			if (strength === 'medium') return 66;
+			return 100;
+		}
+
+		it('weak should fill approximately 33%', () => {
+			expect(getStrengthFillPercentage('weak')).toBe(33);
+		});
+
+		it('medium should fill approximately 66%', () => {
+			expect(getStrengthFillPercentage('medium')).toBe(66);
+		});
+
+		it('strong should fill 100%', () => {
+			expect(getStrengthFillPercentage('strong')).toBe(100);
+		});
+	});
+});

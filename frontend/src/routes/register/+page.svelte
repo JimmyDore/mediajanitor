@@ -19,6 +19,30 @@
 		return null;
 	}
 
+	type PasswordStrength = 'weak' | 'medium' | 'strong';
+
+	function getPasswordStrength(pwd: string): PasswordStrength {
+		if (pwd.length >= 12) {
+			return 'strong';
+		} else if (pwd.length >= 8) {
+			return 'medium';
+		}
+		return 'weak';
+	}
+
+	function getStrengthLabel(strength: PasswordStrength): string {
+		switch (strength) {
+			case 'weak':
+				return 'Weak';
+			case 'medium':
+				return 'Medium';
+			case 'strong':
+				return 'Strong';
+		}
+	}
+
+	let passwordStrength = $derived(password.length > 0 ? getPasswordStrength(password) : null);
+
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		error = null;
@@ -107,6 +131,21 @@
 					class="input"
 					class:input-error={passwordError}
 				/>
+				{#if passwordStrength}
+					<div class="password-strength">
+						<div class="strength-bar">
+							<div
+								class="strength-fill strength-{passwordStrength}"
+								role="progressbar"
+								aria-valuenow={passwordStrength === 'weak' ? 33 : passwordStrength === 'medium' ? 66 : 100}
+								aria-valuemin={0}
+								aria-valuemax={100}
+								aria-label="Password strength: {getStrengthLabel(passwordStrength)}"
+							></div>
+						</div>
+						<span class="strength-label strength-text-{passwordStrength}">{getStrengthLabel(passwordStrength)}</span>
+					</div>
+				{/if}
 				{#if passwordError}
 					<span class="field-error">{passwordError}</span>
 				{/if}
@@ -231,6 +270,59 @@
 	.field-error {
 		color: var(--danger);
 		font-size: var(--font-size-sm);
+	}
+
+	.password-strength {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.strength-bar {
+		flex: 1;
+		height: 4px;
+		background: var(--border);
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.strength-fill {
+		height: 100%;
+		border-radius: 2px;
+		transition: width var(--transition-fast), background-color var(--transition-fast);
+	}
+
+	.strength-weak {
+		width: 33%;
+		background-color: var(--danger);
+	}
+
+	.strength-medium {
+		width: 66%;
+		background-color: var(--warning);
+	}
+
+	.strength-strong {
+		width: 100%;
+		background-color: var(--success);
+	}
+
+	.strength-label {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		min-width: 55px;
+	}
+
+	.strength-text-weak {
+		color: var(--danger);
+	}
+
+	.strength-text-medium {
+		color: var(--warning);
+	}
+
+	.strength-text-strong {
+		color: var(--success);
 	}
 
 	.error-message {
