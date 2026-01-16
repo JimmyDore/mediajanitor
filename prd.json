@@ -86,8 +86,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed text-transform: uppercase from .issues-table th CSS rule. Headers now display in Title Case as written in HTML."
     },
     {
       "id": "US-34.3",

@@ -1432,8 +1432,6 @@
 		background: var(--bg-secondary);
 		font-size: var(--font-size-xs);
 		font-weight: var(--font-weight-medium);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 		color: var(--text-muted);
 		border-bottom: 1px solid var(--border);
 	}
