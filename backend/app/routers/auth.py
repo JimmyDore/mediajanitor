@@ -17,6 +17,8 @@ from app.models.user import (
     PasswordResetRequest,
     PasswordResetResponse,
     RefreshTokenRequest,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
     TokenWithRefresh,
     UserCreate,
     UserLogin,
@@ -451,3 +453,69 @@ async def request_password_reset(
 
     # Always return success to prevent email enumeration
     return PasswordResetResponse()
+
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    request_data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ResetPasswordResponse:
+    """
+    Reset password using a valid reset token.
+
+    Returns 200 OK on success, 400 if token is invalid/expired/used.
+    """
+    import bcrypt
+
+    # Find all non-used, non-expired tokens
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.used == False,  # noqa: E712
+            PasswordResetToken.expires_at > datetime.utcnow(),
+        )
+    )
+    tokens = result.scalars().all()
+
+    # Check incoming token against each stored hash
+    matching_token = None
+    for token_record in tokens:
+        if bcrypt.checkpw(
+            request_data.token.encode("utf-8"),
+            token_record.token_hash.encode("utf-8"),
+        ):
+            matching_token = token_record
+            break
+
+    if not matching_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    # Get the user
+    user_result = await db.execute(
+        select(User).where(User.id == matching_token.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    # Update user's password
+    new_hashed_password = bcrypt.hashpw(
+        request_data.new_password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+    user.hashed_password = new_hashed_password
+
+    # Mark token as used
+    matching_token.used = True
+
+    await db.commit()
+
+    logger.info(f"Password reset successful for user {user.email}")
+
+    return ResetPasswordResponse()

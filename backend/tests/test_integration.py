@@ -119,6 +119,45 @@ class TestIntegrationAuth:
             )
             assert response.status_code == 422
 
+    def test_reset_password_invalid_token(self):
+        """Test POST /api/auth/reset-password returns 400 for invalid token."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "token": "invalid_token_that_does_not_exist",
+                    "new_password": "NewSecure123!",
+                },
+            )
+            assert response.status_code == 400
+            data = response.json()
+            assert "invalid" in data["detail"].lower() or "expired" in data["detail"].lower()
+
+    def test_reset_password_weak_password(self):
+        """Test POST /api/auth/reset-password returns 422 for weak password."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Test password without uppercase
+            response = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "token": "some_token",
+                    "new_password": "weakpassword123",
+                },
+            )
+            assert response.status_code == 422
+
+    def test_reset_password_short_password(self):
+        """Test POST /api/auth/reset-password returns 422 for short password."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "token": "some_token",
+                    "new_password": "Short1!",  # Only 7 chars
+                },
+            )
+            assert response.status_code == 422
+
 
 class TestIntegrationContentIssues:
     """Integration tests for GET /api/content/issues endpoint (US-D.3)."""

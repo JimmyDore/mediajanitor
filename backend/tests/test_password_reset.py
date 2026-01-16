@@ -557,3 +557,325 @@ class TestPasswordResetRateLimiting:
             # Clean up
             password_reset_rate_limiter.clear()
             fresh_app.dependency_overrides.clear()
+
+
+class TestResetPasswordEndpoint:
+    """Tests for POST /api/auth/reset-password endpoint."""
+
+    async def _create_user_with_reset_token(
+        self,
+        client: TestClient,
+        email: str = "resetuser@example.com",
+        password: str = "OldPassword123!",
+    ) -> tuple[str, int]:
+        """
+        Helper to create a user and return a valid reset token.
+
+        Returns:
+            Tuple of (raw_token, user_id)
+        """
+        import secrets
+
+        # Register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": password,
+            },
+        )
+
+        # Get user id and create token directly in database
+        from tests.conftest import TestingAsyncSessionLocal
+
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.email == email)
+            )
+            user = result.scalar_one()
+
+            # Create a valid token
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = bcrypt.hashpw(raw_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+            reset_token = PasswordResetToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                used=False,
+            )
+            session.add(reset_token)
+            await session.commit()
+
+            return raw_token, user.id
+
+    def test_reset_password_success(self, client: TestClient) -> None:
+        """Test successful password reset with valid token."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        raw_token, user_id = loop.run_until_complete(
+            self._create_user_with_reset_token(client, "success@example.com")
+        )
+
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert "success" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_reset_password_updates_user_password(self, client: TestClient) -> None:
+        """Test that password is actually updated after reset."""
+        from tests.conftest import TestingAsyncSessionLocal
+
+        raw_token, user_id = await self._create_user_with_reset_token(
+            client, "updated@example.com"
+        )
+
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 200
+
+        # Verify the password was updated by logging in with new password
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "updated@example.com",
+                "password": "NewSecure123!",
+            },
+        )
+        assert login_response.status_code == 200
+
+        # Old password should not work
+        old_login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "updated@example.com",
+                "password": "OldPassword123!",
+            },
+        )
+        assert old_login_response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_reset_password_marks_token_as_used(self, client: TestClient) -> None:
+        """Test that token is marked as used after successful reset."""
+        from tests.conftest import TestingAsyncSessionLocal
+
+        raw_token, user_id = await self._create_user_with_reset_token(
+            client, "tokenused@example.com"
+        )
+
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 200
+
+        # Verify token is marked as used
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(PasswordResetToken).where(PasswordResetToken.user_id == user_id)
+            )
+            token = result.scalar_one()
+            assert token.used is True
+
+    def test_reset_password_invalid_token(self, client: TestClient) -> None:
+        """Test that invalid token returns 400."""
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": "invalid_token_that_does_not_exist",
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "invalid" in data["detail"].lower() or "expired" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_reset_password_expired_token(self, client: TestClient) -> None:
+        """Test that expired token returns 400."""
+        import secrets
+
+        from tests.conftest import TestingAsyncSessionLocal
+
+        # Create user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "expired@example.com",
+                "password": "OldPassword123!",
+            },
+        )
+
+        # Create expired token
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.email == "expired@example.com")
+            )
+            user = result.scalar_one()
+
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = bcrypt.hashpw(raw_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+            expired_token = PasswordResetToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.utcnow() - timedelta(minutes=1),  # Already expired
+                used=False,
+            )
+            session.add(expired_token)
+            await session.commit()
+
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "expired" in data["detail"].lower() or "invalid" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_reset_password_already_used_token(self, client: TestClient) -> None:
+        """Test that already-used token returns 400."""
+        import secrets
+
+        from tests.conftest import TestingAsyncSessionLocal
+
+        # Create user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "usedtoken@example.com",
+                "password": "OldPassword123!",
+            },
+        )
+
+        # Create already-used token
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.email == "usedtoken@example.com")
+            )
+            user = result.scalar_one()
+
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = bcrypt.hashpw(raw_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+            used_token = PasswordResetToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                used=True,  # Already used
+            )
+            session.add(used_token)
+            await session.commit()
+
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "NewSecure123!",
+            },
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "invalid" in data["detail"].lower() or "expired" in data["detail"].lower() or "used" in data["detail"].lower()
+
+    def test_reset_password_too_short(self, client: TestClient) -> None:
+        """Test that password less than 8 chars returns 422."""
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": "sometoken",
+                "new_password": "Short1!",  # Only 7 chars
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_reset_password_missing_uppercase(self, client: TestClient) -> None:
+        """Test that password without uppercase returns 422."""
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": "sometoken",
+                "new_password": "nouppercase123!",
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_reset_password_missing_lowercase(self, client: TestClient) -> None:
+        """Test that password without lowercase returns 422."""
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": "sometoken",
+                "new_password": "NOLOWERCASE123!",
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_reset_password_missing_number(self, client: TestClient) -> None:
+        """Test that password without number returns 422."""
+        response = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": "sometoken",
+                "new_password": "NoNumberHere!",
+            },
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_reset_password_token_cannot_be_reused(self, client: TestClient) -> None:
+        """Test that a token cannot be used twice."""
+        raw_token, user_id = await self._create_user_with_reset_token(
+            client, "reuse@example.com"
+        )
+
+        # First reset should succeed
+        response1 = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "FirstNew123!",
+            },
+        )
+        assert response1.status_code == 200
+
+        # Second reset with same token should fail
+        response2 = client.post(
+            "/api/auth/reset-password",
+            json={
+                "token": raw_token,
+                "new_password": "SecondNew123!",
+            },
+        )
+        assert response2.status_code == 400

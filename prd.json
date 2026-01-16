@@ -647,8 +647,8 @@
         "Test in Docker: full flow from request to reset"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added POST /api/auth/reset-password endpoint. Validates password strength (8+ chars, uppercase, lowercase, number) with Pydantic validator. Compares incoming token against bcrypt hashes of non-expired, unused tokens. Updates user password and marks token as used. 11 new unit tests + 3 integration tests."
     },
     {
       "id": "US-44.5",
