@@ -1961,13 +1961,436 @@ async def cleanup_expired_tokens(db: AsyncSession):
 
 ---
 
+## Epic 45: Responsive Layout for Large Screens (27"+)
+
+### Overview
+
+Optimize the application layout for large screens (27" monitors and ultrawide displays). Currently, the UI has significant wasted space on large screens: the sidebar is fixed at 220px, content is capped at 1200px max-width, and table columns don't expand to utilize available space. This epic adds CSS breakpoints and progressive enhancements for screens ≥1440px and ≥1920px.
+
+### Goals
+
+- Better utilize horizontal space on 27"+ monitors
+- Expand sidebar width progressively on larger screens
+- Increase content max-width to reduce empty margins
+- Allow tables to display full content (no truncated titles)
+- Maintain existing mobile/tablet experience (no regressions)
+- Keep changes purely CSS-based where possible (minimal JS)
+
+### User Stories
+
+#### US-45.1: Add CSS Breakpoints and Variables for Large Screens
+
+**As a** developer
+**I want** CSS custom properties for large screen breakpoints
+**So that** responsive styles can be applied consistently across the app
+
+**Problem:**
+Current CSS only has breakpoints for mobile (≤768px) and small mobile (≤640px). No breakpoints exist for large screens (≥1440px, ≥1920px), leaving large monitors with a centered 1200px content area surrounded by empty space.
+
+**Acceptance Criteria:**
+- [ ] Add CSS custom properties in `frontend/src/app.css` for breakpoints:
+  - `--breakpoint-lg: 1440px` (large desktop)
+  - `--breakpoint-xl: 1920px` (ultrawide/4K)
+- [ ] Add CSS custom properties for responsive layout values:
+  - `--sidebar-width: 220px` (default)
+  - `--sidebar-width-lg: 260px` (≥1440px)
+  - `--sidebar-width-xl: 300px` (≥1920px)
+  - `--content-max-width: 1200px` (default)
+  - `--content-max-width-lg: 1600px` (≥1440px)
+  - `--content-max-width-xl: 1800px` (≥1920px)
+- [ ] Document breakpoint strategy in CSS comments
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: variables are accessible in DevTools
+
+**Technical Notes:**
+```css
+/* frontend/src/app.css */
+
+/* Breakpoint tokens (reference only, use in media queries) */
+/* --breakpoint-md: 768px - tablet/mobile */
+/* --breakpoint-lg: 1440px - large desktop (27" at 100% scale) */
+/* --breakpoint-xl: 1920px - ultrawide/4K */
+
+/* Layout tokens - default (mobile-first) */
+:root {
+  --sidebar-width: 220px;
+  --content-max-width: 1200px;
+}
+
+/* Large desktop (≥1440px) */
+@media (min-width: 1440px) {
+  :root {
+    --sidebar-width: 260px;
+    --content-max-width: 1600px;
+  }
+}
+
+/* Ultrawide (≥1920px) */
+@media (min-width: 1920px) {
+  :root {
+    --sidebar-width: 300px;
+    --content-max-width: 1800px;
+  }
+}
+```
+
+**Files:**
+- `frontend/src/app.css` - Add breakpoint and layout CSS variables
+
+---
+
+#### US-45.2: Expand Main Content Max-Width on Large Screens
+
+**As a** user on a large screen
+**I want** the content area to expand beyond 1200px
+**So that** I can use more of my screen space
+
+**Problem:**
+Currently, `.content` in `+layout.svelte` has `max-width: 1200px` hardcoded. On a 27" monitor at 2560px width, this leaves ~680px of unused space on each side (after sidebar).
+
+**Acceptance Criteria:**
+- [ ] Update `frontend/src/routes/+layout.svelte` to use `var(--content-max-width)` instead of hardcoded `1200px`
+- [ ] Content expands to 1600px on screens ≥1440px
+- [ ] Content expands to 1800px on screens ≥1920px
+- [ ] Content remains centered with auto margins
+- [ ] No horizontal scrollbar appears on any screen size
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: resize window, see content width change at breakpoints
+
+**Files:**
+- `frontend/src/routes/+layout.svelte` - Use CSS variable for max-width
+
+---
+
+#### US-45.3: Responsive Sidebar Width
+
+**As a** user on a large screen
+**I want** a wider sidebar with more readable navigation
+**So that** navigation items aren't cramped on large displays
+
+**Problem:**
+The sidebar is fixed at 220px regardless of screen size. On large screens, this looks disproportionately narrow. A wider sidebar provides better visual balance and room for longer nav labels if needed.
+
+**Acceptance Criteria:**
+- [ ] Update `frontend/src/lib/components/Sidebar.svelte` to use `var(--sidebar-width)`
+- [ ] Update `frontend/src/routes/+layout.svelte` margin-left to use `var(--sidebar-width)`
+- [ ] Sidebar grows to 260px on screens ≥1440px
+- [ ] Sidebar grows to 300px on screens ≥1920px
+- [ ] Nav items remain properly aligned and spaced
+- [ ] User info section at bottom doesn't overflow
+- [ ] Mobile sidebar behavior unchanged (still 220px overlay)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: sidebar width changes at breakpoints
+
+**Technical Notes:**
+```css
+/* Sidebar.svelte */
+.sidebar {
+  width: var(--sidebar-width);
+  /* ... rest unchanged ... */
+}
+
+/* +layout.svelte */
+.app.with-sidebar {
+  margin-left: var(--sidebar-width);
+}
+
+/* Mobile override (unchanged) */
+@media (max-width: 768px) {
+  .app.with-sidebar {
+    margin-left: 0;
+  }
+  .sidebar {
+    width: 220px; /* Keep fixed on mobile overlay */
+  }
+}
+```
+
+**Files:**
+- `frontend/src/lib/components/Sidebar.svelte` - Use CSS variable for width
+- `frontend/src/routes/+layout.svelte` - Use CSS variable for margin-left
+
+---
+
+#### US-45.4: Responsive Table Columns on Issues Page
+
+**As a** user viewing the Issues table on a large screen
+**I want** columns to expand and show full content
+**So that** I can see complete titles without truncation
+
+**Problem:**
+The Issues page table has hardcoded column widths (Name: 35%, Issues: 30%, etc.). On a 1800px content area, the Name column could be ~630px wide instead of ~420px, reducing truncation of long titles like "The Lord of the Rings: The Return of the King".
+
+**Acceptance Criteria:**
+- [ ] On ≥1440px: Name column expands, other columns use more space
+- [ ] On ≥1920px: Name column expands further, all columns comfortable
+- [ ] Columns use `min-width` + `flex-grow` pattern instead of fixed percentages
+- [ ] Text truncation (ellipsis) still applies for very long titles
+- [ ] Table header widths match content widths
+- [ ] Mobile column hiding unchanged (Size, Added, Watched hidden)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: table columns expand at breakpoints, no overflow
+
+**Technical Notes:**
+```css
+/* issues/+page.svelte */
+
+/* Default column widths (percentage for smaller screens) */
+.col-name { width: 35%; min-width: 200px; }
+.col-issues { width: 30%; min-width: 150px; }
+.col-size { width: 12%; min-width: 80px; }
+.col-added { width: 12%; min-width: 100px; }
+.col-watched { width: 13%; min-width: 100px; }
+
+/* Large screens: let columns breathe */
+@media (min-width: 1440px) {
+  .col-name { width: auto; flex: 2; min-width: 300px; }
+  .col-issues { width: auto; flex: 1.5; min-width: 180px; }
+  .col-size { width: auto; flex: 0.5; min-width: 100px; }
+  .col-added { width: auto; flex: 0.5; min-width: 120px; }
+  .col-watched { width: auto; flex: 0.5; min-width: 120px; }
+
+  table { display: flex; flex-direction: column; }
+  thead, tbody, tr { display: flex; width: 100%; }
+  th, td { display: flex; align-items: center; }
+}
+```
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte` - Add responsive column styles
+
+---
+
+#### US-45.5: Responsive Table Columns on Library Page
+
+**As a** user viewing the Library table on a large screen
+**I want** columns to expand similar to the Issues page
+**So that** I have a consistent experience across pages
+
+**Problem:**
+The Library page has similar column width constraints. Apply the same responsive patterns as US-45.4 for consistency.
+
+**Acceptance Criteria:**
+- [ ] Column widths expand on large screens (≥1440px, ≥1920px)
+- [ ] Name/Title column gets more space
+- [ ] Columns use same pattern as Issues page (min-width + flex)
+- [ ] Mobile column hiding preserved
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: library table columns expand at breakpoints
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte` - Add responsive column styles
+
+---
+
+#### US-45.6: Responsive Dashboard Stats Grid
+
+**As a** user viewing the Dashboard on a large screen
+**I want** the stats grid to make better use of space
+**So that** stat cards aren't cramped on large displays
+
+**Problem:**
+Dashboard has `max-width: 800px` and a fixed 4-column grid. On large screens, this wastes significant space and makes the dashboard feel empty.
+
+**Acceptance Criteria:**
+- [ ] Dashboard max-width increases on large screens (use `var(--content-max-width)` or page-specific value)
+- [ ] On ≥1440px: max-width increases to 1000px
+- [ ] On ≥1920px: max-width increases to 1200px (or full width if grid handles it)
+- [ ] Stats grid remains 4 columns but cards are larger
+- [ ] Spacing between cards increases proportionally
+- [ ] Mobile grid unchanged (2 columns on ≤640px)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: dashboard cards grow at breakpoints
+
+**Technical Notes:**
+```css
+/* +page.svelte (dashboard) */
+.dashboard {
+  max-width: 800px;
+}
+
+@media (min-width: 1440px) {
+  .dashboard {
+    max-width: 1000px;
+  }
+  .stats-grid {
+    gap: var(--space-6); /* Increase gap */
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard {
+    max-width: 1200px;
+  }
+}
+```
+
+**Files:**
+- `frontend/src/routes/+page.svelte` - Add responsive dashboard styles
+
+### Non-Goals
+
+- Changing the overall design aesthetic or color scheme
+- Adding new content or features to fill the space
+- Supporting screens smaller than 320px (edge case)
+- Adding user preference for layout density (future enhancement)
+- Changing font sizes on large screens (keep current scaling)
+- Adding a "compact mode" toggle
+
+### Technical Considerations
+
+**CSS-Only Approach:**
+All changes should be achievable with CSS media queries and custom properties. No JavaScript viewport detection needed.
+
+**Testing Strategy:**
+- Use Chrome DevTools responsive mode
+- Test at: 1366x768 (laptop), 1920x1080 (1080p), 2560x1440 (27" 1440p), 3840x2160 (4K)
+- Verify no horizontal scrollbars at any size
+- Verify text remains readable (not too spread out)
+
+**Breakpoint Strategy:**
+- Mobile: ≤768px (existing)
+- Tablet: 769px - 1439px (default desktop, existing)
+- Large Desktop: 1440px - 1919px (new)
+- Ultrawide: ≥1920px (new)
+
+**Files to Modify:**
+1. `frontend/src/app.css` - Global CSS variables and breakpoints
+2. `frontend/src/routes/+layout.svelte` - Main layout responsive styles
+3. `frontend/src/lib/components/Sidebar.svelte` - Sidebar width
+4. `frontend/src/routes/issues/+page.svelte` - Issues table columns
+5. `frontend/src/routes/library/+page.svelte` - Library table columns
+6. `frontend/src/routes/+page.svelte` - Dashboard grid and max-width
+
+---
+
+## Epic 46: External Service Logos for Media Links
+
+### Overview
+
+Replace text-based external link badges (JF, JS, RD, SN, TMDB) with 16x16px logo icons across all media tables for better visual recognition. Also add missing Radarr/Sonarr links to the Library page.
+
+### User Stories
+
+#### US-46.1: Create ServiceBadge Component with Inline SVG Logos
+
+**As a** user
+**I want** to see recognizable service logos instead of text abbreviations
+**So that** I can quickly identify which service each link leads to
+
+**Acceptance Criteria:**
+- [ ] Create `frontend/src/lib/components/ServiceBadge.svelte` component
+- [ ] Component accepts props: `service` (jellyfin|jellyseerr|radarr|sonarr|tmdb), `url`, `title`
+- [ ] Embed inline 16x16px SVGs for all 5 services with brand colors:
+  - Jellyfin: blue (`#00a4dc`)
+  - Jellyseerr: purple (`#7b68ee`)
+  - Radarr: yellow (`#ffc230`)
+  - Sonarr: green (`#2ecc71`)
+  - TMDB: blue (`#01b4e4`)
+- [ ] Links open in new tab (`target="_blank"`)
+- [ ] Hover effect provides visual feedback
+- [ ] Works in both light and dark modes
+- [ ] Unit tests pass
+- [ ] Typecheck passes
+
+**Files:**
+- `frontend/src/lib/components/ServiceBadge.svelte` (new)
+- `frontend/tests/service-badge.test.ts` (new)
+
+---
+
+#### US-46.2: Update Issues Page to Use ServiceBadge Component
+
+**As a** user viewing the Issues table
+**I want** to see logo icons instead of text badges
+**So that** external links are more visually recognizable
+
+**Acceptance Criteria:**
+- [ ] Import and use `ServiceBadge` component in Issues page
+- [ ] Replace text badge rendering (lines 930-956) with component calls
+- [ ] Keep existing URL generation functions unchanged
+- [ ] Remove old `.service-badge-text.*` CSS styles
+- [ ] All 5 service logos display correctly when URL is available
+- [ ] Unit tests pass
+- [ ] Typecheck passes
+- [ ] Verify in browser
+
+**Files:**
+- `frontend/src/routes/issues/+page.svelte`
+
+---
+
+#### US-46.3: Add sonarr_title_slug to Library Backend
+
+**As a** developer
+**I want** the Library API to return `sonarr_title_slug` for series
+**So that** Sonarr links can be generated on the Library page
+
+**Acceptance Criteria:**
+- [ ] Add `sonarr_title_slug: str | None = None` to `LibraryItem` model in `backend/app/models/content.py`
+- [ ] Modify `get_library()` in `backend/app/services/content.py` to enrich Series items with Sonarr slug
+- [ ] Use existing `build_sonarr_tmdb_slug_map()` pattern from Issues endpoint
+- [ ] Movie items return `null` for `sonarr_title_slug`
+- [ ] Unit tests pass
+- [ ] Typecheck passes
+
+**Files:**
+- `backend/app/models/content.py` - Add field to `LibraryItem`
+- `backend/app/services/content.py` - Enrich `get_library()` with Sonarr slug lookup
+- `backend/tests/test_library.py` - Add test for `sonarr_title_slug` enrichment
+
+---
+
+#### US-46.4: Update Library Page with All Service Badges
+
+**As a** user viewing the Library table
+**I want** to see all 5 service logos (Jellyfin, Jellyseerr, Radarr, Sonarr, TMDB)
+**So that** I can quickly access any external service from the Library
+
+**Acceptance Criteria:**
+- [ ] Update TypeScript interface to include `sonarr_title_slug: string | null`
+- [ ] Add missing URL generation functions (copy from Issues page):
+  - `getJellyseerrUrl()` - uses `tmdb_id` + media_type
+  - `getRadarrUrl()` - uses `tmdb_id` (movies only)
+  - `getSonarrUrl()` - uses `sonarr_title_slug` (series only)
+- [ ] Import and use `ServiceBadge` component for all 5 services
+- [ ] Radarr shows for movies, Sonarr shows for series
+- [ ] Remove old text badge CSS
+- [ ] Unit tests pass
+- [ ] Typecheck passes
+- [ ] Verify in browser
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte`
+
+### Non-Goals
+
+- Popup menu on title click (user prefers logo approach)
+- Adding new external services beyond the 5 already supported
+- Changing link URLs or target pages
+
+### Technical Considerations
+
+- **Inline SVGs**: Best approach for small icons - no HTTP requests, scalable, CSS-stylable
+- **Brand recognition**: Preserve official brand colors for immediate recognition
+- **Sonarr URL pattern**: Uses `titleSlug` field (e.g., "arcane"), not TMDB ID
+- **Radarr URL pattern**: Uses TMDB ID for movies
+
+---
+
 ## Checklist Summary
 
 ### Completed ✅ (141 stories)
 
 See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for all completed epics and stories.
 
-### Pending (37 stories)
+### Pending (41 stories)
 - [ ] US-17.2.1: Populate Sync Progress User Names
 - [ ] US-28.1: Loading States Accessibility
 - [ ] US-33.1: Calculate and Store Total Series Size
@@ -2005,5 +2428,15 @@ See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for all completed epics and stories.
 - [ ] US-44.5: Forgot Password UI
 - [ ] US-44.6: Reset Password UI
 - [ ] US-44.7: Change Password in Settings
+- [ ] US-45.1: Add CSS Breakpoints and Variables for Large Screens
+- [ ] US-45.2: Expand Main Content Max-Width on Large Screens
+- [ ] US-45.3: Responsive Sidebar Width
+- [ ] US-45.4: Responsive Table Columns on Issues Page
+- [ ] US-45.5: Responsive Table Columns on Library Page
+- [ ] US-45.6: Responsive Dashboard Stats Grid
+- [ ] US-46.1: Create ServiceBadge Component with Inline SVG Logos
+- [ ] US-46.2: Update Issues Page to Use ServiceBadge Component
+- [ ] US-46.3: Add sonarr_title_slug to Library Backend
+- [ ] US-46.4: Update Library Page with All Service Badges
 
 ---

@@ -717,6 +717,185 @@
       "priority": 81,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-45.1",
+      "title": "Add CSS Breakpoints and Variables for Large Screens",
+      "story": "As a developer I want CSS custom properties for large screen breakpoints So that responsive styles can be applied consistently across the app",
+      "acceptanceCriteria": [
+        "Add CSS custom properties in `frontend/src/app.css` for breakpoints: `--breakpoint-lg: 1440px` (large desktop), `--breakpoint-xl: 1920px` (ultrawide/4K)",
+        "Add CSS custom properties for responsive layout values: `--sidebar-width: 220px` (default), `--sidebar-width-lg: 260px` (≥1440px), `--sidebar-width-xl: 300px` (≥1920px), `--content-max-width: 1200px` (default), `--content-max-width-lg: 1600px` (≥1440px), `--content-max-width-xl: 1800px` (≥1920px)",
+        "Document breakpoint strategy in CSS comments",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: variables are accessible in DevTools"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-45.2",
+      "title": "Expand Main Content Max-Width on Large Screens",
+      "story": "As a user on a large screen I want the content area to expand beyond 1200px So that I can use more of my screen space",
+      "acceptanceCriteria": [
+        "Update `frontend/src/routes/+layout.svelte` to use `var(--content-max-width)` instead of hardcoded `1200px`",
+        "Content expands to 1600px on screens ≥1440px",
+        "Content expands to 1800px on screens ≥1920px",
+        "Content remains centered with auto margins",
+        "No horizontal scrollbar appears on any screen size",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: resize window, see content width change at breakpoints"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-45.3",
+      "title": "Responsive Sidebar Width",
+      "story": "As a user on a large screen I want a wider sidebar with more readable navigation So that navigation items aren't cramped on large displays",
+      "acceptanceCriteria": [
+        "Update `frontend/src/lib/components/Sidebar.svelte` to use `var(--sidebar-width)`",
+        "Update `frontend/src/routes/+layout.svelte` margin-left to use `var(--sidebar-width)`",
+        "Sidebar grows to 260px on screens ≥1440px",
+        "Sidebar grows to 300px on screens ≥1920px",
+        "Nav items remain properly aligned and spaced",
+        "User info section at bottom doesn't overflow",
+        "Mobile sidebar behavior unchanged (still 220px overlay)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: sidebar width changes at breakpoints"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-45.4",
+      "title": "Responsive Table Columns on Issues Page",
+      "story": "As a user viewing the Issues table on a large screen I want columns to expand and show full content So that I can see complete titles without truncation",
+      "acceptanceCriteria": [
+        "On ≥1440px: Name column expands, other columns use more space",
+        "On ≥1920px: Name column expands further, all columns comfortable",
+        "Columns use `min-width` + `flex-grow` pattern instead of fixed percentages",
+        "Text truncation (ellipsis) still applies for very long titles",
+        "Table header widths match content widths",
+        "Mobile column hiding unchanged (Size, Added, Watched hidden)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: table columns expand at breakpoints, no overflow"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-45.5",
+      "title": "Responsive Table Columns on Library Page",
+      "story": "As a user viewing the Library table on a large screen I want columns to expand similar to the Issues page So that I have a consistent experience across pages",
+      "acceptanceCriteria": [
+        "Column widths expand on large screens (≥1440px, ≥1920px)",
+        "Name/Title column gets more space",
+        "Columns use same pattern as Issues page (min-width + flex)",
+        "Mobile column hiding preserved",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: library table columns expand at breakpoints"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-45.6",
+      "title": "Responsive Dashboard Stats Grid",
+      "story": "As a user viewing the Dashboard on a large screen I want the stats grid to make better use of space So that stat cards aren't cramped on large displays",
+      "acceptanceCriteria": [
+        "Dashboard max-width increases on large screens (use `var(--content-max-width)` or page-specific value)",
+        "On ≥1440px: max-width increases to 1000px",
+        "On ≥1920px: max-width increases to 1200px (or full width if grid handles it)",
+        "Stats grid remains 4 columns but cards are larger",
+        "Spacing between cards increases proportionally",
+        "Mobile grid unchanged (2 columns on ≤640px)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: dashboard cards grow at breakpoints"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-46.1",
+      "title": "Create ServiceBadge Component with Inline SVG Logos",
+      "story": "As a user I want to see recognizable service logos instead of text abbreviations So that I can quickly identify which service each link leads to",
+      "acceptanceCriteria": [
+        "Create `frontend/src/lib/components/ServiceBadge.svelte` component",
+        "Component accepts props: `service` (jellyfin|jellyseerr|radarr|sonarr|tmdb), `url`, `title`",
+        "Embed inline 16x16px SVGs for all 5 services with brand colors: Jellyfin blue (#00a4dc), Jellyseerr purple (#7b68ee), Radarr yellow (#ffc230), Sonarr green (#2ecc71), TMDB blue (#01b4e4)",
+        "Links open in new tab (`target=\"_blank\"`)",
+        "Hover effect provides visual feedback",
+        "Works in both light and dark modes",
+        "Unit tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-46.2",
+      "title": "Update Issues Page to Use ServiceBadge Component",
+      "story": "As a user viewing the Issues table I want to see logo icons instead of text badges So that external links are more visually recognizable",
+      "acceptanceCriteria": [
+        "Import and use `ServiceBadge` component in Issues page",
+        "Replace text badge rendering (lines 930-956) with component calls",
+        "Keep existing URL generation functions unchanged",
+        "Remove old `.service-badge-text.*` CSS styles",
+        "All 5 service logos display correctly when URL is available",
+        "Unit tests pass",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-46.3",
+      "title": "Add sonarr_title_slug to Library Backend",
+      "story": "As a developer I want the Library API to return `sonarr_title_slug` for series So that Sonarr links can be generated on the Library page",
+      "acceptanceCriteria": [
+        "Add `sonarr_title_slug: str | None = None` to `LibraryItem` model in `backend/app/models/content.py`",
+        "Modify `get_library()` in `backend/app/services/content.py` to enrich Series items with Sonarr slug",
+        "Use existing `build_sonarr_tmdb_slug_map()` pattern from Issues endpoint",
+        "Movie items return `null` for `sonarr_title_slug`",
+        "Unit tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-46.4",
+      "title": "Update Library Page with All Service Badges",
+      "story": "As a user viewing the Library table I want to see all 5 service logos (Jellyfin, Jellyseerr, Radarr, Sonarr, TMDB) So that I can quickly access any external service from the Library",
+      "acceptanceCriteria": [
+        "Update TypeScript interface to include `sonarr_title_slug: string | null`",
+        "Add missing URL generation functions (copy from Issues page): `getJellyseerrUrl()` - uses `tmdb_id` + media_type, `getRadarrUrl()` - uses `tmdb_id` (movies only), `getSonarrUrl()` - uses `sonarr_title_slug` (series only)",
+        "Import and use `ServiceBadge` component for all 5 services",
+        "Radarr shows for movies, Sonarr shows for series",
+        "Remove old text badge CSS",
+        "Unit tests pass",
+        "Typecheck passes",
+        "Verify in browser"
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
