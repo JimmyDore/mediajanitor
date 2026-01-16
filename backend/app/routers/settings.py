@@ -1,6 +1,6 @@
 """Settings router for user configuration endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -19,6 +19,7 @@ from app.models.settings import (
     NicknameCreate,
     NicknameItem,
     NicknameListResponse,
+    NicknameRefreshResponse,
     NicknameUpdate,
     RadarrSettingsCreate,
     RadarrSettingsResponse,
@@ -53,6 +54,12 @@ from app.services.nicknames import (
     get_nicknames,
     update_nickname,
 )
+from app.services.sync import (
+    fetch_jellyfin_users,
+    fetch_jellyseerr_users,
+    prefill_user_nicknames,
+)
+from app.services.encryption import decrypt_value
 
 # Default values for analysis preferences
 DEFAULT_OLD_CONTENT_MONTHS = 4
@@ -558,4 +565,72 @@ async def delete_nickname_mapping(
     return SettingsSaveResponse(
         success=True,
         message="Nickname mapping deleted successfully.",
+    )
+
+
+@router.post("/nicknames/refresh", response_model=NicknameRefreshResponse)
+async def refresh_nicknames_from_jellyfin(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NicknameRefreshResponse:
+    """Refresh nickname list by fetching Jellyfin users.
+
+    Fetches all users from Jellyfin and creates nickname records for any new users.
+    Also checks Jellyseerr to mark users that have Jellyseerr accounts.
+    """
+    # Get Jellyfin settings
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings or not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:
+        raise HTTPException(
+            status_code=400,
+            detail="Jellyfin is not configured. Please configure Jellyfin in settings first.",
+        )
+
+    # Decrypt Jellyfin API key
+    jellyfin_api_key = decrypt_value(settings.jellyfin_api_key_encrypted)
+
+    try:
+        # Fetch Jellyfin users
+        jellyfin_users = await fetch_jellyfin_users(
+            settings.jellyfin_server_url,
+            jellyfin_api_key,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch Jellyfin users: {e}",
+        )
+
+    # Fetch Jellyseerr users if configured (graceful degradation)
+    jellyseerr_users: list[dict[str, Any]] = []
+    if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+        jellyseerr_api_key = decrypt_value(settings.jellyseerr_api_key_encrypted)
+        jellyseerr_users = await fetch_jellyseerr_users(
+            settings.jellyseerr_server_url,
+            jellyseerr_api_key,
+        )
+
+    # Prefill nicknames
+    new_count = await prefill_user_nicknames(
+        db=db,
+        user_id=current_user.id,
+        jellyfin_users=jellyfin_users,
+        jellyseerr_users=jellyseerr_users,
+    )
+
+    if new_count == 0:
+        message = "No new users found"
+    elif new_count == 1:
+        message = "1 new user added"
+    else:
+        message = f"{new_count} new users added"
+
+    return NicknameRefreshResponse(
+        success=True,
+        message=message,
+        new_users_count=new_count,
     )

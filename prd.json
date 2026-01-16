@@ -300,8 +300,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added POST /api/settings/nicknames/refresh endpoint to fetch Jellyfin users and prefill nicknames. Frontend settings page has 'Refresh users' button (only shown when Jellyfin is configured) with loading state, success/error toasts."
     },
     {
       "id": "US-38.1",

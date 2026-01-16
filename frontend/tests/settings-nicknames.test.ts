@@ -473,4 +473,138 @@ describe('User Nicknames API Integration (US-31.4)', () => {
 			expect(finalListData.items).toHaveLength(0);
 		});
 	});
+
+	describe('POST /api/settings/nicknames/refresh (US-37.3)', () => {
+		it('refreshes nicknames from Jellyfin users successfully', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						success: true,
+						message: '3 new users added',
+						new_users_count: 3
+					})
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+			expect(response.ok).toBe(true);
+
+			const data = await response.json();
+			expect(data.success).toBe(true);
+			expect(data.new_users_count).toBe(3);
+			expect(data.message).toBe('3 new users added');
+		});
+
+		it('returns appropriate message when no new users found', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						success: true,
+						message: 'No new users found',
+						new_users_count: 0
+					})
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			expect(response.ok).toBe(true);
+
+			const data = await response.json();
+			expect(data.success).toBe(true);
+			expect(data.new_users_count).toBe(0);
+			expect(data.message).toBe('No new users found');
+		});
+
+		it('returns singular message for 1 new user', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						success: true,
+						message: '1 new user added',
+						new_users_count: 1
+					})
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			const data = await response.json();
+			expect(data.new_users_count).toBe(1);
+			expect(data.message).toBe('1 new user added');
+		});
+
+		it('returns 400 when Jellyfin is not configured', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				json: () =>
+					Promise.resolve({
+						detail: 'Jellyfin is not configured. Please configure Jellyfin in settings first.'
+					})
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			expect(response.ok).toBe(false);
+			expect(response.status).toBe(400);
+
+			const data = await response.json();
+			expect(data.detail).toContain('Jellyfin');
+		});
+
+		it('returns 500 when Jellyfin API fails', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: () =>
+					Promise.resolve({
+						detail: 'Failed to fetch Jellyfin users: Connection failed'
+					})
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer test-token' }
+			});
+
+			expect(response.ok).toBe(false);
+			expect(response.status).toBe(500);
+
+			const data = await response.json();
+			expect(data.detail).toContain('Failed to fetch');
+		});
+
+		it('returns 401 when not authenticated', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/settings/nicknames/refresh', {
+				method: 'POST'
+			});
+
+			expect(response.ok).toBe(false);
+			expect(response.status).toBe(401);
+		});
+	});
 });

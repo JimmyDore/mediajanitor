@@ -148,3 +148,11 @@ class NicknameListResponse(BaseModel):
 
     items: list[NicknameItem]
     total_count: int
+
+
+class NicknameRefreshResponse(BaseModel):
+    """Response model for refreshing nicknames from Jellyfin users."""
+
+    success: bool
+    message: str
+    new_users_count: int

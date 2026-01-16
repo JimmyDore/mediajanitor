@@ -90,6 +90,7 @@
 	let isSavingEdit = $state(false);
 	let deleteConfirmId = $state<number | null>(null);
 	let isDeletingNickname = $state(false);
+	let isRefreshingUsers = $state(false);
 
 	// Expand/collapse states
 	let jellyfinExpanded = $state(false);
@@ -211,6 +212,30 @@
 			console.error('Failed to load nicknames:', e);
 		} finally {
 			isNicknamesLoading = false;
+		}
+	}
+
+	async function handleRefreshUsers() {
+		isRefreshingUsers = true;
+
+		try {
+			const response = await authenticatedFetch('/api/settings/nicknames/refresh', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				toasts.add(data.detail || 'Failed to refresh users', 'error');
+				return;
+			}
+
+			const data = await response.json();
+			toasts.add(data.message, 'success');
+			await loadNicknames();
+		} catch (e) {
+			toasts.add('Failed to refresh users', 'error');
+		} finally {
+			isRefreshingUsers = false;
 		}
 	}
 
@@ -973,7 +998,29 @@
 
 		<!-- User Nicknames Section -->
 		<section class="section">
-			<h2 class="section-title">User Nicknames</h2>
+			<div class="section-header">
+				<h2 class="section-title">User Nicknames</h2>
+				{#if hasJellyfinConfigured}
+					<button
+						class="btn-refresh"
+						onclick={handleRefreshUsers}
+						disabled={isRefreshingUsers}
+						title="Fetch Jellyfin users to populate nickname list"
+					>
+						{#if isRefreshingUsers}
+							<span class="spinner-small spinner-inline"></span>
+							Refreshing...
+						{:else}
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M23 4v6h-6"/>
+								<path d="M1 20v-6h6"/>
+								<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+							</svg>
+							Refresh users
+						{/if}
+					</button>
+				{/if}
+			</div>
 
 			{#if isNicknamesLoading}
 				<div class="nicknames-loading">
@@ -1434,6 +1481,17 @@
 		margin-bottom: var(--space-10);
 	}
 
+	.section-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: var(--space-4);
+	}
+
+	.section-header .section-title {
+		margin-bottom: 0;
+	}
+
 	.section-title {
 		font-size: var(--font-size-xs);
 		font-weight: var(--font-weight-medium);
@@ -1441,6 +1499,31 @@
 		letter-spacing: 0.1em;
 		color: var(--text-muted);
 		margin-bottom: var(--space-4);
+	}
+
+	.btn-refresh {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: transparent;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.btn-refresh:hover:not(:disabled) {
+		color: var(--text-primary);
+		border-color: var(--text-muted);
+	}
+
+	.btn-refresh:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.divider {

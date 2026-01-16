@@ -1582,3 +1582,189 @@ class TestNicknameSettings:
         )
         assert list2.json()["total_count"] == 1
         assert list2.json()["items"][0]["display_name"] == "User2's Friend"
+
+    def test_refresh_nicknames_requires_auth(self, client: TestClient) -> None:
+        """Test that refreshing nicknames requires authentication."""
+        response = client.post("/api/settings/nicknames/refresh")
+        assert response.status_code == 401
+
+    def test_refresh_nicknames_requires_jellyfin_configured(
+        self, client: TestClient
+    ) -> None:
+        """Test that refreshing nicknames requires Jellyfin to be configured."""
+        token = self._get_auth_token(client, "nick_refresh_noconfig@example.com")
+
+        response = client.post(
+            "/api/settings/nicknames/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 400
+        assert "jellyfin" in response.json()["detail"].lower()
+
+    @patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyfin_users", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyseerr_users", new_callable=AsyncMock)
+    def test_refresh_nicknames_success(
+        self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
+        mock_validate: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test successful refresh of nicknames from Jellyfin users."""
+        mock_validate.return_value = True
+        mock_jellyfin_users.return_value = [
+            {"Id": "user1", "Name": "Alice"},
+            {"Id": "user2", "Name": "Bob"},
+        ]
+        mock_jellyseerr_users.return_value = [
+            {"id": 1, "displayName": "Alice"},  # Alice has Jellyseerr
+        ]
+
+        token = self._get_auth_token(client, "nick_refresh_success@example.com")
+
+        # Configure Jellyfin first
+        client.post(
+            "/api/settings/jellyfin",
+            json={
+                "server_url": "https://jellyfin.example.com",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Refresh nicknames
+        response = client.post(
+            "/api/settings/nicknames/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["new_users_count"] == 2
+        assert "2 new users added" in data["message"]
+
+        # Verify nicknames were created
+        list_response = client.get(
+            "/api/settings/nicknames",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert list_response.json()["total_count"] == 2
+
+    @patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyfin_users", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyseerr_users", new_callable=AsyncMock)
+    def test_refresh_nicknames_no_new_users(
+        self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
+        mock_validate: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test refresh when all users already exist."""
+        mock_validate.return_value = True
+        mock_jellyfin_users.return_value = [
+            {"Id": "user1", "Name": "ExistingUser"},
+        ]
+        mock_jellyseerr_users.return_value = []
+
+        token = self._get_auth_token(client, "nick_refresh_nochange@example.com")
+
+        # Configure Jellyfin first
+        client.post(
+            "/api/settings/jellyfin",
+            json={
+                "server_url": "https://jellyfin.example.com",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create existing nickname
+        client.post(
+            "/api/settings/nicknames",
+            json={"jellyseerr_username": "ExistingUser", "display_name": "Existing"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Refresh nicknames - should find no new users
+        response = client.post(
+            "/api/settings/nicknames/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["new_users_count"] == 0
+        assert "no new users" in data["message"].lower()
+
+    @patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyfin_users", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyseerr_users", new_callable=AsyncMock)
+    def test_refresh_nicknames_single_new_user_message(
+        self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
+        mock_validate: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test refresh message for single new user."""
+        mock_validate.return_value = True
+        mock_jellyfin_users.return_value = [
+            {"Id": "user1", "Name": "OnlyUser"},
+        ]
+        mock_jellyseerr_users.return_value = []
+
+        token = self._get_auth_token(client, "nick_refresh_single@example.com")
+
+        # Configure Jellyfin first
+        client.post(
+            "/api/settings/jellyfin",
+            json={
+                "server_url": "https://jellyfin.example.com",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Refresh nicknames
+        response = client.post(
+            "/api/settings/nicknames/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["new_users_count"] == 1
+        assert "1 new user added" in data["message"]
+
+    @patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.fetch_jellyfin_users", new_callable=AsyncMock)
+    def test_refresh_nicknames_jellyfin_error(
+        self,
+        mock_jellyfin_users: AsyncMock,
+        mock_validate: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test refresh handles Jellyfin API errors."""
+        mock_validate.return_value = True
+        mock_jellyfin_users.side_effect = Exception("Connection failed")
+
+        token = self._get_auth_token(client, "nick_refresh_error@example.com")
+
+        # Configure Jellyfin first
+        client.post(
+            "/api/settings/jellyfin",
+            json={
+                "server_url": "https://jellyfin.example.com",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Refresh nicknames - should fail
+        response = client.post(
+            "/api/settings/nicknames/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 500
+        assert "failed to fetch" in response.json()["detail"].lower()

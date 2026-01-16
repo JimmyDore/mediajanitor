@@ -505,6 +505,25 @@ class TestIntegrationNicknames:
                 )
                 assert response.status_code == 200
 
+    def test_refresh_nicknames_endpoint(self, auth_headers):
+        """Test POST /api/settings/nicknames/refresh returns expected response (US-37.3)."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/settings/nicknames/refresh",
+                headers=auth_headers,
+            )
+
+            # Should succeed since Jellyfin is configured for the test user
+            assert response.status_code == 200
+            data = response.json()
+
+            assert "success" in data
+            assert "message" in data
+            assert "new_users_count" in data
+            assert data["success"] is True
+            assert isinstance(data["new_users_count"], int)
+            assert data["new_users_count"] >= 0
+
 
 class TestIntegrationLibrary:
     """Integration tests for library endpoints (US-22.1)."""

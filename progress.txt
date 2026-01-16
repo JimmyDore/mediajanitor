@@ -195,6 +195,39 @@ Implemented automatic prefill of nickname records for all Jellyfin users during 
 
 ---
 
+## 2026-01-16: US-37.3 - Manual Refresh Button for Jellyfin Users
+
+### Summary
+Added a "Refresh users" button on the Settings page that allows users to manually fetch Jellyfin users and populate the nickname list without waiting for the next sync.
+
+### Files Changed
+- `backend/app/models/settings.py` - Added `NicknameRefreshResponse` model
+- `backend/app/routers/settings.py` - Added `POST /api/settings/nicknames/refresh` endpoint
+- `backend/tests/test_settings.py` - Added 6 tests for refresh endpoint
+- `backend/tests/test_integration.py` - Added integration test for refresh endpoint
+- `frontend/src/routes/settings/+page.svelte` - Added "Refresh users" button with loading state
+- `frontend/tests/settings-nicknames.test.ts` - Added 6 tests for refresh API contract
+
+### Key Implementation Details
+- Endpoint reuses existing `fetch_jellyfin_users()`, `fetch_jellyseerr_users()`, and `prefill_user_nicknames()` from sync service
+- Returns 400 if Jellyfin not configured, 500 if Jellyfin API fails
+- Response includes `success`, `message` (human-readable), and `new_users_count`
+- Button only visible when `hasJellyfinConfigured` is true
+- Shows loading spinner and disables button during refresh
+
+### Verification
+- 498 backend tests pass (6 new tests)
+- 411 frontend tests pass (6 new tests)
+- 28 integration tests pass (1 new test)
+- mypy typecheck passes
+- svelte-check passes
+
+### Learnings
+- Can reuse sync service functions in settings router by importing from `app.services.sync`
+- Import `Any` from typing when using `dict[str, Any]` type hints
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
