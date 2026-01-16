@@ -269,6 +269,9 @@ class TestSuccessfulSyncStoresData:
         )
 
         # Mock Jellyseerr API
+        respx.get("http://jellyseerr.local/api/v1/user").mock(
+            return_value=Response(200, json={"results": [{"id": 1, "displayName": "Admin"}, {"id": 2, "displayName": "Jane"}]})
+        )
         respx.get("http://jellyseerr.local/api/v1/request").mock(
             return_value=Response(200, json=JELLYSEERR_REQUESTS_RESPONSE)
         )
@@ -511,6 +514,10 @@ class TestJellyseerrDownDoesntBreakSync:
             return_value=Response(200, json={"Items": []})
         )
 
+        # Jellyseerr users mock (needed for nickname prefill)
+        respx.get("http://jellyseerr.local/api/v1/user").mock(
+            return_value=Response(200, json={"results": []})
+        )
         # Jellyseerr returns 500 (simulating server error)
         respx.get("http://jellyseerr.local/api/v1/request").mock(
             return_value=Response(500, json={"error": "Internal Server Error"})
@@ -564,6 +571,10 @@ class TestJellyseerrDownDoesntBreakSync:
             return_value=Response(200, json={"Items": []})
         )
 
+        # Jellyseerr users mock (needed for nickname prefill)
+        respx.get("http://jellyseerr.local/api/v1/user").mock(
+            return_value=Response(200, json={"results": []})
+        )
         # Jellyseerr is not mocked - will timeout/fail
         # Using side_effect to simulate connection error
         import httpx
@@ -649,6 +660,10 @@ class TestEmptyResultsCreateEmptyCache:
             return_value=Response(200, json={"Items": []})
         )
 
+        # Jellyseerr users mock (needed for nickname prefill)
+        respx.get("http://jellyseerr.local/api/v1/user").mock(
+            return_value=Response(200, json={"results": []})
+        )
         # Jellyseerr returns empty results
         respx.get("http://jellyseerr.local/api/v1/request").mock(
             return_value=Response(200, json={"pageInfo": {"pages": 0, "results": 0}, "results": []})

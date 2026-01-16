@@ -134,6 +134,7 @@ class NicknameItem(BaseModel):
     id: int
     jellyseerr_username: str
     display_name: str
+    has_jellyseerr_account: bool
     created_at: str  # ISO format datetime
 
 

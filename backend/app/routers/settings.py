@@ -482,6 +482,7 @@ async def create_nickname_mapping(
         id=entry.id,
         jellyseerr_username=entry.jellyseerr_username,
         display_name=entry.display_name,
+        has_jellyseerr_account=entry.has_jellyseerr_account,
         created_at=entry.created_at.isoformat() if entry.created_at else "",
     )
 
@@ -522,6 +523,7 @@ async def update_nickname_mapping(
         id=entry.id,
         jellyseerr_username=entry.jellyseerr_username,
         display_name=request.display_name,
+        has_jellyseerr_account=entry.has_jellyseerr_account,
         created_at=entry.created_at,
     )
 

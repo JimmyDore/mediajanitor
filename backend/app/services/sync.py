@@ -16,6 +16,7 @@ from app.database import (
     CachedMediaItem,
     CachedJellyseerrRequest,
     SyncStatus,
+    UserNickname,
 )
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
@@ -161,6 +162,38 @@ async def fetch_jellyfin_users(
             return users
 
     return await retry_with_backoff(_fetch, "Jellyfin")
+
+
+async def fetch_jellyseerr_users(
+    server_url: str, api_key: str
+) -> list[dict[str, Any]]:
+    """
+    Fetch all users from Jellyseerr API.
+
+    Returns list of user dicts with id, displayName, email.
+    Returns empty list on error (graceful degradation).
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v1/user",
+                headers={"X-Api-Key": api_key},
+            )
+            response.raise_for_status()
+            data = response.json()
+            # Jellyseerr returns {pageInfo, results} for paginated endpoints
+            # The /user endpoint returns results array
+            if isinstance(data, dict) and "results" in data:
+                results: list[dict[str, Any]] = data["results"]
+                return results
+            elif isinstance(data, list):
+                return list(data)
+            return []
+    except (httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+        logger.warning(f"Failed to fetch Jellyseerr users: {e}")
+        return []
 
 
 async def fetch_user_items(
@@ -893,6 +926,74 @@ async def cache_jellyseerr_requests(
     return cached_count
 
 
+async def prefill_user_nicknames(
+    db: AsyncSession,
+    user_id: int,
+    jellyfin_users: list[dict[str, Any]],
+    jellyseerr_users: list[dict[str, Any]],
+) -> int:
+    """
+    Prefill UserNickname records for Jellyfin users during sync.
+
+    - Creates a nickname record for each Jellyfin user if it doesn't exist
+    - Uses Jellyfin username as jellyseerr_username (assumption: same across systems)
+    - Leaves display_name empty for user to fill in
+    - Sets has_jellyseerr_account=True for users found in Jellyseerr
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_users: List of Jellyfin user dicts with Name
+        jellyseerr_users: List of Jellyseerr user dicts with displayName
+
+    Returns:
+        Number of new nickname records created
+    """
+    # Build set of Jellyseerr usernames for quick lookup
+    jellyseerr_usernames = {
+        user.get("displayName", "").lower()
+        for user in jellyseerr_users
+        if user.get("displayName")
+    }
+
+    created_count = 0
+    for jf_user in jellyfin_users:
+        username = jf_user.get("Name", "")
+        if not username:
+            continue
+
+        # Check if nickname already exists for this user
+        result = await db.execute(
+            select(UserNickname).where(
+                UserNickname.user_id == user_id,
+                UserNickname.jellyseerr_username == username,
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            # Update has_jellyseerr_account if needed, but preserve display_name
+            has_account = username.lower() in jellyseerr_usernames
+            if existing.has_jellyseerr_account != has_account:
+                existing.has_jellyseerr_account = has_account
+            continue
+
+        # Create new nickname record
+        has_account = username.lower() in jellyseerr_usernames
+        nickname = UserNickname(
+            user_id=user_id,
+            jellyseerr_username=username,
+            display_name="",  # Empty for user to fill in
+            has_jellyseerr_account=has_account,
+        )
+        db.add(nickname)
+        created_count += 1
+
+    await db.flush()
+    logger.info(f"Prefilled {created_count} new nickname records for user {user_id}")
+    return created_count
+
+
 async def update_sync_status(
     db: AsyncSession,
     user_id: int,
@@ -1054,6 +1155,21 @@ async def run_user_sync(
         await calculate_season_sizes(
             db, user_id, settings.jellyfin_server_url, jellyfin_api_key
         )
+
+        # Prefill user nicknames from Jellyfin users
+        jellyfin_users = await fetch_jellyfin_users(
+            settings.jellyfin_server_url, jellyfin_api_key
+        )
+
+        # Fetch Jellyseerr users if configured (to mark has_jellyseerr_account)
+        jellyseerr_users: list[dict[str, Any]] = []
+        if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+            jellyseerr_api_key = decrypt_value(settings.jellyseerr_api_key_encrypted)
+            jellyseerr_users = await fetch_jellyseerr_users(
+                settings.jellyseerr_server_url, jellyseerr_api_key
+            )
+
+        await prefill_user_nicknames(db, user_id, jellyfin_users, jellyseerr_users)
 
     except Exception as e:
         error_message = f"Jellyfin sync failed: {str(e)}"

@@ -52,8 +52,38 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 27 - Testing (In Progress)
-**Total Stories**: 41 stories (39 passes: true, 2 remaining)
+**Phase**: Epic 37 - Nickname Prefill (In Progress)
+**Total Stories**: 42 stories (40 passes: true, 2 remaining)
+
+---
+
+## 2026-01-16: US-37.1 - Prefill Nicknames During Sync (Backend)
+
+### Summary
+Implemented automatic prefill of nickname records for all Jellyfin users during sync, including detection of users with Jellyseerr accounts.
+
+### Files Changed
+- `backend/app/database.py` - Added `has_jellyseerr_account` boolean field to `UserNickname` model
+- `backend/app/models/settings.py` - Added `has_jellyseerr_account` to `NicknameItem` response model
+- `backend/app/services/sync.py` - Added `fetch_jellyseerr_users()` and `prefill_user_nicknames()` functions
+- `backend/app/services/nicknames.py` - Updated to include `has_jellyseerr_account` in list response
+- `backend/app/routers/settings.py` - Updated nickname endpoints to return `has_jellyseerr_account`
+- `backend/tests/test_nickname_prefill.py` - New test file for nickname prefill functionality
+- `backend/tests/test_sync.py` - Updated existing tests to mock new functions
+- `backend/tests/test_sync_mocked_integration.py` - Added Jellyseerr users mock
+- `backend/alembic/versions/20260116_184830_*.py` - Migration for `has_jellyseerr_account` column
+
+### Key Implementation Details
+- `fetch_jellyseerr_users()` calls `/api/v1/user` endpoint and returns empty list on error (graceful degradation)
+- `prefill_user_nicknames()` creates nickname records for each Jellyfin user during sync
+  - Preserves existing mappings (only creates if not exists)
+  - Matches Jellyfin usernames against Jellyseerr users (case-insensitive)
+  - Sets `has_jellyseerr_account=True` for users found in Jellyseerr
+- Display name is left empty for user to fill in later
+
+### Learnings
+- When adding new API calls to sync service, remember to update all existing sync tests to mock the new functions
+- `respx` mocks require explicit routes for every HTTP call made during test
 
 ---
 

@@ -340,8 +340,12 @@ class TestSyncService:
     @pytest.mark.asyncio
     @patch("app.services.sync.fetch_jellyfin_media_with_progress")
     @patch("app.services.sync.fetch_jellyseerr_requests")
+    @patch("app.services.sync.fetch_jellyfin_users")
+    @patch("app.services.sync.fetch_jellyseerr_users")
     async def test_run_user_sync_fetches_and_caches_data(
         self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
         mock_jellyseerr: AsyncMock,
         mock_jellyfin: AsyncMock,
         client: TestClient,
@@ -353,6 +357,8 @@ class TestSyncService:
 
         mock_jellyfin.return_value = mock_jellyfin_response["Items"]
         mock_jellyseerr.return_value = mock_jellyseerr_response["results"]
+        mock_jellyfin_users.return_value = []  # No users for nickname prefill
+        mock_jellyseerr_users.return_value = []
 
         async with TestingAsyncSessionLocal() as session:
             # Create a user with settings
@@ -415,8 +421,12 @@ class TestSyncService:
 
     @pytest.mark.asyncio
     @patch("app.services.sync.fetch_jellyfin_media_with_progress")
+    @patch("app.services.sync.fetch_jellyfin_users")
+    @patch("app.services.sync.fetch_jellyseerr_users")
     async def test_sync_clears_old_cache_before_storing_new(
         self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
         mock_jellyfin: AsyncMock,
         client: TestClient,
         mock_jellyfin_response: dict,
@@ -426,6 +436,8 @@ class TestSyncService:
         from app.services.sync import run_user_sync
 
         mock_jellyfin.return_value = mock_jellyfin_response["Items"]
+        mock_jellyfin_users.return_value = []
+        mock_jellyseerr_users.return_value = []
 
         async with TestingAsyncSessionLocal() as session:
             # Create a user with settings
@@ -1418,8 +1430,12 @@ class TestSyncCalculatingSizesState:
     @pytest.mark.asyncio
     @patch("app.services.sync.fetch_jellyfin_media_with_progress")
     @patch("app.services.sync.calculate_season_sizes")
+    @patch("app.services.sync.fetch_jellyfin_users")
+    @patch("app.services.sync.fetch_jellyseerr_users")
     async def test_sync_triggers_calculate_season_sizes_after_media_sync(
         self,
+        mock_jellyseerr_users: AsyncMock,
+        mock_jellyfin_users: AsyncMock,
         mock_calculate_sizes: AsyncMock,
         mock_jellyfin: AsyncMock,
         client: TestClient,
@@ -1435,6 +1451,8 @@ class TestSyncCalculatingSizesState:
                 "UserData": {"Played": False, "PlayCount": 0},
             }
         ]
+        mock_jellyfin_users.return_value = []
+        mock_jellyseerr_users.return_value = []
 
         async with TestingAsyncSessionLocal() as session:
             user = User(
@@ -1573,19 +1591,21 @@ class TestSyncFailureNotifications:
                     mock_js.side_effect = Exception("Jellyseerr API error")
                     with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                         with patch("app.services.sync.calculate_season_sizes"):
-                            with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
-                                result = await run_user_sync(session, user.id)
+                            with patch("app.services.sync.fetch_jellyfin_users", return_value=[]):
+                                with patch("app.services.sync.fetch_jellyseerr_users", return_value=[]):
+                                    with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
+                                        result = await run_user_sync(session, user.id)
 
-                                # Sync should be partial (Jellyfin succeeded, Jellyseerr failed)
-                                assert result["status"] == "partial"
-                                assert "Jellyseerr" in result["error"]
+                                        # Sync should be partial (Jellyfin succeeded, Jellyseerr failed)
+                                        assert result["status"] == "partial"
+                                        assert "Jellyseerr" in result["error"]
 
-                                # Notification should have been called for Jellyseerr failure
-                                mock_notify.assert_called_once()
-                                call_kwargs = mock_notify.call_args[1]
-                                assert call_kwargs["user_email"] == "js_fail_notify@example.com"
-                                assert call_kwargs["service"] == "Jellyseerr"
-                                assert "Jellyseerr API error" in call_kwargs["error_message"]
+                                        # Notification should have been called for Jellyseerr failure
+                                        mock_notify.assert_called_once()
+                                        call_kwargs = mock_notify.call_args[1]
+                                        assert call_kwargs["user_email"] == "js_fail_notify@example.com"
+                                        assert call_kwargs["service"] == "Jellyseerr"
+                                        assert "Jellyseerr API error" in call_kwargs["error_message"]
 
     @pytest.mark.asyncio
     async def test_sync_failure_notification_is_fire_and_forget(self, client: TestClient) -> None:

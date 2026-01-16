@@ -63,6 +63,7 @@ async def get_nicknames(
             id=entry.id,
             jellyseerr_username=entry.jellyseerr_username,
             display_name=entry.display_name,
+            has_jellyseerr_account=entry.has_jellyseerr_account,
             created_at=entry.created_at.isoformat() if entry.created_at else "",
         )
         for entry in entries
