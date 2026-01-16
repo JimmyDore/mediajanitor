@@ -52,8 +52,37 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 38 - Title Language Preference (In Progress)
-**Total Stories**: 47 stories (4 passes: true, 43 remaining)
+**Phase**: Epic 33 - Total Series Size (In Progress)
+**Total Stories**: 47 stories (5 passes: true, 42 remaining)
+
+---
+
+## 2026-01-16: US-33.1 - Calculate and Store Total Series Size
+
+### Summary
+Modified `calculate_season_sizes()` to also calculate and store the total series size (sum of all seasons) in `CachedMediaItem.size_bytes`. This enables the Library page to display actual series sizes instead of "Unknown size".
+
+### Files Changed
+- `backend/app/services/sync.py` - Added `total_series_size` accumulator, store in `size_bytes`
+- `backend/tests/test_sync.py` - Added tests for total series size calculation
+
+### Key Implementation Details
+- `calculate_season_sizes()` now tracks both `largest_season_size` and `total_series_size`
+- For each season, the season size is added to `total_series_size`
+- After processing all seasons, `size_bytes` is updated with the total
+- Log message now includes both total size and largest season size for debugging
+- Frontend already uses `size_formatted` from API, so no frontend changes needed
+
+### Verification
+- 491 backend tests pass (added 1 new test for total series size)
+- All 405 frontend tests pass
+- mypy typecheck passes
+- svelte-check passes
+- 27 integration tests pass in Docker
+
+### Learnings
+- The `format_size()` function returns "Unknown size" when `size_bytes` is None or 0
+- Once `size_bytes` is populated during sync, the Library page will automatically display proper sizes
 
 ---
 

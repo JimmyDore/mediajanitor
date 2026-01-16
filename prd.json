@@ -55,8 +55,8 @@
         "Verify in Docker using local integration test"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Modified calculate_season_sizes() to accumulate total_series_size across all seasons and store in size_bytes. Added unit tests to verify total series size calculation."
     },
     {
       "id": "US-34.1",

@@ -1329,6 +1329,97 @@ class TestCalculateSeasonSizes:
             # Series should have largest season size (15 GB from Season 2)
             assert items["Test Series"].largest_season_size_bytes == 15_000_000_000
 
+            # Series should also have total size (S1: 10 GB + S2: 15 GB = 25 GB)
+            assert items["Test Series"].size_bytes == 25_000_000_000
+
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_stores_total_series_size(
+        self, client: TestClient
+    ) -> None:
+        """calculate_season_sizes should store total series size in size_bytes."""
+        from app.services.sync import calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a user with settings
+            user = User(
+                email="total_series_size@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+
+            # Add a series with no initial size
+            series = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="series-total-test",
+                name="Test Series Total",
+                media_type="Series",
+                size_bytes=None,  # Initially unknown
+            )
+            session.add(series)
+            await session.commit()
+
+            # Mock API: 3 seasons with different sizes
+            mock_seasons_response = {
+                "Items": [
+                    {"Id": "season1", "Name": "Season 1"},
+                    {"Id": "season2", "Name": "Season 2"},
+                    {"Id": "season3", "Name": "Season 3"},
+                ]
+            }
+            # Season 1: 5 GB, Season 2: 10 GB, Season 3: 8 GB
+            mock_episodes_by_season = {
+                "season1": {"Items": [
+                    {"Id": "ep1", "MediaSources": [{"Size": 2_500_000_000}]},
+                    {"Id": "ep2", "MediaSources": [{"Size": 2_500_000_000}]},
+                ]},  # 5 GB total
+                "season2": {"Items": [
+                    {"Id": "ep3", "MediaSources": [{"Size": 5_000_000_000}]},
+                    {"Id": "ep4", "MediaSources": [{"Size": 5_000_000_000}]},
+                ]},  # 10 GB total
+                "season3": {"Items": [
+                    {"Id": "ep5", "MediaSources": [{"Size": 4_000_000_000}]},
+                    {"Id": "ep6", "MediaSources": [{"Size": 4_000_000_000}]},
+                ]},  # 8 GB total
+            }
+
+            async def mock_get(self, url, **kwargs):
+                import httpx
+                params = kwargs.get("params", {})
+                parent_id = params.get("ParentId", "")
+
+                if parent_id == "series-total-test":
+                    return httpx.Response(200, json=mock_seasons_response, request=httpx.Request("GET", url))
+                if parent_id in mock_episodes_by_season:
+                    return httpx.Response(200, json=mock_episodes_by_season[parent_id], request=httpx.Request("GET", url))
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
+                    await calculate_season_sizes(
+                        session, user.id,
+                        "http://jellyfin.local", "decrypted-key"
+                    )
+
+            # Refresh from DB
+            from sqlalchemy import select
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            series_item = result.scalars().first()
+
+            # Total series size should be 5 + 10 + 8 = 23 GB
+            assert series_item.size_bytes == 23_000_000_000
+            # Largest season should be Season 2 at 10 GB
+            assert series_item.largest_season_size_bytes == 10_000_000_000
+
     @pytest.mark.asyncio
     async def test_calculate_season_sizes_handles_api_errors(
         self, client: TestClient

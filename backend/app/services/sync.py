@@ -809,13 +809,14 @@ async def calculate_season_sizes(
     api_key: str,
 ) -> None:
     """
-    Calculate and store largest season sizes for all series in user's cache.
+    Calculate and store season sizes and total series size for all series in user's cache.
 
     This function:
     1. Fetches all series from cached_media_items for the user
     2. For each series, fetches seasons from Jellyfin API
     3. For each season, fetches episodes and calculates total size
     4. Stores the largest season size in largest_season_size_bytes
+    5. Stores the total series size (sum of all seasons) in size_bytes
 
     Args:
         db: Database session
@@ -852,8 +853,9 @@ async def calculate_season_sizes(
                     logger.debug(f"No seasons found for series '{series.name}'")
                     continue
 
-                # Calculate size for each season and find the largest
+                # Calculate size for each season, track largest and total
                 largest_season_size = 0
+                total_series_size = 0
                 for season in seasons:
                     season_id = season.get("Id")
                     if not season_id:
@@ -864,15 +866,21 @@ async def calculate_season_sizes(
                     )
                     season_size = calculate_season_total_size(episodes)
 
+                    # Accumulate total series size
+                    total_series_size += season_size
+
                     if season_size > largest_season_size:
                         largest_season_size = season_size
 
-                # Update the series with largest season size
+                # Update the series with largest season size and total size
                 if largest_season_size > 0:
                     series.largest_season_size_bytes = largest_season_size
+                if total_series_size > 0:
+                    series.size_bytes = total_series_size
                     logger.debug(
-                        f"Series '{series.name}': largest season = "
-                        f"{largest_season_size / (1024**3):.2f} GB"
+                        f"Series '{series.name}': total = "
+                        f"{total_series_size / (1024**3):.2f} GB, "
+                        f"largest season = {largest_season_size / (1024**3):.2f} GB"
                     )
 
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
