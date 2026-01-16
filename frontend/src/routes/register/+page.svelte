@@ -3,9 +3,11 @@
 
 	let email = $state('');
 	let password = $state('');
+	let confirmPassword = $state('');
 	let error = $state<string | null>(null);
 	let isLoading = $state(false);
 	let passwordError = $state<string | null>(null);
+	let confirmPasswordError = $state<string | null>(null);
 	let mounted = $state(false);
 
 	onMount(() => {
@@ -15,6 +17,13 @@
 	function validatePassword(pwd: string): string | null {
 		if (pwd.length < 8) {
 			return 'Password must be at least 8 characters';
+		}
+		return null;
+	}
+
+	function validatePasswordsMatch(pwd: string, confirmPwd: string): string | null {
+		if (pwd !== confirmPwd) {
+			return 'Passwords do not match';
 		}
 		return null;
 	}
@@ -43,17 +52,35 @@
 
 	let passwordStrength = $derived(password.length > 0 ? getPasswordStrength(password) : null);
 
+	// Check if passwords match - only show error when confirm field has content
+	let passwordsMatchError = $derived(
+		confirmPassword.length > 0 ? validatePasswordsMatch(password, confirmPassword) : null
+	);
+
+	// Disable submit when loading or passwords don't match (only when confirm has content)
+	let isSubmitDisabled = $derived(
+		isLoading || (confirmPassword.length > 0 && password !== confirmPassword)
+	);
+
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		error = null;
 
-		// Validate password
+		// Validate password length
 		const pwdError = validatePassword(password);
 		if (pwdError) {
 			passwordError = pwdError;
 			return;
 		}
 		passwordError = null;
+
+		// Validate passwords match
+		const matchError = validatePasswordsMatch(password, confirmPassword);
+		if (matchError) {
+			confirmPasswordError = matchError;
+			return;
+		}
+		confirmPasswordError = null;
 
 		isLoading = true;
 
@@ -151,7 +178,26 @@
 				{/if}
 			</div>
 
-			<button type="submit" disabled={isLoading} class="submit-button">
+			<div class="form-group">
+				<label for="confirmPassword">Confirm Password</label>
+				<input
+					type="password"
+					id="confirmPassword"
+					bind:value={confirmPassword}
+					required
+					autocomplete="new-password"
+					placeholder="Re-enter your password"
+					class="input"
+					class:input-error={passwordsMatchError || confirmPasswordError}
+				/>
+				{#if passwordsMatchError}
+					<span class="field-error">{passwordsMatchError}</span>
+				{:else if confirmPasswordError}
+					<span class="field-error">{confirmPasswordError}</span>
+				{/if}
+			</div>
+
+			<button type="submit" disabled={isSubmitDisabled} class="submit-button">
 				{#if isLoading}
 					<span class="spinner"></span>
 					Creating account...

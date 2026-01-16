@@ -203,3 +203,61 @@ describe('Password Strength Indicator', () => {
 		});
 	});
 });
+
+describe('Password Confirmation', () => {
+	function validatePasswordsMatch(password: string, confirmPassword: string): string | null {
+		if (password !== confirmPassword) {
+			return 'Passwords do not match';
+		}
+		return null;
+	}
+
+	it('returns null when passwords match', () => {
+		expect(validatePasswordsMatch('SecurePass123', 'SecurePass123')).toBeNull();
+		expect(validatePasswordsMatch('password', 'password')).toBeNull();
+	});
+
+	it('returns error when passwords do not match', () => {
+		expect(validatePasswordsMatch('password1', 'password2')).toBe('Passwords do not match');
+		expect(validatePasswordsMatch('Password', 'password')).toBe('Passwords do not match');
+	});
+
+	it('returns error when confirm password is empty', () => {
+		expect(validatePasswordsMatch('password', '')).toBe('Passwords do not match');
+	});
+
+	it('returns error when password is empty but confirm is not', () => {
+		expect(validatePasswordsMatch('', 'password')).toBe('Passwords do not match');
+	});
+
+	it('returns null when both passwords are empty', () => {
+		// Edge case: both empty should technically "match" but form validation handles empty required fields
+		expect(validatePasswordsMatch('', '')).toBeNull();
+	});
+
+	describe('submit button state', () => {
+		function shouldDisableSubmit(password: string, confirmPassword: string, isLoading: boolean): boolean {
+			// Submit should be disabled if loading or if passwords don't match (when confirm has content)
+			if (isLoading) return true;
+			if (confirmPassword.length > 0 && password !== confirmPassword) return true;
+			return false;
+		}
+
+		it('submit disabled when loading', () => {
+			expect(shouldDisableSubmit('password123', 'password123', true)).toBe(true);
+		});
+
+		it('submit enabled when passwords match and not loading', () => {
+			expect(shouldDisableSubmit('password123', 'password123', false)).toBe(false);
+		});
+
+		it('submit disabled when passwords do not match', () => {
+			expect(shouldDisableSubmit('password123', 'password456', false)).toBe(true);
+		});
+
+		it('submit enabled when confirm password is empty (not yet typed)', () => {
+			// User hasn't typed in confirm field yet, don't disable until they start typing
+			expect(shouldDisableSubmit('password123', '', false)).toBe(false);
+		});
+	});
+});
