@@ -582,8 +582,8 @@
         "Unit tests pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created PasswordResetToken model with all required fields. Token stored as token_hash (indexed). Foreign key to users with CASCADE delete. Migration 98891c396773 created and verified."
     },
     {
       "id": "US-44.2",
