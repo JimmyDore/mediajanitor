@@ -1,18 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Registration Page', () => {
-	test('loads with email and password fields', async ({ page }) => {
+	test('loads with email, password, and confirm password fields', async ({ page }) => {
 		await page.goto('/register');
 
 		await expect(page.getByLabel(/email/i)).toBeVisible();
-		await expect(page.getByLabel(/password/i)).toBeVisible();
+		// Use exact label to distinguish from confirm password
+		await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+		await expect(page.getByLabel('Confirm Password')).toBeVisible();
 		await expect(page.getByRole('button', { name: /create free account/i })).toBeVisible();
 	});
 
 	test('password field has minlength validation', async ({ page }) => {
 		await page.goto('/register');
 
-		const passwordInput = page.getByLabel(/password/i);
+		// Use exact label to get the main password field
+		const passwordInput = page.getByLabel('Password', { exact: true });
 		await expect(passwordInput).toHaveAttribute('minlength', '8');
 	});
 
@@ -28,10 +31,13 @@ test.describe('Registration Page', () => {
 		await page.goto('/register');
 
 		await page.getByLabel(/email/i).fill('test@example.com');
-		await page.getByLabel(/password/i).fill('SecurePassword123!');
+		// Use locator by ID for specificity with password fields
+		await page.locator('#password').fill('SecurePassword123!');
+		await page.locator('#confirmPassword').fill('SecurePassword123!');
 
 		// Verify values were entered
 		await expect(page.getByLabel(/email/i)).toHaveValue('test@example.com');
-		await expect(page.getByLabel(/password/i)).toHaveValue('SecurePassword123!');
+		await expect(page.locator('#password')).toHaveValue('SecurePassword123!');
+		await expect(page.locator('#confirmPassword')).toHaveValue('SecurePassword123!');
 	});
 });

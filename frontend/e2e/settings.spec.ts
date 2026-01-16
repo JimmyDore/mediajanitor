@@ -2,58 +2,43 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Settings Page (Smoke Tests)', () => {
 	test('unauthenticated user is redirected to login', async ({ page }) => {
-		await page.route('**/api/auth/me', async (route) => {
-			await route.fulfill({
-				status: 401,
-				contentType: 'application/json',
-				body: JSON.stringify({ detail: 'Not authenticated' })
-			});
-		});
+		// Clear any cookies that might be set
+		await page.context().clearCookies();
 
-		await page.goto('/login');
-		await page.evaluate(() => localStorage.removeItem('access_token'));
+		// Try to access settings (protected route)
 		await page.goto('/settings');
-		await page.waitForURL('/login', { timeout: 5000 });
 
+		// Should redirect to login (may include ?redirect= query param)
+		await page.waitForURL('**/login**', { timeout: 5000 });
 		await expect(page.getByRole('heading', { name: /log in/i })).toBeVisible();
 	});
 
-	test('settings page renders with connection sections', async ({ page }) => {
-		// Set up mocks BEFORE any navigation
-		await page.route('**/api/auth/me', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ id: 1, email: 'test@example.com' })
-			});
-		});
+	test('settings page renders after login', async ({ page }) => {
+		// Generate unique email for this test
+		const uniqueEmail = `settings-e2e-${Date.now()}@example.com`;
+		const testPassword = 'SecurePassword123!';
 
-		await page.route('**/api/settings/jellyfin', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ server_url: null, api_key_configured: false })
-			});
-		});
+		// Step 1: Register a new user
+		await page.goto('/register');
+		await page.getByLabel(/email/i).fill(uniqueEmail);
+		await page.locator('#password').fill(testPassword);
+		await page.locator('#confirmPassword').fill(testPassword);
+		await page.getByRole('button', { name: /create free account/i }).click();
+		await page.waitForURL('/login', { timeout: 10000 });
 
-		await page.route('**/api/settings/jellyseerr', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ server_url: null, api_key_configured: false })
-			});
-		});
+		// Step 2: Login
+		await page.getByLabel(/email/i).fill(uniqueEmail);
+		await page.getByLabel(/password/i).fill(testPassword);
+		await page.getByRole('button', { name: /log in/i }).click();
+		await page.waitForURL('/', { timeout: 10000 });
 
-		// Set token in localStorage before going to settings
-		await page.goto('/login');
-		await page.evaluate(() => {
-			localStorage.setItem('access_token', 'mock-token-for-ui-testing');
-		});
-
+		// Step 3: Navigate to settings
 		await page.goto('/settings');
+		await page.waitForURL('/settings', { timeout: 5000 });
 
-		await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
-		await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+		// Verify settings page loaded with key sections
+		await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText('Connections')).toBeVisible();
 		await expect(page.getByText('Jellyfin')).toBeVisible();
 	});
 });

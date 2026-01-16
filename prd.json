@@ -676,8 +676,8 @@
         "E2E test passes"
       ],
       "priority": 100,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created auth-flow.spec.ts with 2 tests: complete flow (register→login→dashboard→settings→logout) and protected route redirect. Fixed register.spec.ts for confirm password field. Fixed settings.spec.ts and header.spec.ts to use real auth flow instead of deprecated localStorage tokens."
     },
     {
       "id": "US-27.2",
