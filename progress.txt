@@ -53,7 +53,36 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 38 - Title Language Preference (In Progress)
-**Total Stories**: 47 stories (3 passes: true, 44 remaining)
+**Total Stories**: 47 stories (4 passes: true, 43 remaining)
+
+---
+
+## 2026-01-16: US-17.2.1 - Populate Sync Progress User Names
+
+### Summary
+Verified that sync progress user names feature was already fully implemented. No code changes needed - just marked the story as complete.
+
+### Existing Implementation
+- `backend/app/services/sync.py:456-460` - Extracts first user name in batch and passes to `update_sync_progress()`
+- `frontend/src/routes/+page.svelte:159-160` - Displays "Fetching user X/Y: Name..." format
+
+### Verification
+- All 491 backend tests pass including `TestSyncProgressTracking` tests
+- All 405 frontend tests pass including sync.test.ts and setup-checklist.test.ts
+- Typecheck passes (mypy, svelte-check)
+- Integration tests pass in Docker
+- Visual verification attempted via Puppeteer (sync completes too fast to capture mid-progress)
+
+### Key Implementation Details (Pre-existing)
+- `fetch_jellyfin_media_with_progress()` processes users in batches of 3
+- For each batch, it extracts the first user's display name: `first_user_name = batch_users[0].get("Name", "Unknown")`
+- Passes this name to `update_sync_progress()` which stores it in `SyncStatus.current_user_name`
+- API endpoint `/api/sync/status` returns the name in `progress.current_user_name`
+- Frontend `formatProgressMessage()` formats: `Fetching user ${progress.current_step_progress}/${progress.current_step_total}: ${userName}...`
+
+### Learnings
+- Before implementing, always check if the feature is already complete by reviewing existing code
+- The sync progress user names feature was implemented alongside the main sync progress tracking
 
 ---
 

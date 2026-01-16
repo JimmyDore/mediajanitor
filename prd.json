@@ -17,8 +17,8 @@
         "Verify in browser: trigger sync and see user names in progress messages"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementation already complete. Backend sync.py:456-460 extracts user name and passes to update_sync_progress(). Frontend +page.svelte:159-160 displays 'Fetching user X/Y: Name...' format."
     },
     {
       "id": "US-28.1",
