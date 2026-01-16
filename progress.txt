@@ -658,10 +658,161 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(ui): [US-22.2] add Library page with sub-tabs
 
+### 2026-01-16: US-22.3 - Library Search and Filters
+- Added search input in page header with 300ms debounce
+- Search matches name (case-insensitive) and production year
+- Added watched status filter dropdown (All/Watched/Unwatched)
+- Added year range filter with min/max inputs
+- Added size range filter with min/max GB inputs
+- Added sort dropdown (Name/Year/Size/Date Added/Last Watched)
+- Added sort order toggle button (ascending/descending)
+- Added hasActiveFilters derived state for clear button visibility
+- Added clearAllFilters() function to reset all filters to defaults
+- Filters persist when switching between All/Movies/Series tabs
+- Item count updates to show filtered results count
+- Styled filters row with responsive layout for mobile
+- 22 new tests in library.test.ts for filter logic
+- 374 frontend tests pass, typecheck clean
+- Verified in browser: search, filters, sort, clear all work correctly
+- Files changed: frontend/src/routes/library/+page.svelte, frontend/tests/library.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-22.3] add Library search and filters
+
+### 2026-01-16: US-22.4 - Library Sorting
+- Column headers (Name, Year, Size, Added, Last Watched) already implemented with toggleSort() function
+- Visual arrow indicators (↑/↓) show current sort column and direction
+- Click same column toggles between ascending/descending
+- Default sort is Name ascending, other columns default to descending when switched
+- Server-side sorting via API sort and order parameters for performance
+- Added 12 new tests in library.test.ts for column header sorting
+- 386 frontend tests pass, typecheck clean
+- Verified in browser: clicking columns changes sort, arrows update correctly
+- Files changed: frontend/tests/library.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-22.4] add Library column header sorting
+
+### 2026-01-16: US-24.1 - Rate Limiting on Auth Endpoints
+- Created app/services/rate_limit.py with RateLimiter class:
+  - In-memory storage using sliding window algorithm
+  - Thread-safe with Lock for concurrent access
+  - Configurable max_requests (default: 10) and window_seconds (default: 60)
+  - is_rate_limited() returns (is_limited: bool, retry_after: int)
+  - clear() method for testing
+  - TESTING environment variable check to disable rate limiting in tests
+- Global rate limiter instances: login_rate_limiter, register_rate_limiter
+- Updated routers/auth.py:
+  - Added _get_client_ip() helper supporting X-Forwarded-For header
+  - Added _check_rate_limit() helper that raises HTTPException 429
+  - Applied rate limiting to POST /api/auth/register and POST /api/auth/login
+  - /api/auth/me NOT rate limited (authenticated requests only)
+- HTTP 429 response includes:
+  - Retry-After header with seconds until window resets
+  - JSON body: {"detail": "Too many requests. Please try again in X seconds."}
+- Updated integration tests to use module-scoped auth token:
+  - _get_cached_token() caches token across all tests in module
+  - Avoids hitting rate limit during test runs
+- 9 new unit tests in test_rate_limit.py
+- 426 backend unit tests pass, 25 integration tests pass, mypy clean
+- Verified in Docker: 11th login request within 60 seconds returns HTTP 429 with Retry-After header
+- Files changed: app/routers/auth.py, app/services/rate_limit.py, tests/test_rate_limit.py, tests/test_integration.py, prd.json
+- Commits:
+  - feat(auth): [US-24.1] add rate limiting on auth endpoints
+
+### 2026-01-16: US-25.1 - Password Strength Indicator
+- Added password strength indicator to registration page
+- Implemented getPasswordStrength() function:
+  - Returns 'weak' for 1-7 characters
+  - Returns 'medium' for 8-11 characters
+  - Returns 'strong' for 12+ characters
+- Implemented getStrengthLabel() function for display text
+- Added $derived passwordStrength that updates in real-time
+- Visual indicator shows:
+  - Progress bar with proportional fill (33%/66%/100%)
+  - Color changes: red (weak), yellow (medium), green (success)
+  - Text label next to progress bar
+- Indicator only appears when password field has content
+- Informational only - does NOT block form submission
+- Added ARIA attributes for accessibility (role="progressbar", aria-valuenow, etc.)
+- 10 new unit tests in register.test.ts:
+  - getPasswordStrength() function tests for all ranges
+  - Boundary tests (7→8 chars, 11→12 chars)
+  - getStrengthLabel() for all levels
+  - Visibility logic tests
+  - Fill percentage tests
+- 396 frontend tests pass (+10 new), typecheck clean
+- Verified in browser: all strength levels display correctly
+- Files changed: frontend/src/routes/register/+page.svelte, frontend/tests/register.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-25.1] add password strength indicator
+
+### 2026-01-16: US-25.2 - Password Confirmation Field
+- Added confirmPassword state variable for tracking second password entry
+- Added confirmPasswordError state for form validation errors
+- Implemented validatePasswordsMatch() function:
+  - Returns "Passwords do not match" if passwords differ
+  - Returns null if passwords match
+- Added passwordsMatchError derived state:
+  - Only shows error when confirm field has content
+  - Prevents premature error display before user starts typing
+- Added isSubmitDisabled derived state:
+  - Disabled when loading OR when passwords don't match (confirm has content)
+  - Enabled when passwords match or confirm is empty
+- Updated handleSubmit() to validate password match before API call
+- Added Confirm Password input field in form:
+  - Placed after Password field with strength indicator
+  - Required field with placeholder "Re-enter your password"
+  - Shows error styling (red border) when passwords don't match
+  - Error message appears below field, not as toast
+- 9 new tests in register.test.ts:
+  - validatePasswordsMatch() function tests (5 tests)
+  - shouldDisableSubmit() logic tests (4 tests)
+- 405 frontend tests pass (+9 new), typecheck clean
+- Verified in browser: error shows when passwords don't match, submit disabled
+- Files changed: frontend/src/routes/register/+page.svelte, frontend/tests/register.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-25.2] add password confirmation field
+
+### 2026-01-16: US-26.1 - Sync Retry with Exponential Backoff
+- Created app/services/retry.py with retry utility:
+  - is_transient_error(): Identifies retryable errors (timeouts, 5xx, connection errors)
+  - retry_with_backoff(): Async retry decorator with exponential backoff
+  - MAX_RETRIES = 3 (4 total attempts)
+  - INITIAL_DELAY = 1 second, doubles each retry: 1s, 2s, 4s
+- Applied retry logic to Jellyfin API calls:
+  - fetch_jellyfin_users(): Fetches user list
+  - fetch_user_items(): Fetches items per user
+  - fetch_series_seasons(): Fetches seasons for series
+  - fetch_season_episodes(): Fetches episodes for seasons
+- Applied retry logic to Jellyseerr API calls:
+  - fetch_jellyseerr_requests(): Paginated request fetching
+- Permanent errors NOT retried (401, 404, 400, 403):
+  - Auth failures: 401 Unauthorized
+  - Not found: 404
+  - Bad request: 400
+- Logging: "Retry 1/3 for Jellyfin API after 1s... (Error: TimeoutException: ...)"
+- Error message after exhausted retries includes service and error type
+- 21 new tests in test_retry.py:
+  - TestIsTransientError: 10 tests for error classification
+  - TestRetryWithBackoff: 9 tests for retry behavior
+  - TestRetryConstants: 2 tests for configuration
+- 7 new tests in test_sync.py TestSyncRetryWithBackoff:
+  - test_fetch_jellyfin_users_retries_on_timeout
+  - test_fetch_jellyfin_users_retries_on_500_error
+  - test_fetch_jellyfin_users_does_not_retry_on_401
+  - test_fetch_jellyfin_users_fails_after_max_retries
+  - test_fetch_jellyseerr_requests_retries_on_transient_error
+  - test_exponential_backoff_delays_1_2_4_seconds
+  - test_successful_retry_continues_sync_normally
+- 454 backend unit tests pass (+28 new), 25 integration tests pass, mypy clean
+- Verified in Docker: backend starts correctly, sync works
+- Files changed: app/services/retry.py (new), app/services/sync.py, tests/test_retry.py (new), tests/test_sync.py, prd.json
+- Commits:
+  - feat(sync): [US-26.1] add retry with exponential backoff
+
 ## Current Status
 
-**Phase**: Epic 22 - Library Browser (In Progress)
-**Total Stories**: 41 stories (32 passes: true, 9 remaining)
+**Phase**: Epic 26 - Sync Resilience (In Progress)
+**Total Stories**: 41 stories (38 passes: true, 3 remaining)
 
 ## Notes
 

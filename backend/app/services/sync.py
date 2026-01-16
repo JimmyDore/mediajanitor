@@ -18,6 +18,7 @@ from app.database import (
     SyncStatus,
 )
 from app.services.encryption import decrypt_value
+from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
 
 logger = logging.getLogger(__name__)
@@ -143,20 +144,23 @@ async def fetch_jellyfin_users(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
     """
-    Fetch all users from Jellyfin API.
+    Fetch all users from Jellyfin API with retry on transient failures.
 
     Returns list of user dicts with Id and Name.
     """
     server_url = server_url.rstrip("/")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            f"{server_url}/Users",
-            headers={"X-Emby-Token": api_key},
-        )
-        response.raise_for_status()
-        users: list[dict[str, Any]] = response.json()
-        return users
+    async def _fetch() -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/Users",
+                headers={"X-Emby-Token": api_key},
+            )
+            response.raise_for_status()
+            users: list[dict[str, Any]] = response.json()
+            return users
+
+    return await retry_with_backoff(_fetch, "Jellyfin")
 
 
 async def fetch_user_items(
@@ -169,7 +173,7 @@ async def fetch_user_items(
     total_users: int,
 ) -> list[dict[str, Any]]:
     """
-    Fetch all movies and series for a specific Jellyfin user.
+    Fetch all movies and series for a specific Jellyfin user with retry on transient failures.
 
     Args:
         client: Shared httpx client
@@ -195,15 +199,18 @@ async def fetch_user_items(
         "Limit": 10000,
     }
 
-    response = await client.get(
-        f"{server_url}/Users/{user_id}/Items",
-        headers={"X-Emby-Token": api_key},
-        params=params,
-    )
-    response.raise_for_status()
+    async def _fetch() -> list[dict[str, Any]]:
+        response = await client.get(
+            f"{server_url}/Users/{user_id}/Items",
+            headers={"X-Emby-Token": api_key},
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+        items: list[dict[str, Any]] = data.get("Items", [])
+        return items
 
-    data = response.json()
-    items: list[dict[str, Any]] = data.get("Items", [])
+    items = await retry_with_backoff(_fetch, "Jellyfin")
     logger.info(f"User {user_name}: {len(items)} items")
     return items
 
@@ -548,7 +555,7 @@ async def fetch_jellyseerr_requests(
     server_url: str, api_key: str
 ) -> list[dict[str, Any]]:
     """
-    Fetch all requests from Jellyseerr API with pagination.
+    Fetch all requests from Jellyseerr API with pagination and retry on transient failures.
 
     Based on original_script.py:fetch_jellyseer_requests
 
@@ -570,14 +577,17 @@ async def fetch_jellyseerr_requests(
                     "skip": (page - 1) * take,
                 }
 
-                response = await client.get(
-                    f"{server_url}/api/v1/request",
-                    headers={"X-Api-Key": api_key},
-                    params=params,
-                )
-                response.raise_for_status()
+                async def _fetch_page() -> dict[str, Any]:
+                    response = await client.get(
+                        f"{server_url}/api/v1/request",
+                        headers={"X-Api-Key": api_key},
+                        params=params,
+                    )
+                    response.raise_for_status()
+                    result: dict[str, Any] = response.json()
+                    return result
 
-                data = response.json()
+                data = await retry_with_backoff(_fetch_page, "Jellyseerr")
                 page_results = data.get("results", [])
                 page_info = data.get("pageInfo", {})
 
@@ -659,7 +669,7 @@ async def fetch_series_seasons(
     series_id: str,
 ) -> list[dict[str, Any]]:
     """
-    Fetch all seasons for a series from Jellyfin API.
+    Fetch all seasons for a series from Jellyfin API with retry on transient failures.
 
     Returns list of season dicts with Id and IndexNumber.
     """
@@ -668,15 +678,18 @@ async def fetch_series_seasons(
         "IncludeItemTypes": "Season",
     }
 
-    response = await client.get(
-        f"{server_url}/Items",
-        headers={"X-Emby-Token": api_key},
-        params=params,
-    )
-    response.raise_for_status()
-    data = response.json()
-    seasons: list[dict[str, Any]] = data.get("Items", [])
-    return seasons
+    async def _fetch() -> list[dict[str, Any]]:
+        response = await client.get(
+            f"{server_url}/Items",
+            headers={"X-Emby-Token": api_key},
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+        seasons: list[dict[str, Any]] = data.get("Items", [])
+        return seasons
+
+    return await retry_with_backoff(_fetch, "Jellyfin")
 
 
 async def fetch_season_episodes(
@@ -686,7 +699,7 @@ async def fetch_season_episodes(
     season_id: str,
 ) -> list[dict[str, Any]]:
     """
-    Fetch all episodes for a season from Jellyfin API.
+    Fetch all episodes for a season from Jellyfin API with retry on transient failures.
 
     Returns list of episode dicts with MediaSources for size calculation.
     """
@@ -696,15 +709,18 @@ async def fetch_season_episodes(
         "Fields": "MediaSources",
     }
 
-    response = await client.get(
-        f"{server_url}/Items",
-        headers={"X-Emby-Token": api_key},
-        params=params,
-    )
-    response.raise_for_status()
-    data = response.json()
-    episodes: list[dict[str, Any]] = data.get("Items", [])
-    return episodes
+    async def _fetch() -> list[dict[str, Any]]:
+        response = await client.get(
+            f"{server_url}/Items",
+            headers={"X-Emby-Token": api_key},
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+        episodes: list[dict[str, Any]] = data.get("Items", [])
+        return episodes
+
+    return await retry_with_backoff(_fetch, "Jellyfin")
 
 
 def calculate_season_total_size(episodes: list[dict[str, Any]]) -> int:

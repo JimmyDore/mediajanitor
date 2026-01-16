@@ -657,8 +657,8 @@
         "Test: mock API to fail twice then succeed, verify sync completes"
       ],
       "priority": 90,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented retry_with_backoff() utility with exponential backoff (1s, 2s, 4s). Applied to Jellyfin API calls (fetch_jellyfin_users, fetch_user_items, fetch_series_seasons, fetch_season_episodes) and Jellyseerr API calls (fetch_jellyseerr_requests pagination). Retries on transient errors (timeouts, 5xx, connection errors). Does NOT retry on permanent errors (401, 404, 400). 21 new tests in test_retry.py + 7 new tests in test_sync.py."
     },
     {
       "id": "US-27.1",

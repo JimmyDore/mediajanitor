@@ -1714,3 +1714,217 @@ class TestSyncFailureNotifications:
         finally:
             celery_app.conf.task_always_eager = False
             celery_app.conf.task_eager_propagates = False
+
+
+class TestSyncRetryWithBackoff:
+    """Test retry with exponential backoff on transient API failures (US-26.1)."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_fetch_jellyfin_users_retries_on_timeout(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """fetch_jellyfin_users should retry on timeout errors."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise httpx.TimeoutException("Connection timed out")
+            response = httpx.Response(200, json=[{"Id": "user1", "Name": "John"}])
+            response.raise_for_status = lambda: None
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            users = await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert len(users) == 1
+        assert call_count == 3  # Failed twice, succeeded on third
+        assert mock_sleep.call_count == 2  # Slept twice before retries
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_fetch_jellyfin_users_retries_on_500_error(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """fetch_jellyfin_users should retry on 500 server errors."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                # Return 500 error
+                request = httpx.Request("GET", args[1] if len(args) > 1 else "http://example.com")
+                response = httpx.Response(500, request=request)
+
+                def raise_error():
+                    raise httpx.HTTPStatusError("Server error", request=request, response=response)
+                response.raise_for_status = raise_error
+                return response
+            # Success on second attempt
+            response = httpx.Response(200, json=[{"Id": "user1", "Name": "John"}])
+            response.raise_for_status = lambda: None
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            users = await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert len(users) == 1
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyfin_users_does_not_retry_on_401(self) -> None:
+        """fetch_jellyfin_users should NOT retry on 401 auth errors."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            request = httpx.Request("GET", "http://jellyfin.local/Users")
+            response = httpx.Response(401, request=request)
+
+            def raise_error():
+                raise httpx.HTTPStatusError("Unauthorized", request=request, response=response)
+            response.raise_for_status = raise_error
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert exc_info.value.response.status_code == 401
+        assert call_count == 1  # Only one call - no retry
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_fetch_jellyfin_users_fails_after_max_retries(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """fetch_jellyfin_users should fail after 4 total attempts (1 + 3 retries)."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise httpx.TimeoutException("Persistent timeout")
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            with pytest.raises(httpx.TimeoutException):
+                await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert call_count == 4  # 1 initial + 3 retries
+        assert mock_sleep.call_count == 3
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_fetch_jellyseerr_requests_retries_on_transient_error(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """fetch_jellyseerr_requests should retry on transient errors."""
+        import httpx
+        from app.services.sync import fetch_jellyseerr_requests
+
+        request_call_count = 0
+
+        async def mock_get(self_or_url, url_or_headers=None, **kwargs):
+            nonlocal request_call_count
+            # Handle both (self, url, ...) and (url, ...) signatures
+            url = url_or_headers if url_or_headers and isinstance(url_or_headers, str) else str(self_or_url)
+            # Only count calls to /api/v1/request (not media detail fetches)
+            if "/api/v1/request" in url:
+                request_call_count += 1
+                if request_call_count == 1:
+                    raise httpx.ConnectError("Connection refused")
+                # Success on second attempt
+                response = httpx.Response(200, json={
+                    "results": [{"id": 1, "media": {"tmdbId": 123, "mediaType": "movie"}}],
+                    "pageInfo": {"pages": 1}
+                })
+                response.raise_for_status = lambda: None
+                return response
+            else:
+                # Media detail calls - return empty (optional enrichment)
+                response = httpx.Response(200, json={"title": "Test Movie"})
+                response.raise_for_status = lambda: None
+                return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            requests = await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        assert len(requests) == 1
+        assert request_call_count == 2  # Failed once, succeeded on retry
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_exponential_backoff_delays_1_2_4_seconds(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """Retry delays should follow exponential backoff: 1s, 2s, 4s."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise httpx.TimeoutException("Timeout")
+            response = httpx.Response(200, json=[{"Id": "user1", "Name": "John"}])
+            response.raise_for_status = lambda: None
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        assert mock_sleep.call_count == 3
+        # Verify exponential backoff: 1, 2, 4 seconds
+        mock_sleep.assert_any_call(1)
+        mock_sleep.assert_any_call(2)
+        mock_sleep.assert_any_call(4)
+
+    @pytest.mark.asyncio
+    @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
+    async def test_successful_retry_continues_sync_normally(
+        self, mock_sleep: AsyncMock
+    ) -> None:
+        """After successful retry, sync should continue normally (no partial state)."""
+        import httpx
+        from app.services.sync import fetch_jellyfin_users
+
+        call_count = 0
+        expected_users = [
+            {"Id": "user1", "Name": "John"},
+            {"Id": "user2", "Name": "Jane"},
+        ]
+
+        async def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.TimeoutException("First attempt failed")
+            response = httpx.Response(200, json=expected_users)
+            response.raise_for_status = lambda: None
+            return response
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            users = await fetch_jellyfin_users("http://jellyfin.local", "api-key")
+
+        # Should have complete data after retry
+        assert len(users) == 2
+        assert users[0]["Name"] == "John"
+        assert users[1]["Name"] == "Jane"
