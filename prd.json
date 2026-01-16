@@ -595,8 +595,8 @@
         "Manual test: verify 11th request within 60 seconds returns 429"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented RateLimiter class with in-memory storage, thread-safe sliding window, and TESTING env check. Rate limiter applied to /api/auth/login and /api/auth/register endpoints. Updated integration tests to use module-scoped auth token to avoid rate limit issues."
     },
     {
       "id": "US-25.1",

@@ -1,11 +1,13 @@
 """Authentication router for user registration and login."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +27,11 @@ from app.services.auth import (
     rotate_refresh_token,
     validate_refresh_token,
 )
+from app.services.rate_limit import login_rate_limiter, register_rate_limiter
 from app.services.slack import send_slack_message
+
+if TYPE_CHECKING:
+    from app.services.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,43 @@ def _is_testing() -> bool:
     """Check if we're running in test environment."""
     import os
     return os.environ.get("TESTING", "").lower() in ("1", "true", "yes")
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Get the client IP address from the request.
+
+    Handles X-Forwarded-For header for requests behind a proxy.
+    """
+    # Check for forwarded IP (from reverse proxy like nginx)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs, first is the client
+        return forwarded_for.split(",")[0].strip()
+    # Fallback to direct client IP
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(request: Request, limiter: RateLimiter) -> None:
+    """
+    Check rate limit and raise HTTPException if exceeded.
+
+    Args:
+        request: FastAPI request object
+        limiter: The rate limiter instance to use
+
+    Raises:
+        HTTPException: 429 Too Many Requests if rate limit exceeded
+    """
+    client_ip = _get_client_ip(request)
+    is_limited, retry_after = limiter.is_rate_limited(client_ip)
+
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 async def get_total_user_count(db: AsyncSession) -> int:
@@ -113,11 +156,15 @@ async def send_signup_notification(email: str, user_id: int, total_users: int) -
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
+    request: Request,
     user_data: UserCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Register a new user."""
+    # Check rate limit
+    _check_rate_limit(request, register_rate_limiter)
+
     # Check if email already exists
     existing_user = await get_user_by_email_async(db, user_data.email)
     if existing_user:
@@ -149,11 +196,15 @@ async def register(
 
 @router.post("/login", response_model=TokenWithRefresh)
 async def login(
+    request: Request,
     user_data: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenWithRefresh:
     """Login and return JWT access token with refresh token in httpOnly cookie."""
+    # Check rate limit
+    _check_rate_limit(request, login_rate_limiter)
+
     user = await authenticate_user_async(db, user_data.email, user_data.password)
     if not user:
         raise HTTPException(

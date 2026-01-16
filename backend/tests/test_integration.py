@@ -23,37 +23,55 @@ TEST_EMAIL = "jimmy291295+2@gmail.com"
 TEST_PASSWORD = "ZSh1YYNsr844!*"
 
 
-class TestIntegrationAuth:
-    """Integration tests for authentication endpoints."""
+# Module-scoped token cache to avoid hitting rate limits
+# Logs in once and reuses the token for all tests in the module
+_cached_token: str | None = None
 
-    def test_login_returns_token(self):
-        """Test POST /api/auth/login returns valid JWT token."""
+
+def _get_cached_token() -> str:
+    """Get a cached authentication token, logging in only once."""
+    global _cached_token
+    if _cached_token is None:
         with httpx.Client(base_url=BASE_URL) as client:
             response = client.post(
                 "/api/auth/login",
                 json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
             )
-
             assert response.status_code == 200, f"Login failed: {response.text}"
-            data = response.json()
-            assert "access_token" in data
-            assert data["token_type"] == "bearer"
-            assert len(data["access_token"]) > 20
+            _cached_token = response.json()["access_token"]
+    return _cached_token
 
-    def test_auth_me_returns_user_info(self):
+
+@pytest.fixture(scope="module")
+def module_auth_headers():
+    """Module-scoped auth headers - logs in once per module."""
+    return {"Authorization": f"Bearer {_get_cached_token()}"}
+
+
+class TestIntegrationAuth:
+    """Integration tests for authentication endpoints."""
+
+    def test_login_returns_token(self, module_auth_headers):
+        """Test POST /api/auth/login returns valid JWT token.
+
+        Uses cached token to verify login works. The cached token is
+        obtained via login, so this test passes if the cache is valid.
+        """
+        # The module_auth_headers fixture already logged in successfully
+        # to get the token, so we verify it's valid by using it
+        token = _get_cached_token()
+        assert len(token) > 20
+        # JWT tokens have 3 parts
+        parts = token.split(".")
+        assert len(parts) == 3
+
+    def test_auth_me_returns_user_info(self, module_auth_headers):
         """Test GET /api/auth/me returns user info with valid token."""
         with httpx.Client(base_url=BASE_URL) as client:
-            # Login first
-            login_response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = login_response.json()["access_token"]
-
-            # Get user info
+            # Use cached token
             response = client.get(
                 "/api/auth/me",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=module_auth_headers,
             )
 
             assert response.status_code == 200
@@ -72,16 +90,9 @@ class TestIntegrationContentIssues:
     """Integration tests for GET /api/content/issues endpoint (US-D.3)."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            assert response.status_code == 200, f"Login failed: {response.text}"
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_issues_endpoint_requires_auth(self):
         """Test GET /api/content/issues returns 401 without auth."""
@@ -235,15 +246,9 @@ class TestIntegrationContentSummary:
     """Integration tests for GET /api/content/summary endpoint."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_summary_endpoint_returns_all_categories(self, auth_headers):
         """Test GET /api/content/summary returns all issue categories."""
@@ -274,15 +279,9 @@ class TestIntegrationSyncStatus:
     """Integration tests for sync-related endpoints."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_sync_status_endpoint(self, auth_headers):
         """Test GET /api/sync/status returns valid structure."""
@@ -303,15 +302,9 @@ class TestIntegrationWhitelist:
     """Integration tests for whitelist endpoints."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_whitelist_list_endpoint(self, auth_headers):
         """Test GET /api/whitelist/content returns list."""
@@ -366,15 +359,9 @@ class TestIntegrationDisplaySettings:
     """Integration tests for display settings endpoints (US-31.1)."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_get_display_settings_includes_recently_available_days(self, auth_headers):
         """Test GET /api/settings/display returns recently_available_days."""
@@ -421,15 +408,9 @@ class TestIntegrationNicknames:
     """Integration tests for nickname mapping endpoints (US-31.3)."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_list_nicknames_endpoint(self, auth_headers):
         """Test GET /api/settings/nicknames returns list."""
@@ -490,15 +471,9 @@ class TestIntegrationLibrary:
     """Integration tests for library endpoints (US-22.1)."""
 
     @pytest.fixture
-    def auth_headers(self):
-        """Get authentication headers by logging in."""
-        with httpx.Client(base_url=BASE_URL) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            )
-            token = response.json()["access_token"]
-            return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, module_auth_headers):
+        """Use module-level auth headers to avoid rate limiting."""
+        return module_auth_headers
 
     def test_library_endpoint_requires_auth(self):
         """Test GET /api/library returns 401 without token."""
