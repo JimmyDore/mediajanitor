@@ -788,10 +788,10 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert">{toast.message}</div>
+	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
 {/if}
 
-<div class="issues-page">
+<div class="issues-page" aria-busy={loading}>
 	<header class="page-header">
 		<div class="header-main">
 			<h1>Issues</h1>
@@ -866,18 +866,18 @@
 	{/if}
 
 	{#if loading}
-		<div class="loading">
-			<span class="spinner"></span>
+		<div class="loading" role="status" aria-label="Loading issues">
+			<span class="spinner" aria-hidden="true"></span>
 		</div>
 	{:else if error}
 		<div class="error-box">{error}</div>
 	{:else if data}
 		{#if data.items.length === 0}
-			<div class="empty">No issues found</div>
+			<div class="empty" aria-live="polite">No issues found</div>
 		{:else if getFilteredItems(data.items).length === 0}
-			<div class="empty">No matching items found</div>
+			<div class="empty" aria-live="polite">No matching items found</div>
 		{:else}
-			<div class="table-container">
+			<div class="table-container" aria-live="polite">
 				<table class="issues-table">
 					<thead>
 						<tr>

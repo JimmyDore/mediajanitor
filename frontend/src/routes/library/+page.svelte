@@ -282,7 +282,7 @@
 	<title>Library - Media Janitor</title>
 </svelte:head>
 
-<div class="library-page">
+<div class="library-page" aria-busy={loading}>
 	<header class="page-header">
 		<div class="header-main">
 			<h1>Library</h1>
@@ -408,21 +408,21 @@
 	</div>
 
 	{#if loading}
-		<div class="loading">
-			<span class="spinner"></span>
+		<div class="loading" role="status" aria-label="Loading library">
+			<span class="spinner" aria-hidden="true"></span>
 		</div>
 	{:else if error}
 		<div class="error-box">{error}</div>
 	{:else if data}
 		{#if data.items.length === 0}
-			<div class="empty">
+			<div class="empty" aria-live="polite">
 				<p>Your library is empty.</p>
 				<p class="empty-hint">
 					<a href="/settings">Configure Jellyfin</a> and run a sync to see your media here.
 				</p>
 			</div>
 		{:else}
-			<div class="table-container">
+			<div class="table-container" aria-live="polite">
 				<table class="library-table">
 					<thead>
 						<tr>

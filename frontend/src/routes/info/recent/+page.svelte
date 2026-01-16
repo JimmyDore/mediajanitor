@@ -186,10 +186,10 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert">{toast.message}</div>
+	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
 {/if}
 
-<div class="page">
+<div class="page" aria-busy={loading}>
 	<header class="page-header">
 		<div class="header-main">
 			<h1>Recently Available</h1>
@@ -211,16 +211,16 @@
 	<p class="page-subtitle">Content that became available in the past {recentlyAvailableDays} day{recentlyAvailableDays !== 1 ? 's' : ''}</p>
 
 	{#if loading}
-		<div class="loading">
-			<span class="spinner"></span>
+		<div class="loading" role="status" aria-label="Loading recently available content">
+			<span class="spinner" aria-hidden="true"></span>
 		</div>
 	{:else if error}
 		<div class="error-box">{error}</div>
 	{:else if data}
 		{#if data.items.length === 0}
-			<div class="empty">No content became available in the past {recentlyAvailableDays} day{recentlyAvailableDays !== 1 ? 's' : ''}</div>
+			<div class="empty" aria-live="polite">No content became available in the past {recentlyAvailableDays} day{recentlyAvailableDays !== 1 ? 's' : ''}</div>
 		{:else}
-			<div class="table-container">
+			<div class="table-container" aria-live="polite">
 				<table class="data-table">
 					<thead>
 						<tr>

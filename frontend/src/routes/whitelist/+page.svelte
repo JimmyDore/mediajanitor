@@ -169,10 +169,10 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert">{toast.message}</div>
+	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
 {/if}
 
-<div class="whitelist-page">
+<div class="whitelist-page" aria-busy={loading}>
 	<header class="page-header">
 		<h1>Whitelists</h1>
 	</header>
@@ -197,11 +197,11 @@
 	<p class="tab-desc">{tabLabels[activeTab].desc}</p>
 
 	{#if loading}
-		<div class="loading"><span class="spinner"></span></div>
+		<div class="loading" role="status" aria-label="Loading whitelist"><span class="spinner" aria-hidden="true"></span></div>
 	{:else}
 		{@const currentData = getCurrentData()}
 		{#if !currentData || currentData.items.length === 0}
-			<div class="empty">
+			<div class="empty" aria-live="polite">
 				<p>No items in this list</p>
 				<p class="empty-hint">
 					{#if activeTab === 'protected'}

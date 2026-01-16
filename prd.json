@@ -36,8 +36,8 @@
         "Verify with screen reader or accessibility inspector"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added aria-busy to parent containers (dashboard, issues-page, settings-page, library-page, whitelist-page, page), aria-label/role='status' to loading divs, aria-hidden to spinners, and aria-live='polite' to dynamic content regions."
     },
     {
       "id": "US-33.1",

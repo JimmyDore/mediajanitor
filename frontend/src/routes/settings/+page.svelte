@@ -687,14 +687,14 @@
 	<title>Settings - Media Janitor</title>
 </svelte:head>
 
-<div class="settings-page">
+<div class="settings-page" aria-busy={isFetchingSettings}>
 	<header class="page-header">
 		<h1>Settings</h1>
 	</header>
 
 	{#if isFetchingSettings}
-		<div class="loading">
-			<span class="spinner"></span>
+		<div class="loading" role="status" aria-label="Loading settings">
+			<span class="spinner" aria-hidden="true"></span>
 		</div>
 	{:else}
 		<!-- Connections Section -->
@@ -1023,12 +1023,12 @@
 			</div>
 
 			{#if isNicknamesLoading}
-				<div class="nicknames-loading">
-					<span class="spinner-small spinner-inline"></span>
+				<div class="nicknames-loading" role="status">
+					<span class="spinner-small spinner-inline" aria-hidden="true"></span>
 					<span>Loading nicknames...</span>
 				</div>
 			{:else if nicknames.length === 0 && !showAddNicknameForm}
-				<div class="nicknames-empty">
+				<div class="nicknames-empty" aria-live="polite">
 					<p>No nicknames configured. Add nicknames to customize how requesters appear in notifications.</p>
 					<button class="btn-add" onclick={() => showAddNicknameForm = true}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

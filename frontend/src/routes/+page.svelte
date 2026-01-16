@@ -359,12 +359,12 @@
 	<Landing />
 {:else if $auth.isAuthenticated}
 	{#if toastMessage}
-		<div class="toast toast-{toastType}" role="alert">
+		<div class="toast toast-{toastType}" role="alert" aria-live="assertive">
 			{toastMessage}
 		</div>
 	{/if}
 
-	<div class="dashboard">
+	<div class="dashboard" aria-busy={summaryLoading}>
 		<header class="page-header">
 			<div class="header-left">
 				<h1>Dashboard</h1>
@@ -381,7 +381,7 @@
 				aria-label="Refresh data"
 			>
 				{#if syncLoading}
-					<span class="spinner"></span>
+					<span class="spinner" role="status" aria-label="Loading"></span>
 				{:else}
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M23 4v6h-6M1 20v-6h6"/>
@@ -509,13 +509,13 @@
 			<h2 class="section-label">Issues</h2>
 
 			{#if summaryLoading}
-				<div class="stats-grid">
+				<div class="stats-grid" role="status" aria-label="Loading content statistics">
 					{#each Array(4) as _}
 						<div class="stat-card skeleton"></div>
 					{/each}
 				</div>
 			{:else}
-				<div class="stats-grid">
+				<div class="stats-grid" aria-live="polite">
 					<button class="stat-card" onclick={() => navigateToIssues('old')}>
 						<div class="stat-value">{contentSummary?.old_content.count ?? 0}</div>
 						<div class="stat-label">Old Content</div>
