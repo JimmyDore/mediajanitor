@@ -52,8 +52,64 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 33 - Total Series Size (In Progress)
-**Total Stories**: 47 stories (5 passes: true, 42 remaining)
+**Phase**: Epic 44 - Password Reset (In Progress)
+**Total Stories**: 47 stories (7 passes: true, 40 remaining)
+
+---
+
+## 2026-01-16: US-44.2 - Email Service with SMTP2GO
+
+### Summary
+Created email service to send password reset emails using SMTP with STARTTLS.
+
+### Files Changed
+- `backend/app/config.py` - Added SMTP config settings (smtp_host, smtp_port, smtp_username, smtp_password, smtp_from_email, frontend_url)
+- `backend/app/services/email.py` - New email service with send_password_reset_email() function
+- `backend/tests/test_email.py` - 18 unit tests with mocked smtplib.SMTP
+
+### Key Implementation Details
+- Uses smtplib with STARTTLS for secure connection
+- Sends both HTML and plain text email formats (multipart/alternative)
+- Email includes: reset link (clickable), expiration time (15 minutes), user's email for reference
+- Raises HTTPException 500 on SMTP errors (authentication, connection, general SMTP errors)
+- Skips login if username/password are empty (for testing with local SMTP servers)
+- Logs success message on email sent
+
+### Verification
+- 523 backend tests pass (18 new email tests)
+- mypy typecheck passes
+
+### Learnings
+- smtplib context manager (`with`) automatically handles quit/disconnect
+- MIMEMultipart("alternative") lets email clients choose HTML or plain text
+
+---
+
+## 2026-01-16: US-44.1 - Password Reset Token Model
+
+### Summary
+Created `PasswordResetToken` database model to store password reset tokens securely for the forgot password feature.
+
+### Files Changed
+- `backend/app/database.py` - Added `PasswordResetToken` model with all required fields
+- `backend/alembic/versions/20260116_203015_*.py` - Migration to create table
+- `backend/tests/test_password_reset.py` - Unit tests for model CRUD and constraints
+
+### Key Implementation Details
+- Fields: `id`, `user_id`, `token_hash`, `expires_at`, `created_at`, `used`
+- `token_hash` column is indexed for fast lookup
+- Foreign key to `users` table with `ON DELETE CASCADE` - tokens deleted when user is deleted
+- `used` boolean flag to prevent token reuse
+
+### Verification
+- 505 backend tests pass (6 new tests for PasswordResetToken model)
+- mypy typecheck passes
+- 28 integration tests pass in Docker
+- Table verified in Docker database with correct columns and foreign key
+
+### Learnings
+- CASCADE delete in SQLAlchemy requires `ondelete="CASCADE"` in ForeignKey definition
+- SQLite in-memory tests may not enforce foreign keys (engine-specific behavior)
 
 ---
 
