@@ -318,7 +318,7 @@
         "Verify in browser: dropdown appears in Settings > Display and persists"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

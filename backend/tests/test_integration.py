@@ -403,6 +403,45 @@ class TestIntegrationDisplaySettings:
                 json={"recently_available_days": original_value},
             )
 
+    def test_get_display_settings_includes_title_language(self, auth_headers):
+        """Test GET /api/settings/display returns title_language."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.get("/api/settings/display", headers=auth_headers)
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify title_language is present
+            assert "title_language" in data
+            assert data["title_language"] in ("en", "fr")
+
+    def test_save_title_language(self, auth_headers):
+        """Test POST /api/settings/display saves title_language."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Get current value
+            response = client.get("/api/settings/display", headers=auth_headers)
+            original_value = response.json()["title_language"]
+
+            # Save new value (toggle between en and fr)
+            new_value = "fr" if original_value == "en" else "en"
+            response = client.post(
+                "/api/settings/display",
+                headers=auth_headers,
+                json={"title_language": new_value},
+            )
+            assert response.status_code == 200
+
+            # Verify it was saved
+            response = client.get("/api/settings/display", headers=auth_headers)
+            assert response.json()["title_language"] == new_value
+
+            # Reset to original value
+            client.post(
+                "/api/settings/display",
+                headers=auth_headers,
+                json={"title_language": original_value},
+            )
+
 
 class TestIntegrationNicknames:
     """Integration tests for nickname mapping endpoints (US-31.3)."""

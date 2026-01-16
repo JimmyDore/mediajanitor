@@ -64,11 +64,13 @@
 	let showUnreleasedRequests = $state(false);
 	let recentlyAvailableDays = $state(7);
 	let currentTheme = $state<ThemePreference>('system');
+	let titleLanguage = $state<'en' | 'fr'>('en');
 	let displayError = $state<string | null>(null);
 	let displaySuccess = $state<string | null>(null);
 	let isDisplayLoading = $state(false);
 	let isThemeLoading = $state(false);
 	let isRecentDaysLoading = $state(false);
+	let isTitleLanguageLoading = $state(false);
 
 	// Nickname state
 	interface NicknameItem {
@@ -178,6 +180,7 @@
 				showUnreleasedRequests = data.show_unreleased_requests;
 				recentlyAvailableDays = data.recently_available_days ?? 7;
 				currentTheme = data.theme_preference || 'system';
+				titleLanguage = data.title_language || 'en';
 			}
 
 			// Load nicknames
@@ -608,6 +611,41 @@
 			displayError = e instanceof Error ? e.message : 'Failed to save setting';
 		} finally {
 			isRecentDaysLoading = false;
+		}
+	}
+
+	async function handleTitleLanguageChange(event: Event) {
+		const select = event.target as HTMLSelectElement;
+		const newValue = select.value as 'en' | 'fr';
+
+		if (newValue === titleLanguage) return;
+
+		isTitleLanguageLoading = true;
+		displayError = null;
+		displaySuccess = null;
+
+		try {
+			const response = await authenticatedFetch('/api/settings/display', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					title_language: newValue
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save setting');
+			}
+
+			titleLanguage = newValue;
+			displaySuccess = 'Saved';
+			setTimeout(() => displaySuccess = null, 3000);
+		} catch (e) {
+			displayError = e instanceof Error ? e.message : 'Failed to save setting';
+		} finally {
+			isTitleLanguageLoading = false;
 		}
 	}
 
@@ -1319,6 +1357,31 @@
 
 			<div class="divider"></div>
 
+			<!-- Title Language -->
+			<div class="select-row">
+				<div class="select-info">
+					<span class="select-label">Title language</span>
+					<span class="select-description">Preferred language for content titles</span>
+				</div>
+				<div class="select-wrapper">
+					<select
+						id="title-language"
+						value={titleLanguage}
+						onchange={handleTitleLanguageChange}
+						disabled={isTitleLanguageLoading}
+						class="language-select"
+					>
+						<option value="en">English</option>
+						<option value="fr">French</option>
+					</select>
+					{#if isTitleLanguageLoading}
+						<span class="spinner-small spinner-inline"></span>
+					{/if}
+				</div>
+			</div>
+
+			<div class="divider"></div>
+
 			<div class="toggle-row">
 				<div class="toggle-info">
 					<span class="toggle-label">Show unreleased requests</span>
@@ -1749,6 +1812,64 @@
 		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
+	}
+
+	/* Select Row (Language selector) */
+	.select-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-3) 0;
+	}
+
+	.select-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.select-label {
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+	}
+
+	.select-description {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.select-wrapper {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.language-select {
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+		min-width: 110px;
+	}
+
+	.language-select:hover:not(:disabled) {
+		border-color: var(--text-muted);
+	}
+
+	.language-select:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.language-select:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	/* Theme Selector */

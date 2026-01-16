@@ -52,8 +52,33 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 37 - Nickname Prefill (In Progress)
-**Total Stories**: 42 stories (40 passes: true, 2 remaining)
+**Phase**: Epic 38 - Title Language Preference (In Progress)
+**Total Stories**: 47 stories (2 passes: true, 45 remaining)
+
+---
+
+## 2026-01-16: US-38.1 - Add Title Language User Setting
+
+### Summary
+Added user setting to choose preferred language (English or French) for content titles. This is the first step toward supporting French title display.
+
+### Files Changed
+- `backend/app/database.py` - Added `title_language` column to `UserSettings` (String(2), default='en')
+- `backend/app/models/settings.py` - Added `TitleLanguage` Literal type and fields to display preferences models
+- `backend/app/routers/settings.py` - Updated GET/POST display endpoints to include `title_language`
+- `backend/tests/test_integration.py` - Added integration tests for title_language API
+- `backend/alembic/versions/20260116_191223_*.py` - Migration for `title_language` column
+- `frontend/src/routes/settings/+page.svelte` - Added "Title language" dropdown to Display section
+
+### Key Implementation Details
+- TitleLanguage is a Literal type: `"en" | "fr"`
+- Default value is "en" (English)
+- Migration includes `server_default='en'` for existing rows
+- Frontend dropdown saves on change (no save button needed)
+- Includes proper loading states and error handling
+
+### Learnings
+- When adding a new NOT NULL column, always include `server_default` in migration for existing rows
 
 ---
 

@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field, HttpUrl
 # Theme preference type
 ThemePreference = Literal["light", "dark", "system"]
 
+# Title language preference type
+TitleLanguage = Literal["en", "fr"]
+
 
 class JellyfinSettingsCreate(BaseModel):
     """Request model for saving Jellyfin settings."""
@@ -102,6 +105,7 @@ class DisplayPreferencesCreate(BaseModel):
     show_unreleased_requests: bool | None = None
     theme_preference: ThemePreference | None = None
     recently_available_days: int | None = Field(default=None, ge=1, le=30)
+    title_language: TitleLanguage | None = None
 
 
 class DisplayPreferencesResponse(BaseModel):
@@ -110,6 +114,7 @@ class DisplayPreferencesResponse(BaseModel):
     show_unreleased_requests: bool
     theme_preference: ThemePreference
     recently_available_days: int
+    title_language: TitleLanguage
 
 
 # User Nicknames

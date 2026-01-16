@@ -400,6 +400,11 @@ async def get_display_preferences(
     # Validate the stored value is a valid theme
     if theme_pref not in ("light", "dark", "system"):
         theme_pref = "system"
+    # Cast title_language to the Literal type (stored as string in DB)
+    title_lang = settings.title_language if settings else "en"
+    # Validate the stored value is a valid language
+    if title_lang not in ("en", "fr"):
+        title_lang = "en"
     return DisplayPreferencesResponse(
         show_unreleased_requests=(
             settings.show_unreleased_requests if settings else False
@@ -410,6 +415,7 @@ async def get_display_preferences(
             if settings and settings.recently_available_days is not None
             else DEFAULT_RECENTLY_AVAILABLE_DAYS
         ),
+        title_language=title_lang,  # type: ignore[arg-type]
     )
 
 
@@ -432,6 +438,8 @@ async def save_display_preferences(
         settings.theme_preference = prefs.theme_preference
     if prefs.recently_available_days is not None:
         settings.recently_available_days = prefs.recently_available_days
+    if prefs.title_language is not None:
+        settings.title_language = prefs.title_language
 
     return SettingsSaveResponse(
         success=True,
