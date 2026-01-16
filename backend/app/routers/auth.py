@@ -12,8 +12,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database import User, get_db
-from app.models.user import RefreshTokenRequest, TokenWithRefresh, UserCreate, UserLogin, UserResponse
+from app.database import PasswordResetToken, User, get_db
+from app.models.user import (
+    PasswordResetRequest,
+    PasswordResetResponse,
+    RefreshTokenRequest,
+    TokenWithRefresh,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 from app.services.auth import (
     authenticate_user_async,
     create_access_token,
@@ -27,7 +35,8 @@ from app.services.auth import (
     rotate_refresh_token,
     validate_refresh_token,
 )
-from app.services.rate_limit import login_rate_limiter, register_rate_limiter
+from app.services.email import send_password_reset_email
+from app.services.rate_limit import login_rate_limiter, password_reset_rate_limiter, register_rate_limiter
 from app.services.slack import send_slack_message
 
 if TYPE_CHECKING:
@@ -347,3 +356,98 @@ async def logout(
         key=REFRESH_TOKEN_COOKIE_NAME,
         path="/" if testing else "/api/auth",
     )
+
+
+def _check_password_reset_rate_limit(email: str) -> None:
+    """
+    Check password reset rate limit by email address.
+
+    Args:
+        email: Email address to check
+
+    Raises:
+        HTTPException: 429 Too Many Requests if rate limit exceeded
+    """
+    is_limited, retry_after = password_reset_rate_limiter.is_rate_limited(email.lower())
+
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many password reset requests. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+@router.post("/request-password-reset", response_model=PasswordResetResponse)
+async def request_password_reset(
+    request_data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> PasswordResetResponse:
+    """
+    Request a password reset email.
+
+    Always returns 200 OK to prevent email enumeration attacks.
+    If the email exists, sends a reset link. If not, silently succeeds.
+    """
+    import secrets
+
+    import bcrypt
+
+    email = request_data.email.lower()
+
+    # Check rate limit by email (not IP)
+    _check_password_reset_rate_limit(email)
+
+    # Look up user
+    user = await get_user_by_email_async(db, email)
+
+    if user:
+        # Delete any existing unused tokens for this user
+        result = await db.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.user_id == user.id,
+                PasswordResetToken.used == False,  # noqa: E712
+            )
+        )
+        existing_tokens = result.scalars().all()
+        for token in existing_tokens:
+            await db.delete(token)
+
+        # Generate secure random token (32 bytes, URL-safe base64)
+        raw_token = secrets.token_urlsafe(32)
+
+        # Hash the token for storage
+        token_hash = bcrypt.hashpw(raw_token.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+        # Create expiration (15 minutes from now)
+        expires_at = datetime.utcnow() + timedelta(minutes=15)
+
+        # Create token record
+        password_reset_token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            used=False,
+        )
+        db.add(password_reset_token)
+        await db.commit()
+
+        # Build reset URL
+        settings = get_settings()
+        reset_url = f"{settings.frontend_url}/reset-password?token={raw_token}"
+
+        # Send email
+        try:
+            send_password_reset_email(
+                to_email=email,
+                reset_url=reset_url,
+                user_email=email,
+            )
+        except HTTPException:
+            # Email service error - log but don't reveal to user
+            logger.error(f"Failed to send password reset email to {email}")
+        except Exception as e:
+            logger.error(f"Unexpected error sending password reset email: {e}")
+
+    # Always return success to prevent email enumeration
+    return PasswordResetResponse()

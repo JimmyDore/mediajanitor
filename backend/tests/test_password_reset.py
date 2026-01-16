@@ -1,8 +1,11 @@
 """Tests for password reset token model and functionality."""
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
+import bcrypt
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.database import User, PasswordResetToken
@@ -209,3 +212,348 @@ class TestPasswordResetTokenModel:
             )
             found_token = result.scalar_one()
             assert found_token.used is True
+
+
+class TestRequestPasswordResetEndpoint:
+    """Tests for POST /api/auth/request-password-reset endpoint."""
+
+    def test_request_password_reset_success(self, client: TestClient) -> None:
+        """Test requesting password reset for existing user sends email."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "reset@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        with patch("app.routers.auth.send_password_reset_email") as mock_send_email:
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "reset@example.com"},
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+            assert "reset link" in data["message"].lower()
+
+            # Verify email was called with correct parameters
+            mock_send_email.assert_called_once()
+            call_args = mock_send_email.call_args
+            assert call_args.kwargs["to_email"] == "reset@example.com"
+            assert call_args.kwargs["user_email"] == "reset@example.com"
+            assert "reset_url" in call_args.kwargs
+            assert "token=" in call_args.kwargs["reset_url"]
+
+    @pytest.mark.asyncio
+    async def test_request_password_reset_creates_token(self, client: TestClient) -> None:
+        """Test that requesting password reset creates a token in database."""
+        from tests.conftest import TestingAsyncSessionLocal
+
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "token@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        with patch("app.routers.auth.send_password_reset_email"):
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "token@example.com"},
+            )
+
+            assert response.status_code == 200
+
+        # Verify token was created in database
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(PasswordResetToken)
+            )
+            tokens = result.scalars().all()
+            assert len(tokens) == 1
+            token = tokens[0]
+            assert token.used is False
+            assert token.expires_at > datetime.utcnow()
+            # Verify token is hashed (not raw)
+            assert len(token.token_hash) > 40  # bcrypt hashes are long
+
+    def test_request_password_reset_nonexistent_email(self, client: TestClient) -> None:
+        """Test requesting reset for non-existent email returns 200 (no enumeration)."""
+        with patch("app.routers.auth.send_password_reset_email") as mock_send_email:
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "nonexistent@example.com"},
+            )
+
+            # Should still return 200 to prevent email enumeration
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+
+            # Email should NOT be sent for non-existent user
+            mock_send_email.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_request_password_reset_deletes_old_tokens(self, client: TestClient) -> None:
+        """Test that requesting new reset deletes old unused tokens for same user."""
+        from tests.conftest import TestingAsyncSessionLocal
+
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "oldtoken@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        # Get user id
+        async with TestingAsyncSessionLocal() as session:
+            from app.database import User
+            result = await session.execute(
+                select(User).where(User.email == "oldtoken@example.com")
+            )
+            user = result.scalar_one()
+
+            # Create existing unused token
+            old_token = PasswordResetToken(
+                user_id=user.id,
+                token_hash="old_token_hash",
+                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                used=False,
+            )
+            session.add(old_token)
+            await session.commit()
+
+        with patch("app.routers.auth.send_password_reset_email"):
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "oldtoken@example.com"},
+            )
+
+            assert response.status_code == 200
+
+        # Verify old token is deleted and new one exists
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(PasswordResetToken)
+            )
+            tokens = result.scalars().all()
+            assert len(tokens) == 1
+            assert tokens[0].token_hash != "old_token_hash"
+
+    def test_request_password_reset_invalid_email_format(self, client: TestClient) -> None:
+        """Test requesting reset with invalid email format returns 422."""
+        response = client.post(
+            "/api/auth/request-password-reset",
+            json={"email": "not-an-email"},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_request_password_reset_token_expires_in_15_minutes(self, client: TestClient) -> None:
+        """Test that created token expires in approximately 15 minutes."""
+        from tests.conftest import TestingAsyncSessionLocal
+
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "expire@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        with patch("app.routers.auth.send_password_reset_email"):
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "expire@example.com"},
+            )
+
+            assert response.status_code == 200
+
+        # Verify token expires in ~15 minutes
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(PasswordResetToken)
+            )
+            token = result.scalar_one()
+            now = datetime.utcnow()
+            # Token should expire between 14 and 16 minutes from now
+            time_diff = (token.expires_at - now).total_seconds()
+            assert 14 * 60 <= time_diff <= 16 * 60
+
+    def test_request_password_reset_url_contains_frontend_url(self, client: TestClient) -> None:
+        """Test that reset URL uses the configured frontend URL."""
+        # First register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "urltest@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+
+        with patch("app.routers.auth.send_password_reset_email") as mock_send_email:
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "urltest@example.com"},
+            )
+
+            assert response.status_code == 200
+
+            # Verify URL in email contains frontend URL
+            mock_send_email.assert_called_once()
+            reset_url = mock_send_email.call_args.kwargs["reset_url"]
+            # Default frontend_url is http://localhost:5173
+            assert "/reset-password?token=" in reset_url
+
+
+class TestPasswordResetRateLimiting:
+    """Tests for password reset rate limiting (3 requests per email per hour)."""
+
+    def test_rate_limit_allows_first_three_requests(self) -> None:
+        """Test that the first 3 requests are allowed."""
+        import os
+        # Need to disable TESTING mode to enable rate limiting
+        with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
+            # Import fresh app to pick up new TESTING value
+            from app.main import app as fresh_app
+            from app.database import get_db
+            from tests.conftest import override_get_db
+            from app.services.rate_limit import password_reset_rate_limiter
+
+            # Clear rate limiter state from previous tests
+            password_reset_rate_limiter.clear()
+
+            fresh_app.dependency_overrides[get_db] = override_get_db
+
+            with TestClient(fresh_app) as test_client:
+                # Register a user
+                test_client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "ratelimit@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+
+                with patch("app.routers.auth.send_password_reset_email"):
+                    # First 3 requests should succeed
+                    for i in range(3):
+                        response = test_client.post(
+                            "/api/auth/request-password-reset",
+                            json={"email": "ratelimit@example.com"},
+                        )
+                        assert response.status_code == 200, f"Request {i+1} should succeed"
+
+            # Clean up
+            password_reset_rate_limiter.clear()
+            fresh_app.dependency_overrides.clear()
+
+    def test_rate_limit_blocks_fourth_request(self) -> None:
+        """Test that the 4th request within an hour is blocked."""
+        import os
+        with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
+            from app.main import app as fresh_app
+            from app.database import get_db
+            from tests.conftest import override_get_db
+            from app.services.rate_limit import password_reset_rate_limiter
+
+            # Clear rate limiter state from previous tests
+            password_reset_rate_limiter.clear()
+
+            fresh_app.dependency_overrides[get_db] = override_get_db
+
+            with TestClient(fresh_app) as test_client:
+                # Register a user
+                test_client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "blocked@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+
+                with patch("app.routers.auth.send_password_reset_email"):
+                    # Make 3 requests
+                    for _ in range(3):
+                        test_client.post(
+                            "/api/auth/request-password-reset",
+                            json={"email": "blocked@example.com"},
+                        )
+
+                    # 4th request should be rate limited
+                    response = test_client.post(
+                        "/api/auth/request-password-reset",
+                        json={"email": "blocked@example.com"},
+                    )
+                    assert response.status_code == 429
+                    assert "Retry-After" in response.headers
+
+            # Clean up
+            password_reset_rate_limiter.clear()
+            fresh_app.dependency_overrides.clear()
+
+    def test_rate_limit_is_per_email(self) -> None:
+        """Test that rate limit is tracked per email address."""
+        import os
+        with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
+            from app.main import app as fresh_app
+            from app.database import get_db
+            from tests.conftest import override_get_db
+            from app.services.rate_limit import password_reset_rate_limiter
+
+            # Clear rate limiter state from previous tests
+            password_reset_rate_limiter.clear()
+
+            fresh_app.dependency_overrides[get_db] = override_get_db
+
+            with TestClient(fresh_app) as test_client:
+                # Register two users
+                test_client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "email1@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+                test_client.post(
+                    "/api/auth/register",
+                    json={
+                        "email": "email2@example.com",
+                        "password": "SecurePassword123!",
+                    },
+                )
+
+                with patch("app.routers.auth.send_password_reset_email"):
+                    # Max out rate limit for email1
+                    for _ in range(3):
+                        test_client.post(
+                            "/api/auth/request-password-reset",
+                            json={"email": "email1@example.com"},
+                        )
+
+                    # email2 should still be allowed
+                    response = test_client.post(
+                        "/api/auth/request-password-reset",
+                        json={"email": "email2@example.com"},
+                    )
+                    assert response.status_code == 200
+
+                    # But email1 is still blocked
+                    response = test_client.post(
+                        "/api/auth/request-password-reset",
+                        json={"email": "email1@example.com"},
+                    )
+                    assert response.status_code == 429
+
+            # Clean up
+            password_reset_rate_limiter.clear()
+            fresh_app.dependency_overrides.clear()

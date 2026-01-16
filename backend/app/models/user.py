@@ -45,3 +45,18 @@ class RefreshTokenRequest(BaseModel):
     """Schema for refresh token request (optional - can use cookie)."""
 
     refresh_token: str | None = None
+
+
+class PasswordResetRequest(BaseModel):
+    """Schema for password reset request."""
+
+    email: EmailStr
+
+
+class PasswordResetResponse(BaseModel):
+    """Schema for password reset response.
+
+    Always returns success to prevent email enumeration.
+    """
+
+    message: str = "If that email exists, a reset link has been sent. Check your inbox."

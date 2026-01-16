@@ -53,7 +53,40 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 44 - Password Reset (In Progress)
-**Total Stories**: 47 stories (7 passes: true, 40 remaining)
+**Total Stories**: 47 stories (8 passes: true, 39 remaining)
+
+---
+
+## 2026-01-16: US-44.3 - Request Password Reset Endpoint
+
+### Summary
+Created POST /api/auth/request-password-reset endpoint that allows users to request a password reset email.
+
+### Files Changed
+- `backend/app/models/user.py` - Added `PasswordResetRequest` and `PasswordResetResponse` Pydantic models
+- `backend/app/routers/auth.py` - Added `request_password_reset` endpoint and `_check_password_reset_rate_limit` helper
+- `backend/app/services/rate_limit.py` - Added `password_reset_rate_limiter` (3 requests/email/hour)
+- `backend/tests/test_password_reset.py` - Added 10 new unit tests for endpoint and rate limiting
+- `backend/tests/test_integration.py` - Added 3 integration tests for password reset endpoint
+
+### Key Implementation Details
+- Generates secure random token: `secrets.token_urlsafe(32)` (32 bytes, URL-safe base64)
+- Hashes token with bcrypt before storage for security
+- Token expires in 15 minutes from creation
+- Deletes existing unused tokens for user before creating new one (only one active reset per user)
+- Sends email via `send_password_reset_email()` service with reset URL
+- Returns 200 OK even for non-existent emails (prevents email enumeration attacks)
+- Rate limited to 3 requests per email per hour (in-memory RateLimiter keyed by email)
+
+### Verification
+- 533 backend tests pass (10 new tests + 3 integration tests)
+- mypy typecheck passes
+- 31 integration tests pass in Docker
+
+### Learnings
+- Rate limiting by email address (not IP) provides better protection for this endpoint
+- The RateLimiter class has `_is_testing()` check that bypasses limits when TESTING=1
+- For rate limit tests, must set TESTING=0 with `patch.dict(os.environ)` pattern
 
 ---
 
@@ -281,6 +314,40 @@ Added a "Refresh users" button on the Settings page that allows users to manuall
 ### Learnings
 - Can reuse sync service functions in settings router by importing from `app.services.sync`
 - Import `Any` from typing when using `dict[str, Any]` type hints
+
+---
+
+## 2025-01-16: US-28.1 - Loading States Accessibility
+
+### Summary
+Added accessibility attributes to loading states across all main pages so screen readers can announce loading status and content updates.
+
+### Files Changed
+- `frontend/src/routes/+page.svelte` - Dashboard with aria-busy, aria-live on stats grid
+- `frontend/src/routes/issues/+page.svelte` - Issues page with aria-busy, aria-live on table
+- `frontend/src/routes/settings/+page.svelte` - Settings page with aria-busy, role="status" on loading
+- `frontend/src/routes/library/+page.svelte` - Library page with aria-busy, aria-live on table
+- `frontend/src/routes/whitelist/+page.svelte` - Whitelist page with aria-busy, aria-live on list
+- `frontend/src/routes/info/recent/+page.svelte` - Recent page with aria-busy, aria-live on table
+
+### Key Implementation Details
+- `aria-busy="true/false"` on parent containers (dashboard, issues-page, settings-page, library-page, whitelist-page, page) - dynamically set based on loading state
+- `role="status"` and `aria-label="Loading..."` on loading div elements
+- `aria-hidden="true"` on spinner elements (decorative)
+- `aria-live="polite"` on table/list containers that update with content
+- `aria-live="assertive"` on toast notifications
+
+### Verification
+- 523 backend tests pass
+- 411 frontend tests pass
+- svelte-check passes (0 errors)
+- Verified in browser using Puppeteer - all aria attributes present
+
+### Learnings
+- `aria-busy` should be on the container that changes during load (toggles between content and loading state)
+- `aria-live="polite"` announces updates without interrupting the user
+- `aria-live="assertive"` for urgent messages like error toasts
+- Spinners should have `aria-hidden="true"` since the `role="status"` on parent provides context
 
 ---
 

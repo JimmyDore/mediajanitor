@@ -91,3 +91,7 @@ class RateLimiter:
 # 10 requests per minute per IP
 login_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 register_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
+# Password reset rate limiter: 3 requests per email per hour
+# Note: This limiter is keyed by email address, not IP address
+password_reset_rate_limiter = RateLimiter(max_requests=3, window_seconds=3600)

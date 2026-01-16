@@ -85,6 +85,40 @@ class TestIntegrationAuth:
             response = client.get("/api/auth/me")
             assert response.status_code == 401
 
+    def test_request_password_reset_returns_200(self):
+        """Test POST /api/auth/request-password-reset returns 200 for any email."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Test with existing email
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": TEST_EMAIL},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+            assert "reset link" in data["message"].lower()
+
+    def test_request_password_reset_nonexistent_email(self):
+        """Test POST /api/auth/request-password-reset returns 200 for non-existent email (no enumeration)."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "nonexistent@example.com"},
+            )
+            # Returns 200 to prevent email enumeration
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+
+    def test_request_password_reset_invalid_email(self):
+        """Test POST /api/auth/request-password-reset returns 422 for invalid email format."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/request-password-reset",
+                json={"email": "not-an-email"},
+            )
+            assert response.status_code == 422
+
 
 class TestIntegrationContentIssues:
     """Integration tests for GET /api/content/issues endpoint (US-D.3)."""

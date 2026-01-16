@@ -624,8 +624,8 @@
         "Test in Docker: request reset, verify email sent (check logs if SMTP not configured)"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added POST /api/auth/request-password-reset endpoint. Generates secure token (secrets.token_urlsafe(32)), hashes with bcrypt, stores in PasswordResetToken table with 15-min expiration. Rate limited to 3 requests/email/hour. Returns 200 for any email to prevent enumeration. 10 new unit tests + 3 integration tests."
     },
     {
       "id": "US-44.4",
