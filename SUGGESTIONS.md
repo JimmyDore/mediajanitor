@@ -11,13 +11,14 @@ P1 items should be reviewed and manually added to PRD.md if deemed necessary.
 - [P2] Default SECRET_KEY in config.py is insecure - should validate/warn if using default in production
 - [P3] Add CSRF protection for state-changing operations
 
+## UI/UX
+
+
+## Accessibility
+
 ## Architecture
 
 - [P3] Consider extracting sync status display into reusable component for dashboard
-
-## UI/UX
-
-- [P3] Extract common form components (FormGroup, Input, Button) - used in login, register, settings
 
 ## Database
 

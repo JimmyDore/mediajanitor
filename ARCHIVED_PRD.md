@@ -4,8 +4,8 @@ Completed epics moved from PRD.md for historical reference. These features have 
 
 ## Summary
 
-- **73 completed user stories** across 21 epics
-- **Archived**: 2026-01-15
+- **141 completed user stories** across 31 epics
+- **Archived**: 2026-01-16
 - **Active PRD**: See `PRD.md` for pending stories
 
 ---
@@ -2066,9 +2066,1263 @@ Allow users to manually control the application's theme (light/dark mode) instea
 ---
 
 
+## Epic 18: Onboarding Flow
+
+### Overview
+Guide new users through service configuration and first sync via an enhanced dashboard experience. After signup/login, users see a setup checklist that disappears once Jellyfin is configured and first sync completes.
+
+### Goals
+- Guide new users to configure Jellyfin immediately after signup
+- Auto-trigger first sync once Jellyfin is configured
+- Show clear progress through setup steps
+- Disappear gracefully once onboarding is complete
+
+### User Stories
+
+#### US-18.1: Show Setup Checklist for New Users
+**As a** new user who just signed up
+**I want** to see a clear checklist of what to do next
+**So that** I know how to get started with the app
+
+**Acceptance Criteria:**
+- [x] Dashboard shows "Setup Checklist" card when Jellyfin not configured OR never synced
+- [x] Checklist shows 2 steps: "Connect Jellyfin" and "Run First Sync"
+- [x] Each step shows status: pending (gray), in-progress (blue), complete (green)
+- [x] "Connect Jellyfin" step has button linking to /settings
+- [x] Checklist hides when both steps are complete
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser
+
+**Note:** Setup Checklist shows when Jellyfin not configured OR never synced. Steps show pending/in-progress/complete status. Go to Settings link on step 1, Start Sync button on step 2 when Jellyfin configured. Hides when both complete.
+
+**Files:**
+- `frontend/src/routes/+page.svelte` - Add SetupChecklist component
+- `frontend/src/lib/components/SetupChecklist.svelte` - New component
+
 ---
 
-## Archived Checklist (73 stories)
+#### US-18.2: Auto-Sync After Jellyfin Configuration
+**As a** user who just configured Jellyfin
+**I want** the first sync to start automatically
+**So that** I don't have to figure out how to trigger it manually
+
+**Acceptance Criteria:**
+- [x] When Jellyfin settings saved successfully AND user has never synced, trigger sync automatically
+- [x] Show "Syncing..." state in checklist with spinner
+- [x] On sync complete, show success message with item counts
+- [x] Handle sync errors gracefully with retry option
+- [x] First sync bypasses rate limit (or rate limit doesn't apply to first sync)
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Added force parameter to POST /api/sync to bypass rate limit for first sync. Settings page navigates to dashboard after first Jellyfin config. Dashboard auto-triggers sync via $effect when Jellyfin configured + never synced. Checklist shows error state with Retry button on sync failure.
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Trigger sync after Jellyfin save (if first time)
+- `backend/app/routers/sync.py` - Ensure first sync isn't rate-limited
+
+---
+
+#### US-18.3: Optional Services Prompt
+**As a** user who completed basic setup
+**I want** to see optional services I can configure
+**So that** I can enhance my experience if I have Jellyseerr/Radarr/Sonarr
+
+**Acceptance Criteria:**
+- [x] After checklist complete, show dismissible "Enhance your setup" card
+- [x] Lists: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)
+- [x] Each has "Configure" link to /settings
+- [x] User can dismiss card permanently (stored in localStorage)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser
+
+**Note:** Implemented dismissible Enhance your setup card showing after checklist complete. Fetches optional service settings and displays only unconfigured services with Configure links. Dismiss state persisted in localStorage. 15 new tests in enhance-setup.test.ts.
+
+**Files:**
+- `frontend/src/routes/+page.svelte` - Add optional services card
+- `frontend/src/lib/components/OptionalServicesCard.svelte` - New component (optional)
+
+### Non-Goals
+- No separate /onboarding route (stays on dashboard)
+- No changes to signup/login flow itself
+- No forced configuration of Jellyseerr/Radarr/Sonarr
+
+### Technical Considerations
+- **Backend:** Derive `has_completed_first_sync` from `last_synced != null` in sync status
+- **Frontend:** Conditionally render checklist based on: `!jellyfin_configured || !has_synced`
+- **Dismissed state:** Store "dismissed optional services" in localStorage (no backend needed)
+- **Auto-sync:** Use existing `/api/sync` endpoint after Jellyfin save
+
+---
+
+
+## Epic 19: Issues Page Search
+
+### Overview
+Add a search input to the Issues page that allows users to quickly find specific content by filtering the displayed items. Search is client-side for instant responsiveness.
+
+### Goals
+- Allow users to quickly locate specific movies/shows in their issues list
+- Search across title, year, and requested_by fields
+- Maintain current tab filtering behavior (search operates within active tab)
+
+### User Stories
+
+#### US-19.1: Search Issues by Text
+**As a** media server owner
+**I want** to search for content on the Issues page
+**So that** I can quickly find a specific movie or show without scrolling
+
+**Acceptance Criteria:**
+- [x] Search input appears next to the "Issues" title/item count
+- [x] Search filters items in real-time as user types (debounced ~300ms)
+- [x] Search matches against: title (case-insensitive), production year, and requested_by (for Requests tab)
+- [x] Search operates within the currently active tab filter (Old, Large, Language, Requests, or All)
+- [x] Empty search shows all items for current tab
+- [x] Item count updates to reflect filtered results (e.g., "3 of 219 items")
+- [x] Total size updates to reflect filtered results
+- [x] Search input has a clear (X) button when text is present
+- [x] Placeholder text: "Search by title, year..."
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Implemented client-side search with debounced filtering (300ms), matching against title, year, and requested_by. Stats update to show 'X of Y items' format with filtered size.
+
+### Non-Goals
+- Backend API changes (search is client-side only)
+- Persistent search state across page navigation
+- Advanced search syntax (AND/OR operators, field-specific queries)
+- Searching content outside of issues (library-wide search)
+
+### Technical Considerations
+- Use Svelte `$state()` for search input value
+- Debounce filtering to avoid excessive re-renders (~300ms)
+- Filter function should check: `name`, `production_year`, `requested_by`
+- Update `filteredItems` computed value that combines tab filter + search filter
+- Update displayed count/size based on filtered results
+
+### UI Design Notes
+- Search input should be compact, matching the existing design system
+- Position: right side of the header, aligned with "219 items · 727.1 GB" text
+- Use existing CSS variables for styling consistency
+
+---
+
+
+## Epic 20: Large Series Detection
+
+### Overview
+Extend the "Large Movies" feature to also detect TV series with oversized seasons. Currently, only movies are flagged as "large" (>13GB). This epic adds detection for series where any single season exceeds a configurable threshold (default 15GB).
+
+### Goals
+- Flag TV series with any season larger than threshold
+- Provide a separate, user-configurable threshold for series (independent from movies)
+- Calculate season sizes efficiently via background task (not during main sync)
+- Unified "Large Content" view with movie/series filtering
+
+### User Stories
+
+#### US-20.1: Large Season Threshold Setting
+**As a** media server owner
+**I want** to configure the threshold for large seasons separately from movies
+**So that** I can fine-tune detection based on my storage preferences
+
+**Acceptance Criteria:**
+- [x] Add `large_season_size_gb` field to UserSettings model (default: 15)
+- [x] Create database migration for new column
+- [x] `GET /api/settings` returns `large_season_size_gb` value
+- [x] `POST /api/settings` accepts and saves `large_season_size_gb`
+- [x] Settings page displays "Large season threshold (GB)" input below movie threshold
+- [x] Input validates: integer, minimum 1GB
+- [x] Help text: "Flag TV series if any season exceeds this size"
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: setting saves and loads correctly
+
+**Note:** Added large_season_size_gb to UserSettings model with Alembic migration, updated GET/POST /api/settings/analysis endpoints, added frontend input with validation (1-100 GB)
+
+**Files:**
+- `backend/app/database.py` - Add field to UserSettings
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Include in GET/POST
+- `backend/app/models/settings.py` - Update Pydantic schemas
+- `frontend/src/routes/settings/+page.svelte` - Add input field
+
+---
+
+#### US-20.2: Calculate and Store Season Sizes
+**As a** system
+**I want** to calculate TV series season sizes after sync completes
+**So that** large series detection has accurate data without slowing down the main sync
+
+**Acceptance Criteria:**
+- [x] Add `largest_season_size_bytes` field to CachedMediaItem model (nullable BigInteger)
+- [x] Create database migration for new column
+- [x] New async function `calculate_season_sizes(db, user_id, server_url, api_key)`:
+  - Fetches all series for user from cache
+  - For each series, calls Jellyfin API: `GET /Items?ParentId={series_id}&IncludeItemTypes=Episode&Fields=MediaSources,ParentIndexNumber`
+  - Groups episodes by `ParentIndexNumber` (season number), sums sizes per season
+  - Stores the LARGEST season size in `largest_season_size_bytes`
+- [x] Background task triggered AFTER main sync completes (not during)
+- [x] Sync status includes new state: "calculating_sizes" (after "completed")
+- [x] Progress logging: "Calculating season sizes for {n} series..."
+- [x] Handles API errors gracefully (logs warning, continues to next series)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Integration test: trigger sync, verify season sizes populated
+
+**Note:** Added largest_season_size_bytes field to CachedMediaItem, created Alembic migration, implemented calculate_season_sizes() that fetches seasons/episodes from Jellyfin API and stores largest season size, triggered after media sync with calculating_sizes progress step
+
+**Files:**
+- `backend/app/database.py` - Add field to CachedMediaItem
+- `backend/alembic/versions/` - New migration
+- `backend/app/services/sync.py` - Add `calculate_season_sizes()` function
+- `backend/app/services/sync.py` - Trigger after main sync in `run_full_sync()`
+- `backend/tests/test_sync_service.py` - Test season size calculation
+
+**Technical Notes:**
+- Jellyfin API endpoint: `GET /Items?ParentId={series_id}&IncludeItemTypes=Episode&Recursive=true&Fields=MediaSources,ParentIndexNumber`
+- Episode size is at `MediaSources[0].Size`
+- Season number is at `ParentIndexNumber`
+- Reference: `original_script.py:1582` - `get_series_total_size()` function
+
+---
+
+#### US-20.3: Large Series Detection Service
+**As a** user
+**I want** large series included in the content issues API
+**So that** I can see all my oversized content in one place
+
+**Acceptance Criteria:**
+- [x] New function `is_large_series(item, threshold_gb)` returns True if `largest_season_size_bytes >= threshold`
+- [x] `get_content_summary()` includes large series in a combined count:
+  - Rename internal variable from `large_movies` to `large_content`
+  - Count includes both large movies AND large series
+  - Total size includes both
+- [x] `get_content_issues()` with `filter=large` returns both movies and series
+- [x] Each item includes new field: `largest_season_size_bytes` (null for movies)
+- [x] Each item includes new field: `largest_season_size_formatted` (e.g., "18.5 GB")
+- [x] Series items include issue badge "large" when flagged
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Test: large series appears in issues, large movie still appears
+
+**Note:** Implemented is_large_series() function, updated UserThresholds to include large_season_size_gb, modified get_content_summary() and get_content_issues() to detect large series, added largest_season_size_bytes and largest_season_size_formatted fields to ContentIssueItem model
+
+**Files:**
+- `backend/app/services/content.py` - Add `is_large_series()`, update `get_content_summary()`, `get_content_issues()`
+- `backend/app/models/content.py` - Add fields to response schemas
+- `backend/tests/test_content.py` - Test large series detection
+
+---
+
+#### US-20.4: Large Content UI with Filter
+**As a** media server owner
+**I want** to filter large content by movies or series
+**So that** I can focus on one type at a time
+
+**Acceptance Criteria:**
+- [x] Dashboard card renamed from "Large Movies" to "Large Content"
+- [x] Dashboard card shows combined count (movies + series)
+- [x] Issues page "Large" tab shows both movies and series
+- [x] Sub-filter buttons appear when Large tab selected: [All] [Movies] [Series]
+- [x] Default sub-filter is "All"
+- [x] Sub-filter is client-side (no API changes needed)
+- [x] Series items display: name, largest season size (e.g., "Largest season: 18.5 GB")
+- [x] Movie items display: name, file size (unchanged behavior)
+- [x] Item count and total size update based on sub-filter
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: filter toggles work correctly
+
+**Note:** Renamed dashboard card to 'Large Content', added sub-filter buttons [All/Movies/Series] to Issues Large tab with client-side filtering, series items display 'Largest season: X GB', added 15 new tests in large-content.test.ts and 2 tests in issues.test.ts
+
+**Files:**
+- `frontend/src/routes/+page.svelte` - Rename card label
+- `frontend/src/routes/issues/+page.svelte` - Add sub-filter UI, update display logic
+- `frontend/src/lib/components/IssueItem.svelte` - Show season size for series (if applicable)
+
+### Non-Goals
+- Per-season breakdown in UI (only show largest season size)
+- Deleting individual seasons (out of scope)
+- Real-time size calculation (always uses cached values)
+
+### Technical Considerations
+- **Jellyfin API:** Episodes don't have a direct "season" endpoint. Must fetch all episodes and group by `ParentIndexNumber`
+- **Performance:** With ~100 series, background calculation adds ~100 API calls (acceptable)
+- **Sync flow:** Main sync → Complete → Background task calculates sizes → Update status
+- **Original script reference:** `get_series_total_size()` at line 1582, but we calculate per-season, not total
+
+---
+
+
+## Epic 21: Slack Notification Monitoring
+
+### Overview
+Add admin monitoring via Slack notifications to track new user signups and sync failures. This helps the admin stay informed about app health and growth without checking logs.
+
+### Goals
+- Get notified immediately when new users sign up
+- Get notified when sync operations fail for any user
+- Keep webhook configuration secure via environment variables
+
+### User Stories
+
+#### US-21.1: Slack Notification Service
+**As a** developer
+**I want** a reusable Slack notification service
+**So that** I can send messages to different Slack channels
+
+**Acceptance Criteria:**
+- [x] Create `app/services/slack.py` with `send_slack_message(webhook_url, message)` function
+- [x] Function accepts webhook URL and message dict (Slack Block Kit format)
+- [x] Function handles HTTP errors gracefully (log error, don't crash app)
+- [x] Function is async and non-blocking
+- [x] Add `SLACK_WEBHOOK_NEW_USERS` and `SLACK_WEBHOOK_SYNC_FAILURES` to config
+- [x] Webhooks are optional - if not configured, notifications are silently skipped
+- [x] Unit tests mock HTTP calls and verify message format
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented send_slack_message() async function with httpx, graceful error handling, and logging. Added slack_webhook_new_users and slack_webhook_sync_failures to config with empty defaults (optional).
+
+**Files:**
+- `backend/app/services/slack.py` - New service
+- `backend/app/config.py` - Add webhook URL settings
+- `backend/tests/test_slack_service.py` - Unit tests
+
+---
+
+#### US-21.2: New User Signup Notifications
+**As an** admin
+**I want** to receive a Slack notification when someone signs up
+**So that** I can track user growth in real-time
+
+**Acceptance Criteria:**
+- [x] After successful user registration, send Slack notification
+- [x] Message includes: user email, signup timestamp, total user count
+- [x] Message uses Slack Block Kit for nice formatting
+- [x] Notification is fire-and-forget (doesn't block registration response)
+- [x] If webhook not configured, registration still works (no error)
+- [x] Unit tests verify notification is sent with correct payload
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented send_signup_notification() function with Block Kit formatted message, triggered via BackgroundTasks after registration. Added get_total_user_count() helper. 5 new tests in TestNewUserSignupNotifications.
+
+**Message Format:**
+```
+:wave: New User Signup
+Email: user@example.com
+Signed up: 2025-01-15 14:30 UTC
+Total users: 42
+```
+
+**Files:**
+- `backend/app/routers/auth.py` - Call Slack service after registration
+- `backend/tests/test_auth.py` - Add test for Slack notification
+
+---
+
+#### US-21.3: Sync Failure Notifications
+**As an** admin
+**I want** to receive a Slack notification when a user's sync fails
+**So that** I can investigate and help users with connection issues
+
+**Acceptance Criteria:**
+- [x] When sync fails (Jellyfin or Jellyseerr), send Slack notification
+- [x] Message includes: user email, which service failed, error message
+- [x] Notification sent for both manual sync and scheduled (Celery) sync failures
+- [x] Message is fire-and-forget (doesn't affect sync error handling)
+- [x] If webhook not configured, sync failure handling still works
+- [x] Unit tests verify notification is sent with correct payload
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented send_sync_failure_notification() in sync service with Block Kit formatted message. Manual sync failures trigger notification from run_user_sync(). Celery sync failures trigger notification from sync_user task via send_sync_failure_notification_for_celery() wrapper.
+
+**Message Format:**
+```
+:warning: Sync Failed
+User: user@example.com
+Service: Jellyfin
+Error: Connection timeout after 30s
+Time: 2025-01-15 14:30 UTC
+```
+
+**Files:**
+- `backend/app/services/sync.py` - Call Slack service on failure
+- `backend/app/tasks.py` - Call Slack service on Celery task failure
+- `backend/tests/test_sync_service.py` - Add test for failure notification
+
+### Non-Goals
+- No admin UI to configure webhooks (env vars only)
+- No notification preferences per user (admin-only feature)
+- No retry logic for failed Slack deliveries
+- No rate limiting on notifications
+
+### Technical Considerations
+- **Slack Block Kit**: Use blocks for rich formatting (not plain text)
+- **Async HTTP**: Use `httpx` async client for non-blocking calls
+- **Error handling**: Log failures but never raise - notifications are best-effort
+- **Environment variables**:
+  - `SLACK_WEBHOOK_NEW_USERS` - Webhook for #new-users channel
+  - `SLACK_WEBHOOK_SYNC_FAILURES` - Webhook for #alerts channel
+
+### Environment Variables
+```env
+# Optional - if not set, notifications are disabled
+SLACK_WEBHOOK_NEW_USERS=https://hooks.slack.com/services/XXX/YYY/ZZZ
+SLACK_WEBHOOK_SYNC_FAILURES=https://hooks.slack.com/services/AAA/BBB/CCC
+```
+
+---
+
+
+## Epic 22: Library Browser
+
+### Overview
+A new Library section that allows users to browse their complete Jellyfin media library. Unlike the Issues page which shows only problematic content, the Library shows everything - giving users a complete view of what's in their collection.
+
+### Goals
+- Provide full visibility into the user's Jellyfin library
+- Enable quick discovery and search of specific content
+- Separate movies and series for easier browsing
+- Leverage existing cached data (no new sync logic needed)
+
+### User Stories
+
+#### US-22.1: Library API Endpoint
+**As a** developer
+**I want** an API endpoint that returns all cached media
+**So that** the frontend can display the complete library
+
+**Acceptance Criteria:**
+- [x] `GET /api/library` returns all cached media items for the user
+- [x] Supports query params: `type=movie|series|all` (default: all)
+- [x] Supports query params: `search=string` (searches name, case-insensitive)
+- [x] Supports query params: `watched=true|false|all` (default: all)
+- [x] Supports query params: `sort=name|year|size|date_added|last_watched` (default: name)
+- [x] Supports query params: `order=asc|desc` (default: asc)
+- [x] Supports query params: `min_year`, `max_year` for year range filter
+- [x] Supports query params: `min_size_gb`, `max_size_gb` for size range filter
+- [x] Returns: items[], total_count, total_size_bytes, total_size_formatted, service_urls
+- [x] Each item includes: jellyfin_id, name, media_type, production_year, size_bytes, size_formatted, played, last_played_date, date_created, tmdb_id
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented GET /api/library endpoint with filtering by type, search, watched status, year range, size range, sorting by name/year/size/date_added/last_watched with asc/desc order. Created LibraryItem and LibraryResponse models. 20 unit tests + 4 integration tests.
+
+**Files:**
+- `backend/app/routers/library.py` - New router
+- `backend/app/services/library.py` - New service
+- `backend/app/models/library.py` - Response schemas
+- `backend/app/main.py` - Register router
+- `backend/tests/test_library.py` - Unit tests
+
+---
+
+#### US-22.2: Library Page with Sub-tabs
+**As a** media server owner
+**I want** to browse my library with separate Movies and Series tabs
+**So that** I can explore my collection by content type
+
+**Acceptance Criteria:**
+- [x] New route `/library` accessible from sidebar navigation
+- [x] Sidebar shows "Library" menu item with appropriate icon (between Issues and Whitelist)
+- [x] Page header shows "Library" with total item count and size
+- [x] Sub-tabs: [All] [Movies] [Series] - filter by media type
+- [x] Default sub-tab is "All"
+- [x] Table displays: Name, Year, Size, Added, Last Watched
+- [x] External service links (Jellyfin, TMDB) like Issues page
+- [x] Empty state when library is empty (with link to Settings to configure Jellyfin)
+- [x] Loading state while fetching data
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Created /library route with sub-tabs (All/Movies/Series), table with Name/Year/Size/Added/Last Watched columns, JF and TMDB external links, server-side sorting, loading and empty states. Added Library menu item to sidebar between Issues and Whitelist with book icon.
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte` - New page
+- `frontend/src/lib/components/Sidebar.svelte` - Add Library nav item
+- `frontend/src/lib/types.ts` - Add LibraryItem type
+
+---
+
+#### US-22.3: Library Search and Filters
+**As a** media server owner
+**I want** to search and filter my library
+**So that** I can quickly find specific content
+
+**Acceptance Criteria:**
+- [x] Search input in page header (searches as user types, debounced 300ms)
+- [x] Search matches name (case-insensitive) and production year
+- [x] Filter dropdown for watched status: All, Watched, Unwatched
+- [x] Year range filter: min year and max year inputs
+- [x] Size range filter: min size and max size (in GB)
+- [x] Sort dropdown: Name, Year, Size, Date Added, Last Watched
+- [x] Sort order toggle: Ascending/Descending
+- [x] Filters persist while switching between All/Movies/Series tabs
+- [x] Clear all filters button
+- [x] Item count updates to reflect filtered results
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Implemented search with 300ms debounce, watched status filter, year/size range filters, sort dropdown with order toggle, clear all filters button. 22 new tests in library.test.ts.
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte` - Add filter UI and logic
+
+---
+
+#### US-22.4: Library Sorting
+**As a** media server owner
+**I want** to sort my library by different columns
+**So that** I can organize the view to my preference
+
+**Acceptance Criteria:**
+- [x] Clickable column headers for sorting (Name, Year, Size, Last Watched)
+- [x] Visual indicator showing current sort column and direction
+- [x] Click same column to toggle ascending/descending
+- [x] Default sort: Name ascending
+- [x] Sorting is server-side (API parameter) for performance with large libraries
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Column headers (Name, Year, Size, Added, Last Watched) are clickable with toggleSort() function. Visual arrow indicators (↑/↓) show current sort. Clicking same column toggles asc/desc. Default is name asc. Server-side sorting via API params. Added 12 new tests in library.test.ts for column header sorting.
+
+**Files:**
+- `frontend/src/routes/library/+page.svelte` - Add sortable column headers
+
+### Non-Goals
+- No whitelist/delete actions (this is browse-only, use Issues page for actions)
+- No pagination in v1 (will revisit if performance issues arise with large libraries)
+- No grid/poster view (table view only for v1)
+- No offline/PWA support
+- No export functionality
+
+### Technical Considerations
+- **Data Source:** All data comes from `CachedMediaItem` table (already synced)
+- **Performance:** With typical libraries of 500-2000 items, server-side filtering/sorting is sufficient
+- **Reuse:** Can reuse external link badge components from Issues page
+- **API Design:** Server-side filtering for watched status, year range, size range to support large libraries
+
+---
+
+
+## Epic 23: Added Date Column
+
+### Overview
+Display when content was added to the Jellyfin library on the Issues page and Library page. This helps users understand the age of their content and make better decisions about what to keep or remove.
+
+### Goals
+- Show "Added" date column on Issues page
+- Include "Added" column in Library page (when built)
+- Leverage existing `date_created` data from sync
+
+### User Stories
+
+#### US-23.1: Added Date Column on Issues Page
+**As a** media server owner
+**I want** to see when content was added to my library
+**So that** I can understand how long items have been in my collection
+
+**Acceptance Criteria:**
+- [x] API includes `date_created` field in content issues response
+- [x] Issues page table shows "Added" column after "Size" column
+- [x] Displays date in user-friendly format (e.g., "Jan 15, 2024")
+- [x] Shows "Unknown" if date_created is null
+- [x] Column is sortable (client-side)
+- [x] Column visible on all tabs (All, Old, Large, Language, Unavailable)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added date_created to ContentIssueItem model and API response, Added column to Issues table with formatDateCreated() for display, client-side sorting, responsive hiding on mobile, and shows dash for request items
+
+**Files:**
+- `backend/app/models/content.py` - Add `date_created` to ContentIssueItem schema
+- `backend/app/services/content.py` - Include `date_created` in response
+- `frontend/src/routes/issues/+page.svelte` - Add "Added" column to table
+
+### Non-Goals
+- No filtering by added date on Issues page (use Library for that)
+- No backend sorting by date_created (client-side only for Issues)
+
+### Technical Considerations
+- `date_created` already exists in `CachedMediaItem` model and is synced from Jellyfin
+- Format: ISO 8601 string from Jellyfin API (e.g., "2024-01-15T10:30:00Z")
+- Frontend should format using `toLocaleDateString()` or similar
+
+---
+
+
+## Epic 24: Auth Security
+
+### Overview
+Add rate limiting to authentication endpoints to protect against brute force password attacks. This is a security hardening measure that limits the number of login/register attempts from a single IP address.
+
+### Goals
+- Prevent brute force password attacks on login endpoint
+- Prevent automated account creation spam on register endpoint
+- Provide clear feedback to legitimate users who hit rate limits
+
+### User Stories
+
+#### US-24.1: Rate Limiting on Auth Endpoints
+**As a** system administrator
+**I want** login and registration endpoints to be rate-limited
+**So that** brute force attacks are mitigated
+
+**Acceptance Criteria:**
+- [x] Rate limit of 10 requests per minute per IP address on `/api/auth/login`
+- [x] Rate limit of 10 requests per minute per IP address on `/api/auth/register`
+- [x] Rate-limited requests return HTTP 429 (Too Many Requests)
+- [x] Response includes `Retry-After` header indicating seconds until reset
+- [x] Response body includes clear error message: "Too many requests. Please try again in X seconds."
+- [x] Rate limit uses in-memory storage (Redis not required for v1)
+- [x] `/api/auth/me` endpoint is NOT rate-limited (authenticated requests only)
+- [x] Rate limiting is disabled in test environment
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Manual test: verify 11th request within 60 seconds returns 429
+
+**Note:** Implemented RateLimiter class with in-memory storage, thread-safe sliding window, and TESTING env check. Rate limiter applied to /api/auth/login and /api/auth/register endpoints. Updated integration tests to use module-scoped auth token to avoid rate limit issues.
+
+**Files:**
+- `backend/app/middleware/rate_limit.py` - New middleware/dependency for rate limiting
+- `backend/app/routers/auth.py` - Apply rate limit dependency to login/register
+- `backend/tests/test_auth.py` - Add rate limit tests
+
+### Non-Goals
+- Redis/distributed rate limiting (in-memory is sufficient for single-instance deployment)
+- Per-email rate limiting (IP-based only for v1)
+- Gradual backoff/tarpit (simple blocking for v1)
+- Admin UI to configure rate limits (hardcoded for now)
+
+### Technical Considerations
+- **Implementation option:** Use `slowapi` library (FastAPI-compatible) or custom middleware
+- **Storage:** In-memory dict with IP -> (count, window_start) for simplicity
+- **Thread safety:** Use `asyncio.Lock` for concurrent request handling
+- **Testing:** Mock time or use short windows in tests
+- **X-Forwarded-For:** Handle proxy scenarios (get real client IP from headers)
+
+---
+
+
+## Epic 25: Password Strength Indicator
+
+### Overview
+Display visual feedback during registration showing password strength based on length. Helps users create stronger passwords without enforcing any restrictions.
+
+### Goals
+- Guide users toward creating better passwords
+- Provide immediate visual feedback as they type
+- Keep the indicator simple and non-intrusive
+
+### User Stories
+
+#### US-25.1: Password Strength Indicator
+**As a** new user registering for an account
+**I want** to see a visual indicator of my password strength
+**So that** I can understand how secure my password is
+
+**Acceptance Criteria:**
+- [x] Password input on registration page shows strength indicator below the field
+- [x] Indicator is a horizontal progress bar that changes color based on strength
+- [x] Strength levels based on length:
+  - Weak (red): 1-7 characters
+  - Medium (yellow): 8-11 characters
+  - Strong (green): 12+ characters
+- [x] Bar fills proportionally: ~33% for weak, ~66% for medium, ~100% for strong
+- [x] Indicator only appears when password field has content
+- [x] Indicator updates in real-time as user types (no debounce needed)
+- [x] Indicator is informational only - does NOT block form submission
+- [x] Uses existing CSS color variables (--danger, --warning, --success or similar)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Implemented password strength indicator with getPasswordStrength() and getStrengthLabel() functions. Progress bar shows weak (red, 33%), medium (yellow, 66%), or strong (green, 100%) based on password length. 10 new tests in register.test.ts.
+
+**Files:**
+- `frontend/src/routes/register/+page.svelte` - Add strength indicator component
+
+### Non-Goals
+- No backend validation of password strength (purely frontend visual)
+- No complex strength algorithms (zxcvbn, etc.) - just length-based
+- No blocking weak passwords from submission
+- No password requirements checklist
+
+### Technical Considerations
+- Use Svelte reactive statements to compute strength from password length
+- Color transitions should be smooth (CSS transition)
+- Bar width calculated as percentage: `Math.min(100, (length / 12) * 100)`
+- Empty password = hidden indicator (not "weak")
+
+---
+
+#### US-25.2: Password Confirmation Field
+**As a** new user registering for an account
+**I want** to confirm my password by typing it twice
+**So that** I don't accidentally create an account with a typo in my password
+
+**Acceptance Criteria:**
+- [x] Registration form adds "Confirm Password" input field after Password field
+- [x] Confirm Password field is required
+- [x] Form validates that Password and Confirm Password match
+- [x] If passwords don't match, show error: "Passwords do not match"
+- [x] Error appears below the Confirm Password field (not as a toast)
+- [x] Submit button is disabled until passwords match (or validation runs on submit)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added confirmPassword state and validatePasswordsMatch() function. Real-time validation shows error below confirm field when passwords don't match. Submit button disabled when confirm has content but doesn't match. 9 new tests in register.test.ts.
+
+**Files:**
+- `frontend/src/routes/register/+page.svelte` - Add confirm password field and validation
+
+---
+
+
+## Epic 26: Sync Resilience
+
+### Overview
+Add retry logic with exponential backoff to handle transient API failures during sync. Jellyfin and Jellyseerr APIs can occasionally fail due to timeouts, rate limits, or temporary network issues. Automatic retries improve sync reliability.
+
+### Goals
+- Automatically retry failed API calls during sync
+- Use exponential backoff to avoid overwhelming failing services
+- Provide clear failure messages when retries are exhausted
+
+### User Stories
+
+#### US-26.1: Sync Retry with Exponential Backoff
+**As a** user
+**I want** sync to automatically retry on transient failures
+**So that** temporary API issues don't require me to manually retry
+
+**Acceptance Criteria:**
+- [x] Jellyfin API calls retry up to 3 times on failure (4 total attempts)
+- [x] Jellyseerr API calls retry up to 3 times on failure (4 total attempts)
+- [x] Retry delays use exponential backoff: 1s, 2s, 4s between retries
+- [x] Only retry on transient errors: timeouts, 5xx errors, connection errors
+- [x] Do NOT retry on: 401 (auth failed), 404 (not found), 400 (bad request)
+- [x] Each retry attempt is logged: "Retry 1/3 for Jellyfin API after 1s..."
+- [x] After all retries exhausted, sync status set to "failed" with error message
+- [x] Error message includes which service failed and the error type
+- [x] Successful retry continues sync normally (no partial state)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Test: mock API to fail twice then succeed, verify sync completes
+
+**Note:** Implemented retry_with_backoff() utility with exponential backoff (1s, 2s, 4s). Applied to Jellyfin API calls (fetch_jellyfin_users, fetch_user_items, fetch_series_seasons, fetch_season_episodes) and Jellyseerr API calls (fetch_jellyseerr_requests pagination). Retries on transient errors (timeouts, 5xx, connection errors). Does NOT retry on permanent errors (401, 404, 400). 21 new tests in test_retry.py + 7 new tests in test_sync.py.
+
+**Files:**
+- `backend/app/services/sync.py` - Add retry wrapper for API calls
+- `backend/app/services/jellyfin.py` - Use retry wrapper (if separate)
+- `backend/app/services/jellyseerr.py` - Use retry wrapper (if separate)
+- `backend/tests/test_sync_service.py` - Add retry tests
+
+### Non-Goals
+- Per-item retry (if one movie fails, don't retry the whole sync)
+- Configurable retry count/delays via settings
+- Circuit breaker pattern (v1 uses simple retry)
+- Retry notifications to user (just logging for now)
+
+### Technical Considerations
+- Use `tenacity` library for retry logic (cleaner than manual implementation)
+- Exponential backoff formula: `2^attempt * base_delay` where base_delay=1s
+- Wrap high-level fetch functions (not every HTTP call individually)
+- Consider adding jitter to backoff to prevent thundering herd
+- Retryable exceptions: `httpx.TimeoutException`, `httpx.ConnectError`, responses with 5xx status
+
+### Example Implementation Pattern
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+    before_sleep=lambda retry_state: logger.info(f"Retry {retry_state.attempt_number}/3...")
+)
+async def fetch_jellyfin_media(...):
+    ...
+```
+
+---
+
+
+## Epic 27: Test Coverage
+
+### Overview
+Improve automated test coverage with critical E2E tests for core user flows.
+
+### User Stories
+
+#### US-27.1: E2E Auth Flow Test
+**As a** developer
+**I want** an E2E test covering the complete authentication flow
+**So that** regressions in auth are caught automatically
+
+**Acceptance Criteria:**
+- [x] E2E test covers: register new user → login → navigate to dashboard → navigate to settings → logout
+- [x] Test uses unique email per run (e.g., `test-{timestamp}@example.com`)
+- [x] Verifies dashboard loads after login (checks for expected element)
+- [x] Verifies settings page loads and shows user info
+- [x] Verifies logout redirects to login page
+- [x] Verifies protected routes redirect to login when not authenticated
+- [x] Test is idempotent (can run multiple times without cleanup)
+- [x] Typecheck passes
+- [x] E2E test passes
+
+**Note:** Created auth-flow.spec.ts with 2 tests: complete flow (register→login→dashboard→settings→logout) and protected route redirect. Fixed register.spec.ts for confirm password field. Fixed settings.spec.ts and header.spec.ts to use real auth flow instead of deprecated localStorage tokens.
+
+**Files:**
+- `frontend/e2e/auth-flow.spec.ts` - New E2E test file
+
+---
+
+#### US-27.2: Sync Integration Tests with Mocked APIs
+**As a** developer
+**I want** integration tests that verify sync behavior with mocked Jellyfin/Jellyseerr responses
+**So that** I can test sync logic without requiring real external services
+
+**Acceptance Criteria:**
+- [x] Test file `backend/tests/test_sync_integration.py` with mocked API responses
+- [x] Mock Jellyfin API responses using `httpx` mock or `respx` library
+- [x] Mock Jellyseerr API responses
+- [x] Test: successful sync stores correct data in database
+- [x] Test: partial Jellyfin data is handled correctly (missing fields)
+- [x] Test: Jellyseerr down doesn't break Jellyfin sync
+- [x] Test: API returning empty results creates empty cache (not error)
+- [x] Mocks use realistic response structures from actual API documentation
+- [x] Tests run without network access (fully offline)
+- [x] Typecheck passes
+- [x] All tests pass
+
+**Note:** Created test_sync_mocked_integration.py with 11 tests using respx to mock Jellyfin/Jellyseerr APIs. Tests cover: successful sync with multi-user aggregation, Jellyseerr title enrichment, partial data handling, Jellyseerr failure isolation (500 and connection errors), empty results handling, and realistic API response structures.
+
+**Files:**
+- `backend/tests/test_sync_integration.py` - New integration test file
+- `backend/tests/fixtures/jellyfin_responses.py` - Mock response data (optional)
+- `backend/tests/fixtures/jellyseerr_responses.py` - Mock response data (optional)
+
+### Non-Goals
+- Testing every form validation (unit tests cover that)
+- Visual regression testing
+
+---
+
+
+## Epic 29: Issues Table UX Improvements
+
+### Overview
+Improve the visual alignment and readability of the Issues table. The Name column currently has alignment issues: year and service badges shift horizontally based on title length, creating a ragged, hard-to-scan layout. This epic restructures the Name cell for consistent alignment and adds a dedicated Requester column for the Unavailable tab.
+
+### Goals
+- Fix year/badge misalignment across all rows (all tabs)
+- Improve table scanability with consistent visual structure
+- Separate requester info from title into dedicated column (Unavailable tab only)
+- Reduce visual noise from competing badge colors
+
+### User Stories
+
+#### US-29.1: Issues Table Name Column Improvements
+**As a** media server owner
+**I want** the Issues table to have consistent visual alignment
+**So that** I can quickly scan and compare items across rows
+
+**Acceptance Criteria:**
+- [x] Year displays at a fixed horizontal position (not flowing after variable-length titles)
+- [x] Service badges (JF, JS, RD, TMDB) align consistently across all rows
+- [x] Long titles truncate with ellipsis instead of wrapping to multiple lines
+- [x] On hover, truncated titles show full text via title tooltip
+- [x] New "Requester" column appears after Name column (only on Unavailable tab)
+- [x] Requester column follows same pattern as Release column (conditional display)
+- [x] Column displays username from `requested_by` field, or `—` if null
+- [x] The inline "by {username}" display in the name cell is removed
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Implemented CSS grid layout for name cell with fixed-width year column, title truncation with ellipsis and tooltip, and conditional Requester column for Unavailable tab
+
+### Non-Goals
+- Adding requester info to non-request items
+- Backend API changes (data already includes `requested_by`)
+- Filtering by requester (future enhancement)
+- Sorting by requester (future enhancement)
+- Changing service badge colors (defer to future enhancement)
+
+### Technical Considerations
+- **Frontend-only change** to `frontend/src/routes/issues/+page.svelte`
+- Restructure `.name-cell` from flex to CSS Grid with fixed zones: `[Title (1fr)] [Year (auto)] [Badges (auto)]`
+- Add `text-overflow: ellipsis` and `white-space: nowrap` to `.item-name` for truncation
+- Add `title={item.name}` attribute for hover tooltip on truncated names
+- Follow existing pattern from `col-release` for conditional Requester column
+- `requested_by` field already exists in `ContentIssueItem` interface
+
+---
+
+
+## Epic 30: Remove Currently Airing Placeholder
+
+### Overview
+Remove the "Currently Airing" feature which was never implemented. The dashboard currently shows "0 currently airing" linking to an empty page, which is confusing to users. This epic cleans up the placeholder code.
+
+### Goals
+- Remove confusing "0 currently airing" from dashboard
+- Clean up unused backend code, routes, and tests
+- Simplify the codebase by removing dead code
+
+### User Stories
+
+#### US-30.1: Remove Currently Airing Placeholder
+**As a** user
+**I want** the dashboard to only show implemented features
+**So that** I'm not confused by links to empty pages
+
+**Acceptance Criteria:**
+- [x] Remove "currently airing" link from dashboard info section
+- [x] Remove `/info/airing` route and page entirely
+- [x] Remove `GET /api/info/airing` endpoint
+- [x] Remove `get_currently_airing()` function from content service
+- [x] Remove `CurrentlyAiringItem` and `CurrentlyAiringResponse` models
+- [x] Remove `currently_airing` from `ContentSummaryResponse` model
+- [x] Update `get_content_summary()` to not include `currently_airing`
+- [x] Remove related tests (backend and frontend)
+- [x] Dashboard info section shows only "recently available" (remove separator)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: dashboard no longer shows "currently airing"
+
+**Note:** Removed all currently airing code: endpoint, models, service function, frontend page and link, related tests. Dashboard info section now shows only recently available.
+
+### Non-Goals
+- Implementing the feature (can be added later if needed)
+- Changing any other dashboard functionality
+
+### Technical Considerations
+
+**Files to modify:**
+- `frontend/src/routes/+page.svelte` - Remove currently_airing from info section
+- `frontend/src/routes/info/airing/+page.svelte` - DELETE entire file
+- `frontend/tests/info.test.ts` - Remove currently_airing tests
+- `backend/app/routers/info.py` - Remove `/airing` endpoint
+- `backend/app/services/content.py` - Remove `get_currently_airing()` function
+- `backend/app/models/content.py` - Remove `CurrentlyAiringItem`, `CurrentlyAiringResponse`, update `ContentSummaryResponse`
+- `backend/tests/test_content.py` - Remove currently_airing tests
+
+**Cleanup pattern:**
+1. Start with backend models (remove types)
+2. Update service (remove function)
+3. Update router (remove endpoint)
+4. Update frontend (remove UI + route)
+5. Clean up tests last
+
+---
+
+
+## Epic 31: Recently Available Enhancements
+
+### Overview
+Improve the "Recently Available" page to better serve its primary purpose: notifying users who requested content that it's now available. This includes configurable time window, user nickname mapping for friendly names in notifications, and copy output grouped by requester.
+
+### Goals
+- Make the "days back" threshold configurable per user
+- Allow users to map Jellyseerr usernames to friendly display names
+- Generate copy output grouped by requester for easy notification
+- Improve the notification workflow for media server owners
+
+### User Stories
+
+#### US-31.1: Recently Available Days Setting (Backend)
+**As a** media server owner
+**I want** to configure how many days back to show recently available content
+**So that** I can adjust the view to my notification frequency
+
+**Acceptance Criteria:**
+- [x] Add `recently_available_days` field to UserSettings model (integer, default 7)
+- [x] Create database migration for new column
+- [x] `GET /api/settings` returns `recently_available_days` value
+- [x] `POST /api/settings` accepts and validates `recently_available_days` (range: 1-30)
+- [x] `GET /api/info/recent` uses user's setting instead of hardcoded 7 days
+- [x] `GET /api/content/summary` uses user's setting for `recently_available` count
+- [x] Invalid values return 422 with clear error message
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented recently_available_days field in UserSettings, added to display preferences API, GET /api/info/recent and GET /api/content/summary now use user's setting
+
+**Files:**
+- `backend/app/database.py` - Add field to UserSettings
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Include in GET/POST
+- `backend/app/models/settings.py` - Update Pydantic schemas
+- `backend/app/services/content.py` - Update `get_recently_available()` and `get_content_summary()`
+- `backend/tests/test_settings.py` - Validation tests
+
+---
+
+#### US-31.2: Recently Available Days Setting (Frontend)
+**As a** media server owner
+**I want** to set my "recently available" days preference in the settings page
+**So that** I can customize the time window
+
+**Acceptance Criteria:**
+- [x] Settings page shows "Recently available days" input in a new "Display" section
+- [x] Input is a number field with min=1, max=30
+- [x] Default value is 7 when not set
+- [x] Help text: "Show content that became available in the past N days"
+- [x] Value saves successfully and persists on page reload
+- [x] Recently Available page subtitle updates to reflect setting (e.g., "past 14 days")
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added recently_available_days input to Settings Display section with onchange save. Recently Available page fetches user setting and displays dynamic subtitle.
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Add input field
+- `frontend/src/routes/info/recent/+page.svelte` - Fetch setting and display in subtitle
+
+---
+
+#### US-31.3: User Nickname Mapping (Backend)
+**As a** media server owner
+**I want** to store nickname mappings for Jellyseerr usernames
+**So that** I can show friendly names in notifications
+
+**Acceptance Criteria:**
+- [x] Create new `UserNickname` model: `id`, `user_id` (FK), `jellyseerr_username` (string), `display_name` (string)
+- [x] Create database migration for new table
+- [x] Unique constraint on (`user_id`, `jellyseerr_username`) - each username maps once per user
+- [x] `GET /api/settings/nicknames` returns list of all nickname mappings for user
+- [x] `POST /api/settings/nicknames` creates a new mapping (body: `{jellyseerr_username, display_name}`)
+- [x] `PUT /api/settings/nicknames/{id}` updates an existing mapping
+- [x] `DELETE /api/settings/nicknames/{id}` removes a mapping
+- [x] 409 Conflict if trying to create duplicate jellyseerr_username
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented UserNickname model with unique constraint, CRUD service functions, and REST endpoints at /api/settings/nicknames
+
+**Files:**
+- `backend/app/database.py` - Add UserNickname model
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/settings.py` - Add nickname CRUD endpoints
+- `backend/app/models/settings.py` - Add NicknameCreate, NicknameResponse schemas
+- `backend/tests/test_settings.py` - CRUD tests
+
+---
+
+#### US-31.4: User Nickname Mapping (Frontend)
+**As a** media server owner
+**I want** to manage nickname mappings in the settings page
+**So that** I can assign friendly names to Jellyseerr users
+
+**Acceptance Criteria:**
+- [x] Settings page shows new "User Nicknames" section below services configuration
+- [x] Section displays table of existing mappings: Jellyseerr Username → Display Name
+- [x] "Add nickname" button opens inline form with two inputs: username, display name
+- [x] Each row has edit and delete buttons
+- [x] Delete shows confirmation before removing
+- [x] Empty state: "No nicknames configured. Add nicknames to customize how requesters appear in notifications."
+- [x] Toast feedback on save/delete success/error
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Implemented User Nicknames section with inline CRUD: table display, add form, inline edit, delete confirmation, toast feedback. 14 new tests in settings-nicknames.test.ts
+
+**Files:**
+- `frontend/src/routes/settings/+page.svelte` - Add nicknames section with CRUD UI
+
+---
+
+#### US-31.5: Copy Output Grouped by Requester
+**As a** media server owner
+**I want** the copy output to group content by requester with their display name
+**So that** I can easily notify each person about their available content
+
+**Acceptance Criteria:**
+- [x] "Copy" button generates output grouped by requester (not by date)
+- [x] Uses display_name from nickname mapping if configured, otherwise original Jellyseerr username
+- [x] Format per requester:
+  ```
+  {display_name}:
+    - {Title} ({Type}) - available since {Date}
+  ```
+- [x] Requesters sorted alphabetically
+- [x] Items under each requester sorted by availability date (newest first)
+- [x] Items without a requester grouped under "Unknown" at the end
+- [x] API endpoint `GET /api/info/recent` includes resolved `display_name` field
+- [x] Frontend uses `display_name` for grouping and display in table
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: copy output shows correct grouping
+
+**Note:** Added display_name field to RecentlyAvailableItem model, implemented get_nickname_map() and resolve_display_name() in content service, updated frontend copy function to group by requester
+
+**Example output:**
+```
+Recently Available (3 items):
+
+Fab:
+  - 2 Alone in Paris (Movie) - available since Jan 11
+  - The Serpent (TV) - available since Jan 11
+
+John:
+  - Inception (Movie) - available since Jan 10
+```
+
+**Files:**
+- `backend/app/services/content.py` - Add `display_name` resolution to `get_recently_available()`
+- `backend/app/models/content.py` - Add `display_name` to `RecentlyAvailableItem`
+- `frontend/src/routes/info/recent/+page.svelte` - Update copy function, show display_name in table
+
+### Non-Goals
+- Many-to-1 username mapping (multiple usernames → one person)
+- Auto-detecting Jellyseerr usernames (user must manually add)
+- Actually sending notifications (just copy for manual paste)
+- Per-requester filtering on the Recently Available page
+
+### Technical Considerations
+- **Database:** New `UserNickname` table with FK to users
+- **API pattern:** Follow existing settings endpoint patterns for CRUD
+- **Display name resolution:** Done at API level so both table and copy use same resolved name
+- **Settings page structure:** Add new "Display" section for recently_available_days, new "User Nicknames" section for mappings
+
+---
+
+
+## Epic 32: Session Management & Auth UX
+
+### Overview
+Improve authentication experience by extending session duration with refresh tokens and automatically redirecting users to login when their session expires. Currently, sessions expire after 30 minutes forcing frequent re-logins, and expired sessions still allow frontend navigation with failing API calls.
+
+### Goals
+- Reduce login friction with long-lived sessions (30 days)
+- Implement refresh token mechanism for secure session renewal
+- Auto-redirect to login on session expiration instead of showing toast errors
+- Clean up stale auth state so users can't navigate with expired sessions
+
+### User Stories
+
+#### US-32.1: Refresh Token Backend Implementation
+**As a** user
+**I want** my session to last 30 days with automatic renewal
+**So that** I don't have to log in multiple times a day
+
+**Acceptance Criteria:**
+- [x] New `RefreshToken` model: `id`, `user_id` (FK), `token` (hashed), `expires_at`, `created_at`
+- [x] Create database migration for refresh_tokens table
+- [x] Access token expiration reduced to 15 minutes (short-lived)
+- [x] Refresh token expiration set to 30 days (long-lived)
+- [x] `POST /api/auth/login` returns both `access_token` and `refresh_token`
+- [x] `POST /api/auth/refresh` accepts refresh_token, returns new access_token + new refresh_token
+- [x] Old refresh token is invalidated when new one is issued (rotation)
+- [x] Invalid/expired refresh token returns 401
+- [x] Refresh token stored as httpOnly cookie (more secure than localStorage)
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented refresh token with rotation, httpOnly cookie storage, and logout endpoint
+
+**Files:**
+- `backend/app/database.py` - Add RefreshToken model
+- `backend/alembic/versions/` - New migration
+- `backend/app/routers/auth.py` - Update login, add refresh endpoint
+- `backend/app/models/user.py` - Add TokenResponse schema with both tokens
+- `backend/app/services/auth.py` - New service for token generation/validation
+- `backend/tests/test_auth.py` - Refresh token tests
+
+---
+
+#### US-32.2: Frontend Token Refresh
+**As a** user
+**I want** my session to auto-renew in the background
+**So that** I stay logged in without interruption
+
+**Acceptance Criteria:**
+- [x] Login stores refresh_token in httpOnly cookie (set by backend)
+- [x] Access token stored in memory (not localStorage) for security
+- [x] Auth store includes `refreshAccessToken()` method
+- [x] API calls that receive 401 automatically attempt token refresh
+- [x] If refresh succeeds, retry original request with new token
+- [x] If refresh fails (401), redirect to login page
+- [x] Proactive refresh: refresh token 1 minute before access token expires
+- [x] Logout calls `POST /api/auth/logout` to invalidate refresh token
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Implemented authenticatedFetch wrapper with 401 retry logic, proactive token refresh 1 min before expiration, access token in memory instead of localStorage
+
+**Files:**
+- `frontend/src/lib/stores/index.ts` - Update auth store with refresh logic
+- `frontend/src/lib/api.ts` - New API wrapper with auto-refresh interceptor
+- `frontend/src/routes/login/+page.svelte` - Update to handle new token format
+- `backend/app/routers/auth.py` - Add logout endpoint to invalidate refresh token
+- `frontend/tests/auth.test.ts` - Token refresh tests
+
+---
+
+#### US-32.3: Auto-Redirect on Session Expiration
+**As a** user
+**I want** to be automatically redirected to login when my session fully expires
+**So that** I don't see broken pages with failed API calls
+
+**Acceptance Criteria:**
+- [x] When refresh token fails (401), user is redirected to `/login`
+- [x] Auth state is fully cleared before redirect (no stale isAuthenticated)
+- [x] Redirect includes `?redirect=/original/path` query param
+- [x] After successful login, redirect back to original path
+- [x] Toast message shows "Session expired, please log in again"
+- [x] No more "Session expired" errors while staying on page
+- [x] Protected routes immediately redirect if not authenticated (no content flash)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: let session expire → automatic redirect to login
+
+**Note:** Session expiration redirect with ?redirect param, toast message, and protected route handling were already implemented in US-32.2. Added 12 new tests for session expiration behavior.
+
+**Files:**
+- `frontend/src/lib/api.ts` - Handle 401 with redirect
+- `frontend/src/routes/+layout.svelte` - Improve route protection
+- `frontend/src/routes/login/+page.svelte` - Handle redirect query param
+- `frontend/src/lib/stores/index.ts` - Clear auth state properly
+
+---
+
+### Non-Goals
+- "Remember me" checkbox (all sessions are 30 days)
+- Multiple device session management (revoke other sessions)
+- Session activity tracking/listing
+- IP-based session binding
+
+### Technical Considerations
+- **Security:** Refresh tokens in httpOnly cookies prevent XSS token theft. Access tokens in memory prevent persistence attacks.
+- **Token rotation:** Each refresh invalidates old token, limiting damage from token leak.
+- **Race conditions:** If multiple tabs refresh simultaneously, handle gracefully (only first succeeds, others retry).
+- **Backward compatibility:** First deploy keeps old 30-min tokens working until they expire naturally.
+- **Cookie settings:** `SameSite=Strict`, `Secure=true` in production, `Path=/api/auth`.
+
+---
+
+
+
+---
+
+## Archived Checklist (141 stories)
 
 - [x] US-0.1: Hello World (Full Stack)
 - [x] US-0.2: Dockerize the Application
@@ -2143,3 +3397,38 @@ Allow users to manually control the application's theme (light/dark mode) instea
 - [x] US-16.1: Theme Preference Backend
 - [x] US-16.2: Theme Store and Application
 - [x] US-16.3: Theme Toggle UI in Settings
+- [x] US-17.1: Multi-User Watch Data Aggregation
+- [x] US-17.2: Sync Progress Visibility
+- [x] US-17.3: Fix Mobile Sidebar Visual Overlap
+- [x] US-18.1: Show Setup Checklist for New Users
+- [x] US-18.2: Auto-Sync After Jellyfin Configuration
+- [x] US-18.3: Optional Services Prompt
+- [x] US-19.1: Search Issues by Text
+- [x] US-20.1: Large Season Threshold Setting
+- [x] US-20.2: Calculate and Store Season Sizes
+- [x] US-20.3: Large Series Detection Service
+- [x] US-20.4: Large Content UI with Filter
+- [x] US-21.1: Slack Notification Service
+- [x] US-21.2: New User Signup Notifications
+- [x] US-21.3: Sync Failure Notifications
+- [x] US-22.1: Library API Endpoint
+- [x] US-22.2: Library Page with Sub-tabs
+- [x] US-22.3: Library Search and Filters
+- [x] US-22.4: Library Sorting
+- [x] US-23.1: Added Date Column on Issues Page
+- [x] US-24.1: Rate Limiting on Auth Endpoints
+- [x] US-25.1: Password Strength Indicator
+- [x] US-25.2: Password Confirmation Field
+- [x] US-26.1: Sync Retry with Exponential Backoff
+- [x] US-27.1: E2E Auth Flow Test
+- [x] US-27.2: Sync Integration Tests with Mocked APIs
+- [x] US-29.1: Add Requester Column to Issues Table
+- [x] US-30.1: Remove Currently Airing Placeholder
+- [x] US-31.1: Recently Available Days Setting (Backend)
+- [x] US-31.2: Recently Available Days Setting (Frontend)
+- [x] US-31.3: User Nickname Mapping (Backend)
+- [x] US-31.4: User Nickname Mapping (Frontend)
+- [x] US-31.5: Copy Output Grouped by Requester
+- [x] US-32.1: Refresh Token Backend Implementation
+- [x] US-32.2: Frontend Token Refresh
+- [x] US-32.3: Auto-Redirect on Session Expiration

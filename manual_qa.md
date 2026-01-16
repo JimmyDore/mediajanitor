@@ -1,9 +1,65 @@
-Bugs : 
-- Delete : A tester demain, normalement c'est fix, mais j'attends d'avoir le added date pour delete un truc plus safe
-- Name pas assez gros dans la table, issues prend trop de place
-- column names pas cohérents majuscule/minuscule
-- on peut pas trier par release date
+Prd
+- Series episodes are buggy for the recent released
 
-- afk ralph a pas l'air de s'arrêter après une story : 
-Now let me update progress.txt:
-US-29.1 is complete. Let me check if there are more stories to implement by finding the next one with `passes: false`:
+Manual
+- add in ralph.md process morning : /prd-sync, review progress.txt/Progress.md, /prd-archive, /review-suggestions, manual qa(/prd or auto fix), /ralph-init 
+- Delete : A tester demain, normalement c'est fix, mais j'attends 
+d'avoir le added date pour delete un truc plus safe
+- DB backup 
+- Test slack notif
+- Split exploratory qa skill in multiple skills
+- Test Email forgot password flow
+
+
+Manual QA : 
+QA Guide for Epic 21: Slack Notification Monitoring                                       
+                                                                                            
+  Prerequisites                                                                             
+                                                                                            
+  1. Create Slack webhooks at https://api.slack.com/apps → Create App → Incoming Webhooks   
+  2. Set environment variables in your .env file or Docker:                                 
+  SLACK_WEBHOOK_NEW_USERS=https://hooks.slack.com/services/xxx/yyy/zzz                      
+  SLACK_WEBHOOK_SYNC_FAILURES=https://hooks.slack.com/services/xxx/yyy/zzz                  
+                                                                                            
+  Test 1: New User Signup Notification (US-21.2)                                            
+                                                                                            
+  # Start Docker                                                                            
+  docker-compose up --build -d                                                              
+                                                                                            
+  # Register a new user                                                                     
+  curl -X POST http://localhost:8080/api/auth/register \                                    
+    -H "Content-Type: application/json" \                                                   
+    -d '{"email":"test-slack@example.com","password":"TestPassword123!"}'                   
+  Expected: Slack message with :wave: New User Signup, email, timestamp, total user count   
+                                                                                            
+  Test 2: Sync Failure Notification (US-21.3)                                               
+                                                                                            
+  # Login as a user with INVALID Jellyfin settings                                          
+  TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \                            
+    -H "Content-Type: application/json" \                                                   
+    -d '{"email":"test-slack@example.com","password":"TestPassword123!"}' \                 
+    | jq -r '.access_token')                                                                
+                                                                                            
+  # First configure invalid settings                                                        
+  curl -X POST http://localhost:8080/api/settings \                                         
+    -H "Authorization: Bearer $TOKEN" \                                                     
+    -H "Content-Type: application/json" \                                                   
+    -d '{"jellyfin_server_url":"http://invalid-server:8096","jellyfin_api_key":"bad-key"}'  
+                                                                                            
+  # Trigger a sync (will fail)                                                              
+  curl -X POST http://localhost:8080/api/sync/trigger \                                     
+    -H "Authorization: Bearer $TOKEN"                                                       
+  Expected: Slack message with :warning: Sync Failed, user email, service name, error       
+  message                                                                                   
+                                                                                            
+  Test 3: No Webhook Configured (Graceful Skip)                                             
+                                                                                            
+  # Remove webhook env vars and restart                                                     
+  unset SLACK_WEBHOOK_NEW_USERS                                                             
+  docker-compose up --build -d                                                              
+                                                                                            
+  # Register should still work without error                                                
+  curl -X POST http://localhost:8080/api/auth/register \                                    
+    -H "Content-Type: application/json" \                                                   
+    -d '{"email":"no-slack@example.com","password":"TestPassword123!"}'                     
+  Expected: Registration succeeds, no Slack message sent, no errors in logs  

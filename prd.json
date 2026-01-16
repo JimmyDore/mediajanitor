@@ -1,713 +1,33 @@
 {
   "project": "Media Janitor",
-  "branchName": "ralph/session-management",
+  "branchName": "main",
   "userStories": [
     {
-      "id": "US-32.1",
-      "title": "Refresh Token Backend Implementation",
-      "story": "As a user, I want my session to last 30 days with automatic renewal, so that I don't have to log in multiple times a day",
+      "id": "US-17.2.1",
+      "title": "Populate Sync Progress User Names",
+      "story": "As a user I want to see which Jellyfin user is being synced So that I can understand the progress in detail",
       "acceptanceCriteria": [
-        "New RefreshToken model: id, user_id (FK), token (hashed), expires_at, created_at",
-        "Create database migration for refresh_tokens table",
-        "Access token expiration reduced to 15 minutes (short-lived)",
-        "Refresh token expiration set to 30 days (long-lived)",
-        "POST /api/auth/login returns both access_token and refresh_token",
-        "POST /api/auth/refresh accepts refresh_token, returns new access_token + new refresh_token",
-        "Old refresh token is invalidated when new one is issued (rotation)",
-        "Invalid/expired refresh token returns 401",
-        "Refresh token stored as httpOnly cookie (more secure than localStorage)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": "Implemented refresh token with rotation, httpOnly cookie storage, and logout endpoint"
-    },
-    {
-      "id": "US-32.2",
-      "title": "Frontend Token Refresh",
-      "story": "As a user, I want my session to auto-renew in the background, so that I stay logged in without interruption",
-      "acceptanceCriteria": [
-        "Login stores refresh_token in httpOnly cookie (set by backend)",
-        "Access token stored in memory (not localStorage) for security",
-        "Auth store includes refreshAccessToken() method",
-        "API calls that receive 401 automatically attempt token refresh",
-        "If refresh succeeds, retry original request with new token",
-        "If refresh fails (401), redirect to login page",
-        "Proactive refresh: refresh token 1 minute before access token expires",
-        "Logout calls POST /api/auth/logout to invalidate refresh token",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "Implemented authenticatedFetch wrapper with 401 retry logic, proactive token refresh 1 min before expiration, access token in memory instead of localStorage"
-    },
-    {
-      "id": "US-32.3",
-      "title": "Auto-Redirect on Session Expiration",
-      "story": "As a user, I want to be automatically redirected to login when my session fully expires, so that I don't see broken pages with failed API calls",
-      "acceptanceCriteria": [
-        "When refresh token fails (401), user is redirected to /login",
-        "Auth state is fully cleared before redirect (no stale isAuthenticated)",
-        "Redirect includes ?redirect=/original/path query param",
-        "After successful login, redirect back to original path",
-        "Toast message shows 'Session expired, please log in again'",
-        "No more 'Session expired' errors while staying on page",
-        "Protected routes immediately redirect if not authenticated (no content flash)",
+        "Backend: `fetch_jellyfin_media_with_progress()` passes `current_user_name` to `update_sync_progress()`",
+        "During batch processing, extract current user's display name from Jellyfin users list",
+        "Pass display name (e.g., \"John\", \"Admin\") to progress update function",
+        "Frontend displays \"Fetching user 3/10: John...\" instead of \"Syncing media...\"",
+        "Progress message updates with each user's name during sync",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: let session expire → automatic redirect to login"
+        "Verify in browser: trigger sync and see user names in progress messages"
       ],
-      "priority": 3,
-      "passes": true,
-      "notes": "Session expiration redirect with ?redirect param, toast message, and protected route handling were already implemented in US-32.2. Added 12 new tests for session expiration behavior."
-    },
-    {
-      "id": "US-29.1",
-      "title": "Issues Table Name Column Improvements",
-      "story": "As a media server owner, I want the Issues table to have consistent visual alignment, so that I can quickly scan and compare items across rows",
-      "acceptanceCriteria": [
-        "Year displays at a fixed horizontal position (not flowing after variable-length titles)",
-        "Service badges (JF, JS, RD, TMDB) align consistently across all rows",
-        "Long titles truncate with ellipsis instead of wrapping to multiple lines",
-        "On hover, truncated titles show full text via title tooltip",
-        "New 'Requester' column appears after Name column (only on Unavailable tab)",
-        "Requester column follows same pattern as Release column (conditional display)",
-        "Column displays username from requested_by field, or — if null",
-        "The inline 'by {username}' display in the name cell is removed",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Implemented CSS grid layout for name cell with fixed-width year column, title truncation with ellipsis and tooltip, and conditional Requester column for Unavailable tab"
-    },
-    {
-      "id": "US-30.1",
-      "title": "Remove Currently Airing Placeholder",
-      "story": "As a user, I want the dashboard to only show implemented features, so that I'm not confused by links to empty pages",
-      "acceptanceCriteria": [
-        "Remove 'currently airing' link from dashboard info section",
-        "Remove /info/airing route and page entirely",
-        "Remove GET /api/info/airing endpoint",
-        "Remove get_currently_airing() function from content service",
-        "Remove CurrentlyAiringItem and CurrentlyAiringResponse models",
-        "Remove currently_airing from ContentSummaryResponse model",
-        "Update get_content_summary() to not include currently_airing",
-        "Remove related tests (backend and frontend)",
-        "Dashboard info section shows only 'recently available' (remove separator)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: dashboard no longer shows 'currently airing'"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Removed all currently airing code: endpoint, models, service function, frontend page and link, related tests. Dashboard info section now shows only recently available."
-    },
-    {
-      "id": "US-31.1",
-      "title": "Recently Available Days Setting (Backend)",
-      "story": "As a media server owner, I want to configure how many days back to show recently available content, so that I can adjust the view to my notification frequency",
-      "acceptanceCriteria": [
-        "Add recently_available_days field to UserSettings model (integer, default 7)",
-        "Create database migration for new column",
-        "GET /api/settings returns recently_available_days value",
-        "POST /api/settings accepts and validates recently_available_days (range: 1-30)",
-        "GET /api/info/recent uses user's setting instead of hardcoded 7 days",
-        "GET /api/content/summary uses user's setting for recently_available count",
-        "Invalid values return 422 with clear error message",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Implemented recently_available_days field in UserSettings, added to display preferences API, GET /api/info/recent and GET /api/content/summary now use user's setting"
-    },
-    {
-      "id": "US-31.2",
-      "title": "Recently Available Days Setting (Frontend)",
-      "story": "As a media server owner, I want to set my 'recently available' days preference in the settings page, so that I can customize the time window",
-      "acceptanceCriteria": [
-        "Settings page shows 'Recently available days' input in a new 'Display' section",
-        "Input is a number field with min=1, max=30",
-        "Default value is 7 when not set",
-        "Help text: 'Show content that became available in the past N days'",
-        "Value saves successfully and persists on page reload",
-        "Recently Available page subtitle updates to reflect setting (e.g., 'past 14 days')",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Added recently_available_days input to Settings Display section with onchange save. Recently Available page fetches user setting and displays dynamic subtitle."
-    },
-    {
-      "id": "US-31.3",
-      "title": "User Nickname Mapping (Backend)",
-      "story": "As a media server owner, I want to store nickname mappings for Jellyseerr usernames, so that I can show friendly names in notifications",
-      "acceptanceCriteria": [
-        "Create new UserNickname model: id, user_id (FK), jellyseerr_username (string), display_name (string)",
-        "Create database migration for new table",
-        "Unique constraint on (user_id, jellyseerr_username) - each username maps once per user",
-        "GET /api/settings/nicknames returns list of all nickname mappings for user",
-        "POST /api/settings/nicknames creates a new mapping (body: {jellyseerr_username, display_name})",
-        "PUT /api/settings/nicknames/{id} updates an existing mapping",
-        "DELETE /api/settings/nicknames/{id} removes a mapping",
-        "409 Conflict if trying to create duplicate jellyseerr_username",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "Implemented UserNickname model with unique constraint, CRUD service functions, and REST endpoints at /api/settings/nicknames"
-    },
-    {
-      "id": "US-31.4",
-      "title": "User Nickname Mapping (Frontend)",
-      "story": "As a media server owner, I want to manage nickname mappings in the settings page, so that I can assign friendly names to Jellyseerr users",
-      "acceptanceCriteria": [
-        "Settings page shows new 'User Nicknames' section below services configuration",
-        "Section displays table of existing mappings: Jellyseerr Username → Display Name",
-        "'Add nickname' button opens inline form with two inputs: username, display name",
-        "Each row has edit and delete buttons",
-        "Delete shows confirmation before removing",
-        "Empty state: 'No nicknames configured. Add nicknames to customize how requesters appear in notifications.'",
-        "Toast feedback on save/delete success/error",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Implemented User Nicknames section with inline CRUD: table display, add form, inline edit, delete confirmation, toast feedback. 14 new tests in settings-nicknames.test.ts"
-    },
-    {
-      "id": "US-31.5",
-      "title": "Copy Output Grouped by Requester",
-      "story": "As a media server owner, I want the copy output to group content by requester with their display name, so that I can easily notify each person about their available content",
-      "acceptanceCriteria": [
-        "'Copy' button generates output grouped by requester (not by date)",
-        "Uses display_name from nickname mapping if configured, otherwise original Jellyseerr username",
-        "Format per requester: {display_name}:\\n  - {Title} ({Type}) - available since {Date}",
-        "Requesters sorted alphabetically",
-        "Items under each requester sorted by availability date (newest first)",
-        "Items without a requester grouped under 'Unknown' at the end",
-        "API endpoint GET /api/info/recent includes resolved display_name field",
-        "Frontend uses display_name for grouping and display in table",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: copy output shows correct grouping"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Added display_name field to RecentlyAvailableItem model, implemented get_nickname_map() and resolve_display_name() in content service, updated frontend copy function to group by requester"
-    },
-    {
-      "id": "US-17.1",
-      "title": "Multi-User Watch Data Aggregation",
-      "story": "As a user, I want my watched content to reflect plays from ALL Jellyfin users, so that the Old/Unwatched content detection is accurate",
-      "acceptanceCriteria": [
-        "Sync fetches media items from ALL Jellyfin users (not just first user)",
-        "Watch data is aggregated: played = True if ANY user has watched",
-        "last_played_date uses the MOST RECENT date across all users",
-        "play_count sums all users' play counts",
-        "Uses asyncio.gather() to parallelize user fetches (6-15 users expected)",
-        "Progress logging shows which user is being synced (e.g., 'Fetching user 3/10: John')",
-        "Existing sync tests still pass",
-        "New test verifies multi-user aggregation logic",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify 'La Chambre de Mariana' shows correct watch date after sync"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "Implemented multi-user watch data aggregation with asyncio.gather() parallelization, aggregate_user_watch_data() for combining watch data, and progress logging per user"
-    },
-    {
-      "id": "US-17.2",
-      "title": "Sync Progress Visibility",
-      "story": "As a user, I want to see detailed sync progress in the UI, so that I know what's happening during the longer sync",
-      "acceptanceCriteria": [
-        "Backend stores sync progress details (current step, current user being fetched)",
-        "GET /api/sync/status returns progress info: current_step, total_steps, current_user_name",
-        "Frontend displays progress during sync (e.g., 'Fetching user 3/10: John...')",
-        "Progress updates while sync is running (poll every 2-3 seconds)",
-        "Shows 'Syncing media...' or 'Syncing requests...' as appropriate",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: trigger sync and see progress updates"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Added progress tracking fields to SyncStatus model, update_sync_progress() function, modified fetch_jellyfin_media_with_progress() to update per-user progress during batch processing, frontend polls /api/sync/status every 2s during sync and displays progress message"
-    },
-    {
-      "id": "US-17.3",
-      "title": "Fix Mobile Sidebar Visual Overlap",
-      "story": "As a mobile user, I want the sidebar to be completely hidden when closed, so that I don't see visual artifacts on the dashboard",
-      "acceptanceCriteria": [
-        "On mobile (viewport < 768px), when sidebar is closed, no part of it is visible",
-        "No blue strip or other visual artifacts on left edge",
-        "Sidebar still opens/closes correctly with hamburger menu",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using mobile viewport (Chrome DevTools device mode)"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "Added visibility: hidden when sidebar is closed on mobile, visibility: visible when open. This ensures the sidebar is completely hidden when translated off-screen."
-    },
-    {
-      "id": "US-19.1",
-      "title": "Search Issues by Text",
-      "story": "As a media server owner, I want to search for content on the Issues page, so that I can quickly find a specific movie or show without scrolling",
-      "acceptanceCriteria": [
-        "Search input appears next to the 'Issues' title/item count",
-        "Search filters items in real-time as user types (debounced ~300ms)",
-        "Search matches against: title (case-insensitive), production year, and requested_by (for Requests tab)",
-        "Search operates within the currently active tab filter (Old, Large, Language, Requests, or All)",
-        "Empty search shows all items for current tab",
-        "Item count updates to reflect filtered results (e.g., '3 of 219 items')",
-        "Total size updates to reflect filtered results",
-        "Search input has a clear (X) button when text is present",
-        "Placeholder text: 'Search by title, year...'",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Implemented client-side search with debounced filtering (300ms), matching against title, year, and requested_by. Stats update to show 'X of Y items' format with filtered size."
-    },
-    {
-      "id": "US-23.1",
-      "title": "Added Date Column on Issues Page",
-      "story": "As a media server owner, I want to see when content was added to my library, so that I can understand how long items have been in my collection",
-      "acceptanceCriteria": [
-        "API includes date_created field in content issues response",
-        "Issues page table shows 'Added' column after 'Size' column",
-        "Displays date in user-friendly format (e.g., 'Jan 15, 2024')",
-        "Shows 'Unknown' if date_created is null",
-        "Column is sortable (client-side)",
-        "Column visible on all tabs (All, Old, Large, Language, Unavailable)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "Added date_created to ContentIssueItem model and API response, Added column to Issues table with formatDateCreated() for display, client-side sorting, responsive hiding on mobile, and shows dash for request items"
-    },
-    {
-      "id": "US-18.1",
-      "title": "Show Setup Checklist for New Users",
-      "story": "As a new user who just signed up, I want to see a clear checklist of what to do next, so that I know how to get started with the app",
-      "acceptanceCriteria": [
-        "Dashboard shows 'Setup Checklist' card when Jellyfin not configured OR never synced",
-        "Checklist shows 2 steps: 'Connect Jellyfin' and 'Run First Sync'",
-        "Each step shows status: pending (gray), in-progress (blue), complete (green)",
-        "'Connect Jellyfin' step has button linking to /settings",
-        "Checklist hides when both steps are complete",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "Setup Checklist shows when Jellyfin not configured OR never synced. Steps show pending/in-progress/complete status. Go to Settings link on step 1, Start Sync button on step 2 when Jellyfin configured. Hides when both complete."
-    },
-    {
-      "id": "US-18.2",
-      "title": "Auto-Sync After Jellyfin Configuration",
-      "story": "As a user who just configured Jellyfin, I want the first sync to start automatically, so that I don't have to figure out how to trigger it manually",
-      "acceptanceCriteria": [
-        "When Jellyfin settings saved successfully AND user has never synced, trigger sync automatically",
-        "Show 'Syncing...' state in checklist with spinner",
-        "On sync complete, show success message with item counts",
-        "Handle sync errors gracefully with retry option",
-        "First sync bypasses rate limit (or rate limit doesn't apply to first sync)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": "Added force parameter to POST /api/sync to bypass rate limit for first sync. Settings page navigates to dashboard after first Jellyfin config. Dashboard auto-triggers sync via $effect when Jellyfin configured + never synced. Checklist shows error state with Retry button on sync failure."
-    },
-    {
-      "id": "US-18.3",
-      "title": "Optional Services Prompt",
-      "story": "As a user who completed basic setup, I want to see optional services I can configure, so that I can enhance my experience if I have Jellyseerr/Radarr/Sonarr",
-      "acceptanceCriteria": [
-        "After checklist complete, show dismissible 'Enhance your setup' card",
-        "Lists: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)",
-        "Each has 'Configure' link to /settings",
-        "User can dismiss card permanently (stored in localStorage)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": "Implemented dismissible Enhance your setup card showing after checklist complete. Fetches optional service settings and displays only unconfigured services with Configure links. Dismiss state persisted in localStorage. 15 new tests in enhance-setup.test.ts."
-    },
-    {
-      "id": "US-20.1",
-      "title": "Large Season Threshold Setting",
-      "story": "As a media server owner, I want to configure the threshold for large seasons separately from movies, so that I can fine-tune detection based on my storage preferences",
-      "acceptanceCriteria": [
-        "Add large_season_size_gb field to UserSettings model (default: 15)",
-        "Create database migration for new column",
-        "GET /api/settings returns large_season_size_gb value",
-        "POST /api/settings accepts and saves large_season_size_gb",
-        "Settings page displays 'Large season threshold (GB)' input below movie threshold",
-        "Input validates: integer, minimum 1GB",
-        "Help text: 'Flag TV series if any season exceeds this size'",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: setting saves and loads correctly"
-      ],
-      "priority": 50,
-      "passes": true,
-      "notes": "Added large_season_size_gb to UserSettings model with Alembic migration, updated GET/POST /api/settings/analysis endpoints, added frontend input with validation (1-100 GB)"
-    },
-    {
-      "id": "US-20.2",
-      "title": "Calculate and Store Season Sizes",
-      "story": "As a system, I want to calculate TV series season sizes after sync completes, so that large series detection has accurate data without slowing down the main sync",
-      "acceptanceCriteria": [
-        "Add largest_season_size_bytes field to CachedMediaItem model (nullable BigInteger)",
-        "Create database migration for new column",
-        "New async function calculate_season_sizes(db, user_id, server_url, api_key)",
-        "Function fetches all series for user from cache",
-        "For each series, calls Jellyfin API to get episodes grouped by season",
-        "Stores the LARGEST season size in largest_season_size_bytes",
-        "Background task triggered AFTER main sync completes (not during)",
-        "Sync status includes new state: 'calculating_sizes' (after 'completed')",
-        "Progress logging: 'Calculating season sizes for {n} series...'",
-        "Handles API errors gracefully (logs warning, continues to next series)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Integration test: trigger sync, verify season sizes populated"
-      ],
-      "priority": 51,
-      "passes": true,
-      "notes": "Added largest_season_size_bytes field to CachedMediaItem, created Alembic migration, implemented calculate_season_sizes() that fetches seasons/episodes from Jellyfin API and stores largest season size, triggered after media sync with calculating_sizes progress step"
-    },
-    {
-      "id": "US-20.3",
-      "title": "Large Series Detection Service",
-      "story": "As a user, I want large series included in the content issues API, so that I can see all my oversized content in one place",
-      "acceptanceCriteria": [
-        "New function is_large_series(item, threshold_gb) returns True if largest_season_size_bytes >= threshold",
-        "get_content_summary() includes large series in a combined count",
-        "get_content_issues() with filter=large returns both movies and series",
-        "Each item includes new field: largest_season_size_bytes (null for movies)",
-        "Each item includes new field: largest_season_size_formatted (e.g., '18.5 GB')",
-        "Series items include issue badge 'large' when flagged",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Test: large series appears in issues, large movie still appears"
-      ],
-      "priority": 52,
-      "passes": true,
-      "notes": "Implemented is_large_series() function, updated UserThresholds to include large_season_size_gb, modified get_content_summary() and get_content_issues() to detect large series, added largest_season_size_bytes and largest_season_size_formatted fields to ContentIssueItem model"
-    },
-    {
-      "id": "US-20.4",
-      "title": "Large Content UI with Filter",
-      "story": "As a media server owner, I want to filter large content by movies or series, so that I can focus on one type at a time",
-      "acceptanceCriteria": [
-        "Dashboard card renamed from 'Large Movies' to 'Large Content'",
-        "Dashboard card shows combined count (movies + series)",
-        "Issues page 'Large' tab shows both movies and series",
-        "Sub-filter buttons appear when Large tab selected: [All] [Movies] [Series]",
-        "Default sub-filter is 'All'",
-        "Sub-filter is client-side (no API changes needed)",
-        "Series items display: name, largest season size (e.g., 'Largest season: 18.5 GB')",
-        "Movie items display: name, file size (unchanged behavior)",
-        "Item count and total size update based on sub-filter",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: filter toggles work correctly"
-      ],
-      "priority": 53,
-      "passes": true,
-      "notes": "Renamed dashboard card to 'Large Content', added sub-filter buttons [All/Movies/Series] to Issues Large tab with client-side filtering, series items display 'Largest season: X GB', added 15 new tests in large-content.test.ts and 2 tests in issues.test.ts"
-    },
-    {
-      "id": "US-21.1",
-      "title": "Slack Notification Service",
-      "story": "As a developer, I want a reusable Slack notification service, so that I can send messages to different Slack channels",
-      "acceptanceCriteria": [
-        "Create app/services/slack.py with send_slack_message(webhook_url, message) function",
-        "Function accepts webhook URL and message dict (Slack Block Kit format)",
-        "Function handles HTTP errors gracefully (log error, don't crash app)",
-        "Function is async and non-blocking",
-        "Add SLACK_WEBHOOK_NEW_USERS and SLACK_WEBHOOK_SYNC_FAILURES to config",
-        "Webhooks are optional - if not configured, notifications are silently skipped",
-        "Unit tests mock HTTP calls and verify message format",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": "Implemented send_slack_message() async function with httpx, graceful error handling, and logging. Added slack_webhook_new_users and slack_webhook_sync_failures to config with empty defaults (optional)."
-    },
-    {
-      "id": "US-21.2",
-      "title": "New User Signup Notifications",
-      "story": "As an admin, I want to receive a Slack notification when someone signs up, so that I can track user growth in real-time",
-      "acceptanceCriteria": [
-        "After successful user registration, send Slack notification",
-        "Message includes: user email, signup timestamp, total user count",
-        "Message uses Slack Block Kit for nice formatting",
-        "Notification is fire-and-forget (doesn't block registration response)",
-        "If webhook not configured, registration still works (no error)",
-        "Unit tests verify notification is sent with correct payload",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": "Implemented send_signup_notification() function with Block Kit formatted message, triggered via BackgroundTasks after registration. Added get_total_user_count() helper. 5 new tests in TestNewUserSignupNotifications."
-    },
-    {
-      "id": "US-21.3",
-      "title": "Sync Failure Notifications",
-      "story": "As an admin, I want to receive a Slack notification when a user's sync fails, so that I can investigate and help users with connection issues",
-      "acceptanceCriteria": [
-        "When sync fails (Jellyfin or Jellyseerr), send Slack notification",
-        "Message includes: user email, which service failed, error message",
-        "Notification sent for both manual sync and scheduled (Celery) sync failures",
-        "Message is fire-and-forget (doesn't affect sync error handling)",
-        "If webhook not configured, sync failure handling still works",
-        "Unit tests verify notification is sent with correct payload",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Implemented send_sync_failure_notification() in sync service with Block Kit formatted message. Manual sync failures trigger notification from run_user_sync(). Celery sync failures trigger notification from sync_user task via send_sync_failure_notification_for_celery() wrapper."
-    },
-    {
-      "id": "US-22.1",
-      "title": "Library API Endpoint",
-      "story": "As a developer, I want an API endpoint that returns all cached media, so that the frontend can display the complete library",
-      "acceptanceCriteria": [
-        "GET /api/library returns all cached media items for the user",
-        "Supports query params: type=movie|series|all (default: all)",
-        "Supports query params: search=string (searches name, case-insensitive)",
-        "Supports query params: watched=true|false|all (default: all)",
-        "Supports query params: sort=name|year|size|date_added|last_watched (default: name)",
-        "Supports query params: order=asc|desc (default: asc)",
-        "Supports query params: min_year, max_year for year range filter",
-        "Supports query params: min_size_gb, max_size_gb for size range filter",
-        "Returns: items[], total_count, total_size_bytes, total_size_formatted, service_urls",
-        "Each item includes: jellyfin_id, name, media_type, production_year, size_bytes, size_formatted, played, last_played_date, date_created, tmdb_id",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "priority": 70,
-      "passes": true,
-      "notes": "Implemented GET /api/library endpoint with filtering by type, search, watched status, year range, size range, sorting by name/year/size/date_added/last_watched with asc/desc order. Created LibraryItem and LibraryResponse models. 20 unit tests + 4 integration tests."
-    },
-    {
-      "id": "US-22.2",
-      "title": "Library Page with Sub-tabs",
-      "story": "As a media server owner, I want to browse my library with separate Movies and Series tabs, so that I can explore my collection by content type",
-      "acceptanceCriteria": [
-        "New route /library accessible from sidebar navigation",
-        "Sidebar shows 'Library' menu item with appropriate icon (between Issues and Whitelist)",
-        "Page header shows 'Library' with total item count and size",
-        "Sub-tabs: [All] [Movies] [Series] - filter by media type",
-        "Default sub-tab is 'All'",
-        "Table displays: Name, Year, Size, Added, Last Watched",
-        "External service links (Jellyfin, TMDB) like Issues page",
-        "Empty state when library is empty (with link to Settings to configure Jellyfin)",
-        "Loading state while fetching data",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": "Created /library route with sub-tabs (All/Movies/Series), table with Name/Year/Size/Added/Last Watched columns, JF and TMDB external links, server-side sorting, loading and empty states. Added Library menu item to sidebar between Issues and Whitelist with book icon."
-    },
-    {
-      "id": "US-22.3",
-      "title": "Library Search and Filters",
-      "story": "As a media server owner, I want to search and filter my library, so that I can quickly find specific content",
-      "acceptanceCriteria": [
-        "Search input in page header (searches as user types, debounced 300ms)",
-        "Search matches name (case-insensitive) and production year",
-        "Filter dropdown for watched status: All, Watched, Unwatched",
-        "Year range filter: min year and max year inputs",
-        "Size range filter: min size and max size (in GB)",
-        "Sort dropdown: Name, Year, Size, Date Added, Last Watched",
-        "Sort order toggle: Ascending/Descending",
-        "Filters persist while switching between All/Movies/Series tabs",
-        "Clear all filters button",
-        "Item count updates to reflect filtered results",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": "Implemented search with 300ms debounce, watched status filter, year/size range filters, sort dropdown with order toggle, clear all filters button. 22 new tests in library.test.ts."
-    },
-    {
-      "id": "US-22.4",
-      "title": "Library Sorting",
-      "story": "As a media server owner, I want to sort my library by different columns, so that I can organize the view to my preference",
-      "acceptanceCriteria": [
-        "Clickable column headers for sorting (Name, Year, Size, Last Watched)",
-        "Visual indicator showing current sort column and direction",
-        "Click same column to toggle ascending/descending",
-        "Default sort: Name ascending",
-        "Sorting is server-side (API parameter) for performance with large libraries",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": "Column headers (Name, Year, Size, Added, Last Watched) are clickable with toggleSort() function. Visual arrow indicators (↑/↓) show current sort. Clicking same column toggles asc/desc. Default is name asc. Server-side sorting via API params. Added 12 new tests in library.test.ts for column header sorting."
-    },
-    {
-      "id": "US-24.1",
-      "title": "Rate Limiting on Auth Endpoints",
-      "story": "As a system administrator, I want login and registration endpoints to be rate-limited, so that brute force attacks are mitigated",
-      "acceptanceCriteria": [
-        "Rate limit of 10 requests per minute per IP address on /api/auth/login",
-        "Rate limit of 10 requests per minute per IP address on /api/auth/register",
-        "Rate-limited requests return HTTP 429 (Too Many Requests)",
-        "Response includes Retry-After header indicating seconds until reset",
-        "Response body includes clear error message: 'Too many requests. Please try again in X seconds.'",
-        "Rate limit uses in-memory storage (Redis not required for v1)",
-        "/api/auth/me endpoint is NOT rate-limited (authenticated requests only)",
-        "Rate limiting is disabled in test environment",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Manual test: verify 11th request within 60 seconds returns 429"
-      ],
-      "priority": 80,
-      "passes": true,
-      "notes": "Implemented RateLimiter class with in-memory storage, thread-safe sliding window, and TESTING env check. Rate limiter applied to /api/auth/login and /api/auth/register endpoints. Updated integration tests to use module-scoped auth token to avoid rate limit issues."
-    },
-    {
-      "id": "US-25.1",
-      "title": "Password Strength Indicator",
-      "story": "As a new user registering for an account, I want to see a visual indicator of my password strength, so that I can understand how secure my password is",
-      "acceptanceCriteria": [
-        "Password input on registration page shows strength indicator below the field",
-        "Indicator is a horizontal progress bar that changes color based on strength",
-        "Strength levels based on length: Weak (red): 1-7 characters, Medium (yellow): 8-11 characters, Strong (green): 12+ characters",
-        "Bar fills proportionally: ~33% for weak, ~66% for medium, ~100% for strong",
-        "Indicator only appears when password field has content",
-        "Indicator updates in real-time as user types (no debounce needed)",
-        "Indicator is informational only - does NOT block form submission",
-        "Uses existing CSS color variables (--danger, --warning, --success or similar)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 81,
-      "passes": true,
-      "notes": "Implemented password strength indicator with getPasswordStrength() and getStrengthLabel() functions. Progress bar shows weak (red, 33%), medium (yellow, 66%), or strong (green, 100%) based on password length. 10 new tests in register.test.ts."
-    },
-    {
-      "id": "US-25.2",
-      "title": "Password Confirmation Field",
-      "story": "As a new user registering for an account, I want to confirm my password by typing it twice, so that I don't accidentally create an account with a typo in my password",
-      "acceptanceCriteria": [
-        "Registration form adds 'Confirm Password' input field after Password field",
-        "Confirm Password field is required",
-        "Form validates that Password and Confirm Password match",
-        "If passwords don't match, show error: 'Passwords do not match'",
-        "Error appears below the Confirm Password field (not as a toast)",
-        "Submit button is disabled until passwords match (or validation runs on submit)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 82,
-      "passes": true,
-      "notes": "Added confirmPassword state and validatePasswordsMatch() function. Real-time validation shows error below confirm field when passwords don't match. Submit button disabled when confirm has content but doesn't match. 9 new tests in register.test.ts."
-    },
-    {
-      "id": "US-26.1",
-      "title": "Sync Retry with Exponential Backoff",
-      "story": "As a user, I want sync to automatically retry on transient failures, so that temporary API issues don't require me to manually retry",
-      "acceptanceCriteria": [
-        "Jellyfin API calls retry up to 3 times on failure (4 total attempts)",
-        "Jellyseerr API calls retry up to 3 times on failure (4 total attempts)",
-        "Retry delays use exponential backoff: 1s, 2s, 4s between retries",
-        "Only retry on transient errors: timeouts, 5xx errors, connection errors",
-        "Do NOT retry on: 401 (auth failed), 404 (not found), 400 (bad request)",
-        "Each retry attempt is logged: 'Retry 1/3 for Jellyfin API after 1s...'",
-        "After all retries exhausted, sync status set to 'failed' with error message",
-        "Error message includes which service failed and the error type",
-        "Successful retry continues sync normally (no partial state)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Test: mock API to fail twice then succeed, verify sync completes"
-      ],
-      "priority": 90,
-      "passes": true,
-      "notes": "Implemented retry_with_backoff() utility with exponential backoff (1s, 2s, 4s). Applied to Jellyfin API calls (fetch_jellyfin_users, fetch_user_items, fetch_series_seasons, fetch_season_episodes) and Jellyseerr API calls (fetch_jellyseerr_requests pagination). Retries on transient errors (timeouts, 5xx, connection errors). Does NOT retry on permanent errors (401, 404, 400). 21 new tests in test_retry.py + 7 new tests in test_sync.py."
-    },
-    {
-      "id": "US-27.1",
-      "title": "E2E Auth Flow Test",
-      "story": "As a developer, I want an E2E test covering the complete authentication flow, so that regressions in auth are caught automatically",
-      "acceptanceCriteria": [
-        "E2E test covers: register new user → login → navigate to dashboard → navigate to settings → logout",
-        "Test uses unique email per run (e.g., test-{timestamp}@example.com)",
-        "Verifies dashboard loads after login (checks for expected element)",
-        "Verifies settings page loads and shows user info",
-        "Verifies logout redirects to login page",
-        "Verifies protected routes redirect to login when not authenticated",
-        "Test is idempotent (can run multiple times without cleanup)",
-        "Typecheck passes",
-        "E2E test passes"
-      ],
-      "priority": 100,
-      "passes": true,
-      "notes": "Created auth-flow.spec.ts with 2 tests: complete flow (register→login→dashboard→settings→logout) and protected route redirect. Fixed register.spec.ts for confirm password field. Fixed settings.spec.ts and header.spec.ts to use real auth flow instead of deprecated localStorage tokens."
-    },
-    {
-      "id": "US-27.2",
-      "title": "Sync Integration Tests with Mocked APIs",
-      "story": "As a developer, I want integration tests that verify sync behavior with mocked Jellyfin/Jellyseerr responses, so that I can test sync logic without requiring real external services",
-      "acceptanceCriteria": [
-        "Test file backend/tests/test_sync_integration.py with mocked API responses",
-        "Mock Jellyfin API responses using httpx mock or respx library",
-        "Mock Jellyseerr API responses",
-        "Test: successful sync stores correct data in database",
-        "Test: partial Jellyfin data is handled correctly (missing fields)",
-        "Test: Jellyseerr down doesn't break Jellyfin sync",
-        "Test: API returning empty results creates empty cache (not error)",
-        "Mocks use realistic response structures from actual API documentation",
-        "Tests run without network access (fully offline)",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "priority": 101,
-      "passes": true,
-      "notes": "Created test_sync_mocked_integration.py with 11 tests using respx to mock Jellyfin/Jellyseerr APIs. Tests cover: successful sync with multi-user aggregation, Jellyseerr title enrichment, partial data handling, Jellyseerr failure isolation (500 and connection errors), empty results handling, and realistic API response structures."
+      "priority": 25,
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-28.1",
       "title": "Loading States Accessibility",
-      "story": "As a screen reader user, I want loading states to be announced, so that I know when content is being fetched",
+      "story": "As a screen reader user I want loading states to be announced So that I know when content is being fetched",
       "acceptanceCriteria": [
-        "Add aria-busy='true' to parent containers during loading",
-        "Loading spinners have aria-label='Loading' or equivalent",
-        "Add aria-live='polite' regions for dynamic content updates",
+        "Add `aria-busy=\"true\"` to parent containers during loading",
+        "Loading spinners have `aria-label=\"Loading\"` or equivalent",
+        "Add `aria-live=\"polite\"` regions for dynamic content updates",
         "Dashboard loading state is accessible",
         "Issues page loading state is accessible",
         "Settings page loading state is accessible",
@@ -715,7 +35,686 @@
         "Unit tests pass",
         "Verify with screen reader or accessibility inspector"
       ],
-      "priority": 110,
+      "priority": 55,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-33.1",
+      "title": "Calculate and Store Total Series Size",
+      "story": "As a media server owner I want to see the total size of each series in my library So that I can understand how much storage each series consumes",
+      "acceptanceCriteria": [
+        "`calculate_season_sizes()` calculates both largest season size AND total series size",
+        "Total series size is stored in `CachedMediaItem.size_bytes` for series",
+        "Library page displays actual series sizes instead of \"Unknown size\"",
+        "Size filter works correctly for series (e.g., min_size_gb, max_size_gb)",
+        "Size sort works correctly for series",
+        "Total library size header includes series sizes",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in Docker using local integration test"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-34.1",
+      "title": "Hide Issues Column on Unavailable Tab",
+      "story": "As a user viewing unavailable requests I want the Issues column hidden on the Unavailable tab So that I have more space for useful information like the content name",
+      "acceptanceCriteria": [
+        "Issues column is not rendered when `activeFilter === 'requests'`",
+        "Name column expands to use the freed space (increase from 35% to ~45%)",
+        "Other tabs (All, Old, Large, Language) still show the Issues column",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-34.2",
+      "title": "Normalize Table Header Casing",
+      "story": "As a user I want consistent header casing across all columns So that the table looks professional and cohesive",
+      "acceptanceCriteria": [
+        "All headers use Title Case: Name, Requester, Issues, Size, Added, Release, Requested/Watched",
+        "No ALL CAPS headers remain in the table",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-34.3",
+      "title": "Add Sorting to Requester and Release Columns",
+      "story": "As a user viewing unavailable requests I want to sort by Requester or Release date So that I can find requests from specific users or by upcoming releases",
+      "acceptanceCriteria": [
+        "Requester column header is wrapped in a sort button and clickable",
+        "Release column header is wrapped in a sort button and clickable",
+        "Sort indicators (↑/↓) appear on active sort column",
+        "Add 'requester' and 'release' to the `SortField` type",
+        "Sorting logic added to `getSortedItems()` for 'requester' (alphabetical) and 'release' (date comparison)",
+        "Requester sorts alphabetically (ascending by default)",
+        "Release sorts by date (descending by default - newest first)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-35.1",
+      "title": "Fix Watched Column Sort Order",
+      "story": "As a media server owner I want the Watched column to sort chronologically from newest to oldest So that I can easily find recently watched content or identify never-watched items",
+      "acceptanceCriteria": [
+        "Clicking Watched column header sorts items in correct order: date DESC → \"Watched\" → \"Never\"",
+        "Items with last_played_date display in descending order (newest first)",
+        "Items with played=true but no last_played_date show \"Watched\" and sort after dated items",
+        "Items with played=false show \"Never\" and sort last",
+        "Clicking the column again reverses the order: \"Never\" → \"Watched\" → date ASC",
+        "Sort works correctly for both movies and series",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-35.2",
+      "title": "Display Last Watched Date for Series",
+      "story": "As a media server owner I want to see the last watched date for series, not just \"Watched\" status So that I can understand when I last engaged with each series",
+      "acceptanceCriteria": [
+        "Series with last_played_date display formatted date (e.g., \"Jan 15, 2025\")",
+        "Series with played=true but no last_played_date display \"Watched\"",
+        "Series with played=false display \"Never\"",
+        "Display logic matches movies exactly (same formatting function)",
+        "Backend API already provides last_played_date for series (verify in API response)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: series show dates instead of generic \"Watched\""
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-36.1",
+      "title": "Settings Layout with Sidebar Navigation",
+      "story": "As a user I want a sidebar navigation within Settings So that I can easily navigate between different settings sections",
+      "acceptanceCriteria": [
+        "Create `/settings/+layout.svelte` with sidebar navigation",
+        "Sidebar shows 4 nav items: Connections, Thresholds, Users, Display",
+        "Each nav item links to its respective route (`/settings/connections`, etc.)",
+        "Active nav item is visually highlighted",
+        "Breadcrumb shows: Dashboard > Settings > [Section Name]",
+        "`/settings` redirects to `/settings/connections` (default section)",
+        "Layout is responsive: sidebar collapses to horizontal tabs on mobile",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-36.2",
+      "title": "Extract Connections Page",
+      "story": "As a user I want to manage API connections on a dedicated page So that I can focus on configuring my services without distraction",
+      "acceptanceCriteria": [
+        "Create `/settings/connections/+page.svelte` with all connection forms",
+        "Includes Jellyfin, Jellyseerr, Radarr, Sonarr connection cards",
+        "All existing functionality preserved: expand/collapse, validation, save, status indicators",
+        "Form state is local to the page (not shared with other settings pages)",
+        "Loading states work correctly on initial page load",
+        "Success/error messages display inline as before",
+        "Remove connections section from old settings page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: all connection flows work correctly"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-36.3",
+      "title": "Extract Thresholds Page",
+      "story": "As a user I want to configure analysis thresholds on a dedicated page So that I can adjust detection settings without scrolling through other options",
+      "acceptanceCriteria": [
+        "Create `/settings/thresholds/+page.svelte` with threshold inputs",
+        "Includes: Old content months, Min age months, Large movie size, Large season size",
+        "Save and Reset buttons work correctly",
+        "Help text shows which feature uses each threshold",
+        "Loading state on initial fetch",
+        "Success/error messages display inline",
+        "Remove thresholds section from old settings page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: threshold changes save and persist"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-36.4",
+      "title": "Extract Users Page",
+      "story": "As a user I want to manage user nicknames on a dedicated page So that I can easily configure display names for requesters",
+      "acceptanceCriteria": [
+        "Create `/settings/users/+page.svelte` with nickname management",
+        "Table displays existing mappings: Jellyseerr Username → Display Name",
+        "Add, edit, delete functionality preserved",
+        "Delete confirmation flow works",
+        "Empty state message with call to action",
+        "Toast feedback on CRUD operations",
+        "Remove nicknames section from old settings page",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: all nickname CRUD operations work"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-36.5",
+      "title": "Extract Display Page",
+      "story": "As a user I want to configure display preferences on a dedicated page So that I can customize my viewing experience",
+      "acceptanceCriteria": [
+        "Create `/settings/display/+page.svelte` with display options",
+        "Includes: Theme selector (Light/Dark/System), Recently available days, Show unreleased requests toggle",
+        "Theme changes apply immediately (no save button needed)",
+        "Days input saves on change",
+        "Toggle saves on change",
+        "Remove display section from old settings page",
+        "Delete the original `/settings/+page.svelte` (now empty)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: all display settings work correctly"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-37.1",
+      "title": "Prefill Nicknames During Sync (Backend)",
+      "story": "As a developer I want to automatically create nickname records for all Jellyfin users during sync So that the nicknames table is prepopulated without user intervention",
+      "acceptanceCriteria": [
+        "During sync, after fetching Jellyfin users, upsert UserNickname records for each user",
+        "Use Jellyfin username as `jellyseerr_username` (assumption: same username across systems)",
+        "Leave `display_name` empty (user will fill in their preferred friendly name)",
+        "If nickname record already exists for a username, skip it (preserve existing mappings)",
+        "Add `has_jellyseerr_account` boolean field to UserNickname model (default False)",
+        "Query Jellyseerr users API during sync and mark matching usernames as `has_jellyseerr_account=True`",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-37.2",
+      "title": "Display Prefilled Users in UI",
+      "story": "As a user I want to see all my Jellyfin users already listed in the nicknames table So that I can immediately add display names without typing usernames",
+      "acceptanceCriteria": [
+        "When users page loads, prefilled Jellyfin users appear in the table",
+        "Prefilled rows show username in \"Jellyseerr Username\" column",
+        "Display name column is empty (awaiting user input)",
+        "Users with `has_jellyseerr_account=False` show warning badge next to username",
+        "Warning badge tooltip: \"This Jellyfin user was not found in Jellyseerr. They may not be able to request content.\"",
+        "Users can still edit/delete prefilled rows normally",
+        "Empty state only shows if NO nicknames exist (not even prefilled ones)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-37.3",
+      "title": "Manual Refresh Button for Jellyfin Users",
+      "story": "As a user I want to manually refresh the Jellyfin users list So that I can add newly created Jellyfin users to nicknames without waiting for next sync",
+      "acceptanceCriteria": [
+        "Users page has \"Refresh users\" button above the table",
+        "Button triggers backend endpoint to fetch Jellyfin users and prefill nicknames",
+        "Shows loading spinner while fetching",
+        "On success: toast \"X new users added\", table updates",
+        "On error: toast with error message",
+        "Button disabled during refresh",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-38.1",
+      "title": "Add Title Language User Setting",
+      "story": "As a media server owner I want to choose my preferred language (English or French) for content titles So that I can view and copy titles in my preferred language",
+      "acceptanceCriteria": [
+        "Settings > Display Preferences has \"Title language\" dropdown with options: English (default), French",
+        "Add `title_language` column to `UserSettings` table (String(2), default='en')",
+        "Create database migration for new column",
+        "GET `/api/settings/display` returns `title_language` field",
+        "POST `/api/settings/display` accepts `title_language` field",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: dropdown appears in Settings > Display and persists"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-38.2",
+      "title": "Store French Titles During Sync",
+      "story": "As a media server owner I want French titles to be fetched and stored during sync So that I can view content in French without API delays",
+      "acceptanceCriteria": [
+        "Add `title_fr` column to `CachedJellyseerrRequest` model (String(500), nullable)",
+        "Create database migration for new column",
+        "Sync service fetches French titles from TMDB (`language=fr` parameter)",
+        "Add `language` parameter to `fetch_media_details()` function",
+        "During sync, fetch both English and French titles (two API calls per media item)",
+        "French titles stored in `title_fr` column",
+        "Sync handles missing French titles gracefully (stores None)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify after sync: `title_fr` column populated in database"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-38.3",
+      "title": "Recently Available Uses Language Preference",
+      "story": "As a user who prefers French I want the Recently Available page to show French titles So that I can view and share content lists in French",
+      "acceptanceCriteria": [
+        "`RecentlyAvailableItem` model includes `title_fr` field (nullable string)",
+        "API `/api/info/recent` returns both `title` and `title_fr` for each item",
+        "Frontend reads user's `title_language` preference from display settings",
+        "Table displays titles in preferred language",
+        "Copy button outputs titles in preferred language",
+        "If French title unavailable, falls back to English title",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: table shows French titles when setting is French",
+        "Verify in browser: copy output contains French titles when setting is French"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-39.1",
+      "title": "Add Manual Dismiss Button to Toasts",
+      "story": "As a user I want to manually dismiss toast notifications So that I can control when messages disappear",
+      "acceptanceCriteria": [
+        "All toasts (success, error, info) display an \"X\" close button in the top-right corner",
+        "Clicking the close button immediately removes the toast",
+        "Close button is keyboard accessible (Tab to focus, Enter/Space to activate)",
+        "Close button has `aria-label=\"Close notification\"`",
+        "Toasts still auto-dismiss after 3 seconds if not manually closed",
+        "Close button is visually distinct but doesn't dominate the toast",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-39.2",
+      "title": "Add Type Icons to Toasts",
+      "story": "As a user I want to see an icon indicating the toast type So that I can quickly understand the message severity at a glance",
+      "acceptanceCriteria": [
+        "Success toasts show ✓ (checkmark) icon",
+        "Error toasts show ✕ (X) icon",
+        "Info toasts show ℹ (info) icon",
+        "Warning toasts show ⚠ (warning triangle) icon (if warning type exists)",
+        "Icons are positioned on the left side of the message text",
+        "Icons use semantic colors matching toast background (green for success, red for error, etc.)",
+        "Icons have appropriate `aria-hidden=\"true\"` (decorative, message text conveys meaning)",
+        "Icon size is proportional to text size (~16-20px)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser using browser tools"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-40.1",
+      "title": "Fix GitHub Repository Link",
+      "story": "As a user seeking help I want the Help page to link to the correct project repository So that I can report issues or view the project code",
+      "acceptanceCriteria": [
+        "Help page link points to `https://github.com/jimmydore/mediajanitor`",
+        "Link opens in a new tab (`target=\"_blank\" rel=\"noopener noreferrer\"`)",
+        "Link text clearly indicates it's the project repository (e.g., \"View project on GitHub\" or \"Report an issue\")",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: clicking link opens correct repository"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-41.1",
+      "title": "Add Escape Key to Close Modals",
+      "story": "As a keyboard user I want to press Escape to close modals So that I can quickly dismiss dialogs without using the mouse",
+      "acceptanceCriteria": [
+        "Pressing Escape key closes the whitelist duration picker modal",
+        "Pressing Escape key closes the delete confirmation modal",
+        "Escape key has same effect as clicking Cancel (doesn't trigger destructive actions)",
+        "Event listener is added when modal opens, removed when modal closes",
+        "Escape key only closes the topmost modal (if multiple modals exist)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: open each modal, press Escape, verify it closes"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-41.2",
+      "title": "Implement Keyboard Focus Trap",
+      "story": "As a keyboard user I want Tab/Shift+Tab to stay within the modal So that I don't accidentally tab to background content",
+      "acceptanceCriteria": [
+        "When modal is open, Tab moves focus to next focusable element within modal",
+        "When on last focusable element, Tab wraps to first focusable element",
+        "Shift+Tab moves focus to previous focusable element within modal",
+        "When on first focusable element, Shift+Tab wraps to last focusable element",
+        "Focus trap works for both duration picker and delete modals",
+        "Focusable elements: buttons, inputs, select (if any)",
+        "Remove `svelte-ignore a11y_interactive_supports_focus` comments",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: open modal, tab through elements, verify focus stays in modal"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-41.3",
+      "title": "Auto-Focus and Restore Focus",
+      "story": "As a keyboard user I want focus to automatically move into the modal when it opens So that I can immediately interact with it using keyboard",
+      "acceptanceCriteria": [
+        "When duration picker opens, first focusable element (first duration button) receives focus",
+        "When delete modal opens, Cancel button receives focus (safer default for destructive action)",
+        "Store reference to the element that triggered the modal (e.g., \"Add to whitelist\" button)",
+        "When modal closes (Escape, Cancel, or Confirm), focus returns to trigger element",
+        "Focus restoration works whether modal is closed by keyboard or mouse",
+        "Remove `svelte-ignore a11y_click_events_have_key_events` comments",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: open modal with keyboard (Tab + Enter), verify focus moves into modal",
+        "Verify in browser: close modal, verify focus returns to trigger button"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-42.1",
+      "title": "Create SearchInput Component",
+      "story": "As a developer I want a reusable SearchInput component with built-in accessibility So that search inputs are consistently accessible across the app",
+      "acceptanceCriteria": [
+        "Create `frontend/src/lib/components/SearchInput.svelte`",
+        "Component accepts props: `value`, `placeholder`, `oninput`, `aria-label`",
+        "Input has `type=\"text\"` and `class=\"search-input\"`",
+        "aria-label is applied to the input element",
+        "Clear button appears when value is not empty",
+        "Clear button has aria-label=\"Clear search\"",
+        "Component uses same HTML structure as existing search inputs",
+        "Component uses same CSS classes as existing search inputs (no visual changes)",
+        "Typecheck passes",
+        "Unit tests pass (test component renders, accepts props, handles input/clear)"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-42.2",
+      "title": "Use SearchInput in Library Page",
+      "story": "As a screen reader user I want the search input on Library page to have a descriptive label So that I know what the input is for",
+      "acceptanceCriteria": [
+        "Import SearchInput component in `frontend/src/routes/library/+page.svelte`",
+        "Replace existing search input with `<SearchInput>` component",
+        "Set aria-label=\"Search library by title or year\"",
+        "Pass existing `searchQuery`, `placeholder`, and `handleSearchInput` as props",
+        "Remove old inline search input HTML",
+        "Search functionality works identically to before (debounced input, clear button)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: search input appears and functions correctly"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-42.3",
+      "title": "Use SearchInput in Issues Page",
+      "story": "As a screen reader user I want the search input on Issues page to have a descriptive label So that I know what the input is for",
+      "acceptanceCriteria": [
+        "Import SearchInput component in `frontend/src/routes/issues/+page.svelte`",
+        "Replace existing search input with `<SearchInput>` component",
+        "Set aria-label=\"Search issues by title or year\"",
+        "Pass existing `searchQuery`, `placeholder`, and `handleSearchInput` as props",
+        "Remove old inline search input HTML",
+        "Search functionality works identically to before (debounced input, clear button)",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: search input appears and functions correctly"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-43.1",
+      "title": "Audit Warning Color Contrast",
+      "story": "As a developer I want to verify current warning color contrast ratios So that I know what needs to be fixed",
+      "acceptanceCriteria": [
+        "Use browser DevTools (Chrome/Firefox) contrast checker on warning text instances",
+        "Document current contrast ratios for light mode: Warning text on light background (e.g., `--warning` on `--bg-primary`) and Warning text on warning-light background (e.g., `--warning` on `--warning-light`)",
+        "Document current contrast ratios for dark mode",
+        "Identify which combinations fail WCAG AA (< 4.5:1 for normal text)",
+        "Create a list of files using `var(--warning)` that need testing (already identified in Grep results)"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-43.2",
+      "title": "Fix Warning Color for WCAG AA Compliance",
+      "story": "As a user with visual impairments I want warning text to have sufficient contrast So that I can easily read important warnings",
+      "acceptanceCriteria": [
+        "Update `--warning` color in light mode to meet WCAG AA (4.5:1 contrast)",
+        "Update `--warning` color in dark mode if needed for WCAG AA compliance",
+        "Maintain visual distinction from other status colors (success, danger, info)",
+        "Warning color remains recognizable as \"yellow/amber\" (don't shift to orange/brown)",
+        "Test updated colors in browser DevTools contrast checker",
+        "Verify contrast on all instances: Issues page warning text, Register page warning elements, Library page warning text, badge-warning class (even if unused, for future use)",
+        "Typecheck passes",
+        "Unit tests pass (if any color-related tests exist)",
+        "Verify in browser: warning text is readable and meets WCAG AA"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.1",
+      "title": "Password Reset Token Model",
+      "story": "As a developer I want a database model to store password reset tokens So that we can securely track and validate reset requests",
+      "acceptanceCriteria": [
+        "Create `PasswordResetToken` model in `backend/app/database.py`",
+        "Fields: `id`, `user_id` (FK to users), `token` (hashed), `expires_at`, `created_at`, `used` (boolean)",
+        "Add index on `token` for fast lookup",
+        "Add foreign key constraint to `users` table with cascade delete",
+        "Create Alembic migration for new table",
+        "Migration applies successfully: `alembic upgrade head`",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.2",
+      "title": "Email Service with SMTP2GO",
+      "story": "As a developer I want an email service to send password reset emails So that users can receive reset links",
+      "acceptanceCriteria": [
+        "Create `backend/app/services/email.py` with `send_password_reset_email()` function",
+        "Function accepts: `to_email: str`, `reset_url: str`, `user_email: str`",
+        "Email subject: \"Reset Your Media Janitor Password\"",
+        "Email body includes: reset link (clickable), expiration time (15 minutes), user's email for reference",
+        "Use SMTP2GO API via SMTP (not HTTP API) with environment variables",
+        "Environment variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`",
+        "Add email config to `backend/app/config.py` Settings class",
+        "Handle SMTP errors gracefully (log error, raise HTTPException 500)",
+        "Typecheck passes",
+        "Unit tests pass (mock smtplib.SMTP)"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.3",
+      "title": "Request Password Reset Endpoint",
+      "story": "As a user who forgot my password I want to request a password reset link via my email So that I can regain access to my account",
+      "acceptanceCriteria": [
+        "Create `POST /api/auth/request-password-reset` endpoint",
+        "Request body: `{ \"email\": \"user@example.com\" }`",
+        "Generate secure random token (32 bytes, URL-safe base64)",
+        "Hash token with bcrypt before storing in database",
+        "Store token with expiration (15 minutes from now)",
+        "Delete any existing unused tokens for this user before creating new one",
+        "Send email with reset URL: `{FRONTEND_URL}/reset-password?token={raw_token}`",
+        "Return 200 OK even if email doesn't exist (prevent email enumeration)",
+        "Rate limit: max 3 requests per email per hour (use in-memory dict or Redis if available)",
+        "Typecheck passes",
+        "Unit tests pass (mock email sending)",
+        "Test in Docker: request reset, verify email sent (check logs if SMTP not configured)"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.4",
+      "title": "Reset Password Endpoint",
+      "story": "As a user with a reset token I want to submit a new password using the token So that I can access my account again",
+      "acceptanceCriteria": [
+        "Create `POST /api/auth/reset-password` endpoint",
+        "Request body: `{ \"token\": \"abc123...\", \"new_password\": \"newPass123!\" }`",
+        "Validate new password meets requirements (8+ chars, uppercase, lowercase, number)",
+        "Find token in database (hash incoming token, compare with stored hashes)",
+        "Verify token is not expired (expires_at > now)",
+        "Verify token is not already used",
+        "Update user's password (hash with bcrypt)",
+        "Mark token as used",
+        "Return 200 OK with success message",
+        "Return 400 if token is invalid, expired, or already used",
+        "Typecheck passes",
+        "Unit tests pass (test valid token, expired token, used token, invalid token)",
+        "Test in Docker: full flow from request to reset"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.5",
+      "title": "Forgot Password UI",
+      "story": "As a user who forgot my password I want a UI to request a password reset So that I can easily reset my password",
+      "acceptanceCriteria": [
+        "Add \"Forgot password?\" link below login form on `/login` page",
+        "Link navigates to `/forgot-password` route",
+        "Create `frontend/src/routes/forgot-password/+page.svelte`",
+        "Page has: email input, \"Send Reset Link\" button, back to login link",
+        "On submit: call `POST /api/auth/request-password-reset`",
+        "Show success message: \"If that email exists, a reset link has been sent. Check your inbox.\"",
+        "Show error toast if request fails",
+        "Disable button while request is in flight",
+        "Typecheck passes",
+        "Unit tests pass (test form submission, success/error states)",
+        "Verify in browser: navigate to forgot password, enter email, see success message"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.6",
+      "title": "Reset Password UI",
+      "story": "As a user who clicked a reset link I want a UI to enter my new password So that I can complete the password reset",
+      "acceptanceCriteria": [
+        "Create `frontend/src/routes/reset-password/+page.svelte`",
+        "Page reads token from URL query param: `/reset-password?token=abc123`",
+        "Page has: new password input, confirm password input, \"Reset Password\" button",
+        "Password inputs are type=\"password\" with show/hide toggle (eye icon)",
+        "Validate passwords match before submission",
+        "On submit: call `POST /api/auth/reset-password` with token and new password",
+        "On success: show success message, redirect to `/login` after 2 seconds",
+        "On error (400): show \"Invalid or expired token\" error",
+        "On error (network): show generic error toast",
+        "If no token in URL, show error: \"Invalid reset link\"",
+        "Typecheck passes",
+        "Unit tests pass (test validation, success/error states)",
+        "Verify in browser: use reset link from email, enter new password, redirect to login"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-44.7",
+      "title": "Change Password in Settings",
+      "story": "As a logged-in user I want to change my password from settings So that I can update my password without resetting it",
+      "acceptanceCriteria": [
+        "Create `POST /api/auth/change-password` endpoint (requires authentication)",
+        "Request body: `{ \"current_password\": \"old\", \"new_password\": \"new\" }`",
+        "Verify current password is correct",
+        "Validate new password meets requirements",
+        "Update user's password",
+        "Return 200 OK on success",
+        "Return 400 if current password is wrong",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Add \"Change Password\" section to `/settings` page (or new `/settings/security` page)",
+        "Section has: current password input, new password input, confirm new password input, \"Change Password\" button",
+        "Show success toast on password change",
+        "Show error toast if current password is wrong",
+        "Verify in browser: change password, logout, login with new password"
+      ],
+      "priority": 81,
       "passes": false,
       "notes": ""
     }

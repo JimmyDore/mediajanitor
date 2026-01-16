@@ -1,0 +1,784 @@
+# Plex Dashboard - Archived Progress
+
+Task completion logs moved from progress.txt for historical reference.
+
+## Completed Tasks
+
+### 2026-01-15: US-32.1 - Refresh Token Backend Implementation
+- Created RefreshToken database model with:
+  - id, user_id (FK), token_hash (SHA-256), expires_at, created_at
+  - Unique index on token_hash for fast lookups
+- Created Alembic migration for refresh_tokens table
+- Updated config.py:
+  - access_token_expire_minutes: 30 → 15 (short-lived)
+  - Added refresh_token_expire_days: 30 (long-lived)
+- Implemented auth service functions:
+  - generate_refresh_token(): Cryptographically secure token generation
+  - hash_refresh_token(): SHA-256 hashing (stored in DB, not the raw token)
+  - create_refresh_token(): Creates and stores hashed token
+  - validate_refresh_token(): Validates token exists and not expired
+  - rotate_refresh_token(): Invalidates old, creates new (security best practice)
+  - invalidate_refresh_token(): Deletes token by hash
+  - get_user_by_id_async(): Helper for refresh endpoint
+- Updated POST /api/auth/login:
+  - Returns TokenWithRefresh: access_token, token_type, expires_in (900 seconds)
+  - Sets refresh_token as httpOnly cookie (30 days, secure, samesite=lax)
+- Created POST /api/auth/refresh:
+  - Accepts refresh token via cookie or request body
+  - Rotates token (old invalidated, new issued)
+  - Returns new access token
+- Created POST /api/auth/logout:
+  - Invalidates refresh token in database
+  - Clears refresh token cookie
+  - Returns 204 No Content
+- Updated Pydantic models:
+  - TokenWithRefresh: access_token, token_type, expires_in
+  - RefreshTokenRequest: optional refresh_token for non-cookie clients
+- Added TESTING env var check for cookie settings (path, secure flags)
+- 8 new unit tests for refresh token functionality:
+  - test_refresh_success_with_cookie
+  - test_refresh_without_token_returns_401
+  - test_refresh_with_invalid_token_returns_401
+  - test_refresh_rotates_token (verifies old token invalidated)
+  - test_refresh_via_request_body
+  - test_logout_success
+  - test_logout_without_token_succeeds
+  - test_logout_clears_cookie
+- 286 backend unit tests pass, 17 integration tests pass, mypy clean
+- Verified in Docker: login, refresh, rotation, logout all work correctly
+- Files changed: config.py, database.py, models/user.py, routers/auth.py, services/auth.py, tests/conftest.py, tests/test_auth.py, alembic migration
+- Commits:
+  - feat(auth): [US-32.1] add refresh token backend implementation
+
+### 2026-01-15: US-32.2 - Frontend Token Refresh
+- Refactored auth store to use in-memory token storage instead of localStorage:
+  - accessToken and tokenExpiresAt stored in module-level variables
+  - Removed localStorage.getItem/setItem/removeItem for access_token
+  - auth.setToken(token, expiresIn) stores token in memory with expiration
+  - auth.getToken() returns current in-memory token
+- Implemented refreshAccessToken() method:
+  - Calls POST /api/auth/refresh with credentials: 'include' for httpOnly cookie
+  - Updates in-memory token on success
+  - Returns boolean for success/failure
+- Implemented proactive token refresh:
+  - scheduleTokenRefresh() sets timer to refresh 60 seconds before expiration
+  - Timer cleared on logout or token change
+- Updated logout to invalidate refresh token:
+  - Calls POST /api/auth/logout endpoint
+  - Clears in-memory tokens
+  - Clears refresh timer
+- Created authenticatedFetch() wrapper:
+  - Adds Authorization header with Bearer token
+  - Includes credentials: 'include' for cookies
+  - On 401 response: attempts token refresh and retries original request
+  - Returns original 401 response if refresh fails
+- Updated all frontend pages to use authenticatedFetch:
+  - +page.svelte (dashboard): syncStatus, contentSummary, triggerSync
+  - settings/+page.svelte: all loadCurrentSettings and submit handlers
+  - issues/+page.svelte: fetchIssues, fetchConfigStatus, all whitelist actions
+  - whitelist/+page.svelte: fetchAll, removeItem
+  - info/recent/+page.svelte: onMount fetch
+  - info/airing/+page.svelte: onMount fetch
+  - content/old-unwatched/+page.svelte: protectContent, fetchOldUnwatchedContent
+- Updated login page to use credentials: 'include' and store token via auth.setToken()
+- Updated theme store to use getAccessToken() instead of localStorage
+- New frontend tests: 10 tests for token refresh API integration (token-refresh.test.ts)
+- Updated theme.test.ts to use auth.setToken() for test setup
+- 232 frontend tests pass, typecheck passes
+- Verified in browser: login, navigation, API calls all work correctly
+- Files changed: stores/index.ts, +page.svelte (dashboard), settings/+page.svelte, issues/+page.svelte, whitelist/+page.svelte, info/recent/+page.svelte, info/airing/+page.svelte, content/old-unwatched/+page.svelte, login/+page.svelte, theme.test.ts, token-refresh.test.ts
+- Commits:
+  - feat(auth): [US-32.2] add frontend token refresh implementation
+
+### 2026-01-15: US-32.3 - Auto-Redirect on Session Expiration
+- Added session expiration handling to authenticatedFetch:
+  - When refresh token fails (401), clear auth state and trigger redirect
+  - Redirect includes ?redirect=/original/path query param for return after login
+  - Session expiration handler is registered by layout component
+- Updated layout.svelte:
+  - Added redirectToLogin() helper function with optional redirect path
+  - Registered onSessionExpired handler showing toast "Session expired, please log in again"
+  - Protected routes now redirect with original path preserved
+- Updated login page:
+  - Reads ?redirect query param from URL
+  - After successful login, navigates to redirect path (defaults to /)
+  - If already authenticated, redirect to intended destination immediately
+- Frontend tests: 12 new tests for session expiration behavior (session-expiration.test.ts)
+  - Tests for 401 after failed refresh triggering session expiration
+  - Tests for redirect query param encoding/decoding
+  - Tests for protected vs public route handling
+- 244 frontend tests pass, typecheck passes
+- Verified in browser: login with ?redirect=/settings correctly redirects to /settings
+- Files changed: stores/index.ts, +layout.svelte, login/+page.svelte, session-expiration.test.ts, prd.json
+- Commits:
+  - feat(auth): [US-32.3] add auto-redirect on session expiration
+
+### 2026-01-15: US-29.1 - Issues Table Name Column Improvements
+- Refactored Issues table Name column layout for better visual alignment:
+  - Changed from flexbox to CSS grid layout with fixed columns
+  - Year now displays at fixed horizontal position (40px min-width, right-aligned)
+  - Year uses monospace font for consistent digit alignment
+  - Shows "—" when year is null (instead of hiding)
+- Added title truncation with ellipsis:
+  - Long titles truncate with CSS text-overflow: ellipsis
+  - Native title tooltip shows full text on hover
+- Added new Requester column for Unavailable tab:
+  - Column header and data cells conditionally rendered when filter=requests
+  - Displays username from requested_by field, or "—" if null
+  - Follows same conditional pattern as Release column
+- Removed inline 'by {username}' display from name cell
+- Service badges now align consistently across rows (using grid auto columns)
+- 244 frontend tests pass, typecheck passes
+- Verified in browser: both All and Unavailable tabs display correctly
+- Files changed: frontend/src/routes/issues/+page.svelte, prd.json
+- Commits:
+  - feat(ui): [US-29.1] improve Issues table visual alignment
+
+### 2026-01-15: US-30.1 - Remove Currently Airing Placeholder
+- Removed all currently airing placeholder code:
+  - Backend: Removed GET /api/info/airing endpoint from info.py router
+  - Backend: Removed get_currently_airing() function from content.py service
+  - Models: Removed CurrentlyAiringItem and CurrentlyAiringResponse from content.py
+  - Models: Removed currently_airing field from ContentSummaryResponse
+  - Frontend: Deleted /info/airing route and page entirely
+  - Frontend: Removed 'currently airing' link from dashboard info section
+  - Frontend: Removed info-separator CSS class (no longer needed)
+- Updated tests:
+  - Backend: Removed 2 currently airing tests from test_content.py
+  - Backend: Updated test_integration.py to not check for currently_airing
+  - Frontend: Removed 4 currently airing tests from info.test.ts
+- Dashboard info section now shows only 'recently available'
+- 303 backend tests pass, mypy clean
+- 241 frontend tests pass, typecheck clean
+- 17 integration tests pass
+- Verified: /api/info/airing returns 404
+- Files changed: info.py, content.py, models/content.py, test_content.py, test_integration.py, +page.svelte (dashboard), info/airing/+page.svelte (deleted), info.test.ts
+- Commits:
+  - chore(cleanup): [US-30.1] remove currently airing placeholder
+
+### 2026-01-15: US-31.1 - Recently Available Days Setting (Backend)
+- Added recently_available_days field to UserSettings model (nullable Integer, default: 7)
+- Created Alembic migration for new column
+- Extended GET /api/settings/display to return recently_available_days
+- Extended POST /api/settings/display to accept recently_available_days (range: 1-30)
+- Created get_user_recently_available_days() helper function in content service
+- Updated get_recently_available() to use user's setting instead of hardcoded 7 days
+- Updated get_recently_available_count() to use user's setting for summary
+- Invalid values return 422 with validation error
+- 5 new unit tests for display preferences (recently_available_days)
+- 3 new unit tests for info/recent and content/summary using user setting
+- 2 new integration tests for display settings
+- 294 backend unit tests pass, 19 integration tests pass, mypy clean
+- Verified in Docker: GET/POST /api/settings/display with recently_available_days works
+- Files changed: database.py, models/settings.py, routers/settings.py, services/content.py, test_content.py, test_integration.py, test_settings.py, alembic migration
+- Commits:
+  - feat(settings): [US-31.1] add recently available days setting
+
+### 2026-01-15: US-31.2 - Recently Available Days Setting (Frontend)
+- Added recentlyAvailableDays state to Settings page
+- Load recently_available_days from GET /api/settings/display on mount
+- Added handleRecentDaysChange() that saves on input change
+- Added number input in Display section with:
+  - Label: "Recently available days"
+  - Help text: "Show content that became available in the past N days"
+  - min=1, max=30 validation
+  - Inline spinner during save
+- Updated Recently Available page (/info/recent):
+  - Fetch user's recently_available_days setting on mount
+  - Dynamic subtitle: "Content that became available in the past {N} days"
+  - Dynamic empty state message
+- Frontend tests: 5 new tests for recently_available_days API integration
+- 246 frontend tests pass, typecheck clean
+- Verified in browser: setting at 14 days shows 8 items, subtitle shows "past 14 days"
+- Files changed: settings/+page.svelte, info/recent/+page.svelte, settings-display.test.ts
+- Commits:
+  - feat(settings): [US-31.2] add recently available days frontend setting
+
+### 2026-01-15: US-31.3 - User Nickname Mapping (Backend)
+- Created UserNickname database model with fields:
+  - id, user_id (FK), jellyseerr_username, display_name, created_at
+  - UniqueConstraint on (user_id, jellyseerr_username)
+- Created Alembic migration: add_user_nicknames_table
+- Added Pydantic models in models/settings.py:
+  - NicknameCreate: Request model for creating mappings
+  - NicknameUpdate: Request model for updating display_name
+  - NicknameItem: Response model for single mapping
+  - NicknameListResponse: Response model for list
+- Implemented service functions in services/nicknames.py:
+  - create_nickname(): Creates new mapping, raises ValueError on duplicate
+  - get_nicknames(): Returns all mappings for user, alphabetically sorted
+  - update_nickname(): Updates display_name by ID
+  - delete_nickname(): Deletes mapping by ID
+- Implemented REST endpoints in routers/settings.py:
+  - GET /api/settings/nicknames: List all mappings for user
+  - POST /api/settings/nicknames: Create new mapping (201 Created)
+  - PUT /api/settings/nicknames/{id}: Update mapping display_name
+  - DELETE /api/settings/nicknames/{id}: Delete mapping
+- 409 Conflict returned when trying to create duplicate username mapping
+- 404 Not Found returned when updating/deleting non-existent mapping
+- Empty string validation rejects jellyseerr_username="" and display_name=""
+- User isolation: each user has separate namespace for mappings
+- 13 unit tests in TestNicknameSettings class
+- 2 integration tests for CRUD operations
+- 307 backend unit tests pass, 21 integration tests pass, mypy clean
+- Files changed: database.py, models/settings.py, routers/settings.py, services/nicknames.py, test_settings.py, test_integration.py, alembic migration
+- Commits:
+  - feat(settings): [US-31.3] add user nickname mapping backend
+
+### 2026-01-15: US-31.4 - User Nickname Mapping (Frontend)
+- Added User Nicknames section to Settings page below services configuration
+- Implemented table view showing Jellyseerr Username → Display Name mappings
+- Added inline add form with two inputs: jellyseerr username, display name
+- Added inline edit mode for updating display names only
+- Added delete confirmation mode showing "Delete this nickname?" before removal
+- Implemented empty state message: "No nicknames configured. Add nicknames to customize how requesters appear in notifications."
+- Added toast feedback for all CRUD operations (add, edit, delete success/error)
+- Created 14 new frontend unit tests in settings-nicknames.test.ts
+- Frontend typecheck passes, 260 unit tests pass
+- Verified in browser: add, edit, delete, confirmation all working
+- Files changed: routes/settings/+page.svelte, tests/settings-nicknames.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-31.4] add user nickname mapping frontend
+
+### 2026-01-15: US-31.5 - Copy Output Grouped by Requester
+- Added display_name field to RecentlyAvailableItem Pydantic model
+- Implemented get_nickname_map() in content service to fetch user's nickname mappings
+- Implemented resolve_display_name() to resolve Jellyseerr username to display name
+- Updated get_recently_available() to include resolved display_name in API response
+- Updated frontend copy function to group items by requester (alphabetically)
+- Items under each requester sorted by availability date (newest first)
+- Items without requester grouped under 'Unknown' at the end
+- Frontend table now displays display_name instead of requested_by
+- Copy output format: `{display_name}:\n  - {Title} ({Type}) - available since {Date}`
+- Added 4 backend tests for display_name resolution in TestRecentlyAvailableDisplayName
+- Added 3 frontend tests for display_name API contract in info.test.ts
+- 332 backend tests pass, 263 frontend tests pass, mypy clean, typecheck clean
+- Files changed: models/content.py, services/content.py, test_content.py, info/recent/+page.svelte, info.test.ts, prd.json
+- Commits:
+  - feat(info): [US-31.5] copy output grouped by requester
+
+### 2026-01-15: US-17.1 - Multi-User Watch Data Aggregation
+- Implemented multi-user watch data aggregation for accurate Old/Unwatched detection
+- Added aggregate_user_watch_data() function:
+  - played = True if ANY user has watched
+  - last_played_date = most recent date across all users
+  - play_count = sum of all users' play counts
+- Added fetch_jellyfin_users() to get all Jellyfin users from API
+- Added fetch_user_items() to fetch items for a specific user with progress logging
+- Added fetch_all_users_media() with asyncio.gather() for parallel user fetches
+- Updated fetch_jellyfin_media() to use new multi-user aggregation approach
+- Progress logging shows: "Fetching user 3/10: John" for each user
+- 8 new tests for aggregation logic in TestMultiUserWatchDataAggregation
+- 340 backend tests pass (+8 new), 21 integration tests pass, mypy clean
+- Files changed: app/services/sync.py, tests/test_sync.py, prd.json
+- Commits:
+  - feat(sync): [US-17.1] add multi-user watch data aggregation
+
+### 2026-01-15: US-17.2 - Sync Progress Visibility
+- Added progress tracking fields to SyncStatus database model:
+  - current_step: "syncing_media" or "syncing_requests"
+  - total_steps: 1 or 2 (Jellyfin only, or Jellyfin + Jellyseerr)
+  - current_step_progress: current user being processed
+  - current_step_total: total users to process
+  - current_user_name: name of current Jellyfin user
+- Created Alembic migration: add_sync_progress_fields
+- Added update_sync_progress() function for updating progress during sync
+- Created fetch_jellyfin_media_with_progress() that processes users in batches:
+  - Batch size of 3 for visible progress updates
+  - Updates progress per batch with first user's name
+  - Same aggregation logic as fetch_all_users_media()
+- Updated run_user_sync() to use progress-aware function
+- Updated GET /api/sync/status to return:
+  - is_syncing: boolean flag when sync is in progress
+  - progress: object with current_step, total_steps, etc.
+- Updated frontend dashboard to poll every 2 seconds during sync:
+  - startPolling()/stopPolling() with setInterval
+  - formatProgressMessage() displays e.g. "Fetching user 3/10: John..."
+  - Progress shown in header next to "Dashboard" title
+  - onDestroy() cleanup stops polling
+- 5 new backend unit tests in TestSyncProgressTracking
+- 3 new frontend unit tests for progress API contract
+- 345 backend tests pass, 266 frontend tests pass, mypy clean, typecheck clean
+- Verified in browser: sync triggers correctly, rate limiting works
+- Files changed: database.py, routers/sync.py, services/sync.py, test_sync.py, +page.svelte, sync.test.ts, prd.json, alembic migration
+- Commits:
+  - feat(sync): [US-17.2] add sync progress visibility
+
+### 2026-01-15: US-17.3 - Fix Mobile Sidebar Visual Overlap
+- Fixed sidebar showing a blue strip on mobile when closed
+- Root cause: transform: translateX(-100%) only moved the element visually but didn't hide it
+- Added visibility: hidden when sidebar is not open on mobile (< 768px)
+- Added visibility: visible when sidebar.open class is applied
+- Sidebar now completely hidden when closed, opens/closes correctly
+- 266 frontend tests pass, typecheck clean
+- Verified in browser: no blue strip visible, hamburger menu works
+- Files changed: frontend/src/lib/components/Sidebar.svelte, prd.json
+- Commits:
+  - fix(ui): [US-17.3] hide mobile sidebar completely when closed
+
+### 2026-01-15: US-19.1 - Search Issues by Text
+- Added search input to Issues page header below title/stats
+- Implemented debounced filtering (300ms) using setTimeout
+- Search matches against:
+  - Title (case-insensitive)
+  - Production year
+  - requested_by field (for Unavailable/Requests tab)
+- Item count updates to show "X of Y items" format when search is active
+- Total size updates to reflect filtered results
+- Added clear (X) button that appears when search text is present
+- Search operates within currently active tab filter
+- CSS: search-container with search-input and search-clear button
+- 24 new frontend unit tests in issues-search.test.ts
+- 290 frontend tests pass, typecheck clean
+- Verified in browser: search by title, year, and requester all work correctly
+- Files changed: frontend/src/routes/issues/+page.svelte, frontend/tests/issues-search.test.ts, prd.json
+- Commits:
+  - feat(issues): [US-19.1] add search filtering for Issues page
+
+### 2026-01-15: US-23.1 - Added Date Column on Issues Page
+- Added date_created field to ContentIssueItem Pydantic model
+- Updated get_content_issues() in content service to include date_created from CachedMediaItem
+- Added 'Added' column to Issues table (positioned after Size column)
+- Implemented formatDateCreated() function for user-friendly date display (e.g., "Jan 15, 2024")
+- Added 'added' to SortField type and implemented sorting in getSortedItems()
+- Added CSS styling for .col-added (12% width, right-aligned)
+- Column shows "—" for request items (they have no date_created)
+- Responsive: column hidden on mobile (< 768px) alongside Watched column
+- 3 new frontend unit tests for date_created field handling
+- 345 backend tests pass, 293 frontend tests pass, typecheck clean
+- Verified in browser: column displays correctly, sorting works
+- Files changed: backend/app/models/content.py, backend/app/services/content.py, frontend/src/routes/issues/+page.svelte, frontend/tests/issues.test.ts, prd.json
+- Commits:
+  - feat(issues): [US-23.1] add Added date column to Issues page
+
+### 2026-01-15: US-18.1 - Show Setup Checklist for New Users
+- Added Setup Checklist component to Dashboard for new user onboarding
+- Checklist shows when Jellyfin not configured OR user has never synced
+- Two steps displayed:
+  1. "Connect Jellyfin" - links to /settings page
+  2. "Run First Sync" - shows "Start Sync" button when Jellyfin is configured
+- Step states with visual indicators:
+  - pending: gray circle with step number
+  - in-progress: blue spinner (for sync step)
+  - complete: green checkmark
+- Added JellyfinSettings interface and fetchJellyfinSettings() function
+- Added $derived computed properties for showSetupChecklist, jellyfinStepStatus, syncStepStatus
+- Checklist hides automatically when both steps are complete
+- 10 new unit tests in setup-checklist.test.ts for API integration
+- 303 frontend tests pass, typecheck clean
+- Verified in browser: checklist shows for new users, hides for configured users
+- Files changed: frontend/src/routes/+page.svelte, frontend/tests/setup-checklist.test.ts, prd.json
+- Commits:
+  - feat(dashboard): [US-18.1] add setup checklist for new users
+
+### 2026-01-15: US-18.2 - Auto-Sync After Jellyfin Configuration
+- Added SyncRequest Pydantic model with force: bool parameter
+- Updated POST /api/sync to accept force parameter in request body
+- First sync (last_sync_completed is None) bypasses rate limit when force=True
+- Subsequent syncs cannot bypass rate limit even with force=True
+- Settings page detects if user has never synced via GET /api/sync/status
+- After first Jellyfin config + never synced, shows toast and navigates to dashboard
+- Dashboard auto-triggers sync via $effect when:
+  - Jellyfin configured (api_key_configured=true)
+  - Never synced (last_synced=null)
+  - Not currently syncing (is_syncing=false)
+  - Not already triggered (autoSyncTriggered flag)
+- Added 'error' state to syncStepStatus for failed syncs
+- Checklist shows error state with Retry button when sync fails
+- triggerSync() now accepts force parameter for first sync bypass
+- 2 new backend tests for force parameter behavior
+- 6 new frontend tests for auto-sync feature and error state
+- 349 backend tests pass, 309 frontend tests pass, typecheck clean
+- Files changed: backend/app/routers/sync.py, backend/tests/test_sync.py, frontend/src/routes/+page.svelte, frontend/src/routes/settings/+page.svelte, frontend/tests/setup-checklist.test.ts, prd.json
+- Commits:
+  - feat(onboarding): [US-18.2] add auto-sync after Jellyfin configuration
+
+### 2026-01-15: US-18.3 - Optional Services Prompt
+- Added dismissible "Enhance your setup" card to Dashboard
+- Card shows after setup checklist complete but optional services not configured
+- Fetches Jellyseerr, Radarr, Sonarr settings via API
+- Displays only unconfigured services with Configure link to /settings
+- Service descriptions: Jellyseerr (request tracking), Radarr (movie management), Sonarr (TV management)
+- Dismiss button (X) persists state in localStorage (mediajanitor_enhance_setup_dismissed)
+- Card visibility computed via showEnhanceSetup derived state
+- fetchOptionalServicesSettings() fetches all three services in parallel
+- loadEnhanceSetupDismissed() and dismissEnhanceSetup() handle localStorage
+- 15 new tests in enhance-setup.test.ts for visibility and dismiss logic
+- 324 frontend tests pass, typecheck clean
+- Files changed: frontend/src/routes/+page.svelte, frontend/tests/enhance-setup.test.ts, prd.json
+- Commits:
+  - feat(onboarding): [US-18.3] add optional services prompt after setup
+
+### 2026-01-15: US-20.1 - Large Season Threshold Setting
+- Added large_season_size_gb field to UserSettings model (default: 15GB)
+- Created Alembic migration for new column
+- Updated GET/POST /api/settings/analysis endpoints to include large_season_size_gb
+- Updated DELETE /api/settings/analysis to reset the new field
+- Added frontend input "Flag TV series if any season exceeds" with 1-100 GB validation
+- Added 5 new backend tests for large_season_size_gb (default, save, min/max validation, boundary)
+- Added 2 new frontend tests for API contract
+- All 352 backend tests pass, 325 frontend tests pass
+- Files changed: backend/app/database.py, backend/app/models/settings.py, backend/app/routers/settings.py, backend/tests/test_settings.py, backend/alembic/versions/208afe3608f2*, frontend/src/routes/settings/+page.svelte, frontend/tests/settings-analysis.test.ts, prd.json
+- Commits:
+  - feat(settings): [US-20.1] add large season threshold setting
+
+### 2026-01-15: US-20.2 - Calculate and Store Season Sizes
+- Added largest_season_size_bytes field to CachedMediaItem model (nullable BigInteger)
+- Created Alembic migration for new column
+- Implemented fetch_series_seasons() to get seasons from Jellyfin API
+- Implemented fetch_season_episodes() to get episodes with MediaSources for size calculation
+- Implemented calculate_season_total_size() to sum episode sizes in a season
+- Implemented calculate_season_sizes() async function that:
+  - Fetches all series from user's cache
+  - For each series, fetches seasons and episodes from Jellyfin API
+  - Calculates total size for each season, stores largest
+  - Handles API errors gracefully (logs warning, continues to next series)
+- Trigger calculate_season_sizes after media sync completes
+- Added calculating_sizes progress step in sync status for UI feedback
+- Progress logging: "Calculating season sizes for {n} series..."
+- 8 new unit tests: TestCalculateSeasonSizes and TestSyncCalculatingSizesState
+- All 360 backend tests pass, 21 integration tests pass, mypy clean
+- Files changed: database.py, services/sync.py, tests/test_sync.py, prd.json, alembic migration
+- Commits:
+  - feat(sync): [US-20.2] calculate and store season sizes
+
+### 2026-01-15: US-20.3 - Large Series Detection Service
+- Implemented is_large_series() function:
+  - Returns True if largest_season_size_bytes >= threshold_gb * 1024^3
+  - Returns False for movies or when largest_season_size_bytes is None
+  - Default threshold: 15GB (configurable per user)
+- Added large_season_size_gb to UserThresholds dataclass
+- Updated get_user_thresholds() to include large_season_size_gb setting
+- Updated get_content_summary() to count both large movies AND large series:
+  - Changed large_movies_items to large_content_items
+  - Includes both is_large_movie() and is_large_series() checks
+- Updated get_item_issues() to detect large series:
+  - Added elif is_large_series() check after is_large_movie()
+  - Series with large seasons get 'large' badge
+- Updated get_content_issues() to include largest_season_size fields:
+  - Added largest_season_size_bytes (null for movies)
+  - Added largest_season_size_formatted (e.g., "18.5 GB")
+- Added fields to ContentIssueItem Pydantic model
+- 11 new tests in TestLargeSeriesDetection class covering:
+  - is_large_series() function unit tests (5 tests)
+  - Content summary with large series (2 tests)
+  - Content issues filter=large returns movies and series (1 test)
+  - Field presence in API response (2 tests)
+  - Issues badge verification (1 test)
+- 371 backend tests pass (+11 new), 21 integration tests pass, mypy clean
+- Files changed: models/content.py, services/content.py, tests/test_content.py, prd.json
+- Commits:
+  - feat(content): [US-20.3] add large series detection service
+
+### 2026-01-15: US-20.4 - Large Content UI with Filter
+- Renamed dashboard card from 'Large Movies' to 'Large Content'
+- Added sub-filter buttons [All/Movies/Series] to Issues page Large tab
+- Sub-filter appears only when Large tab is selected
+- Default sub-filter is 'All', showing both movies and series
+- Client-side filtering: no API changes needed
+- Added helper functions isMovieItem(), isSeriesItem(), applyLargeSubFilter()
+- Series items display "Largest season: X GB" in size column
+- Movies continue to display regular file size
+- Item count and total size update dynamically based on sub-filter
+- Reset sub-filter to 'all' when changing tabs
+- Added largest_season_size_bytes and largest_season_size_formatted to ContentIssueItem interface
+- CSS: .sub-filter-nav and .sub-filter-btn styles, .size-with-label for series display
+- 15 new tests in large-content.test.ts:
+  - API response tests for large movies and series
+  - Sub-filter logic tests (all, movies, series)
+  - Size calculations with sub-filter
+- 2 new tests in issues.test.ts for largest_season_size fields
+- 340 frontend tests pass (+17 new), typecheck clean
+- Verified in browser: sub-filter buttons work, toggle correctly, don't appear on other tabs
+- Files changed: +page.svelte (dashboard), issues/+page.svelte, issues.test.ts, large-content.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-20.4] add large content filtering UI
+
+### 2026-01-15: US-21.1 - Slack Notification Service
+- Created app/services/slack.py with async send_slack_message() function:
+  - Accepts webhook_url (string) and message (dict, Slack Block Kit format)
+  - Uses httpx.AsyncClient for async, non-blocking HTTP calls
+  - Returns True on success (HTTP 200), False otherwise
+- Graceful error handling:
+  - Catches httpx.RequestError, httpx.TimeoutException, and unexpected exceptions
+  - Logs warnings for all error cases (doesn't crash app)
+  - Never raises exceptions - safe for fire-and-forget usage
+- Added config settings for Slack webhooks:
+  - slack_webhook_new_users: str = "" (optional, empty default)
+  - slack_webhook_sync_failures: str = "" (optional, empty default)
+  - Empty string is falsy, so callers can check `if settings.slack_webhook_*:`
+- 11 unit tests covering:
+  - Successful message sending (2 tests)
+  - HTTP error handling with logging (1 test)
+  - Network error handling (1 test)
+  - Timeout handling (1 test)
+  - Async non-blocking verification (1 test)
+  - Block Kit format support (1 test)
+  - Graceful error handling (1 test)
+  - Config defaults (3 tests)
+- 382 backend tests pass (+11 new), 21 integration tests pass, mypy clean
+- Files changed: app/services/slack.py, app/config.py, tests/test_slack.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.1] add Slack notification service
+
+### 2026-01-16: US-21.2 - New User Signup Notifications
+- Implemented send_signup_notification() function in auth router:
+  - Creates Slack Block Kit formatted message with header and fields
+  - Includes user email, user ID, signup timestamp (UTC), and total user count
+  - Uses fallback text for basic Slack clients
+- Added get_total_user_count() helper to count registered users
+- Updated register endpoint to trigger notification via BackgroundTasks:
+  - Fire-and-forget pattern: notification failures don't block registration
+  - Exception handling wraps add_task() to ensure robustness
+- Notification silently skipped when slack_webhook_new_users not configured
+- 5 new tests in TestNewUserSignupNotifications:
+  - test_signup_sends_slack_notification (verifies args passed correctly)
+  - test_signup_notification_includes_total_user_count
+  - test_signup_notification_is_fire_and_forget
+  - test_signup_without_webhook_configured
+  - test_signup_notification_uses_block_kit_format
+- 387 backend tests pass (+5 new), 21 integration tests pass, mypy clean
+- Files changed: app/routers/auth.py, tests/test_auth.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.2] add new user signup notifications
+
+### 2026-01-16: US-21.3 - Sync Failure Notifications
+- Implemented send_sync_failure_notification() function in sync service:
+  - Creates Slack Block Kit formatted message with header and fields
+  - Includes user email, service name (Jellyfin/Jellyseerr), error message, timestamp
+  - Uses fallback text for basic Slack clients
+  - Truncates error message to 200 chars for readability
+- Updated run_user_sync() to send notifications on failure:
+  - Jellyfin sync failure triggers notification with service="Jellyfin"
+  - Jellyseerr sync failure triggers notification with service="Jellyseerr"
+  - Fire-and-forget pattern: notification failures don't affect sync error handling
+- Added Celery sync failure notification support:
+  - send_sync_failure_notification_for_celery() synchronous wrapper
+  - _get_user_email() async helper to fetch user email by ID
+  - sync_user task calls notification on exception
+- Notification silently skipped when slack_webhook_sync_failures not configured
+- 6 new tests in TestSyncFailureNotifications:
+  - test_jellyfin_sync_failure_sends_notification
+  - test_jellyseerr_sync_failure_sends_notification
+  - test_sync_failure_notification_is_fire_and_forget
+  - test_sync_failure_notification_without_webhook_configured
+  - test_sync_failure_notification_uses_block_kit_format
+  - test_celery_sync_user_failure_sends_notification
+- 393 backend tests pass (+6 new), 21 integration tests pass, mypy clean
+- Files changed: app/services/sync.py, app/tasks.py, tests/test_sync.py, prd.json
+- Commits:
+  - feat(notifications): [US-21.3] add sync failure notifications
+
+### 2026-01-16: US-22.1 - Library API Endpoint
+- Created GET /api/library endpoint with comprehensive filtering and sorting
+- Query parameters supported:
+  - type: movie, series, or all (default)
+  - search: case-insensitive name search
+  - watched: true, false, or all (default)
+  - sort: name (default), year, size, date_added, last_watched
+  - order: asc (default), desc
+  - min_year, max_year: production year range filter
+  - min_size_gb, max_size_gb: size range filter
+- Created LibraryItem Pydantic model with fields:
+  - jellyfin_id, name, media_type, production_year, size_bytes, size_formatted
+  - played, last_played_date, date_created, tmdb_id
+- Created LibraryResponse model with items[], total_count, total_size_bytes, total_size_formatted, service_urls
+- Implemented get_library() service function in content.py
+- Created app/routers/library.py with endpoint registration
+- 20 unit tests in test_library.py covering all acceptance criteria
+- 4 integration tests in test_integration.py for Docker verification
+- 413 backend tests pass (+20 new), 25 integration tests pass (+4 new), mypy clean
+- Files changed: app/main.py, app/models/content.py, app/services/content.py, app/routers/library.py (new), tests/test_library.py (new), tests/test_integration.py, prd.json
+- Commits:
+  - feat(api): [US-22.1] add library API endpoint
+
+### 2026-01-16: US-22.2 - Library Page with Sub-tabs
+- Created /library route with SvelteKit page component
+- Added Library menu item to sidebar between Issues and Whitelist with book icon
+- Implemented sub-tabs: All, Movies, Series for filtering by media type
+- Table displays: Name, Year, Size, Added, Last Watched columns
+- External service links: JF (Jellyfin) and TMDB badges for each item
+- Server-side sorting: clicking column headers sends sort/order params to API
+- Loading spinner displayed while fetching data
+- Empty state with link to Settings when library is empty
+- "Never" displayed in yellow for unwatched content
+- 12 new unit tests in library.test.ts for API integration
+- 352 frontend tests pass (+12 new), typecheck clean
+- 25 integration tests pass
+- Verified in browser: all tabs work, sorting works, links work
+- Files changed: frontend/src/routes/library/+page.svelte (new), frontend/tests/library.test.ts (new), frontend/src/lib/components/Sidebar.svelte, prd.json
+- Commits:
+  - feat(ui): [US-22.2] add Library page with sub-tabs
+
+### 2026-01-16: US-22.3 - Library Search and Filters
+- Added search input in page header with 300ms debounce
+- Search matches name (case-insensitive) and production year
+- Added watched status filter dropdown (All/Watched/Unwatched)
+- Added year range filter with min/max inputs
+- Added size range filter with min/max GB inputs
+- Added sort dropdown (Name/Year/Size/Date Added/Last Watched)
+- Added sort order toggle button (ascending/descending)
+- Added hasActiveFilters derived state for clear button visibility
+- Added clearAllFilters() function to reset all filters to defaults
+- Filters persist when switching between All/Movies/Series tabs
+- Item count updates to show filtered results count
+- Styled filters row with responsive layout for mobile
+- 22 new tests in library.test.ts for filter logic
+- 374 frontend tests pass, typecheck clean
+- Verified in browser: search, filters, sort, clear all work correctly
+- Files changed: frontend/src/routes/library/+page.svelte, frontend/tests/library.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-22.3] add Library search and filters
+
+### 2026-01-16: US-22.4 - Library Sorting
+- Column headers (Name, Year, Size, Added, Last Watched) already implemented with toggleSort() function
+- Visual arrow indicators (↑/↓) show current sort column and direction
+- Click same column toggles between ascending/descending
+- Default sort is Name ascending, other columns default to descending when switched
+- Server-side sorting via API sort and order parameters for performance
+- Added 12 new tests in library.test.ts for column header sorting
+- 386 frontend tests pass, typecheck clean
+- Verified in browser: clicking columns changes sort, arrows update correctly
+- Files changed: frontend/tests/library.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-22.4] add Library column header sorting
+
+### 2026-01-16: US-24.1 - Rate Limiting on Auth Endpoints
+- Created app/services/rate_limit.py with RateLimiter class:
+  - In-memory storage using sliding window algorithm
+  - Thread-safe with Lock for concurrent access
+  - Configurable max_requests (default: 10) and window_seconds (default: 60)
+  - is_rate_limited() returns (is_limited: bool, retry_after: int)
+  - clear() method for testing
+  - TESTING environment variable check to disable rate limiting in tests
+- Global rate limiter instances: login_rate_limiter, register_rate_limiter
+- Updated routers/auth.py:
+  - Added _get_client_ip() helper supporting X-Forwarded-For header
+  - Added _check_rate_limit() helper that raises HTTPException 429
+  - Applied rate limiting to POST /api/auth/register and POST /api/auth/login
+  - /api/auth/me NOT rate limited (authenticated requests only)
+- HTTP 429 response includes:
+  - Retry-After header with seconds until window resets
+  - JSON body: {"detail": "Too many requests. Please try again in X seconds."}
+- Updated integration tests to use module-scoped auth token:
+  - _get_cached_token() caches token across all tests in module
+  - Avoids hitting rate limit during test runs
+- 9 new unit tests in test_rate_limit.py
+- 426 backend unit tests pass, 25 integration tests pass, mypy clean
+- Verified in Docker: 11th login request within 60 seconds returns HTTP 429 with Retry-After header
+- Files changed: app/routers/auth.py, app/services/rate_limit.py, tests/test_rate_limit.py, tests/test_integration.py, prd.json
+- Commits:
+  - feat(auth): [US-24.1] add rate limiting on auth endpoints
+
+### 2026-01-16: US-25.1 - Password Strength Indicator
+- Added password strength indicator to registration page
+- Implemented getPasswordStrength() function:
+  - Returns 'weak' for 1-7 characters
+  - Returns 'medium' for 8-11 characters
+  - Returns 'strong' for 12+ characters
+- Implemented getStrengthLabel() function for display text
+- Added $derived passwordStrength that updates in real-time
+- Visual indicator shows:
+  - Progress bar with proportional fill (33%/66%/100%)
+  - Color changes: red (weak), yellow (medium), green (success)
+  - Text label next to progress bar
+- Indicator only appears when password field has content
+- Informational only - does NOT block form submission
+- Added ARIA attributes for accessibility (role="progressbar", aria-valuenow, etc.)
+- 10 new unit tests in register.test.ts:
+  - getPasswordStrength() function tests for all ranges
+  - Boundary tests (7→8 chars, 11→12 chars)
+  - getStrengthLabel() for all levels
+  - Visibility logic tests
+  - Fill percentage tests
+- 396 frontend tests pass (+10 new), typecheck clean
+- Verified in browser: all strength levels display correctly
+- Files changed: frontend/src/routes/register/+page.svelte, frontend/tests/register.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-25.1] add password strength indicator
+
+### 2026-01-16: US-25.2 - Password Confirmation Field
+- Added confirmPassword state variable for tracking second password entry
+- Added confirmPasswordError state for form validation errors
+- Implemented validatePasswordsMatch() function:
+  - Returns "Passwords do not match" if passwords differ
+  - Returns null if passwords match
+- Added passwordsMatchError derived state:
+  - Only shows error when confirm field has content
+  - Prevents premature error display before user starts typing
+- Added isSubmitDisabled derived state:
+  - Disabled when loading OR when passwords don't match (confirm has content)
+  - Enabled when passwords match or confirm is empty
+- Updated handleSubmit() to validate password match before API call
+- Added Confirm Password input field in form:
+  - Placed after Password field with strength indicator
+  - Required field with placeholder "Re-enter your password"
+  - Shows error styling (red border) when passwords don't match
+  - Error message appears below field, not as toast
+- 9 new tests in register.test.ts:
+  - validatePasswordsMatch() function tests (5 tests)
+  - shouldDisableSubmit() logic tests (4 tests)
+- 405 frontend tests pass (+9 new), typecheck clean
+- Verified in browser: error shows when passwords don't match, submit disabled
+- Files changed: frontend/src/routes/register/+page.svelte, frontend/tests/register.test.ts, prd.json
+- Commits:
+  - feat(ui): [US-25.2] add password confirmation field
+
+### 2026-01-16: US-26.1 - Sync Retry with Exponential Backoff
+- Created app/services/retry.py with retry utility:
+  - is_transient_error(): Identifies retryable errors (timeouts, 5xx, connection errors)
+  - retry_with_backoff(): Async retry decorator with exponential backoff
+  - MAX_RETRIES = 3 (4 total attempts)
+  - INITIAL_DELAY = 1 second, doubles each retry: 1s, 2s, 4s
+- Applied retry logic to Jellyfin API calls:
+  - fetch_jellyfin_users(): Fetches user list
+  - fetch_user_items(): Fetches items per user
+  - fetch_series_seasons(): Fetches seasons for series
+  - fetch_season_episodes(): Fetches episodes for seasons
+- Applied retry logic to Jellyseerr API calls:
+  - fetch_jellyseerr_requests(): Paginated request fetching
+- Permanent errors NOT retried (401, 404, 400, 403):
+  - Auth failures: 401 Unauthorized
+  - Not found: 404
+  - Bad request: 400
+- Logging: "Retry 1/3 for Jellyfin API after 1s... (Error: TimeoutException: ...)"
+- Error message after exhausted retries includes service and error type
+- 21 new tests in test_retry.py:
+  - TestIsTransientError: 10 tests for error classification
+  - TestRetryWithBackoff: 9 tests for retry behavior
+  - TestRetryConstants: 2 tests for configuration
+- 7 new tests in test_sync.py TestSyncRetryWithBackoff:
+  - test_fetch_jellyfin_users_retries_on_timeout
+  - test_fetch_jellyfin_users_retries_on_500_error
+  - test_fetch_jellyfin_users_does_not_retry_on_401
+  - test_fetch_jellyfin_users_fails_after_max_retries
+  - test_fetch_jellyseerr_requests_retries_on_transient_error
+  - test_exponential_backoff_delays_1_2_4_seconds
+  - test_successful_retry_continues_sync_normally
+- 454 backend unit tests pass (+28 new), 25 integration tests pass, mypy clean
+- Verified in Docker: backend starts correctly, sync works
+- Files changed: app/services/retry.py (new), app/services/sync.py, tests/test_retry.py (new), tests/test_sync.py, prd.json
+- Commits:
+  - feat(sync): [US-26.1] add retry with exponential backoff
+
+### 2026-01-16: US-27.1 - E2E Auth Flow Test
+- Created frontend/e2e/auth-flow.spec.ts with comprehensive auth flow tests:
+  - Test 1: Complete auth flow - register → login → dashboard → settings → logout
+    - Uses unique timestamp email for idempotency
+    - Verifies each step: registration redirect, login redirect, dashboard heading, settings page, logout redirect
+  - Test 2: Protected routes redirect to login when not authenticated
+    - Clears cookies and verifies /settings redirects to /login
+- Fixed pre-existing E2E test failures caused by auth refactoring (US-32.2):
+  - register.spec.ts: Updated for password confirmation field (US-25.2)
+    - Changed getByLabel(/password/i) to getByLabel('Password', { exact: true })
+    - Added test for confirm password field
+  - settings.spec.ts: Replaced localStorage token mocking with real auth flow
+    - Register and login before accessing settings page
+  - header.spec.ts: Replaced localStorage token mocking with real auth flow
+    - Register once per describe block, login in beforeEach
+- 22 E2E tests pass, typecheck clean
+- Files changed: e2e/auth-flow.spec.ts (new), e2e/register.spec.ts, e2e/settings.spec.ts, e2e/header.spec.ts, prd.json
+- Commits:
+  - test(e2e): [US-27.1] add E2E auth flow test
+
+## 
