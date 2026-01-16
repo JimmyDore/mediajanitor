@@ -809,10 +809,30 @@ Reusable patterns discovered during development. Update this section when you fi
 - Commits:
   - feat(sync): [US-26.1] add retry with exponential backoff
 
+### 2026-01-16: US-27.1 - E2E Auth Flow Test
+- Created frontend/e2e/auth-flow.spec.ts with comprehensive auth flow tests:
+  - Test 1: Complete auth flow - register → login → dashboard → settings → logout
+    - Uses unique timestamp email for idempotency
+    - Verifies each step: registration redirect, login redirect, dashboard heading, settings page, logout redirect
+  - Test 2: Protected routes redirect to login when not authenticated
+    - Clears cookies and verifies /settings redirects to /login
+- Fixed pre-existing E2E test failures caused by auth refactoring (US-32.2):
+  - register.spec.ts: Updated for password confirmation field (US-25.2)
+    - Changed getByLabel(/password/i) to getByLabel('Password', { exact: true })
+    - Added test for confirm password field
+  - settings.spec.ts: Replaced localStorage token mocking with real auth flow
+    - Register and login before accessing settings page
+  - header.spec.ts: Replaced localStorage token mocking with real auth flow
+    - Register once per describe block, login in beforeEach
+- 22 E2E tests pass, typecheck clean
+- Files changed: e2e/auth-flow.spec.ts (new), e2e/register.spec.ts, e2e/settings.spec.ts, e2e/header.spec.ts, prd.json
+- Commits:
+  - test(e2e): [US-27.1] add E2E auth flow test
+
 ## Current Status
 
-**Phase**: Epic 26 - Sync Resilience (In Progress)
-**Total Stories**: 41 stories (38 passes: true, 3 remaining)
+**Phase**: Epic 27 - Testing (In Progress)
+**Total Stories**: 41 stories (39 passes: true, 2 remaining)
 
 ## Notes
 
