@@ -878,7 +878,7 @@
 			<div class="empty" aria-live="polite">No matching items found</div>
 		{:else}
 			<div class="table-container" aria-live="polite">
-				<table class="issues-table">
+				<table class="issues-table" class:requests-view={activeFilter === 'requests'}>
 					<thead>
 						<tr>
 							<th class="col-name">
@@ -889,11 +889,13 @@
 							{#if activeFilter === 'requests'}
 								<th class="col-requester">Requester</th>
 							{/if}
-							<th class="col-issues">
-								<button class="sort-btn" onclick={() => toggleSort('issues')}>
-									Issues {sortField === 'issues' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-								</button>
-							</th>
+							{#if activeFilter !== 'requests'}
+								<th class="col-issues">
+									<button class="sort-btn" onclick={() => toggleSort('issues')}>
+										Issues {sortField === 'issues' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+									</button>
+								</th>
+							{/if}
 							<th class="col-size">
 								<button class="sort-btn" onclick={() => toggleSort('size')}>
 									Size {sortField === 'size' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -961,6 +963,7 @@
 										{item.requested_by ?? '—'}
 									</td>
 								{/if}
+								{#if activeFilter !== 'requests'}
 								<td class="col-issues">
 									<div class="badge-groups">
 										{#each item.issues as issue}
@@ -1046,6 +1049,7 @@
 										{/each}
 									</div>
 								</td>
+								{/if}
 								<td class="col-size">
 									{#if isRequestItem(item)}
 										<span class="text-muted">—</span>
@@ -1462,6 +1466,11 @@
 	/* Columns */
 	.col-name {
 		width: 35%;
+	}
+
+	/* Expand Name column when Issues column is hidden (requests tab) */
+	.requests-view .col-name {
+		width: 45%;
 	}
 
 	.name-cell {

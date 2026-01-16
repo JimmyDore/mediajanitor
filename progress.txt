@@ -52,8 +52,61 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 44 - Password Reset (In Progress)
-**Total Stories**: 47 stories (8 passes: true, 39 remaining)
+**Phase**: Epic 34 - UI Improvements (In Progress)
+**Total Stories**: 47 stories (10 passes: true, 37 remaining)
+
+---
+
+## 2026-01-16: US-34.1 - Hide Issues Column on Unavailable Tab
+
+### Summary
+Hid the Issues column on the Unavailable tab to give more space to the content name column.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added conditional rendering for Issues column and CSS for expanded Name column
+
+### Key Implementation Details
+- Added `{#if activeFilter !== 'requests'}` around Issues column header and cells
+- Added `class:requests-view={activeFilter === 'requests'}` to table element
+- Added CSS rule `.requests-view .col-name { width: 45%; }` to expand Name column
+- Other tabs (All, Old, Large, Language) still show the Issues column at 35% width
+
+### Verification
+- 411 frontend unit tests pass
+- svelte-check passes (0 errors)
+- Verified in browser: Unavailable tab has no Issues column, Name column is wider
+- Verified in browser: All/Old tabs still show Issues column
+
+---
+
+## 2026-01-16: US-44.4 - Reset Password Endpoint
+
+### Summary
+Created POST /api/auth/reset-password endpoint that allows users to submit a new password using a valid reset token.
+
+### Files Changed
+- `backend/app/models/user.py` - Added `ResetPasswordRequest`, `ResetPasswordResponse` models and `validate_password_strength()` function
+- `backend/app/routers/auth.py` - Added `reset_password` endpoint
+- `backend/tests/test_password_reset.py` - Added 11 new unit tests (TestResetPasswordEndpoint class)
+- `backend/tests/test_integration.py` - Added 3 integration tests for reset-password validation
+
+### Key Implementation Details
+- Password validation with Pydantic `field_validator`: 8+ chars, uppercase, lowercase, number
+- Iterates through all non-expired, unused tokens and compares bcrypt hashes
+- Updates user's `hashed_password` with new bcrypt hash
+- Marks token as `used=True` to prevent reuse
+- Returns 200 OK with success message on valid reset
+- Returns 400 Bad Request for invalid/expired/used tokens
+- Returns 422 Unprocessable Entity for weak passwords (validation)
+
+### Verification
+- 547 backend tests pass (11 new tests)
+- mypy typecheck passes
+- 9 auth integration tests pass in Docker
+
+### Learnings
+- Pydantic `field_validator` decorator runs during request parsing, catching validation errors before endpoint code
+- bcrypt.checkpw is used to safely compare incoming token with stored hashes
 
 ---
 

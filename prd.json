@@ -71,8 +71,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added conditional rendering for Issues column header and cells using {#if activeFilter !== 'requests'}. Added requests-view class to table and CSS rule to expand .col-name from 35% to 45% when in requests view."
     },
     {
       "id": "US-34.2",
