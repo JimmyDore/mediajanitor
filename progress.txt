@@ -52,8 +52,52 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 42 - Accessibility Improvements (In Progress)
-**Total Stories**: 47 stories (15 passes: true, 32 remaining)
+**Phase**: Epic 43 - Accessibility Color Contrast (In Progress)
+**Total Stories**: 47 stories (16 passes: true, 31 remaining)
+
+---
+
+## 2026-01-18: US-43.1 - Audit Warning Color Contrast
+
+### Summary
+Performed comprehensive WCAG AA contrast audit of warning color usage across the application using contrastchecker.com.
+
+### Contrast Audit Results
+
+| Scenario | Foreground | Background | Contrast | WCAG AA |
+|----------|------------|------------|----------|---------|
+| Light mode: warning text on white bg | #ca8a04 | #ffffff | **2.94:1** | ❌ FAIL |
+| Light mode: warning text on warning-light bg | #ca8a04 | ~#faf3e6 | **2.66:1** | ❌ FAIL |
+| Light mode: white text on warning toast bg | #ffffff | #ca8a04 | **2.94:1** | ❌ FAIL |
+| Dark mode: warning text on dark bg | #eab308 | #0f172a | **9.31:1** | ✅ PASS |
+| Dark mode: warning text on warning-light bg | #eab308 | ~#302e25 | **7.1:1** | ✅ PASS |
+| Dark mode: white text on warning toast bg | #ffffff | #eab308 | **1.92:1** | ❌ FAIL |
+
+### Files Using `var(--warning)` That Need Testing
+1. `frontend/src/routes/issues/+page.svelte` - `.missing-seasons`, `.badge-large`, `.col-release.future`, `.col-watched.never`
+2. `frontend/src/routes/library/+page.svelte` - `.col-watched.never`
+3. `frontend/src/routes/content/old-unwatched/+page.svelte` - `.col-status.never-watched`
+4. `frontend/src/routes/register/+page.svelte` - `.strength-medium`, `.strength-text-medium`
+5. `frontend/src/routes/settings/users/+page.svelte` - Warning badge (!)
+6. `frontend/src/lib/components/Toast.svelte` - `.toast-warning`
+7. `frontend/src/app.css` - `.badge-warning` global class
+
+### Key Findings
+- **Light mode warning color (#ca8a04) fails WCAG AA** on all backgrounds (< 3:1 contrast)
+- **Dark mode warning color (#eab308) passes WCAG AA** on dark backgrounds (7-9:1 contrast)
+- **Toast warning fails in BOTH modes** because white text on bright yellow/amber doesn't have enough contrast
+- The fix (US-43.2) will need to darken the light mode warning color while keeping it recognizable as amber
+
+### Verification
+- 588 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Contrast ratios documented using contrastchecker.com
+
+### Learnings
+- WCAG AA requires 4.5:1 contrast for normal text
+- Yellow/amber colors are inherently difficult for accessibility due to high luminance
+- Dark text on warning-light backgrounds is even worse than warning text on white
+- Toast components need special consideration - the warning toast pattern (white on amber) is problematic
 
 ---
 
