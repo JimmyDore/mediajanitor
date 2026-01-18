@@ -53,7 +53,40 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 45 - Responsive Layout (In Progress)
-**Total Stories**: 47 stories (22 passes: true, 25 remaining)
+**Total Stories**: 47 stories (23 passes: true, 24 remaining)
+
+---
+
+## 2026-01-18: US-45.4 - Responsive Table Columns on Issues Page
+
+### Summary
+Added responsive column widths to the Issues page table, allowing columns to expand at larger breakpoints for better content visibility.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added responsive column styles with media queries
+
+### Key Implementation Details
+- Base (default): Name column 32% (min-width 180px), other columns 10%
+- Large desktop (≥1440px): Name column 38% (min-width 260px), other columns 9%
+- Ultrawide/4K (≥1920px): Name column 42% (min-width 340px), other columns 8%
+- Requests view: Name column expanded further (42% → 48% → 52%) since Issues column hidden
+- Added `table-layout: fixed` for stable column width calculation
+- Page max-width uses `var(--content-max-width)` for layout consistency
+- Mobile column hiding unchanged (Size at ≤640px, Watched/Added at ≤768px)
+
+### Verification
+- 633 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser via Puppeteer at breakpoints:
+  - 800px: Compact layout with truncated titles
+  - 1440px: Expanded layout, most titles visible
+  - 1920px: Full expansion, long titles like "Spider-Man : Across the Spider-Verse" fully visible
+  - 640px: Size column hidden (mobile)
+  - Requests tab: Name column properly expanded (Issues column hidden)
+
+### Learnings
+- Using `table-layout: fixed` with percentage widths and min-width provides responsive columns
+- Media queries at 1440px and 1920px breakpoints match the CSS variables in app.css
 
 ---
 
