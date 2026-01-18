@@ -432,8 +432,8 @@
         "Verify in browser: open each modal, press Escape, verify it closes"
       ],
       "priority": 71,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added svelte:window onkeydown handler with handleKeydown() function that checks for Escape key and closes the appropriate modal (duration picker or delete confirmation). Closes duration picker first if both are open. 8 new unit tests added."
     },
     {
       "id": "US-41.2",

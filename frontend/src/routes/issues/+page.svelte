@@ -236,6 +236,17 @@
 		deleteItem = null;
 	}
 
+	// Handle keyboard events for modals
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			if (showDurationPicker) {
+				closeDurationPicker();
+			} else if (showDeleteModal) {
+				closeDeleteModal();
+			}
+		}
+	}
+
 	function isMovieType(mediaType: string): boolean {
 		return mediaType.toLowerCase() === 'movie';
 	}
@@ -836,6 +847,9 @@
 		fetchConfigStatus();
 	});
 </script>
+
+<!-- Listen for Escape key to close modals -->
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>Issues - Media Janitor</title>
