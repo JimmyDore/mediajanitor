@@ -53,7 +53,35 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 42 - Accessibility Improvements (In Progress)
-**Total Stories**: 47 stories (14 passes: true, 33 remaining)
+**Total Stories**: 47 stories (15 passes: true, 32 remaining)
+
+---
+
+## 2026-01-18: US-42.3 - Use SearchInput in Issues Page
+
+### Summary
+Replaced the inline search input in Issues page with the reusable SearchInput component for improved accessibility.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Imported SearchInput component, replaced inline HTML, removed duplicated CSS
+
+### Key Implementation Details
+- Imported `SearchInput` component from `$lib/components/SearchInput.svelte`
+- Replaced inline `<div class="search-container">...<input>...</div>` with `<SearchInput>` component
+- Set `aria-label="Search issues by title or year"` for screen reader accessibility
+- Passed existing props: `value={searchQuery}`, `placeholder`, `oninput={handleSearchInput}`, `onclear={clearSearch}`
+- Removed ~53 lines of duplicated CSS for `.search-container`, `.search-input`, `.search-clear`
+
+### Verification
+- 588 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: search input renders correctly with aria-label
+- Verified: debounced search filtering works (1 of 214 items when searching "Malcolm")
+- Verified: clear button appears and clears search correctly
+
+### Learnings
+- The SearchInput component handles its own styling, so duplicated CSS in parent pages should be removed
+- Same pattern as US-42.2 (Library page) - consistent approach across pages
 
 ---
 
