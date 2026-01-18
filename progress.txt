@@ -53,7 +53,40 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 45 - Responsive Layout (In Progress)
-**Total Stories**: 47 stories (23 passes: true, 24 remaining)
+**Total Stories**: 47 stories (24 passes: true, 23 remaining)
+
+---
+
+## 2026-01-18: US-45.5 - Responsive Table Columns on Library Page
+
+### Summary
+Added responsive column widths to the Library page table, matching the pattern from the Issues page for a consistent experience across pages.
+
+### Files Changed
+- `frontend/src/routes/library/+page.svelte` - Added responsive column styles with media queries
+
+### Key Implementation Details
+- Page max-width changed from 1000px to `var(--content-max-width)` for responsive layout
+- Added `table-layout: fixed` for stable column width calculation
+- Base (default): Name 40%, Year 10%, Size 12%, Added 15%, Watched 13%
+- Large desktop (≥1440px): Name 44%, Year 9%, Size 10%, Added 13%, Watched 11%
+- Ultrawide/4K (≥1920px): Name 48%, Year 8%, Size 9%, Added 12%, Watched 10%
+- Each column has min-width values to prevent over-compression
+- Mobile column hiding unchanged (Added hidden at ≤768px, Watched hidden at ≤640px)
+
+### Verification
+- 633 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser via Puppeteer at breakpoints:
+  - 800px: Compact layout with all visible columns fitting
+  - 1440px: Expanded layout, Name column has more room
+  - 1920px: Full expansion, content spreads nicely
+  - 640px: Watched column hidden (mobile)
+  - 768px: Added column hidden (tablet)
+
+### Learnings
+- Same pattern as Issues page (US-45.4): min-width + percentage widths with table-layout: fixed
+- CSS variables from app.css (--content-max-width) enable responsive page widths
 
 ---
 
