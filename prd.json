@@ -691,8 +691,8 @@
         "Verify in browser: use reset link from email, enter new password, redirect to login"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /reset-password/+page.svelte with password reset form. Token extraction from URL query param. Password inputs with show/hide toggle (eye icon). Validates passwords match before submission. Calls POST /api/auth/reset-password. Shows success message and redirects to /login after 2 seconds. Shows 'Invalid or expired token' error on 400. Shows 'Invalid reset link' if no token. Added to publicRoutes in +layout.svelte. 19 new unit tests added."
     },
     {
       "id": "US-44.7",
