@@ -1,5 +1,6 @@
 Prd
 - Series episodes are buggy for the recent released
+- if no pseudo available, then it shoud use default username
 
 Manual
 - add in ralph.md process morning : /prd-sync, review progress.txt/PRD.md, /prd-archive, /review-suggestions, manual qa(/prd or auto fix), /ralph-init 
@@ -9,6 +10,7 @@ d'avoir le added date pour delete un truc plus safe
 - Test slack notif
 - Split exploratory qa skill in multiple skills
 - Test Email forgot password flow
+
 
 
 Manual QA : 

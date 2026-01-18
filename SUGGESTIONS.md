@@ -6,8 +6,15 @@ P1 items should be reviewed and manually added to PRD.md if deemed necessary.
 
 ---
 
+## ACTION NEEDED: Review P1 items for PRD promotion
+
+- **[P1] Mobile sidebar still visible when closed** - US-17.3 marked complete but blue strip still shows on left edge at 375px viewport. The `visibility: hidden` fix isn't fully working.
+
+---
+
 ## Security
 
+- [P2] Authenticated users can access /login and /register pages - should redirect to dashboard
 - [P2] Default SECRET_KEY in config.py is insecure - should validate/warn if using default in production
 - [P3] Add CSRF protection for state-changing operations
 
@@ -25,6 +32,10 @@ P1 items should be reviewed and manually added to PRD.md if deemed necessary.
 - [P3] Dark mode contrast issues: Edit buttons and input borders blend in slightly.
 - [P3] No page navigation for 4 sections - consider sticky headers or tabs for longer settings pages.
 - [P3] Nickname action icons (edit/delete) have small touch targets - increase to 32px.
+
+### Toast Notifications
+
+- [P2] Inconsistent toast implementations: some pages use local `toast` state, others use global `toasts` store. Standardize on global store for consistency.
 
 ## Accessibility
 
