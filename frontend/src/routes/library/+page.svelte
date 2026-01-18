@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
+	import SearchInput from '$lib/components/SearchInput.svelte';
 
 	interface LibraryItem {
 		jellyfin_id: string;
@@ -294,18 +295,13 @@
 		</div>
 
 		<!-- Search Input -->
-		<div class="search-container">
-			<input
-				type="text"
-				class="search-input"
-				placeholder="Search by title, year..."
-				value={searchQuery}
-				oninput={handleSearchInput}
-			/>
-			{#if searchQuery}
-				<button class="search-clear" onclick={clearSearch} aria-label="Clear search">×</button>
-			{/if}
-		</div>
+		<SearchInput
+			value={searchQuery}
+			placeholder="Search by title, year..."
+			aria-label="Search library by title or year"
+			oninput={handleSearchInput}
+			onclear={clearSearch}
+		/>
 	</header>
 
 	<!-- Filter Tabs (underline style) -->
@@ -551,52 +547,6 @@
 	.filter-tab.active {
 		color: var(--text-primary);
 		border-bottom-color: var(--accent);
-	}
-
-	/* Search */
-	.search-container {
-		position: relative;
-		margin-top: var(--space-3);
-	}
-
-	.search-input {
-		width: 100%;
-		max-width: 300px;
-		padding: var(--space-2) var(--space-3);
-		padding-right: var(--space-8);
-		font-size: var(--font-size-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		transition: border-color var(--transition-fast);
-	}
-
-	.search-input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.search-input::placeholder {
-		color: var(--text-muted);
-	}
-
-	.search-clear {
-		position: absolute;
-		right: var(--space-2);
-		top: 50%;
-		transform: translateY(-50%);
-		padding: var(--space-1);
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		cursor: pointer;
-		font-size: var(--font-size-lg);
-		line-height: 1;
-	}
-
-	.search-clear:hover {
-		color: var(--text-primary);
 	}
 
 	/* Filters Row */
