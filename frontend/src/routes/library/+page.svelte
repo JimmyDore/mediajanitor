@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
 	import SearchInput from '$lib/components/SearchInput.svelte';
+	import ServiceBadge from '$lib/components/ServiceBadge.svelte';
 
 	interface LibraryItem {
 		jellyfin_id: string;
@@ -15,6 +16,7 @@
 		last_played_date: string | null;
 		date_created: string | null;
 		tmdb_id: string | null;
+		sonarr_title_slug: string | null;
 	}
 
 	interface ServiceUrls {
@@ -124,6 +126,32 @@
 		const baseUrl = data?.service_urls?.jellyfin_url;
 		if (!baseUrl || !item.jellyfin_id) return null;
 		return `${baseUrl.replace(/\/$/, '')}/web/index.html#!/details?id=${item.jellyfin_id}`;
+	}
+
+	function getJellyseerrUrl(item: LibraryItem): string | null {
+		const baseUrl = data?.service_urls?.jellyseerr_url;
+		if (!baseUrl || !item.tmdb_id) return null;
+		// Jellyseerr URL pattern: /movie/{tmdb_id} or /tv/{tmdb_id}
+		const mediaType = item.media_type.toLowerCase() === 'movie' ? 'movie' : 'tv';
+		return `${baseUrl.replace(/\/$/, '')}/${mediaType}/${item.tmdb_id}`;
+	}
+
+	function getRadarrUrl(item: LibraryItem): string | null {
+		// Only show for movies
+		if (item.media_type.toLowerCase() !== 'movie') return null;
+		const baseUrl = data?.service_urls?.radarr_url;
+		if (!baseUrl || !item.tmdb_id) return null;
+		// Radarr URL pattern for movie details (using TMDB ID): /movie/{tmdb_id}
+		return `${baseUrl.replace(/\/$/, '')}/movie/${item.tmdb_id}`;
+	}
+
+	function getSonarrUrl(item: LibraryItem): string | null {
+		// Only show for series
+		if (item.media_type.toLowerCase() !== 'series') return null;
+		const baseUrl = data?.service_urls?.sonarr_url;
+		if (!baseUrl || !item.sonarr_title_slug) return null;
+		// Sonarr URL pattern for series (using titleSlug): /series/{titleSlug}
+		return `${baseUrl.replace(/\/$/, '')}/series/${item.sonarr_title_slug}`;
 	}
 
 	async function fetchLibrary() {
@@ -457,14 +485,19 @@
 										<span class="item-name" title={item.name}>{item.name}</span>
 										<span class="external-links">
 											{#if getJellyfinUrl(item)}
-												<a href={getJellyfinUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Jellyfin">
-													<span class="service-badge-text jellyfin">JF</span>
-												</a>
+												<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
+											{/if}
+											{#if getJellyseerrUrl(item)}
+												<ServiceBadge service="jellyseerr" url={getJellyseerrUrl(item) ?? ''} title="View in Jellyseerr" />
+											{/if}
+											{#if getRadarrUrl(item)}
+												<ServiceBadge service="radarr" url={getRadarrUrl(item) ?? ''} title="View in Radarr" />
+											{/if}
+											{#if getSonarrUrl(item)}
+												<ServiceBadge service="sonarr" url={getSonarrUrl(item) ?? ''} title="View in Sonarr" />
 											{/if}
 											{#if getTmdbUrl(item)}
-												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on TMDB">
-													<span class="service-badge-text tmdb">TMDB</span>
-												</a>
+												<ServiceBadge service="tmdb" url={getTmdbUrl(item) ?? ''} title="View on TMDB" />
 											{/if}
 										</span>
 									</div>
@@ -814,43 +847,6 @@
 		align-items: center;
 		gap: var(--space-1);
 		flex-shrink: 0;
-	}
-
-	.external-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--text-muted);
-		opacity: 0.6;
-		transition: all var(--transition-fast);
-		text-decoration: none;
-	}
-
-	.external-link:hover {
-		color: var(--accent);
-		opacity: 1;
-	}
-
-	.service-badge {
-		text-decoration: none;
-	}
-
-	.service-badge-text {
-		font-size: 9px;
-		font-weight: var(--font-weight-bold);
-		padding: 1px 4px;
-		border-radius: 2px;
-		letter-spacing: -0.02em;
-	}
-
-	.service-badge-text.jellyfin {
-		background: #00a4dc;
-		color: #fff;
-	}
-
-	.service-badge-text.tmdb {
-		background: #01b4e4;
-		color: #fff;
 	}
 
 	.col-year {
