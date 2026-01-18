@@ -57,6 +57,40 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-41.3 - Auto-Focus and Restore Focus
+
+### Summary
+Implemented auto-focus when modals open and focus restoration when modals close for improved keyboard accessibility. Duration picker focuses first radio input, delete modal focuses Cancel button (safer default for destructive actions).
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added trigger refs, capture/restore focus logic, $effect hooks for auto-focus
+- `frontend/tests/issues-auto-focus.test.ts` - New test file with 24 unit tests
+
+### Key Implementation Details
+- Added `durationPickerTrigger` and `deleteModalTrigger` state refs to store trigger elements
+- `openDurationPicker()` and `openDeleteModal()` capture `document.activeElement` before opening
+- `closeDurationPicker()` and `closeDeleteModal()` call `trigger.focus()` to restore focus
+- Added `$effect` hooks that fire when modal state changes:
+  - Duration picker: focuses first radio input (Permanent option)
+  - Delete modal: focuses Cancel button (safer default for destructive action)
+- Added `onkeydown={handleKeydown}` and `tabindex="-1"` to modal overlays
+- Kept `svelte-ignore a11y_click_events_have_key_events` for overlay backdrop (role="presentation" is correct semantic)
+
+### Verification
+- svelte-check passes (0 errors, 3 warnings - all pre-existing in other files)
+- Verified in browser using Puppeteer:
+  - Duration picker: first radio input (value="permanent") receives focus
+  - Delete modal: Cancel button receives focus
+  - Focus returns to trigger button after closing via Escape, Cancel, or Confirm
+
+### Learnings
+- Use `$effect` for side effects that depend on reactive state (like auto-focusing when modal opens)
+- Capture `document.activeElement` BEFORE any state changes that might move focus
+- For destructive actions, focusing Cancel button is the safer default
+- Modal overlays with `role="presentation"` don't need interactive roles (they're visual backdrops)
+
+---
+
 ## 2026-01-18: US-41.2 - Implement Keyboard Focus Trap
 
 ### Summary
