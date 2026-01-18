@@ -842,8 +842,8 @@
         "Typecheck passes"
       ],
       "priority": 88,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ServiceBadge.svelte component with inline 16x16 SVG icons for all 5 services: Jellyfin (#00a4dc), Jellyseerr (#7b68ee), Radarr (#ffc230), Sonarr (#2ecc71), TMDB (#01b4e4). Component accepts service, url, title props. Links open in new tab with rel='noopener noreferrer'. Hover effect scales to 1.1 with opacity change. Focus outline uses --brand-color CSS variable. 28 unit tests added."
     },
     {
       "id": "US-46.2",
