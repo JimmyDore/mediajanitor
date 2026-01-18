@@ -788,8 +788,8 @@
         "Verify in browser: table columns expand at breakpoints, no overflow"
       ],
       "priority": 85,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added responsive column widths with min-width + percentage pattern. Name column expands from 32% to 38% (1440px) to 42% (1920px). Other columns (issues, size, added, release, watched, requester) also have responsive widths. Page max-width uses var(--content-max-width) for responsive layout. Mobile column hiding unchanged."
     },
     {
       "id": "US-45.5",

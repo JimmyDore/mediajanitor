@@ -1390,7 +1390,7 @@
 
 <style>
 	.issues-page {
-		max-width: 1000px;
+		max-width: var(--content-max-width, 1200px);
 		margin: 0 auto;
 		padding: var(--space-6);
 	}
@@ -1517,6 +1517,7 @@
 	.issues-table {
 		width: 100%;
 		border-collapse: collapse;
+		table-layout: fixed;
 	}
 
 	.issues-table th,
@@ -1558,14 +1559,47 @@
 		color: var(--text-primary);
 	}
 
-	/* Columns */
+	/* ==========================================================================
+	   Responsive Table Columns
+	   ==========================================================================
+	   Base (mobile/small desktop): Compact column widths
+	   ≥1440px: Expand Name column, other columns use more space
+	   ≥1920px: Maximum expansion for comfortable viewing
+	   ========================================================================== */
+
+	/* Base column widths (default) */
 	.col-name {
-		width: 35%;
+		width: 32%;
+		min-width: 180px;
 	}
 
 	/* Expand Name column when Issues column is hidden (requests tab) */
 	.requests-view .col-name {
-		width: 45%;
+		width: 42%;
+	}
+
+	/* Large desktop (≥1440px) - columns expand */
+	@media (min-width: 1440px) {
+		.col-name {
+			width: 38%;
+			min-width: 260px;
+		}
+
+		.requests-view .col-name {
+			width: 48%;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) - maximum expansion */
+	@media (min-width: 1920px) {
+		.col-name {
+			width: 42%;
+			min-width: 340px;
+		}
+
+		.requests-view .col-name {
+			width: 52%;
+		}
 	}
 
 	.name-cell {
@@ -1594,9 +1628,26 @@
 	}
 
 	.col-requester {
-		width: 12%;
+		width: 10%;
+		min-width: 80px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-requester {
+			width: 9%;
+			min-width: 95px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-requester {
+			width: 8%;
+			min-width: 110px;
+		}
 	}
 
 	.missing-seasons {
@@ -1672,7 +1723,24 @@
 
 
 	.col-issues {
-		width: 30%;
+		width: 28%;
+		min-width: 140px;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-issues {
+			width: 25%;
+			min-width: 160px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-issues {
+			width: 22%;
+			min-width: 180px;
+		}
 	}
 
 	/* Badge groups - container for inline badges with actions */
@@ -1775,11 +1843,28 @@
 	}
 
 	.col-size {
-		width: 12%;
+		width: 10%;
+		min-width: 80px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-size {
+			width: 9%;
+			min-width: 90px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-size {
+			width: 8%;
+			min-width: 100px;
+		}
 	}
 
 	/* Size display for series with largest season */
@@ -1802,18 +1887,52 @@
 	}
 
 	.col-added {
-		width: 12%;
+		width: 10%;
+		min-width: 80px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
 	}
 
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-added {
+			width: 9%;
+			min-width: 95px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-added {
+			width: 8%;
+			min-width: 110px;
+		}
+	}
+
 	.col-release {
-		width: 12%;
+		width: 10%;
+		min-width: 80px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-release {
+			width: 9%;
+			min-width: 95px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-release {
+			width: 8%;
+			min-width: 110px;
+		}
 	}
 
 	.col-release.future {
@@ -1822,10 +1941,27 @@
 	}
 
 	.col-watched {
-		width: 13%;
+		width: 10%;
+		min-width: 70px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-watched {
+			width: 9%;
+			min-width: 80px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-watched {
+			width: 8%;
+			min-width: 90px;
+		}
 	}
 
 	.col-watched.never {
