@@ -541,6 +541,40 @@ Created a new settings layout with sidebar navigation, breadcrumb, and placehold
 
 ---
 
+## 2026-01-18: US-36.2 - Extract Connections Page
+
+### Summary
+Extracted the API connections section from the deleted settings page into a dedicated `/settings/connections/+page.svelte` page. This is the first of four extraction stories (US-36.2 through US-36.5) to complete the settings page refactoring.
+
+### Files Changed
+- `frontend/src/routes/settings/connections/+page.svelte` - Full implementation of connections page
+- `frontend/tests/settings-connections.test.ts` - New test file with 15 API contract tests
+
+### Key Implementation Details
+- All four service connection forms: Jellyfin, Jellyseerr, Radarr, Sonarr
+- Each service has expand/collapse functionality with Edit/Cancel button
+- Status indicators: green dot for connected, gray dot for not connected
+- Domain extraction shows hostname instead of full URL (e.g., "jellyfin.example.com")
+- Form shows "(leave blank to keep)" hint for API key when editing existing connection
+- Auto-expand forms for unconfigured services (Jellyfin, Jellyseerr only)
+- Auto-sync after first Jellyfin configuration if user has never synced
+- Loading state with spinner during initial fetch
+- Inline success/error messages for each form
+- Responsive design: form fields stack vertically on mobile
+
+### Verification
+- 438 frontend unit tests pass (15 new tests)
+- svelte-check passes (0 errors, 3 warnings)
+- Verified in Docker: all connection forms load, expand, and display correctly
+- Verified: status dots show correct colors based on configuration state
+
+### Learnings
+- The old settings page was deleted in US-36.1, but git history preserves the original code
+- Code extraction from git history: `git show COMMIT^:path/to/file`
+- Each settings sub-page manages its own state independently (no shared state between pages)
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
