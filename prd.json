@@ -243,8 +243,8 @@
         "Verify in browser: all display settings work correctly"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /settings/display/+page.svelte with all display preferences: Theme selector (Light/Dark/System), Title language dropdown (English/French), Recently available days input (1-30), Show unreleased requests toggle. Each setting saves on change via POST /api/settings/display. 18 new unit tests added. Old settings page was already deleted in US-36.1."
     },
     {
       "id": "US-37.1",
