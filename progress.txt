@@ -57,6 +57,42 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-41.2 - Implement Keyboard Focus Trap
+
+### Summary
+Implemented keyboard focus trap for modal dialogs on the Issues page. Tab and Shift+Tab now cycle through focusable elements within the modal without escaping to background content.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added getFocusableElements() helper, updated handleKeydown() for focus trap, added modal element refs, added tabindex="0" to modals
+- `frontend/tests/issues-focus-trap.test.ts` - New test file with 14 unit tests
+
+### Key Implementation Details
+- Added `getFocusableElements()` helper function to find all interactive elements (buttons, inputs, selects) within a container
+- Extended `handleKeydown()` to handle Tab/Shift+Tab key presses
+- Tab from last focusable element wraps to first element
+- Shift+Tab from first focusable element wraps to last element
+- Added `bind:this` to capture modal element references for focus trap logic
+- Added `tabindex="0"` to modal containers for accessibility compliance
+- Removed `svelte-ignore a11y_interactive_supports_focus` comments (no longer needed with tabindex)
+- Focus trap works for both duration picker modal (7 focusable elements) and delete modal (4 focusable elements)
+
+### Verification
+- 552 frontend unit tests pass (14 new tests)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser using Puppeteer:
+  - Duration picker: Tab from Confirm wraps to first radio input
+  - Duration picker: Shift+Tab from first radio wraps to Confirm button
+  - Delete modal: Tab from Delete wraps to first checkbox
+  - Both modals have tabindex="0" attribute
+
+### Learnings
+- Focus trap pattern: get focusable elements, track current index, wrap at boundaries
+- Use `document.activeElement` to determine current focused element
+- Use `event.preventDefault()` to stop browser's default Tab behavior before programmatically moving focus
+- `tabindex="0"` on modal container makes it focusable and satisfies a11y_interactive_supports_focus warning
+
+---
+
 ## 2026-01-18: US-41.1 - Add Escape Key to Close Modals
 
 ### Summary
