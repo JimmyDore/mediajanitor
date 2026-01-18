@@ -607,6 +607,38 @@ Extracted the analysis thresholds section from the deleted settings page into a 
 
 ---
 
+## 2026-01-18: US-36.4 - Extract Users Page
+
+### Summary
+Extracted the user nicknames section from the deleted settings page into a dedicated `/settings/users/+page.svelte` page. This is the third of four extraction stories to complete the settings page refactoring.
+
+### Files Changed
+- `frontend/src/routes/settings/users/+page.svelte` - Full implementation of users/nicknames page
+- `frontend/tests/settings-users.test.ts` - New test file with 16 API contract tests
+
+### Key Implementation Details
+- Table displays existing mappings: Jellyseerr Username → Display Name
+- Warning badge (!) for users with `has_jellyseerr_account=false` (Jellyfin users not found in Jellyseerr)
+- Edit mode: inline input field with Save/Cancel buttons
+- Delete confirmation: inline "Delete this nickname?" with Confirm/Cancel buttons
+- Empty state with "Add nickname" call-to-action button
+- "Refresh users" button (only when Jellyfin configured) fetches Jellyfin users to populate list
+- Toast feedback on all CRUD operations
+- Responsive: table scrolls horizontally on mobile, header stacks vertically
+
+### Verification
+- 469 frontend unit tests pass (16 new tests)
+- svelte-check passes (0 errors, 3 warnings)
+- Verified in Docker: table loads, edit mode works, delete confirmation works
+- Verified: warning badges display for users without Jellyseerr accounts
+
+### Learnings
+- Old settings page was deleted in US-36.1; code extracted from git history using `git show`
+- The `has_jellyseerr_account` field was added in US-37.1 to mark users found in both Jellyfin and Jellyseerr
+- Empty display names show "—" (em dash) instead of blank for visual clarity
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
