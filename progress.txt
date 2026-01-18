@@ -57,6 +57,36 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-39.2 - Add Type Icons to Toasts
+
+### Summary
+Added type-specific icons to toast notifications for visual clarity. Success toasts show a checkmark, error toasts show an X, info toasts show an i-circle, and warning toasts show a triangle.
+
+### Files Changed
+- `frontend/src/lib/components/Toast.svelte` - Added inline SVG icons for each toast type, added warning toast type
+- `frontend/tests/toast.test.ts` - Added 9 new tests for icon functionality
+
+### Key Implementation Details
+- Icons are inline SVGs (18x18px) positioned left of message text
+- Success: checkmark (M3.5 9.5l4 4 7-8)
+- Error: X shape (M4 4l10 10M14 4L4 14)
+- Info: i inside circle
+- Warning: exclamation inside triangle
+- Icons use `stroke="currentColor"` to inherit white text color from toast
+- Icon container has `aria-hidden="true"` (decorative, message text conveys meaning)
+- Added new `warning` toast type with `--warning` amber background
+
+### Verification
+- 530 frontend unit tests pass (9 new tests)
+- svelte-check passes (0 errors, 3 warnings - all pre-existing)
+- Verified in browser: success toast shows checkmark icon, positioned left of message
+
+### Learnings
+- Inline SVGs are more maintainable than external icon libraries for small icon sets
+- Using `currentColor` for stroke allows icons to inherit text color from parent
+
+---
+
 ## 2026-01-18: US-38.3 - Recently Available Uses Language Preference
 
 ### Summary
