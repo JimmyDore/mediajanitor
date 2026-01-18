@@ -57,6 +57,38 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-45.3 - Responsive Sidebar Width
+
+### Summary
+Updated the sidebar to use CSS variables for responsive width, expanding on larger screens.
+
+### Files Changed
+- `frontend/src/lib/components/Sidebar.svelte` - Changed hardcoded 220px to var(--sidebar-width)
+
+### Key Implementation Details
+- Sidebar.svelte now uses `width: var(--sidebar-width)` instead of hardcoded `220px`
+- CSS variables in app.css (from US-45.1) define the values at each breakpoint:
+  - Default: 220px
+  - ≥1440px: 260px
+  - ≥1920px: 300px
+- +layout.svelte already used `var(--sidebar-width)` for margin-left (from US-45.2)
+- Mobile sidebar behavior unchanged (still 220px overlay on ≤768px)
+
+### Verification
+- 633 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser via Puppeteer at breakpoints:
+  - 800px viewport: sidebar = 220px
+  - 1440px viewport: sidebar = 260px
+  - 1920px viewport: sidebar = 300px
+  - Mobile (375px): sidebar hidden, opens as 220px overlay
+
+### Learnings
+- Only one file needed to be changed since the CSS variables and layout margin-left were already in place
+- The responsive layout system is modular - components just need to use the CSS variables
+
+---
+
 ## 2026-01-18: US-45.2 - Expand Main Content Max-Width on Large Screens
 
 ### Summary
