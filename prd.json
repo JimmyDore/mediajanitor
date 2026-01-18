@@ -472,8 +472,8 @@
         "Verify in browser: close modal, verify focus returns to trigger button"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added durationPickerTrigger and deleteModalTrigger state refs to capture trigger elements. openDurationPicker/openDeleteModal capture document.activeElement. closeDurationPicker/closeDeleteModal restore focus to trigger. Added $effect hooks for auto-focus: duration picker focuses first radio input, delete modal focuses Cancel button. Added onkeydown handler to modal overlays. 24 new unit tests added."
     },
     {
       "id": "US-42.1",

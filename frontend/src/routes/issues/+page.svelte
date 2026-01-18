@@ -110,6 +110,10 @@
 	let durationPickerModal = $state<HTMLElement | null>(null);
 	let deleteModalElement = $state<HTMLElement | null>(null);
 
+	// Trigger element references for focus restoration
+	let durationPickerTrigger = $state<HTMLElement | null>(null);
+	let deleteModalTrigger = $state<HTMLElement | null>(null);
+
 	const durationOptions: { value: DurationOption; label: string }[] = [
 		{ value: 'permanent', label: 'Permanent' },
 		{ value: '3months', label: '3 Months' },
@@ -215,6 +219,8 @@
 	}
 
 	function openDurationPicker(item: ContentIssueItem, type: WhitelistType) {
+		// Capture trigger element before opening modal (for focus restoration)
+		durationPickerTrigger = document.activeElement as HTMLElement | null;
 		selectedItem = item;
 		selectedWhitelistType = type;
 		selectedDuration = 'permanent';
@@ -225,10 +231,17 @@
 	function closeDurationPicker() {
 		showDurationPicker = false;
 		selectedItem = null;
+		// Restore focus to trigger element
+		if (durationPickerTrigger) {
+			durationPickerTrigger.focus();
+			durationPickerTrigger = null;
+		}
 	}
 
 	// Delete modal functions
 	function openDeleteModal(item: ContentIssueItem) {
+		// Capture trigger element before opening modal (for focus restoration)
+		deleteModalTrigger = document.activeElement as HTMLElement | null;
 		deleteItem = item;
 		deleteFromArr = true;
 		deleteFromJellyseerr = true;
@@ -238,6 +251,11 @@
 	function closeDeleteModal() {
 		showDeleteModal = false;
 		deleteItem = null;
+		// Restore focus to trigger element
+		if (deleteModalTrigger) {
+			deleteModalTrigger.focus();
+			deleteModalTrigger = null;
+		}
 	}
 
 	// Get all focusable elements within a container
@@ -881,6 +899,28 @@
 		});
 	}
 
+	// Auto-focus when duration picker modal opens
+	$effect(() => {
+		if (showDurationPicker && durationPickerModal) {
+			// Focus the first radio input (Permanent option)
+			const focusable = getFocusableElements(durationPickerModal);
+			if (focusable.length > 0) {
+				focusable[0].focus();
+			}
+		}
+	});
+
+	// Auto-focus when delete modal opens (focus Cancel button as safer default)
+	$effect(() => {
+		if (showDeleteModal && deleteModalElement) {
+			// Focus the Cancel button (btn-secondary) as the safer default
+			const cancelButton = deleteModalElement.querySelector<HTMLElement>('.btn-secondary');
+			if (cancelButton) {
+				cancelButton.focus();
+			}
+		}
+	});
+
 	onMount(() => {
 		fetchIssues(activeFilter);
 		fetchConfigStatus();
@@ -1250,8 +1290,8 @@
 
 <!-- Duration Picker Modal -->
 {#if showDurationPicker && selectedItem}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={closeDurationPicker} role="presentation">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div class="modal-overlay" onclick={closeDurationPicker} onkeydown={handleKeydown} role="presentation" tabindex="-1">
 		<div class="modal" bind:this={durationPickerModal} onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="modal-title" tabindex="0">
 			<h3 id="modal-title">Set Whitelist Duration</h3>
 			<p class="modal-desc">Choose how long <strong>{selectedItem.name}</strong> should be whitelisted.</p>
@@ -1299,8 +1339,8 @@
 
 <!-- Delete Confirmation Modal -->
 {#if showDeleteModal && deleteItem}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={closeDeleteModal} role="presentation">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div class="modal-overlay" onclick={closeDeleteModal} onkeydown={handleKeydown} role="presentation" tabindex="-1">
 		<div class="modal delete-modal" bind:this={deleteModalElement} onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="delete-modal-title" tabindex="0">
 			<h3 id="delete-modal-title">Delete Content</h3>
 			<p class="modal-desc">
