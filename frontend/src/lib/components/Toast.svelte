@@ -100,7 +100,7 @@
 
 	.toast-warning {
 		background: var(--warning);
-		color: white;
+		color: #451a03;  /* Dark amber for WCAG AA contrast on warning background */
 	}
 
 	.toast-icon {

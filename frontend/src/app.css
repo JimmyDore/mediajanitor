@@ -83,8 +83,8 @@
 	/* Status colors (muted for data-focused UI) */
 	--success: #16a34a;
 	--success-light: rgba(22, 163, 74, 0.1);
-	--warning: #ca8a04;
-	--warning-light: rgba(202, 138, 4, 0.1);
+	--warning: #a16207;  /* Darkened for WCAG AA (5.5:1 on white) - was #ca8a04 (2.9:1) */
+	--warning-light: rgba(161, 98, 7, 0.1);
 	--danger: #dc2626;
 	--danger-light: rgba(220, 38, 38, 0.1);
 	--info: #0284c7;
