@@ -189,6 +189,30 @@
 }
 
 /* ==========================================================================
+   Responsive Layout - Large Screens
+   ==========================================================================
+
+   Updates CSS custom properties at breakpoints for progressive layout expansion.
+   Content and sidebar expand to use available space on larger displays.
+   ========================================================================== */
+
+/* Large desktop (≥1440px) */
+@media (min-width: 1440px) {
+	:root {
+		--content-max-width: var(--content-max-width-lg);
+		--sidebar-width: var(--sidebar-width-lg);
+	}
+}
+
+/* Ultrawide / 4K (≥1920px) */
+@media (min-width: 1920px) {
+	:root {
+		--content-max-width: var(--content-max-width-xl);
+		--sidebar-width: var(--sidebar-width-xl);
+	}
+}
+
+/* ==========================================================================
    Base Reset
    ========================================================================== */
 

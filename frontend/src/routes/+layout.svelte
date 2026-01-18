@@ -78,12 +78,12 @@
 	}
 
 	.app.with-sidebar {
-		margin-left: 220px;
+		margin-left: var(--sidebar-width);
 	}
 
 	.content {
 		width: 100%;
-		max-width: 1200px;
+		max-width: var(--content-max-width);
 		margin: 0 auto;
 		padding: 2rem;
 		flex: 1;

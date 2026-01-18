@@ -749,8 +749,8 @@
         "Verify in browser: resize window, see content width change at breakpoints"
       ],
       "priority": 83,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated +layout.svelte to use var(--content-max-width) for max-width and var(--sidebar-width) for margin-left. Added responsive media queries to app.css that update CSS variables at breakpoints: 1600px at ≥1440px, 1800px at ≥1920px. Content remains centered with auto margins. No horizontal scrollbar."
     },
     {
       "id": "US-45.3",
