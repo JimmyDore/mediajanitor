@@ -5,6 +5,7 @@
 	import { authenticatedFetch } from '$lib/stores';
 	import Toast from '$lib/components/Toast.svelte';
 	import SearchInput from '$lib/components/SearchInput.svelte';
+	import ServiceBadge from '$lib/components/ServiceBadge.svelte';
 
 	interface ContentIssueItem {
 		jellyfin_id: string;
@@ -1083,29 +1084,19 @@
 										{/if}
 										<span class="external-links">
 											{#if getJellyfinUrl(item)}
-												<a href={getJellyfinUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Jellyfin">
-													<span class="service-badge-text jellyfin">JF</span>
-												</a>
+												<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
 											{/if}
 											{#if getJellyseerrUrl(item)}
-												<a href={getJellyseerrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Jellyseerr">
-													<span class="service-badge-text jellyseerr">JS</span>
-												</a>
+												<ServiceBadge service="jellyseerr" url={getJellyseerrUrl(item) ?? ''} title="View in Jellyseerr" />
 											{/if}
 											{#if getRadarrUrl(item)}
-												<a href={getRadarrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Radarr">
-													<span class="service-badge-text radarr">RD</span>
-												</a>
+												<ServiceBadge service="radarr" url={getRadarrUrl(item) ?? ''} title="View in Radarr" />
 											{/if}
 											{#if getSonarrUrl(item)}
-												<a href={getSonarrUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View in Sonarr">
-													<span class="service-badge-text sonarr">SN</span>
-												</a>
+												<ServiceBadge service="sonarr" url={getSonarrUrl(item) ?? ''} title="View in Sonarr" />
 											{/if}
 											{#if getTmdbUrl(item)}
-												<a href={getTmdbUrl(item)} target="_blank" rel="noopener noreferrer" class="external-link service-badge" title="View on TMDB">
-													<span class="service-badge-text tmdb">TMDB</span>
-												</a>
+												<ServiceBadge service="tmdb" url={getTmdbUrl(item) ?? ''} title="View on TMDB" />
 											{/if}
 										</span>
 									</div>
@@ -1681,46 +1672,6 @@
 		color: var(--accent);
 		opacity: 1;
 	}
-
-
-	/* Service badge styles for external links */
-	.service-badge {
-		text-decoration: none;
-	}
-
-	.service-badge-text {
-		font-size: 9px;
-		font-weight: var(--font-weight-bold);
-		padding: 1px 4px;
-		border-radius: 2px;
-		letter-spacing: -0.02em;
-	}
-
-	.service-badge-text.jellyfin {
-		background: #00a4dc;
-		color: #fff;
-	}
-
-	.service-badge-text.jellyseerr {
-		background: #7b68ee;
-		color: #fff;
-	}
-
-	.service-badge-text.radarr {
-		background: #ffc230;
-		color: #000;
-	}
-
-	.service-badge-text.sonarr {
-		background: #3fc;
-		color: #000;
-	}
-
-	.service-badge-text.tmdb {
-		background: #01b4e4;
-		color: #fff;
-	}
-
 
 	.col-issues {
 		width: 28%;
