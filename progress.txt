@@ -52,8 +52,36 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 35 - Issues Page Sorting Improvements (In Progress)
-**Total Stories**: 47 stories (12 passes: true, 35 remaining)
+**Phase**: Epic 42 - Accessibility Improvements (In Progress)
+**Total Stories**: 47 stories (13 passes: true, 34 remaining)
+
+---
+
+## 2026-01-18: US-42.1 - Create SearchInput Component
+
+### Summary
+Created a reusable SearchInput component with built-in accessibility for consistent search inputs across the app.
+
+### Files Changed
+- `frontend/src/lib/components/SearchInput.svelte` - New component file
+- `frontend/tests/search-input.test.ts` - New test file with 19 unit tests
+
+### Key Implementation Details
+- Props interface: `value`, `placeholder`, `aria-label`, `oninput`, `onclear`
+- Input has `type="text"` and `class="search-input"`
+- `aria-label` applied to input element for screen reader accessibility
+- Clear button appears when value is not empty with `aria-label="Clear search"`
+- Same HTML structure (`div.search-container` > `input.search-input` + `button.search-clear`)
+- Same CSS classes and styles as existing search inputs in library/issues pages
+
+### Verification
+- 588 frontend unit tests pass (19 new tests)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Component compiles correctly and is ready for integration in US-42.2 and US-42.3
+
+### Learnings
+- Svelte 5 uses `$props()` rune for prop definitions with TypeScript interface
+- The `aria-label` prop must use bracket notation in interface due to hyphen
 
 ---
 
