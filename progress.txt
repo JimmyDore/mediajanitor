@@ -503,6 +503,44 @@ Fixed series showing "Watched" instead of actual last watched date. Jellyfin tra
 
 ---
 
+## 2026-01-18: US-36.1 - Settings Layout with Sidebar Navigation
+
+### Summary
+Created a new settings layout with sidebar navigation, breadcrumb, and placeholder sub-pages. The settings page now redirects to /settings/connections by default, with navigation to Connections, Thresholds, Users, and Display sections.
+
+### Files Changed
+- `frontend/src/routes/settings/+layout.svelte` - New layout with sidebar navigation and breadcrumb
+- `frontend/src/routes/settings/+page.server.ts` - Server-side redirect to /settings/connections
+- `frontend/src/routes/settings/+page.svelte` - Deleted (content will be extracted to sub-pages)
+- `frontend/src/routes/settings/connections/+page.svelte` - Placeholder page for connections
+- `frontend/src/routes/settings/thresholds/+page.svelte` - Placeholder page for thresholds
+- `frontend/src/routes/settings/users/+page.svelte` - Placeholder page for users
+- `frontend/src/routes/settings/display/+page.svelte` - Placeholder page for display
+- `frontend/e2e/settings.spec.ts` - Updated E2E tests for new layout
+- `frontend/e2e/auth-flow.spec.ts` - Updated to expect /settings/connections redirect
+- `frontend/e2e/header.spec.ts` - Updated to expect /settings/connections redirect
+
+### Key Implementation Details
+- Layout uses flexbox with sidebar on left, content on right
+- Breadcrumb shows: Dashboard > Settings > [Section Name]
+- Active nav item highlighted with accent background color
+- Server-side redirect using `throw redirect(307, '/settings/connections')`
+- Responsive: @media (max-width: 768px) changes sidebar to horizontal scrollable tabs
+- Icons for each nav item (plug, sliders, users, monitor) using inline SVG
+
+### Verification
+- 423 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings)
+- 23 E2E tests pass
+- Verified in browser: sidebar navigation works, redirect works, mobile responsive
+
+### Learnings
+- SvelteKit redirects must use `throw redirect()` not just `redirect()`
+- New route directories require Docker rebuild to be picked up (HMR doesn't detect new folders)
+- E2E tests that create users can hit rate limits when run in parallel
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
