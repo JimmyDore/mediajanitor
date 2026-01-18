@@ -52,8 +52,40 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 43 - Accessibility Color Contrast (In Progress)
-**Total Stories**: 47 stories (17 passes: true, 30 remaining)
+**Phase**: Epic 44 - Password Reset (In Progress)
+**Total Stories**: 47 stories (18 passes: true, 29 remaining)
+
+---
+
+## 2026-01-18: US-44.5 - Forgot Password UI
+
+### Summary
+Created the forgot password page with email form to allow users to request a password reset link.
+
+### Files Changed
+- `frontend/src/routes/forgot-password/+page.svelte` - New forgot password page
+- `frontend/src/routes/login/+page.svelte` - Added "Forgot password?" link
+- `frontend/src/routes/+layout.svelte` - Added /forgot-password to publicRoutes
+- `frontend/tests/forgot-password.test.ts` - 9 new unit tests
+
+### Key Implementation Details
+- Page has email input, "Send Reset Link" button, and "Back to login" link
+- On submit: calls POST /api/auth/request-password-reset
+- Success state shows green checkmark with message: "If that email exists, a reset link has been sent. Check your inbox."
+- Error state shows error message in red box
+- Button disabled while request is in flight
+- Added /forgot-password to publicRoutes so unauthenticated users can access it
+- Styling matches existing auth pages (login, register)
+
+### Verification
+- 597 frontend unit tests pass (9 new tests)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: page renders correctly
+- Verified in browser: form submission shows success message
+
+### Learnings
+- New routes need to be added to publicRoutes in +layout.svelte for unauthenticated access
+- Docker containers need to be rebuilt with --no-cache for new routes to be picked up
 
 ---
 
