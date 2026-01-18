@@ -708,6 +708,8 @@ class TestIntegrationLibrary:
                     "played",
                     "last_played_date",
                     "date_created",
+                    "tmdb_id",
+                    "sonarr_title_slug",  # US-46.3: Sonarr slug for series external links
                 ]
                 for field in required_fields:
                     assert field in item, f"Missing field: {field}"

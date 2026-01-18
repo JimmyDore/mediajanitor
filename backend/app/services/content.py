@@ -1689,6 +1689,20 @@ async def get_library(
     Returns:
         LibraryResponse with items, totals, and service URLs
     """
+    # Build Sonarr TMDB -> titleSlug map for enriching series items
+    from app.services.sonarr import get_sonarr_tmdb_to_slug_map, get_decrypted_sonarr_api_key
+    sonarr_slug_map: dict[int, str] = {}
+    settings_result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == user_id)
+    )
+    user_settings = settings_result.scalar_one_or_none()
+    if user_settings and user_settings.sonarr_server_url and user_settings.sonarr_api_key_encrypted:
+        sonarr_api_key = get_decrypted_sonarr_api_key(user_settings)
+        if sonarr_api_key:
+            sonarr_slug_map = await get_sonarr_tmdb_to_slug_map(
+                user_settings.sonarr_server_url, sonarr_api_key
+            )
+
     # Get all cached media items for the user
     result = await db.execute(
         select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -1763,6 +1777,16 @@ async def get_library(
     response_items = []
     for item in filtered_items:
         tmdb_id, _ = extract_provider_ids(item)
+
+        # Look up Sonarr titleSlug for series items (for external links)
+        sonarr_title_slug = None
+        if tmdb_id and item.media_type == "Series":
+            try:
+                tmdb_id_int = int(tmdb_id)
+                sonarr_title_slug = sonarr_slug_map.get(tmdb_id_int)
+            except (ValueError, TypeError):
+                pass
+
         response_items.append(
             LibraryItem(
                 jellyfin_id=item.jellyfin_id,
@@ -1775,6 +1799,7 @@ async def get_library(
                 last_played_date=item.last_played_date,
                 date_created=item.date_created,
                 tmdb_id=tmdb_id,
+                sonarr_title_slug=sonarr_title_slug,
             )
         )
 

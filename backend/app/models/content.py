@@ -263,6 +263,7 @@ class LibraryItem(BaseModel):
     last_played_date: str | None
     date_created: str | None
     tmdb_id: str | None = None
+    sonarr_title_slug: str | None = None  # Sonarr titleSlug for external links (series only)
 
 
 class LibraryResponse(BaseModel):

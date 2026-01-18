@@ -876,8 +876,8 @@
         "Typecheck passes"
       ],
       "priority": 90,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added sonarr_title_slug field to LibraryItem model. Modified get_library() to build Sonarr TMDB->slug map using get_sonarr_tmdb_to_slug_map() from sonarr service. Series items are enriched with titleSlug, movies return null. 2 new unit tests + integration test updated."
     },
     {
       "id": "US-46.4",

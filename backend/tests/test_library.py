@@ -670,3 +670,97 @@ class TestLibraryEndpoint:
         data = response.json()
         assert data["items"][0]["name"] == "Alpha Movie"
         assert data["items"][1]["name"] == "Zebra Movie"
+
+    @pytest.mark.asyncio
+    async def test_series_includes_sonarr_title_slug(self, client: TestClient) -> None:
+        """Series items should include sonarr_title_slug when Sonarr is configured."""
+        from unittest.mock import patch, AsyncMock
+
+        token = self._get_auth_token(client, "library_sonarr_slug@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create series with TMDB ID in ProviderIds
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-slug-1",
+                name="Arcane",
+                media_type="Series",
+                size_bytes=50_000_000_000,
+                raw_data={"ProviderIds": {"Tmdb": "94605"}},  # Arcane's TMDB ID
+            )
+            # Create a movie to verify it returns null for sonarr_title_slug
+            movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-slug-1",
+                name="Test Movie",
+                media_type="Movie",
+                size_bytes=10_000_000_000,
+                raw_data={"ProviderIds": {"Tmdb": "12345"}},
+            )
+            # Set up Sonarr settings
+            settings = UserSettings(
+                user_id=user_id,
+                sonarr_server_url="https://sonarr.example.com",
+                sonarr_api_key_encrypted="encrypted_key",
+            )
+            session.add_all([series, movie, settings])
+            await session.commit()
+
+        # Mock the Sonarr API call to return the slug map
+        # Patch at app.services.sonarr since the import is inside get_library()
+        mock_slug_map = {94605: "arcane"}  # TMDB ID -> titleSlug mapping
+        with patch("app.services.sonarr.get_sonarr_tmdb_to_slug_map", new_callable=AsyncMock) as mock_sonarr:
+            mock_sonarr.return_value = mock_slug_map
+            with patch("app.services.sonarr.get_decrypted_sonarr_api_key") as mock_key:
+                mock_key.return_value = "test_api_key"
+
+                response = client.get("/api/library", headers=headers)
+                assert response.status_code == 200
+                data = response.json()
+
+                # Find the series and movie in response
+                items_by_name = {item["name"]: item for item in data["items"]}
+
+                # Series should have sonarr_title_slug
+                assert "Arcane" in items_by_name
+                assert items_by_name["Arcane"]["sonarr_title_slug"] == "arcane"
+
+                # Movie should have sonarr_title_slug as null
+                assert "Test Movie" in items_by_name
+                assert items_by_name["Test Movie"]["sonarr_title_slug"] is None
+
+    @pytest.mark.asyncio
+    async def test_series_sonarr_title_slug_null_when_sonarr_not_configured(
+        self, client: TestClient
+    ) -> None:
+        """Series items should have null sonarr_title_slug when Sonarr not configured."""
+        token = self._get_auth_token(client, "library_no_sonarr@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create series without Sonarr settings
+            series = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-no-sonarr-1",
+                name="Test Series",
+                media_type="Series",
+                size_bytes=50_000_000_000,
+                raw_data={"ProviderIds": {"Tmdb": "12345"}},
+            )
+            session.add(series)
+            await session.commit()
+
+        response = client.get("/api/library", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 1
+        # sonarr_title_slug should be null (not present or None)
+        assert data["items"][0].get("sonarr_title_slug") is None
