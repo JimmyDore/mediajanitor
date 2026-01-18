@@ -203,8 +203,8 @@
         "Verify in browser: threshold changes save and persist"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted thresholds section to /settings/thresholds/+page.svelte. Includes all 4 threshold inputs with help text. Save/Reset buttons work correctly. Loading state on initial fetch. Inline success/error messages. 15 new unit tests added. Old settings page was already deleted in US-36.1 (content extracted to sub-pages)."
     },
     {
       "id": "US-36.4",
