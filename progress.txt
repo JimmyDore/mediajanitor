@@ -731,6 +731,38 @@ Extracted the display preferences section from the deleted settings page into a 
 
 ---
 
+## 2026-01-18: US-39.1 - Add Manual Dismiss Button to Toasts
+
+### Summary
+Added manual dismiss button to all toast notifications with keyboard accessibility and ARIA labels.
+
+### Files Changed
+- `frontend/src/lib/components/Toast.svelte` - New reusable Toast component with close button
+- `frontend/tests/toast.test.ts` - 28 new unit tests for Toast component
+- `frontend/src/routes/+page.svelte` - Updated to use Toast component
+- `frontend/src/routes/issues/+page.svelte` - Updated to use Toast component
+- `frontend/src/routes/whitelist/+page.svelte` - Updated to use Toast component
+- `frontend/src/routes/info/recent/+page.svelte` - Updated to use Toast component
+- `frontend/src/routes/content/old-unwatched/+page.svelte` - Updated to use Toast component
+
+### Key Implementation Details
+- Toast.svelte component with X close button in top-right corner
+- Keyboard accessible: Tab to focus, Enter/Space to activate close
+- aria-label="Close notification" for screen reader accessibility
+- SVG X icon with aria-hidden="true" (decorative)
+- Close button has hover/focus styles for visual feedback
+- Each page tracks toastTimer to clear on manual close
+- Auto-dismiss after 3 seconds still works if not manually closed
+- Supports success, error, and info toast types
+
+### Verification
+- 521 frontend unit tests pass (28 new tests)
+- svelte-check passes (0 errors, 3 warnings - all pre-existing)
+- Docker build succeeds
+- Toast component renders correctly in browser
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
