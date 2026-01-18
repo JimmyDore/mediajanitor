@@ -207,7 +207,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 220px;
+		width: var(--sidebar-width);
 		background: var(--bg-secondary);
 		border-right: 1px solid var(--border);
 		display: flex;
