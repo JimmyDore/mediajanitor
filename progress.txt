@@ -471,6 +471,38 @@ Added accessibility attributes to loading states across all main pages so screen
 
 ---
 
+## 2026-01-18: US-35.2 - Display Last Watched Date for Series
+
+### Summary
+Fixed series showing "Watched" instead of actual last watched date. Jellyfin tracks watch data at the episode level, not the series level. Modified the sync process to fetch episode UserData from all Jellyfin users and aggregate the most recent LastPlayedDate.
+
+### Files Changed
+- `backend/app/services/sync.py` - Added get_most_recent_episode_played_date(), modified fetch_season_episodes() and calculate_season_sizes()
+- `backend/tests/test_sync.py` - Added 6 new tests for get_most_recent_episode_played_date(), updated existing tests with mock for fetch_jellyfin_users
+
+### Key Implementation Details
+- `fetch_season_episodes()` now accepts optional `jellyfin_user_id` parameter and includes `UserData` in API request
+- `calculate_season_sizes()` fetches all Jellyfin users, then for each season fetches episode UserData for each user
+- `get_most_recent_episode_played_date()` iterates through all episodes and returns the most recent LastPlayedDate
+- Frontend `formatLastWatched()` already displays dates correctly when data is present
+
+### Root Cause Analysis
+- Jellyfin API returns `UserData.LastPlayedDate` at the episode level, not series level
+- Series items have `played=True` but `LastPlayedDate=None` in the API response
+- Previous sync only stored the series-level UserData which lacked the date
+
+### Verification
+- 97 sync tests pass (6 new tests for get_most_recent_episode_played_date)
+- mypy typecheck passes (32 source files)
+- Manual testing requires a full sync to populate episode watch data
+
+### Learnings
+- Jellyfin stores watch data per-episode, aggregated data must be computed
+- When adding new dependencies in functions, update existing test mocks accordingly
+- Consider API rate limiting when making additional calls during sync
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
