@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
+	import Toast from '$lib/components/Toast.svelte';
 
 	// Redirect to unified issues view - backwards compatibility
 	onMount(() => {
@@ -30,6 +31,7 @@
 	let error = $state<string | null>(null);
 	let data = $state<OldUnwatchedResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let protectingIds = $state<Set<string>>(new Set());
 
 	function formatPath(path: string | null): string {
@@ -74,10 +76,22 @@
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+		}
 		toast = { message, type };
-		setTimeout(() => {
+		toastTimer = setTimeout(() => {
 			toast = null;
+			toastTimer = null;
 		}, 3000);
+	}
+
+	function closeToast() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+		toast = null;
 	}
 
 	async function protectContent(item: OldUnwatchedItem) {
@@ -180,9 +194,7 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert">
-		{toast.message}
-	</div>
+	<Toast message={toast.message} type={toast.type} onclose={closeToast} />
 {/if}
 
 <div class="page-container">
@@ -522,39 +534,6 @@
 		animation: spin 0.6s linear infinite;
 	}
 
-	/* Toast notifications */
-	.toast {
-		position: fixed;
-		bottom: 1.5rem;
-		right: 1.5rem;
-		padding: 0.75rem 1.25rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		z-index: 1000;
-		animation: slideIn 0.2s ease;
-	}
-
-	.toast-success {
-		background: var(--success, #22c55e);
-		color: white;
-	}
-
-	.toast-error {
-		background: var(--danger, #ef4444);
-		color: white;
-	}
-
-	@keyframes slideIn {
-		from {
-			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
 
 	/* Responsive design */
 	@media (max-width: 768px) {

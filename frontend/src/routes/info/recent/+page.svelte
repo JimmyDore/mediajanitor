@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authenticatedFetch } from '$lib/stores';
+	import Toast from '$lib/components/Toast.svelte';
 
 	interface RecentlyAvailableItem {
 		jellyseerr_id: number;
@@ -37,6 +38,7 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 	/**
 	 * Get the display title based on user's language preference.
@@ -82,8 +84,22 @@
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+		}
 		toast = { message, type };
-		setTimeout(() => toast = null, 3000);
+		toastTimer = setTimeout(() => {
+			toast = null;
+			toastTimer = null;
+		}, 3000);
+	}
+
+	function closeToast() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+		toast = null;
 	}
 
 	function groupItemsByDate(items: RecentlyAvailableItem[]): GroupedByDate[] {
@@ -203,7 +219,7 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
+	<Toast message={toast.message} type={toast.type} onclose={closeToast} />
 {/if}
 
 <div class="page" aria-busy={loading}>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authenticatedFetch } from '$lib/stores';
+	import Toast from '$lib/components/Toast.svelte';
 
 	interface WhitelistItem {
 		id: number;
@@ -39,6 +40,7 @@
 	let languageExemptData = $state<WhitelistResponse | null>(null);
 	let requestsData = $state<RequestWhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let removingIds = $state<Set<number>>(new Set());
 
 	const tabLabels: Record<TabType, { label: string; desc: string }> = {
@@ -86,8 +88,22 @@
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+		}
 		toast = { message, type };
-		setTimeout(() => toast = null, 3000);
+		toastTimer = setTimeout(() => {
+			toast = null;
+			toastTimer = null;
+		}, 3000);
+	}
+
+	function closeToast() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+		toast = null;
 	}
 
 	function getCurrentData(): WhitelistResponse | RequestWhitelistResponse | null {
@@ -169,7 +185,7 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
+	<Toast message={toast.message} type={toast.type} onclose={closeToast} />
 {/if}
 
 <div class="whitelist-page" aria-busy={loading}>

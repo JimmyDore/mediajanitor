@@ -3,6 +3,7 @@
 	import { auth, authenticatedFetch } from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import Landing from '$lib/components/Landing.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 
 	let error = $state<string | null>(null);
 
@@ -64,6 +65,7 @@
 	let syncLoading = $state(false);
 	let toastMessage = $state<string | null>(null);
 	let toastType = $state<'success' | 'error'>('success');
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let contentSummary = $state<ContentSummary | null>(null);
 	let summaryLoading = $state(true);
 	let jellyfinSettings = $state<JellyfinSettings | null>(null);
@@ -146,11 +148,23 @@
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+		}
 		toastMessage = message;
 		toastType = type;
-		setTimeout(() => {
+		toastTimer = setTimeout(() => {
 			toastMessage = null;
-		}, 5000);
+			toastTimer = null;
+		}, 3000);
+	}
+
+	function closeToast() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+		toastMessage = null;
 	}
 
 	function formatProgressMessage(progress: SyncProgressInfo): string {
@@ -359,9 +373,7 @@
 	<Landing />
 {:else if $auth.isAuthenticated}
 	{#if toastMessage}
-		<div class="toast toast-{toastType}" role="alert" aria-live="assertive">
-			{toastMessage}
-		</div>
+		<Toast message={toastMessage} type={toastType} onclose={closeToast} />
 	{/if}
 
 	<div class="dashboard" aria-busy={summaryLoading}>

@@ -377,8 +377,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 68,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created Toast.svelte component with X close button, keyboard accessibility (Enter/Space), aria-label='Close notification'. Updated all pages (issues, whitelist, recent, dashboard, old-unwatched) to use Toast component. 28 new unit tests added. Auto-dismiss after 3 seconds still works."
     },
     {
       "id": "US-39.2",

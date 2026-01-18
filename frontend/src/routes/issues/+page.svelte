@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
+	import Toast from '$lib/components/Toast.svelte';
 
 	interface ContentIssueItem {
 		jellyfin_id: string;
@@ -69,6 +70,7 @@
 	let error = $state<string | null>(null);
 	let data = $state<ContentIssuesResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let protectingIds = $state<Set<string>>(new Set());
 	let frenchOnlyIds = $state<Set<string>>(new Set());
 	let languageExemptIds = $state<Set<string>>(new Set());
@@ -495,8 +497,23 @@
 	}
 
 	function showToast(message: string, type: 'success' | 'error') {
+		// Clear any existing timer
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+		}
 		toast = { message, type };
-		setTimeout(() => toast = null, 3000);
+		toastTimer = setTimeout(() => {
+			toast = null;
+			toastTimer = null;
+		}, 3000);
+	}
+
+	function closeToast() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+		toast = null;
 	}
 
 	async function protectContentWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
@@ -825,7 +842,7 @@
 </svelte:head>
 
 {#if toast}
-	<div class="toast toast-{toast.type}" role="alert" aria-live="assertive">{toast.message}</div>
+	<Toast message={toast.message} type={toast.type} onclose={closeToast} />
 {/if}
 
 <div class="issues-page" aria-busy={loading}>
