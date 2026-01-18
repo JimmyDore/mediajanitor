@@ -578,6 +578,27 @@
 		padding: var(--space-6);
 	}
 
+	/* Responsive dashboard width for large screens */
+	@media (min-width: 1440px) {
+		.dashboard {
+			max-width: 1000px;
+		}
+
+		.stats-grid {
+			gap: var(--space-4);
+		}
+	}
+
+	@media (min-width: 1920px) {
+		.dashboard {
+			max-width: 1200px;
+		}
+
+		.stats-grid {
+			gap: var(--space-5);
+		}
+	}
+
 	/* Header */
 	.page-header {
 		display: flex;
