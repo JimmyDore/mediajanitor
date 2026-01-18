@@ -805,8 +805,8 @@
         "Verify in browser: library table columns expand at breakpoints"
       ],
       "priority": 86,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added responsive column widths with min-width + percentage pattern. Name column expands from 40% to 44% (1440px) to 48% (1920px). Other columns (year, size, added, watched) also have responsive widths. Page max-width uses var(--content-max-width) for responsive layout. Mobile column hiding unchanged (Added at ≤768px, Watched at ≤640px)."
     },
     {
       "id": "US-45.6",

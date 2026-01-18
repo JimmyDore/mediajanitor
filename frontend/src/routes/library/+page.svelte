@@ -492,7 +492,7 @@
 
 <style>
 	.library-page {
-		max-width: 1000px;
+		max-width: var(--content-max-width, 1200px);
 		margin: 0 auto;
 		padding: var(--space-6);
 	}
@@ -727,6 +727,7 @@
 	.library-table {
 		width: 100%;
 		border-collapse: collapse;
+		table-layout: fixed;
 	}
 
 	.library-table th,
@@ -773,6 +774,23 @@
 	/* Columns */
 	.col-name {
 		width: 40%;
+		min-width: 180px;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-name {
+			width: 44%;
+			min-width: 260px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-name {
+			width: 48%;
+			min-width: 340px;
+		}
 	}
 
 	.name-cell {
@@ -837,32 +855,100 @@
 
 	.col-year {
 		width: 10%;
+		min-width: 60px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-year {
+			width: 9%;
+			min-width: 70px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-year {
+			width: 8%;
+			min-width: 80px;
+		}
 	}
 
 	.col-size {
 		width: 12%;
+		min-width: 70px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
 	}
 
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-size {
+			width: 10%;
+			min-width: 85px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-size {
+			width: 9%;
+			min-width: 100px;
+		}
+	}
+
 	.col-added {
 		width: 15%;
+		min-width: 90px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
 	}
 
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-added {
+			width: 13%;
+			min-width: 105px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-added {
+			width: 12%;
+			min-width: 120px;
+		}
+	}
+
 	.col-watched {
 		width: 13%;
+		min-width: 75px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
+	}
+
+	/* Large desktop (≥1440px) */
+	@media (min-width: 1440px) {
+		.col-watched {
+			width: 11%;
+			min-width: 85px;
+		}
+	}
+
+	/* Ultrawide / 4K (≥1920px) */
+	@media (min-width: 1920px) {
+		.col-watched {
+			width: 10%;
+			min-width: 95px;
+		}
 	}
 
 	.col-watched.never {
