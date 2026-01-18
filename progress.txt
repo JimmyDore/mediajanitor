@@ -52,8 +52,32 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 34 - UI Improvements (In Progress)
-**Total Stories**: 47 stories (11 passes: true, 36 remaining)
+**Phase**: Epic 35 - Issues Page Sorting Improvements (In Progress)
+**Total Stories**: 47 stories (12 passes: true, 35 remaining)
+
+---
+
+## 2026-01-16: US-35.1 - Fix Watched Column Sort Order
+
+### Summary
+Fixed the Watched column sorting to properly handle three different states: items with dates, items marked as "Watched" (no date), and items marked as "Never" (never watched).
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Added 'watched' to SortField type, implemented three-tier sorting logic, updated column header
+- `frontend/tests/issues-sorting.test.ts` - New test file for watched column sorting logic
+
+### Key Implementation Details
+- Added `watched` to the `SortField` type union
+- Implemented three-tier priority system: 1 = has date, 2 = played without date, 3 = never watched
+- Descending order (first click): dates DESC → "Watched" → "Never"
+- Ascending order (second click): "Never" → "Watched" → dates ASC
+- Column header now uses 'watched' field for non-requests tabs (uses 'date' for Requested column)
+- Sorting works for both movies and series
+
+### Verification
+- 423 frontend unit tests pass (12 new sorting tests)
+- svelte-check passes (0 errors)
+- Verified in browser using Puppeteer: clicking Watched column sorts correctly in both directions
 
 ---
 
