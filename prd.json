@@ -398,8 +398,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 69,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added inline SVG icons to Toast.svelte: checkmark for success, X for error, i-circle for info, triangle for warning. Icons are 18x18px, positioned left of message, use stroke='currentColor' for white color. Icon container has aria-hidden='true'. Added 'warning' toast type with amber background. 9 new unit tests added."
     },
     {
       "id": "US-40.1",

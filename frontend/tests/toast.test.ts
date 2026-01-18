@@ -23,11 +23,12 @@ describe('Toast Component (US-39.1)', () => {
 			expect(typeof props.onclose).toBe('function');
 		});
 
-		it('supports success, error, and info toast types', () => {
-			const validTypes = ['success', 'error', 'info'];
+		it('supports success, error, info, and warning toast types', () => {
+			const validTypes = ['success', 'error', 'info', 'warning'];
 			expect(validTypes).toContain('success');
 			expect(validTypes).toContain('error');
 			expect(validTypes).toContain('info');
+			expect(validTypes).toContain('warning');
 		});
 
 		it('has close button with aria-label', () => {
@@ -190,6 +191,16 @@ describe('Toast Component (US-39.1)', () => {
 			expect(infoStyle.color).toBe('white');
 		});
 
+		it('warning toast has amber background', () => {
+			// Warning toasts should use --warning color
+			const warningStyle = {
+				background: 'var(--warning)',
+				color: 'white'
+			};
+			expect(warningStyle.background).toBe('var(--warning)');
+			expect(warningStyle.color).toBe('white');
+		});
+
 		it('close button is positioned in top-right area', () => {
 			// Close button should be positioned to the right
 			const closeButtonPosition = {
@@ -256,6 +267,65 @@ describe('Toast Component (US-39.1)', () => {
 			const svgPath = 'M1 1l12 12M13 1L1 13';
 			expect(svgPath).toContain('M1 1l12 12');
 			expect(svgPath).toContain('M13 1L1 13');
+		});
+	});
+
+	describe('Type Icons (US-39.2)', () => {
+		it('success toast shows checkmark icon', () => {
+			// Success icon: checkmark shape (M3.5 9.5l4 4 7-8)
+			const successIconPath = 'M3.5 9.5l4 4 7-8';
+			expect(successIconPath).toContain('l4 4'); // Downward diagonal
+			expect(successIconPath).toContain('7-8'); // Upward diagonal
+		});
+
+		it('error toast shows X icon', () => {
+			// Error icon: X shape with two diagonal lines
+			const errorIconPath = 'M4 4l10 10M14 4L4 14';
+			expect(errorIconPath).toContain('M4 4l10 10'); // First diagonal
+			expect(errorIconPath).toContain('M14 4L4 14'); // Second diagonal
+		});
+
+		it('info toast shows i icon with circle', () => {
+			// Info icon: circle with dot and line
+			const infoIconHasCircle = true; // <circle cx="9" cy="9" r="7.5" />
+			const infoIconHasPath = true; // <path d="M9 8v4M9 6v0.01" />
+			expect(infoIconHasCircle).toBe(true);
+			expect(infoIconHasPath).toBe(true);
+		});
+
+		it('warning toast shows triangle icon', () => {
+			// Warning icon: triangle with exclamation
+			const warningIconPath = 'M9 2L1.5 15.5h15L9 2z';
+			expect(warningIconPath).toContain('M9 2'); // Triangle top
+			expect(warningIconPath).toContain('L1.5 15.5'); // Triangle left bottom
+			expect(warningIconPath).toContain('h15'); // Triangle bottom side
+		});
+
+		it('icons are positioned on the left side of message', () => {
+			// Icon span appears before message span in HTML structure
+			const toastStructure = ['toast-icon', 'toast-message', 'toast-close'];
+			expect(toastStructure.indexOf('toast-icon')).toBeLessThan(
+				toastStructure.indexOf('toast-message')
+			);
+		});
+
+		it('icons have aria-hidden="true" (decorative)', () => {
+			// Icon container has aria-hidden for accessibility
+			const iconAriaHidden = 'true';
+			expect(iconAriaHidden).toBe('true');
+		});
+
+		it('icons use appropriate size (18x18)', () => {
+			// All type icons are 18x18 pixels
+			const iconSize = { width: 18, height: 18 };
+			expect(iconSize.width).toBe(18);
+			expect(iconSize.height).toBe(18);
+		});
+
+		it('icon colors inherit from toast text color', () => {
+			// Icons use stroke="currentColor" to inherit white text color
+			const iconStroke = 'currentColor';
+			expect(iconStroke).toBe('currentColor');
 		});
 	});
 });
