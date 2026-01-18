@@ -53,7 +53,36 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 46 - Service Badges (In Progress)
-**Total Stories**: 47 stories (26 passes: true, 21 remaining)
+**Total Stories**: 47 stories (27 passes: true, 20 remaining)
+
+---
+
+## 2026-01-18: US-46.3 - Add sonarr_title_slug to Library Backend
+
+### Summary
+Added `sonarr_title_slug` field to the Library API so that Sonarr links can be generated on the Library page for series items.
+
+### Files Changed
+- `backend/app/models/content.py` - Added `sonarr_title_slug: str | None = None` to LibraryItem model
+- `backend/app/services/content.py` - Modified `get_library()` to enrich series with Sonarr titleSlug
+- `backend/tests/test_library.py` - Added 2 unit tests for sonarr_title_slug behavior
+- `backend/tests/test_integration.py` - Updated required fields check to include sonarr_title_slug
+
+### Key Implementation Details
+- Reused `get_sonarr_tmdb_to_slug_map()` pattern from `get_content_issues()` endpoint
+- Import inside function to avoid circular imports: `from app.services.sonarr import get_sonarr_tmdb_to_slug_map, get_decrypted_sonarr_api_key`
+- Build TMDB -> titleSlug map only when Sonarr is configured (has server_url and api_key_encrypted)
+- Series items get titleSlug lookup via TMDB ID from ProviderIds in raw_data
+- Movie items always return `sonarr_title_slug: null`
+
+### Verification
+- 571 backend tests pass (2 new tests)
+- mypy typecheck passes (32 source files)
+- 37 integration tests pass (updated required fields check)
+- Verified in Docker with integration test
+
+### Learnings
+- When mocking functions imported inside another function, patch at the source module (e.g., `app.services.sonarr.get_sonarr_tmdb_to_slug_map`) not at the importing module
 
 ---
 
