@@ -52,8 +52,45 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 44 - Password Reset (In Progress)
-**Total Stories**: 47 stories (19 passes: true, 28 remaining)
+**Phase**: Epic 44 - Password Reset (Complete)
+**Total Stories**: 47 stories (20 passes: true, 27 remaining)
+
+---
+
+## 2026-01-18: US-44.7 - Change Password in Settings
+
+### Summary
+Added change password functionality to settings. Users can now update their password from a new Security settings page without going through password reset.
+
+### Files Changed
+- `backend/app/models/user.py` - Added ChangePasswordRequest/ChangePasswordResponse Pydantic models
+- `backend/app/routers/auth.py` - Added POST /api/auth/change-password endpoint
+- `backend/tests/test_password_reset.py` - Added 10 new unit tests for change password
+- `backend/tests/test_integration.py` - Added 3 integration tests for change password
+- `frontend/src/routes/settings/+layout.svelte` - Added Security nav item with lock icon
+- `frontend/src/routes/settings/security/+page.svelte` - New security settings page
+- `frontend/tests/settings-security.test.ts` - New test file with 17 unit tests
+
+### Key Implementation Details
+- POST /api/auth/change-password endpoint requires authentication
+- Verifies current password with bcrypt before allowing change
+- New password validated via Pydantic: 8+ chars, uppercase, lowercase, number
+- Returns 200 on success, 400 if current password wrong, 422 for weak password
+- Security settings page has three password inputs with show/hide toggles
+- Client-side validation matches backend requirements with real-time feedback
+- Confirm password field ensures passwords match before submission
+
+### Verification
+- 37 password reset tests pass (10 new change password tests)
+- mypy typecheck passes (32 source files)
+- svelte-check passes (0 errors, 3 warnings pre-existing)
+- 12 auth integration tests pass (3 new change password tests)
+- Verified in browser: Security page displays with all inputs and Change Password button
+
+### Learnings
+- Reuse existing auth service functions (hash_password, verify_password) for password change
+- Client-side password validation should mirror backend requirements for good UX
+- Settings sub-pages can be added by creating new directory in routes/settings/
 
 ---
 
