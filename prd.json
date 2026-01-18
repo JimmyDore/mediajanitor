@@ -223,8 +223,8 @@
         "Verify in browser: all nickname CRUD operations work"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted users/nicknames section to /settings/users/+page.svelte. Table displays Jellyseerr username → Display Name mappings with warning badge for users without Jellyseerr accounts. Add/Edit/Delete functionality with inline confirmation. Refresh users button for Jellyfin-sourced users. 16 new unit tests added. Old settings page was already deleted in US-36.1 (content extracted to sub-pages)."
     },
     {
       "id": "US-36.5",
