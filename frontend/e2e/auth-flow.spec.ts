@@ -47,12 +47,12 @@ test.describe('Complete Auth Flow E2E', () => {
 		await expect(page.getByRole('link', { name: /issues/i })).toBeVisible();
 		await expect(page.getByRole('link', { name: /settings/i })).toBeVisible();
 
-		// Step 4: Navigate to settings
+		// Step 4: Navigate to settings (redirects to /settings/connections)
 		await page.getByRole('link', { name: /settings/i }).click();
-		await page.waitForURL('/settings', { timeout: 5000 });
+		await page.waitForURL('/settings/connections', { timeout: 5000 });
 
-		// Verify settings page loaded
-		await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
+		// Verify settings page loaded with sidebar navigation
+		await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
 		// Settings page should show the user's email in the sidebar
 		await expect(page.getByText(uniqueEmail)).toBeVisible();
 

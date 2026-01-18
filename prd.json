@@ -163,8 +163,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created +layout.svelte with sidebar navigation, breadcrumb, and 4 placeholder sub-pages. Server-side redirect from /settings to /settings/connections via +page.server.ts. Responsive: sidebar becomes horizontal tabs on mobile. Old +page.svelte removed (content will be extracted to sub-pages in subsequent stories US-36.2-36.5)."
     },
     {
       "id": "US-36.2",

@@ -41,14 +41,14 @@ test.describe('Navigation Header (Smoke Tests)', () => {
 		// Wait for dashboard to load
 		await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 10000 });
 
-		// Navigate to settings
+		// Navigate to settings (redirects to /settings/connections)
 		const sidebar = page.locator('aside.sidebar');
 		await sidebar.getByRole('link', { name: /settings/i }).click();
-		await expect(page).toHaveURL('/settings');
+		await expect(page).toHaveURL('/settings/connections');
 
 		// Navigate back to dashboard
 		await sidebar.getByRole('link', { name: /dashboard/i }).click();
-		await expect(page).not.toHaveURL('/settings');
+		await expect(page).toHaveURL('/');
 	});
 
 	test('sidebar does not appear on public pages when logged out', async ({ page }) => {
