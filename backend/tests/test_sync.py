@@ -1309,12 +1309,18 @@ class TestCalculateSeasonSizes:
                     return httpx.Response(200, json=mock_episodes_s2, request=httpx.Request("GET", url))
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
+            # Mock Jellyfin users (needed for episode watch data aggregation)
+            mock_jellyfin_users = [
+                {"Id": "user1", "Name": "Test User"},
+            ]
+
             with patch("httpx.AsyncClient.get", new=mock_get):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
-                    await calculate_season_sizes(
-                        session, user.id,
-                        "http://jellyfin.local", "decrypted-key"
-                    )
+                    with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                        await calculate_season_sizes(
+                            session, user.id,
+                            "http://jellyfin.local", "decrypted-key"
+                        )
 
             # Refresh from DB
             from sqlalchemy import select
@@ -1401,12 +1407,18 @@ class TestCalculateSeasonSizes:
                     return httpx.Response(200, json=mock_episodes_by_season[parent_id], request=httpx.Request("GET", url))
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
+            # Mock Jellyfin users (needed for episode watch data aggregation)
+            mock_jellyfin_users = [
+                {"Id": "user1", "Name": "Test User"},
+            ]
+
             with patch("httpx.AsyncClient.get", new=mock_get):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
-                    await calculate_season_sizes(
-                        session, user.id,
-                        "http://jellyfin.local", "decrypted-key"
-                    )
+                    with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                        await calculate_season_sizes(
+                            session, user.id,
+                            "http://jellyfin.local", "decrypted-key"
+                        )
 
             # Refresh from DB
             from sqlalchemy import select
@@ -1475,12 +1487,18 @@ class TestCalculateSeasonSizes:
 
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
+            # Mock Jellyfin users (needed for episode watch data aggregation)
+            mock_jellyfin_users = [
+                {"Id": "user1", "Name": "Test User"},
+            ]
+
             with patch("httpx.AsyncClient.get", new=mock_get):
-                # Should not raise, just log warning and continue
-                await calculate_season_sizes(
-                    session, user.id,
-                    "http://jellyfin.local", "api-key"
-                )
+                with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                    # Should not raise, just log warning and continue
+                    await calculate_season_sizes(
+                        session, user.id,
+                        "http://jellyfin.local", "api-key"
+                    )
 
             from sqlalchemy import select
             result = await session.execute(
@@ -2252,3 +2270,81 @@ class TestFetchMediaDetailsWithLanguage:
 
         # Should return empty dict on failure
         assert result == {}
+
+
+class TestGetMostRecentEpisodePlayedDate:
+    """Tests for get_most_recent_episode_played_date function."""
+
+    def test_returns_none_for_empty_list(self) -> None:
+        """Should return None when no episodes provided."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        result = get_most_recent_episode_played_date([])
+        assert result is None
+
+    def test_returns_none_when_no_episodes_watched(self) -> None:
+        """Should return None when no episodes have been watched."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        episodes = [
+            {"Id": "ep1", "UserData": {"Played": False, "LastPlayedDate": None}},
+            {"Id": "ep2", "UserData": {"Played": False, "LastPlayedDate": None}},
+            {"Id": "ep3", "UserData": {}},
+        ]
+
+        result = get_most_recent_episode_played_date(episodes)
+        assert result is None
+
+    def test_returns_single_date_when_one_episode_watched(self) -> None:
+        """Should return the date when only one episode has been watched."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        episodes = [
+            {"Id": "ep1", "UserData": {"Played": False, "LastPlayedDate": None}},
+            {"Id": "ep2", "UserData": {"Played": True, "LastPlayedDate": "2025-01-15T10:00:00Z"}},
+            {"Id": "ep3", "UserData": {"Played": False, "LastPlayedDate": None}},
+        ]
+
+        result = get_most_recent_episode_played_date(episodes)
+        assert result == "2025-01-15T10:00:00Z"
+
+    def test_returns_most_recent_date_across_episodes(self) -> None:
+        """Should return the most recent LastPlayedDate across all episodes."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        episodes = [
+            {"Id": "ep1", "UserData": {"Played": True, "LastPlayedDate": "2025-01-10T10:00:00Z"}},
+            {"Id": "ep2", "UserData": {"Played": True, "LastPlayedDate": "2025-01-20T15:30:00Z"}},
+            {"Id": "ep3", "UserData": {"Played": True, "LastPlayedDate": "2025-01-15T08:00:00Z"}},
+        ]
+
+        result = get_most_recent_episode_played_date(episodes)
+        assert result == "2025-01-20T15:30:00Z"
+
+    def test_handles_missing_user_data(self) -> None:
+        """Should handle episodes without UserData gracefully."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        episodes = [
+            {"Id": "ep1"},  # No UserData at all
+            {"Id": "ep2", "UserData": {"Played": True, "LastPlayedDate": "2025-01-15T10:00:00Z"}},
+            {"Id": "ep3", "UserData": {}},  # Empty UserData
+        ]
+
+        result = get_most_recent_episode_played_date(episodes)
+        assert result == "2025-01-15T10:00:00Z"
+
+    def test_handles_mixed_watched_and_unwatched_episodes(self) -> None:
+        """Should correctly handle a mix of watched and unwatched episodes."""
+        from app.services.sync import get_most_recent_episode_played_date
+
+        episodes = [
+            {"Id": "ep1", "UserData": {"Played": False, "LastPlayedDate": None}},
+            {"Id": "ep2", "UserData": {"Played": True, "LastPlayedDate": "2025-01-05T10:00:00Z"}},
+            {"Id": "ep3", "UserData": {"Played": False, "LastPlayedDate": None}},
+            {"Id": "ep4", "UserData": {"Played": True, "LastPlayedDate": "2025-01-25T18:00:00Z"}},
+            {"Id": "ep5", "UserData": {"Played": True, "LastPlayedDate": "2025-01-10T12:00:00Z"}},
+        ]
+
+        result = get_most_recent_episode_played_date(episodes)
+        assert result == "2025-01-25T18:00:00Z"

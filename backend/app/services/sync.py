@@ -766,17 +766,30 @@ async def fetch_season_episodes(
     server_url: str,
     api_key: str,
     season_id: str,
+    jellyfin_user_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Fetch all episodes for a season from Jellyfin API with retry on transient failures.
 
-    Returns list of episode dicts with MediaSources for size calculation.
+    Args:
+        client: httpx client
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+        season_id: Jellyfin season ID
+        jellyfin_user_id: Optional Jellyfin user ID for user-specific UserData
+
+    Returns list of episode dicts with MediaSources for size calculation
+    and UserData for watch status aggregation.
     """
-    params = {
+    params: dict[str, str] = {
         "ParentId": season_id,
         "IncludeItemTypes": "Episode",
-        "Fields": "MediaSources",
+        "Fields": "MediaSources,UserData",
     }
+
+    # Add user ID to get user-specific watch data
+    if jellyfin_user_id:
+        params["UserId"] = jellyfin_user_id
 
     async def _fetch() -> list[dict[str, Any]]:
         response = await client.get(
@@ -802,6 +815,29 @@ def calculate_season_total_size(episodes: list[dict[str, Any]]) -> int:
     return total_size
 
 
+def get_most_recent_episode_played_date(episodes: list[dict[str, Any]]) -> str | None:
+    """
+    Get the most recent LastPlayedDate from a list of episodes.
+
+    Args:
+        episodes: List of episode dicts with UserData
+
+    Returns:
+        Most recent LastPlayedDate string, or None if no episodes were played
+    """
+    most_recent: str | None = None
+
+    for episode in episodes:
+        user_data = episode.get("UserData", {})
+        last_played = user_data.get("LastPlayedDate")
+
+        if last_played:
+            if most_recent is None or last_played > most_recent:
+                most_recent = last_played
+
+    return most_recent
+
+
 async def calculate_season_sizes(
     db: AsyncSession,
     user_id: int,
@@ -809,14 +845,18 @@ async def calculate_season_sizes(
     api_key: str,
 ) -> None:
     """
-    Calculate and store season sizes and total series size for all series in user's cache.
+    Calculate and store season sizes, total series size, and last_played_date
+    for all series in user's cache.
 
     This function:
     1. Fetches all series from cached_media_items for the user
-    2. For each series, fetches seasons from Jellyfin API
-    3. For each season, fetches episodes and calculates total size
-    4. Stores the largest season size in largest_season_size_bytes
-    5. Stores the total series size (sum of all seasons) in size_bytes
+    2. Fetches all Jellyfin users (to aggregate watch data across users)
+    3. For each series, fetches seasons from Jellyfin API
+    4. For each season, fetches episodes and calculates total size
+    5. For episode watch data, queries each Jellyfin user to aggregate last_played_date
+    6. Stores the largest season size in largest_season_size_bytes
+    7. Stores the total series size (sum of all seasons) in size_bytes
+    8. Aggregates last_played_date from all users' episode data
 
     Args:
         db: Database session
@@ -839,6 +879,11 @@ async def calculate_season_sizes(
         logger.info("No series found for user, skipping season size calculation")
         return
 
+    # Fetch Jellyfin users to aggregate watch data
+    jellyfin_users = await fetch_jellyfin_users(server_url, api_key)
+    if not jellyfin_users:
+        logger.warning("No Jellyfin users found, episode watch data will not be aggregated")
+
     logger.info(f"Calculating season sizes for {len(series_items)} series...")
 
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -854,13 +899,17 @@ async def calculate_season_sizes(
                     continue
 
                 # Calculate size for each season, track largest and total
+                # Also collect all episodes to aggregate last_played_date
                 largest_season_size = 0
                 total_series_size = 0
+                all_episodes_watch_data: list[dict[str, Any]] = []
+
                 for season in seasons:
                     season_id = season.get("Id")
                     if not season_id:
                         continue
 
+                    # Fetch episodes without user context for size calculation
                     episodes = await fetch_season_episodes(
                         client, server_url, api_key, season_id
                     )
@@ -872,6 +921,18 @@ async def calculate_season_sizes(
                     if season_size > largest_season_size:
                         largest_season_size = season_size
 
+                    # Fetch episode watch data from each Jellyfin user
+                    for jf_user in jellyfin_users:
+                        jf_user_id = jf_user.get("Id")
+                        if not jf_user_id:
+                            continue
+
+                        user_episodes = await fetch_season_episodes(
+                            client, server_url, api_key, season_id, jf_user_id
+                        )
+                        # Extract just the UserData from each episode
+                        all_episodes_watch_data.extend(user_episodes)
+
                 # Update the series with largest season size and total size
                 if largest_season_size > 0:
                     series.largest_season_size_bytes = largest_season_size
@@ -881,6 +942,14 @@ async def calculate_season_sizes(
                         f"Series '{series.name}': total = "
                         f"{total_series_size / (1024**3):.2f} GB, "
                         f"largest season = {largest_season_size / (1024**3):.2f} GB"
+                    )
+
+                # Aggregate last_played_date from all users' episode data
+                series_last_played = get_most_recent_episode_played_date(all_episodes_watch_data)
+                if series_last_played:
+                    series.last_played_date = series_last_played
+                    logger.debug(
+                        f"Series '{series.name}': last_played_date = {series_last_played}"
                     )
 
             except (httpx.RequestError, httpx.HTTPStatusError) as e:

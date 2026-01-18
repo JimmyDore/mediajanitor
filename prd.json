@@ -143,8 +143,8 @@
         "Verify in browser: series show dates instead of generic \"Watched\""
       ],
       "priority": 60,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Modified calculate_season_sizes() to fetch episode UserData from all Jellyfin users and aggregate last_played_date. Added get_most_recent_episode_played_date() helper function. Updated fetch_season_episodes() to accept optional jellyfin_user_id parameter. Frontend formatLastWatched() already handles date display correctly."
     },
     {
       "id": "US-36.1",
