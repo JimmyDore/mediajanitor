@@ -247,7 +247,7 @@
 	<!-- Contact Section -->
 	<section class="contact-section">
 		<h2>Still need help?</h2>
-		<p>If you can't find what you're looking for, check out the <a href="https://github.com/anthropics/claude-code/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a> or submit a new issue.</p>
+		<p>If you can't find what you're looking for, <a href="https://github.com/jimmydore/mediajanitor" target="_blank" rel="noopener noreferrer">view the project on GitHub</a> or <a href="https://github.com/jimmydore/mediajanitor/issues" target="_blank" rel="noopener noreferrer">report an issue</a>.</p>
 	</section>
 </div>
 

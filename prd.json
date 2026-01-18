@@ -414,8 +414,8 @@
         "Verify in browser: clicking link opens correct repository"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated Help page contact section with two links: 'view the project on GitHub' and 'report an issue'. Both point to jimmydore/mediajanitor with correct attributes."
     },
     {
       "id": "US-41.1",
