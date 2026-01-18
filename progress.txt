@@ -639,6 +639,38 @@ Extracted the user nicknames section from the deleted settings page into a dedic
 
 ---
 
+## 2026-01-18: US-36.5 - Extract Display Page
+
+### Summary
+Extracted the display preferences section from the deleted settings page into a dedicated `/settings/display/+page.svelte` page. This is the final extraction story in the settings page refactoring series (US-36.1 through US-36.5).
+
+### Files Changed
+- `frontend/src/routes/settings/display/+page.svelte` - Full implementation of display settings page
+- `frontend/tests/settings-display-page.test.ts` - New test file with 18 API contract tests
+
+### Key Implementation Details
+- Theme selector (Light/Dark/System) - changes apply immediately via theme store
+- Title language dropdown (English/French) - saves on change
+- Recently available days input (1-30 range) - saves on change
+- Show unreleased requests toggle - saves on change
+- Each setting calls POST /api/settings/display with a partial update (single field)
+- Loading state with spinner during initial fetch
+- Saving indicator shows when any setting is being saved
+- Responsive: setting rows stack vertically on mobile (≤600px)
+
+### Verification
+- 487 frontend unit tests pass (18 new tests)
+- svelte-check passes (0 errors, 3 warnings - all pre-existing)
+- Verified in Docker: all display settings load, change, and persist correctly
+- Theme changes apply immediately to the UI
+
+### Learnings
+- The old settings page was deleted in US-36.1; this completes the extraction series
+- Using partial updates (one field per POST) simplifies the save logic and provides instant feedback
+- The theme store already had `setPreference()` method to apply theme changes to the DOM
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
