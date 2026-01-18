@@ -9,7 +9,7 @@
 	let { children } = $props();
 
 	// Public routes that don't require authentication
-	const publicRoutes = ['/', '/login', '/register'];
+	const publicRoutes = ['/', '/login', '/register', '/forgot-password'];
 
 	// Check if current route is public
 	let isPublicRoute = $derived(publicRoutes.includes($page.url.pathname));

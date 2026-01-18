@@ -1,27 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { auth } from '$lib/stores';
-
 	let email = $state('');
-	let password = $state('');
 	let error = $state<string | null>(null);
 	let isLoading = $state(false);
-	let mounted = $state(false);
-
-	// Get redirect path from query params (if any)
-	let redirectPath = $derived($page.url.searchParams.get('redirect') || '/');
-
-	onMount(() => {
-		mounted = true;
-		// If already authenticated, redirect to intended destination
-		auth.subscribe((authState) => {
-			if (authState.isAuthenticated && !authState.isLoading) {
-				goto(redirectPath);
-			}
-		})();
-	});
+	let isSuccess = $state(false);
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -29,28 +10,21 @@
 		isLoading = true;
 
 		try {
-			const response = await fetch('/api/auth/login', {
+			const response = await fetch('/api/auth/request-password-reset', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password }),
-				credentials: 'include' // Include cookies for refresh token
+				body: JSON.stringify({ email })
 			});
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.detail || 'Login failed');
+				throw new Error(data.detail || 'Request failed');
 			}
 
-			const data = await response.json();
-			// Store token in memory (more secure than localStorage)
-			// Refresh token is stored in httpOnly cookie by the server
-			auth.setToken(data.access_token, data.expires_in);
-
-			// Update auth state and redirect to intended destination
-			await auth.checkAuth();
-			goto(redirectPath);
+			// Success - always show same message regardless of whether email exists
+			isSuccess = true;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Login failed';
+			error = e instanceof Error ? e.message : 'Request failed. Please try again.';
 		} finally {
 			isLoading = false;
 		}
@@ -58,7 +32,7 @@
 </script>
 
 <svelte:head>
-	<title>Login | Media Janitor</title>
+	<title>Forgot Password | Media Janitor</title>
 </svelte:head>
 
 <div class="auth-container">
@@ -72,60 +46,54 @@
 			Media Janitor
 		</a>
 		<div class="auth-header">
-			<h1>Log In</h1>
-			<p class="auth-subtitle">Sign in to your account</p>
+			<h1>Forgot Password</h1>
+			<p class="auth-subtitle">Enter your email to receive a reset link</p>
 		</div>
 
-		<form onsubmit={handleSubmit} class="auth-form">
-			{#if error}
-				<div class="error-message" role="alert">
-					{error}
-				</div>
-			{/if}
-
-			<div class="form-group">
-				<label for="email">Email</label>
-				<input
-					type="email"
-					id="email"
-					bind:value={email}
-					required
-					autocomplete="email"
-					placeholder="you@example.com"
-					class="input"
-				/>
+		{#if isSuccess}
+			<div class="success-message" role="status">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+					<polyline points="22 4 12 14.01 9 11.01"/>
+				</svg>
+				<p>If that email exists, a reset link has been sent. Check your inbox.</p>
 			</div>
-
-			<div class="form-group">
-				<label for="password">Password</label>
-				<input
-					type="password"
-					id="password"
-					bind:value={password}
-					required
-					autocomplete="current-password"
-					placeholder="Your password"
-					class="input"
-				/>
-			</div>
-
-			<div class="forgot-password">
-				<a href="/forgot-password">Forgot password?</a>
-			</div>
-
-			<button type="submit" disabled={isLoading} class="submit-button">
-				{#if isLoading}
-					<span class="spinner"></span>
-					Logging in...
-				{:else}
-					Log In
+			<a href="/login" class="back-link">Back to login</a>
+		{:else}
+			<form onsubmit={handleSubmit} class="auth-form">
+				{#if error}
+					<div class="error-message" role="alert">
+						{error}
+					</div>
 				{/if}
-			</button>
-		</form>
 
-		<p class="auth-footer">
-			Don't have an account? <a href="/register">Sign up</a>
-		</p>
+				<div class="form-group">
+					<label for="email">Email</label>
+					<input
+						type="email"
+						id="email"
+						bind:value={email}
+						required
+						autocomplete="email"
+						placeholder="you@example.com"
+						class="input"
+					/>
+				</div>
+
+				<button type="submit" disabled={isLoading} class="submit-button">
+					{#if isLoading}
+						<span class="spinner" aria-hidden="true"></span>
+						Sending...
+					{:else}
+						Send Reset Link
+					{/if}
+				</button>
+			</form>
+
+			<p class="auth-footer">
+				<a href="/login">Back to login</a>
+			</p>
+		{/if}
 	</div>
 </div>
 
@@ -234,6 +202,28 @@
 		font-size: var(--font-size-base);
 	}
 
+	.success-message {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background: var(--success-light);
+		border: 1px solid var(--success);
+		border-radius: var(--radius-md);
+		color: var(--success);
+		font-size: var(--font-size-base);
+		margin-bottom: var(--space-4);
+	}
+
+	.success-message svg {
+		flex-shrink: 0;
+		margin-top: 2px;
+	}
+
+	.success-message p {
+		margin: 0;
+	}
+
 	.submit-button {
 		margin-top: var(--space-2);
 		padding: var(--space-3);
@@ -286,18 +276,15 @@
 		text-decoration: underline;
 	}
 
-	.forgot-password {
-		text-align: right;
-	}
-
-	.forgot-password a {
-		color: var(--text-secondary);
-		text-decoration: none;
-		font-size: var(--font-size-sm);
-	}
-
-	.forgot-password a:hover {
+	.back-link {
+		display: block;
+		text-align: center;
 		color: var(--accent);
+		text-decoration: none;
+		font-weight: var(--font-weight-medium);
+	}
+
+	.back-link:hover {
 		text-decoration: underline;
 	}
 

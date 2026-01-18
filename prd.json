@@ -668,8 +668,8 @@
         "Verify in browser: navigate to forgot password, enter email, see success message"
       ],
       "priority": 79,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /forgot-password/+page.svelte with email form. Added 'Forgot password?' link to login page. Added /forgot-password to publicRoutes in +layout.svelte. Success state shows green checkmark and message. 9 new unit tests added."
     },
     {
       "id": "US-44.6",
