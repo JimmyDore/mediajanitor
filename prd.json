@@ -183,8 +183,8 @@
         "Verify in browser: all connection flows work correctly"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted connections section to /settings/connections/+page.svelte. Includes Jellyfin, Jellyseerr, Radarr, Sonarr connection cards with expand/collapse, validation, save, status indicators. 15 new unit tests added. All functionality preserved from original settings page."
     },
     {
       "id": "US-36.3",
