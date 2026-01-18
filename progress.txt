@@ -57,6 +57,35 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-45.6 - Responsive Dashboard Stats Grid
+
+### Summary
+Added responsive layout to the Dashboard page, allowing the stats grid to expand on larger screens.
+
+### Files Changed
+- `frontend/src/routes/+page.svelte` - Added responsive CSS media queries for dashboard and stats grid
+
+### Key Implementation Details
+- Dashboard max-width expands at breakpoints: 800px (default) → 1000px (≥1440px) → 1200px (≥1920px)
+- Stats grid gap increases proportionally: space-3 → space-4 (≥1440px) → space-5 (≥1920px)
+- Stats grid remains 4 columns with cards growing larger at each breakpoint
+- Mobile 2-column grid unchanged (≤640px)
+
+### Verification
+- 633 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser via Puppeteer at breakpoints:
+  - 800px: Default compact layout
+  - 1440px: Expanded layout with max-width 1000px, larger gaps
+  - 1920px: Full expansion with max-width 1200px, even larger gaps
+  - 640px: Mobile 2-column grid
+
+### Learnings
+- Dashboard uses page-specific max-width values (800px → 1000px → 1200px) rather than the global --content-max-width variable since it has a more compact design
+- CSS gap property in grid layouts responds well to CSS variable changes for proportional spacing
+
+---
+
 ## 2026-01-18: US-45.5 - Responsive Table Columns on Library Page
 
 ### Summary
