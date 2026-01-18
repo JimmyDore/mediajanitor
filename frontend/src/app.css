@@ -41,6 +41,37 @@
 	--space-10: 40px;
 	--space-12: 48px;
 
+	/* ==========================================================================
+	   Responsive Layout System
+	   ==========================================================================
+
+	   Breakpoint Strategy:
+	   - Mobile-first: Base styles target mobile/tablet
+	   - lg (≥1440px): Large desktop displays
+	   - xl (≥1920px): Ultrawide and 4K displays
+
+	   Layout components (sidebar, content) expand progressively at each breakpoint
+	   to utilize available screen real estate without overwhelming the UI.
+
+	   Usage in media queries:
+	   @media (min-width: 1440px) { ... }  // lg breakpoint
+	   @media (min-width: 1920px) { ... }  // xl breakpoint
+	   ========================================================================== */
+
+	/* Breakpoints (for reference - CSS doesn't support var() in media queries) */
+	--breakpoint-lg: 1440px;
+	--breakpoint-xl: 1920px;
+
+	/* Sidebar Width - expands on larger screens for better nav readability */
+	--sidebar-width: 220px;           /* Default: mobile/tablet/small desktop */
+	--sidebar-width-lg: 260px;        /* ≥1440px: large desktop */
+	--sidebar-width-xl: 300px;        /* ≥1920px: ultrawide/4K */
+
+	/* Content Max Width - expands to use screen space on larger displays */
+	--content-max-width: 1200px;      /* Default: standard desktop */
+	--content-max-width-lg: 1600px;   /* ≥1440px: large desktop */
+	--content-max-width-xl: 1800px;   /* ≥1920px: ultrawide/4K */
+
 	/* Border Radius (sharp system: 4/6/8px) */
 	--radius-sm: 4px;
 	--radius-md: 6px;
