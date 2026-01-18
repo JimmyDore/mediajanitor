@@ -545,8 +545,8 @@
         "Create a list of files using `var(--warning)` that need testing (already identified in Grep results)"
       ],
       "priority": 77,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Audit completed. LIGHT MODE FAILS: warning #ca8a04 on white #ffffff = 2.94:1 (FAIL), on warning-light = 2.66:1 (FAIL), white on warning toast = 2.94:1 (FAIL). DARK MODE: warning #eab308 on dark #0f172a = 9.31:1 (PASS), on warning-light = 7.1:1 (PASS), white on warning toast = 1.92:1 (FAIL). Files: issues/+page.svelte, library/+page.svelte, old-unwatched/+page.svelte, register/+page.svelte, settings/users/+page.svelte, Toast.svelte, app.css (.badge-warning)"
     },
     {
       "id": "US-43.2",
