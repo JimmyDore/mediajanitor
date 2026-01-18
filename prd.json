@@ -452,8 +452,8 @@
         "Verify in browser: open modal, tab through elements, verify focus stays in modal"
       ],
       "priority": 72,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added getFocusableElements() helper and focus trap logic to handleKeydown(). Tab from last element wraps to first, Shift+Tab from first wraps to last. Both modals have tabindex='0' for accessibility. Removed svelte-ignore a11y_interactive_supports_focus comments. 14 new unit tests added."
     },
     {
       "id": "US-41.3",

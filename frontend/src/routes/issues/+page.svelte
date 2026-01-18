@@ -106,6 +106,10 @@
 	let deleteFromArr = $state(true);
 	let deleteFromJellyseerr = $state(true);
 
+	// Modal element references for focus trapping
+	let durationPickerModal = $state<HTMLElement | null>(null);
+	let deleteModalElement = $state<HTMLElement | null>(null);
+
 	const durationOptions: { value: DurationOption; label: string }[] = [
 		{ value: 'permanent', label: 'Permanent' },
 		{ value: '3months', label: '3 Months' },
@@ -236,13 +240,48 @@
 		deleteItem = null;
 	}
 
-	// Handle keyboard events for modals
+	// Get all focusable elements within a container
+	function getFocusableElements(container: HTMLElement): HTMLElement[] {
+		const selector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+		return Array.from(container.querySelectorAll<HTMLElement>(selector));
+	}
+
+	// Handle keyboard events for modals (Escape to close, Tab/Shift+Tab for focus trap)
 	function handleKeydown(event: KeyboardEvent) {
+		// Handle Escape key to close modals
 		if (event.key === 'Escape') {
 			if (showDurationPicker) {
 				closeDurationPicker();
 			} else if (showDeleteModal) {
 				closeDeleteModal();
+			}
+			return;
+		}
+
+		// Handle Tab/Shift+Tab for focus trapping within modals
+		if (event.key === 'Tab') {
+			const activeModal = showDurationPicker ? durationPickerModal : (showDeleteModal ? deleteModalElement : null);
+			if (!activeModal) return;
+
+			const focusableElements = getFocusableElements(activeModal);
+			if (focusableElements.length === 0) return;
+
+			const currentElement = document.activeElement as HTMLElement;
+			const currentIndex = focusableElements.indexOf(currentElement);
+			const lastIndex = focusableElements.length - 1;
+
+			if (event.shiftKey) {
+				// Shift+Tab: go to previous, wrap to last if at first
+				if (currentIndex <= 0) {
+					event.preventDefault();
+					focusableElements[lastIndex].focus();
+				}
+			} else {
+				// Tab: go to next, wrap to first if at last
+				if (currentIndex >= lastIndex) {
+					event.preventDefault();
+					focusableElements[0].focus();
+				}
 			}
 		}
 	}
@@ -1213,8 +1252,7 @@
 {#if showDurationPicker && selectedItem}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div class="modal-overlay" onclick={closeDurationPicker} role="presentation">
-		<!-- svelte-ignore a11y_interactive_supports_focus -->
-		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="modal-title">
+		<div class="modal" bind:this={durationPickerModal} onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="modal-title" tabindex="0">
 			<h3 id="modal-title">Set Whitelist Duration</h3>
 			<p class="modal-desc">Choose how long <strong>{selectedItem.name}</strong> should be whitelisted.</p>
 
@@ -1263,8 +1301,7 @@
 {#if showDeleteModal && deleteItem}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div class="modal-overlay" onclick={closeDeleteModal} role="presentation">
-		<!-- svelte-ignore a11y_interactive_supports_focus -->
-		<div class="modal delete-modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="delete-modal-title">
+		<div class="modal delete-modal" bind:this={deleteModalElement} onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="delete-modal-title" tabindex="0">
 			<h3 id="delete-modal-title">Delete Content</h3>
 			<p class="modal-desc">
 				Are you sure you want to delete <strong>{deleteItem.name}</strong>?
