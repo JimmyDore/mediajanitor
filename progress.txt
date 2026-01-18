@@ -57,6 +57,34 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-37.2 - Display Prefilled Users in UI
+
+### Summary
+Verified that the display prefilled users feature was already fully implemented in US-36.4 and US-37.1. No code changes needed - just marked the story as complete.
+
+### Existing Implementation
+- `frontend/src/routes/settings/users/+page.svelte` - Users page displays prefilled Jellyfin users
+- Warning badge (!) next to usernames with `has_jellyseerr_account=false`
+- Tooltip explains: "This Jellyfin user was not found in Jellyseerr. They may not be able to request content."
+- Empty display names show em-dash (—)
+- Edit/delete functionality preserved
+
+### Verification
+- 487 frontend unit tests pass (16 for settings-users.test.ts)
+- svelte-check passes (0 errors, 3 warnings)
+- Verified in browser via Puppeteer: users table shows prefilled Jellyfin users with warning badges
+
+### Key Implementation Details (Pre-existing)
+- `has_jellyseerr_account` field added in US-37.1 backend sync
+- Warning badge rendered with `{#if nickname.has_jellyseerr_account === false}`
+- Empty state only shows when `nicknames.length === 0 && !showAddNicknameForm`
+
+### Learnings
+- Before implementing, always check if the feature is already complete by reviewing existing code
+- The warning badge styling uses `--warning-light` background with `--warning` text color
+
+---
+
 ## 2026-01-16: US-35.1 - Fix Watched Column Sort Order
 
 ### Summary
