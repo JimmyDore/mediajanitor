@@ -52,8 +52,37 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 46 - Service Badges (In Progress)
-**Total Stories**: 47 stories (27 passes: true, 20 remaining)
+**Phase**: Epic 46 - Service Badges (COMPLETE)
+**Total Stories**: 47 stories (47 passes: true, 0 remaining)
+
+---
+
+## 2026-01-18: US-46.4 - Update Library Page with All Service Badges
+
+### Summary
+Updated the Library page to display all 5 service badges (Jellyfin, Jellyseerr, Radarr, Sonarr, TMDB) using the ServiceBadge component. Radarr shows for movies, Sonarr shows for series.
+
+### Files Changed
+- `frontend/src/routes/library/+page.svelte` - Added sonarr_title_slug to interface, added URL functions, imported ServiceBadge, removed old CSS
+
+### Key Implementation Details
+- Added `sonarr_title_slug: string | null` to LibraryItem TypeScript interface
+- Added `getJellyseerrUrl()` - uses tmdb_id + media_type
+- Added `getRadarrUrl()` - uses tmdb_id (movies only)
+- Added `getSonarrUrl()` - uses sonarr_title_slug (series only)
+- Imported ServiceBadge component from `$lib/components/ServiceBadge.svelte`
+- Replaced old text badges (JF, TMDB) with ServiceBadge components for all 5 services
+- Removed ~25 lines of old `.service-badge-text.*` CSS styles
+
+### Verification
+- 661 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: Movies show Jellyfin, Jellyseerr, Radarr, TMDB badges
+- Verified in browser: Series show Jellyfin, Jellyseerr, Sonarr, TMDB badges
+
+### Learnings
+- ServiceBadge component is self-contained with its own styling, no parent CSS needed
+- Reuse URL generation pattern from Issues page for consistency
 
 ---
 
