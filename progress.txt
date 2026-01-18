@@ -57,6 +57,38 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ---
 
+## 2026-01-18: US-38.3 - Recently Available Uses Language Preference
+
+### Summary
+Implemented language preference support for the Recently Available page. Users can now choose to view and copy content titles in French instead of English.
+
+### Files Changed
+- `backend/app/models/content.py` - Added `title_fr` field to `RecentlyAvailableItem` model
+- `backend/app/services/content.py` - Return `title_fr` from database in API response
+- `frontend/src/routes/info/recent/+page.svelte` - Read `title_language` preference, display titles based on preference, update copy function
+- `frontend/tests/info.test.ts` - Added 6 new tests for title_fr field and language preference logic
+
+### Key Implementation Details
+- `RecentlyAvailableItem` now includes `title_fr: str | None` field
+- Frontend reads `title_language` from `/api/settings/display` on page load
+- `getDisplayTitle()` helper returns French title if `titleLanguage === 'fr'` and `title_fr` is available
+- Falls back to English title when French title is null/unavailable
+- Copy button also uses `getDisplayTitle()` to output titles in preferred language
+
+### Verification
+- 556 backend tests pass
+- 493 frontend tests pass (6 new tests)
+- mypy typecheck passes
+- svelte-check passes (0 errors)
+- 34 integration tests pass
+- Verified in browser: titles switch between English and French based on setting
+
+### Learnings
+- The `title_fr` field was already populated during sync (US-38.2), so only API and frontend changes needed
+- French title fallback to English happens in the frontend, not the backend
+
+---
+
 ## 2026-01-18: US-37.2 - Display Prefilled Users in UI
 
 ### Summary
