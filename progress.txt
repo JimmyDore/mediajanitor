@@ -53,7 +53,33 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 46 - Service Badges (In Progress)
-**Total Stories**: 47 stories (25 passes: true, 22 remaining)
+**Total Stories**: 47 stories (26 passes: true, 21 remaining)
+
+---
+
+## 2026-01-18: US-46.2 - Update Issues Page to Use ServiceBadge Component
+
+### Summary
+Updated the Issues page to use the new ServiceBadge component, replacing text abbreviations (JF, JS, RD, SN, TMDB) with inline SVG logo icons.
+
+### Files Changed
+- `frontend/src/routes/issues/+page.svelte` - Import ServiceBadge, replace text badges, remove old CSS
+
+### Key Implementation Details
+- Imported ServiceBadge component from `$lib/components/ServiceBadge.svelte`
+- Replaced 5 text badge links with ServiceBadge component calls
+- Removed ~40 lines of `.service-badge-text.*` CSS styles (now in component)
+- Existing URL generation functions unchanged (getJellyfinUrl, getJellyseerrUrl, etc.)
+- Used nullish coalescing (`?? ''`) for type safety with potentially null URLs
+
+### Verification
+- 661 frontend unit tests pass (no new tests needed - component already tested)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: all 5 service logos display as colored circular icons
+
+### Learnings
+- Component reuse reduces code duplication - removed ~40 lines of CSS from Issues page
+- ServiceBadge component handles all styling internally, simplifying integration
 
 ---
 
