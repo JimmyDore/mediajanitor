@@ -158,6 +158,47 @@ class TestIntegrationAuth:
             )
             assert response.status_code == 422
 
+    def test_change_password_requires_auth(self):
+        """Test POST /api/auth/change-password returns 401 without auth."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/change-password",
+                json={
+                    "current_password": "OldPassword123!",
+                    "new_password": "NewSecure456!",
+                },
+            )
+            assert response.status_code == 401
+
+    def test_change_password_wrong_current_password(self, module_auth_headers):
+        """Test POST /api/auth/change-password returns 400 for wrong current password."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            response = client.post(
+                "/api/auth/change-password",
+                json={
+                    "current_password": "WrongPassword123!",
+                    "new_password": "NewSecure456!",
+                },
+                headers=module_auth_headers,
+            )
+            assert response.status_code == 400
+            data = response.json()
+            assert "incorrect" in data["detail"].lower() or "current password" in data["detail"].lower()
+
+    def test_change_password_weak_new_password(self, module_auth_headers):
+        """Test POST /api/auth/change-password returns 422 for weak new password."""
+        with httpx.Client(base_url=BASE_URL) as client:
+            # Test password without uppercase
+            response = client.post(
+                "/api/auth/change-password",
+                json={
+                    "current_password": TEST_PASSWORD,
+                    "new_password": "weakpassword123",
+                },
+                headers=module_auth_headers,
+            )
+            assert response.status_code == 422
+
 
 class TestIntegrationContentIssues:
     """Integration tests for GET /api/content/issues endpoint (US-D.3)."""

@@ -879,3 +879,205 @@ class TestResetPasswordEndpoint:
             },
         )
         assert response2.status_code == 400
+
+
+class TestChangePasswordEndpoint:
+    """Tests for POST /api/auth/change-password endpoint."""
+
+    def _register_and_login(self, client: TestClient, email: str = "changepass@example.com", password: str = "OldPassword123!") -> str:
+        """
+        Helper to register a user and return their access token.
+
+        Returns:
+            Access token string
+        """
+        # Register a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": password,
+            },
+        )
+
+        # Login to get access token
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": password,
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_change_password_success(self, client: TestClient) -> None:
+        """Test successful password change with correct current password."""
+        token = self._register_and_login(client, "success1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewSecure456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert "success" in data["message"].lower()
+
+    def test_change_password_updates_password(self, client: TestClient) -> None:
+        """Test that password is actually updated after change."""
+        token = self._register_and_login(client, "update1@example.com")
+
+        # Change password
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewSecure456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify can log in with new password
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "update1@example.com",
+                "password": "NewSecure456!",
+            },
+        )
+        assert login_response.status_code == 200
+
+        # Verify old password no longer works
+        old_login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "update1@example.com",
+                "password": "OldPassword123!",
+            },
+        )
+        assert old_login_response.status_code == 401
+
+    def test_change_password_wrong_current_password(self, client: TestClient) -> None:
+        """Test that wrong current password returns 400."""
+        token = self._register_and_login(client, "wrong1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "WrongPassword123!",
+                "new_password": "NewSecure456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "current password" in data["detail"].lower() or "incorrect" in data["detail"].lower()
+
+    def test_change_password_requires_authentication(self, client: TestClient) -> None:
+        """Test that change password requires valid authentication."""
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewSecure456!",
+            },
+        )
+
+        assert response.status_code == 401
+
+    def test_change_password_invalid_token(self, client: TestClient) -> None:
+        """Test that change password with invalid token returns 401."""
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewSecure456!",
+            },
+            headers={"Authorization": "Bearer invalid_token"},
+        )
+
+        assert response.status_code == 401
+
+    def test_change_password_too_short(self, client: TestClient) -> None:
+        """Test that new password less than 8 chars returns 422."""
+        token = self._register_and_login(client, "short1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "Short1!",  # Only 7 chars
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 422
+
+    def test_change_password_missing_uppercase(self, client: TestClient) -> None:
+        """Test that new password without uppercase returns 422."""
+        token = self._register_and_login(client, "upper1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "nouppercase123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 422
+
+    def test_change_password_missing_lowercase(self, client: TestClient) -> None:
+        """Test that new password without lowercase returns 422."""
+        token = self._register_and_login(client, "lower1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NOLOWERCASE123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 422
+
+    def test_change_password_missing_number(self, client: TestClient) -> None:
+        """Test that new password without number returns 422."""
+        token = self._register_and_login(client, "num1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NoNumberHere!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 422
+
+    def test_change_password_same_as_current(self, client: TestClient) -> None:
+        """Test that new password can be same as current (no restriction)."""
+        token = self._register_and_login(client, "same1@example.com")
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "OldPassword123!",  # Same as current
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # This could either succeed (200) or fail with 400 depending on business requirements
+        # We'll allow it for simplicity (no restriction on setting same password)
+        assert response.status_code == 200

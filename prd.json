@@ -715,8 +715,8 @@
         "Verify in browser: change password, logout, login with new password"
       ],
       "priority": 81,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created POST /api/auth/change-password endpoint with authentication requirement. Returns 200 on success, 400 if current password wrong, 422 for weak new password. Added /settings/security page with Change Password form: current password, new password, confirm password inputs with show/hide toggles. Client-side validation (8+ chars, uppercase, lowercase, number). 10 backend unit tests + 3 integration tests + 17 frontend tests."
     },
     {
       "id": "US-45.1",

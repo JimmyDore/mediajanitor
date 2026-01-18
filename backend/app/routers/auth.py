@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import PasswordResetToken, User, get_db
 from app.models.user import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     PasswordResetRequest,
     PasswordResetResponse,
     RefreshTokenRequest,
@@ -32,10 +34,12 @@ from app.services.auth import (
     get_current_user,
     get_user_by_email_async,
     get_user_by_id_async,
+    hash_password,
     hash_refresh_token,
     invalidate_refresh_token,
     rotate_refresh_token,
     validate_refresh_token,
+    verify_password,
 )
 from app.services.email import send_password_reset_email
 from app.services.rate_limit import login_rate_limiter, password_reset_rate_limiter, register_rate_limiter
@@ -519,3 +523,37 @@ async def reset_password(
     logger.info(f"Password reset successful for user {user.email}")
 
     return ResetPasswordResponse()
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+async def change_password(
+    request_data: ChangePasswordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ChangePasswordResponse:
+    """
+    Change password for the currently authenticated user.
+
+    Requires:
+    - Valid authentication (JWT token)
+    - Correct current password
+    - New password meeting strength requirements
+
+    Returns 200 OK on success, 400 if current password is incorrect.
+    """
+    # Verify current password
+    if not verify_password(request_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Update user's password
+    new_hashed_password = hash_password(request_data.new_password)
+    current_user.hashed_password = new_hashed_password
+
+    await db.commit()
+
+    logger.info(f"Password changed for user {current_user.email}")
+
+    return ChangePasswordResponse()

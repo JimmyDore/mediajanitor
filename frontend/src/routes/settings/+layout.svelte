@@ -7,7 +7,8 @@
 		{ href: '/settings/connections', label: 'Connections', icon: 'plug' },
 		{ href: '/settings/thresholds', label: 'Thresholds', icon: 'sliders' },
 		{ href: '/settings/users', label: 'Users', icon: 'users' },
-		{ href: '/settings/display', label: 'Display', icon: 'monitor' }
+		{ href: '/settings/display', label: 'Display', icon: 'monitor' },
+		{ href: '/settings/security', label: 'Security', icon: 'lock' }
 	];
 
 	// Get current section name for breadcrumb
@@ -114,6 +115,19 @@
 										<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
 										<line x1="8" y1="21" x2="16" y2="21" />
 										<line x1="12" y1="17" x2="12" y2="21" />
+									</svg>
+								{:else if item.icon === 'lock'}
+									<svg
+										width="18"
+										height="18"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										aria-hidden="true"
+									>
+										<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+										<path d="M7 11V7a5 5 0 0 1 10 0v4" />
 									</svg>
 								{/if}
 								<span>{item.label}</span>

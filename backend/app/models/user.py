@@ -96,3 +96,22 @@ class ResetPasswordResponse(BaseModel):
     """Schema for successful password reset response."""
 
     message: str = "Password has been reset successfully."
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema for change password request (for logged-in users)."""
+
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, description="New password")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password meets strength requirements."""
+        return validate_password_strength(v)
+
+
+class ChangePasswordResponse(BaseModel):
+    """Schema for successful password change response."""
+
+    message: str = "Password has been changed successfully."
