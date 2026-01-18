@@ -53,7 +53,44 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 44 - Password Reset (In Progress)
-**Total Stories**: 47 stories (18 passes: true, 29 remaining)
+**Total Stories**: 47 stories (19 passes: true, 28 remaining)
+
+---
+
+## 2026-01-18: US-44.6 - Reset Password UI
+
+### Summary
+Created the reset password page with password reset form. Users can enter a new password after clicking a reset link from email.
+
+### Files Changed
+- `frontend/src/routes/reset-password/+page.svelte` - New reset password page
+- `frontend/src/routes/+layout.svelte` - Added /reset-password to publicRoutes
+- `frontend/tests/reset-password.test.ts` - 19 new unit tests
+
+### Key Implementation Details
+- Page reads token from URL query param: `/reset-password?token=abc123`
+- Shows "Invalid reset link. No token provided." if no token in URL
+- Two password inputs with show/hide toggle (eye icons)
+- Client-side validation: 8+ chars, uppercase, lowercase, number required
+- Validates passwords match before submission (real-time feedback)
+- Calls POST /api/auth/reset-password with token and new password
+- On success: shows green checkmark message, redirects to /login after 2 seconds
+- On 400 error: shows "Invalid or expired token. Please request a new reset link."
+- Added /reset-password to publicRoutes for unauthenticated access
+
+### Verification
+- 616 frontend unit tests pass (19 new tests)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: page renders correctly
+- Verified in browser: no token shows error message
+- Verified in browser: password toggle shows/hides text
+- Verified in browser: password mismatch validation works
+- Verified in browser: invalid token shows error
+
+### Learnings
+- Password show/hide toggle uses type="text" vs type="password" toggle
+- SVG eye icon changes to eye-off when password is visible
+- Client-side password validation should match backend requirements
 
 ---
 
