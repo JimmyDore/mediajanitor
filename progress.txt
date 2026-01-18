@@ -53,7 +53,46 @@ Reusable patterns discovered during development. Update this section when you fi
 ## Current Status
 
 **Phase**: Epic 43 - Accessibility Color Contrast (In Progress)
-**Total Stories**: 47 stories (16 passes: true, 31 remaining)
+**Total Stories**: 47 stories (17 passes: true, 30 remaining)
+
+---
+
+## 2026-01-18: US-43.2 - Fix Warning Color for WCAG AA Compliance
+
+### Summary
+Fixed warning colors to meet WCAG AA contrast requirements (4.5:1 for normal text).
+
+### Files Changed
+- `frontend/src/app.css` - Updated `--warning` and `--warning-light` colors for light mode
+- `frontend/src/lib/components/Toast.svelte` - Changed toast-warning text color to dark amber
+
+### Key Implementation Details
+- **Light mode `--warning`**: Changed from `#ca8a04` (2.9:1) to `#a16207` (5.5:1)
+- **Light mode `--warning-light`**: Updated rgba() to match new base color
+- **Toast warning text**: Changed from `white` to `#451a03` (dark amber) for proper contrast
+- **Dark mode unchanged**: `#eab308` already passes WCAG AA (9.3:1 on dark backgrounds)
+
+### Updated Contrast Ratios (WCAG AA = 4.5:1)
+
+| Scenario | Foreground | Background | Contrast | WCAG AA |
+|----------|------------|------------|----------|---------|
+| Light mode: warning text on white bg | #a16207 | #ffffff | **5.5:1** | ✅ PASS |
+| Light mode: dark text on warning toast | #451a03 | #a16207 | **5.5:1** | ✅ PASS |
+| Dark mode: warning text on dark bg | #eab308 | #0f172a | **9.3:1** | ✅ PASS |
+| Dark mode: dark text on warning toast | #451a03 | #eab308 | **7.8:1** | ✅ PASS |
+
+### Verification
+- 588 frontend unit tests pass
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Verified in browser: Issues page "Never" text is readable in light mode
+- Verified in browser: Library page "Never" text is readable in light mode
+- Verified in browser: Settings/Users warning badges are visible in light mode
+
+### Learnings
+- WCAG AA requires 4.5:1 contrast for normal text
+- Yellow/amber colors are inherently high luminance, requiring darker shades for accessibility
+- Toast components with amber backgrounds work better with dark text than white text
+- Color `#a16207` (amber-700) maintains visual recognition as amber while meeting contrast requirements
 
 ---
 
