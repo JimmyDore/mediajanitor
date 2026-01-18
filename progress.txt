@@ -52,8 +52,41 @@ Reusable patterns discovered during development. Update this section when you fi
 
 ## Current Status
 
-**Phase**: Epic 45 - Responsive Layout (In Progress)
-**Total Stories**: 47 stories (24 passes: true, 23 remaining)
+**Phase**: Epic 46 - Service Badges (In Progress)
+**Total Stories**: 47 stories (25 passes: true, 22 remaining)
+
+---
+
+## 2026-01-18: US-46.1 - Create ServiceBadge Component with Inline SVG Logos
+
+### Summary
+Created a reusable ServiceBadge component with inline SVG icons for all 5 external services: Jellyfin, Jellyseerr, Radarr, Sonarr, and TMDB.
+
+### Files Changed
+- `frontend/src/lib/components/ServiceBadge.svelte` - New component with inline SVG icons
+- `frontend/tests/service-badge.test.ts` - 28 new unit tests
+
+### Key Implementation Details
+- Component accepts props: `service` (type), `url`, `title`
+- Inline SVG icons are 16x16 pixels with brand colors:
+  - Jellyfin: #00a4dc (blue)
+  - Jellyseerr: #7b68ee (purple)
+  - Radarr: #ffc230 (yellow)
+  - Sonarr: #2ecc71 (green)
+  - TMDB: #01b4e4 (blue)
+- Links open in new tab with `target="_blank"` and `rel="noopener noreferrer"`
+- Hover effect: `transform: scale(1.1)` with opacity change (0.9 → 1)
+- Focus outline uses `--brand-color` CSS variable for each service
+- SVG icons have `aria-hidden="true"` (decorative, title provides context)
+
+### Verification
+- 661 frontend unit tests pass (28 new tests)
+- svelte-check passes (0 errors, 3 warnings - pre-existing)
+- Component ready for integration in US-46.2 (Issues page) and US-46.4 (Library page)
+
+### Learnings
+- Inline SVG icons work well in both light and dark modes since they use solid fills
+- Using `$derived()` for CSS variable computation keeps reactive values clean
 
 ---
 
