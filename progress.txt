@@ -575,6 +575,38 @@ Extracted the API connections section from the deleted settings page into a dedi
 
 ---
 
+## 2026-01-18: US-36.3 - Extract Thresholds Page
+
+### Summary
+Extracted the analysis thresholds section from the deleted settings page into a dedicated `/settings/thresholds/+page.svelte` page. This is the second of four extraction stories to complete the settings page refactoring.
+
+### Files Changed
+- `frontend/src/routes/settings/thresholds/+page.svelte` - Full implementation of thresholds page
+- `frontend/tests/settings-thresholds.test.ts` - New test file with 15 API contract tests
+
+### Key Implementation Details
+- Four threshold inputs: Old content months, Min age months, Large movie size, Large season size
+- Help text shows which feature uses each threshold (e.g., "Used by: Old tab")
+- Save button submits all values via POST /api/settings/analysis
+- Reset button calls DELETE /api/settings/analysis to restore defaults
+- Loading state with spinner during initial fetch
+- Inline success/error messages
+- Responsive: threshold rows stack vertically on mobile (≤600px)
+- Default values: 4 months, 3 months, 13 GB, 15 GB
+
+### Verification
+- 453 frontend unit tests pass (15 new tests)
+- svelte-check passes (0 errors, 3 warnings)
+- Verified in Docker: page loads, Save works, Reset works
+- Verified: changed value from 4 to 6, then Reset restored to 4
+
+### Learnings
+- Thresholds section already had a dedicated API endpoint (GET/POST/DELETE /api/settings/analysis)
+- Old settings page was deleted in US-36.1; code extracted from git history
+- Svelte 5 uses $state() for reactive state instead of let
+
+---
+
 ## Notes
 
 - US-0.2 (Dockerize) was completed together with US-0.1 since Docker setup was needed for testing
