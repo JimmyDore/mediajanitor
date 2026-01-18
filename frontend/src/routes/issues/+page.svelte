@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { authenticatedFetch } from '$lib/stores';
 	import Toast from '$lib/components/Toast.svelte';
+	import SearchInput from '$lib/components/SearchInput.svelte';
 
 	interface ContentIssueItem {
 		jellyfin_id: string;
@@ -953,23 +954,13 @@
 				</span>
 			{/if}
 		</div>
-		<div class="search-container">
-			<input
-				type="text"
-				class="search-input"
-				placeholder="Search by title, year..."
-				value={searchQuery}
-				oninput={handleSearchInput}
-			/>
-			{#if searchQuery}
-				<button class="search-clear" onclick={clearSearch} aria-label="Clear search">
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<line x1="18" y1="6" x2="6" y2="18"/>
-						<line x1="6" y1="6" x2="18" y2="18"/>
-					</svg>
-				</button>
-			{/if}
-		</div>
+		<SearchInput
+			value={searchQuery}
+			placeholder="Search by title, year..."
+			aria-label="Search issues by title or year"
+			oninput={handleSearchInput}
+			onclear={clearSearch}
+		/>
 	</header>
 
 	<!-- Filter Tabs (underline style) -->
@@ -1424,59 +1415,6 @@
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
 		font-family: var(--font-mono);
-	}
-
-	/* Search input */
-	.search-container {
-		position: relative;
-		margin-top: var(--space-3);
-	}
-
-	.search-input {
-		width: 100%;
-		max-width: 300px;
-		padding: var(--space-2) var(--space-3);
-		padding-right: var(--space-8);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--bg-secondary);
-		color: var(--text-primary);
-		font-size: var(--font-size-sm);
-		transition: all var(--transition-fast);
-	}
-
-	.search-input::placeholder {
-		color: var(--text-muted);
-	}
-
-	.search-input:focus {
-		outline: none;
-		border-color: var(--accent);
-		box-shadow: 0 0 0 2px var(--accent-light);
-	}
-
-	.search-clear {
-		position: absolute;
-		right: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 20px;
-		height: 20px;
-		padding: 0;
-		background: var(--bg-tertiary);
-		border: none;
-		border-radius: var(--radius-sm);
-		color: var(--text-muted);
-		cursor: pointer;
-		transition: all var(--transition-fast);
-	}
-
-	.search-clear:hover {
-		background: var(--bg-hover);
-		color: var(--text-primary);
 	}
 
 	/* Filter nav - underline style */
