@@ -281,8 +281,8 @@
         "Verify in browser using browser tools"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementation already complete from US-36.4 and US-37.1. Users page displays prefilled Jellyfin users with warning badges for users without Jellyseerr accounts. Empty display names show em-dash. Edit/delete functionality works. 16 unit tests pass."
     },
     {
       "id": "US-37.3",
