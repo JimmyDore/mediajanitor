@@ -138,14 +138,16 @@ Critical bug fixes that affect core functionality and data accuracy.
 US-17.2 implementation shows generic "Syncing media..." instead of detailed progress like "Fetching user 3/10: John...". The `current_user_name` parameter is never passed to `update_sync_progress()` in `fetch_jellyfin_media_with_progress()`.
 
 **Acceptance Criteria:**
-- [ ] Backend: `fetch_jellyfin_media_with_progress()` passes `current_user_name` to `update_sync_progress()`
-- [ ] During batch processing, extract current user's display name from Jellyfin users list
-- [ ] Pass display name (e.g., "John", "Admin") to progress update function
-- [ ] Frontend displays "Fetching user 3/10: John..." instead of "Syncing media..."
-- [ ] Progress message updates with each user's name during sync
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: trigger sync and see user names in progress messages
+- [x] Backend: `fetch_jellyfin_media_with_progress()` passes `current_user_name` to `update_sync_progress()`
+- [x] During batch processing, extract current user's display name from Jellyfin users list
+- [x] Pass display name (e.g., "John", "Admin") to progress update function
+- [x] Frontend displays "Fetching user 3/10: John..." instead of "Syncing media..."
+- [x] Progress message updates with each user's name during sync
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: trigger sync and see user names in progress messages
+
+**Note:** Implementation already complete. Backend sync.py:456-460 extracts user name and passes to update_sync_progress(). Frontend +page.svelte:159-160 displays 'Fetching user X/Y: Name...' format.
 
 **Files:**
 - `backend/app/services/sync.py` - Add `current_user_name` parameter to `update_sync_progress()` calls
@@ -200,15 +202,17 @@ Improve accessibility for screen reader users by adding proper ARIA attributes t
 **So that** I know when content is being fetched
 
 **Acceptance Criteria:**
-- [ ] Add `aria-busy="true"` to parent containers during loading
-- [ ] Loading spinners have `aria-label="Loading"` or equivalent
-- [ ] Add `aria-live="polite"` regions for dynamic content updates
-- [ ] Dashboard loading state is accessible
-- [ ] Issues page loading state is accessible
-- [ ] Settings page loading state is accessible
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify with screen reader or accessibility inspector
+- [x] Add `aria-busy="true"` to parent containers during loading
+- [x] Loading spinners have `aria-label="Loading"` or equivalent
+- [x] Add `aria-live="polite"` regions for dynamic content updates
+- [x] Dashboard loading state is accessible
+- [x] Issues page loading state is accessible
+- [x] Settings page loading state is accessible
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify with screen reader or accessibility inspector
+
+**Note:** Added aria-busy to parent containers (dashboard, issues-page, settings-page, library-page, whitelist-page, page), aria-label/role='status' to loading divs, aria-hidden to spinners, and aria-live='polite' to dynamic content regions.
 
 **Files:**
 - `frontend/src/routes/+page.svelte` - Dashboard accessibility
@@ -240,15 +244,17 @@ Display the total size of TV series in the library. Currently, series show "Unkn
 **So that** I can understand how much storage each series consumes
 
 **Acceptance Criteria:**
-- [ ] `calculate_season_sizes()` calculates both largest season size AND total series size
-- [ ] Total series size is stored in `CachedMediaItem.size_bytes` for series
-- [ ] Library page displays actual series sizes instead of "Unknown size"
-- [ ] Size filter works correctly for series (e.g., min_size_gb, max_size_gb)
-- [ ] Size sort works correctly for series
-- [ ] Total library size header includes series sizes
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in Docker using local integration test
+- [x] `calculate_season_sizes()` calculates both largest season size AND total series size
+- [x] Total series size is stored in `CachedMediaItem.size_bytes` for series
+- [x] Library page displays actual series sizes instead of "Unknown size"
+- [x] Size filter works correctly for series (e.g., min_size_gb, max_size_gb)
+- [x] Size sort works correctly for series
+- [x] Total library size header includes series sizes
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in Docker using local integration test
+
+**Note:** Modified calculate_season_sizes() to accumulate total_series_size across all seasons and store in size_bytes. Added unit tests to verify total series size calculation.
 
 **Implementation Details:**
 
@@ -351,12 +357,14 @@ Improve the usability and visual consistency of the Unavailable requests table. 
 The Issues column takes up ~30% of table width but only shows "REQUEST" badge for every item on the Unavailable tab. This is redundant since being on this tab already implies all items are requests.
 
 **Acceptance Criteria:**
-- [ ] Issues column is not rendered when `activeFilter === 'requests'`
-- [ ] Name column expands to use the freed space (increase from 35% to ~45%)
-- [ ] Other tabs (All, Old, Large, Language) still show the Issues column
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Issues column is not rendered when `activeFilter === 'requests'`
+- [x] Name column expands to use the freed space (increase from 35% to ~45%)
+- [x] Other tabs (All, Old, Large, Language) still show the Issues column
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added conditional rendering for Issues column header and cells using {#if activeFilter !== 'requests'}. Added requests-view class to table and CSS rule to expand .col-name from 35% to 45% when in requests view.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Conditionally hide Issues column and header
@@ -379,11 +387,13 @@ Current headers have inconsistent casing:
 - "Requested" - Title case
 
 **Acceptance Criteria:**
-- [ ] All headers use Title Case: Name, Requester, Issues, Size, Added, Release, Requested/Watched
-- [ ] No ALL CAPS headers remain in the table
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] All headers use Title Case: Name, Requester, Issues, Size, Added, Release, Requested/Watched
+- [x] No ALL CAPS headers remain in the table
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Removed text-transform: uppercase from .issues-table th CSS rule. Headers now display in Title Case as written in HTML.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Update header text in `<th>` elements
@@ -399,16 +409,18 @@ Current headers have inconsistent casing:
 Looking at the current implementation, Requester and Release column headers don't have sort buttons. Only Name, Issues, Size, Added, and Watched/Requested have sorting enabled.
 
 **Acceptance Criteria:**
-- [ ] Requester column header is wrapped in a sort button and clickable
-- [ ] Release column header is wrapped in a sort button and clickable
-- [ ] Sort indicators (↑/↓) appear on active sort column
-- [ ] Add 'requester' and 'release' to the `SortField` type
-- [ ] Sorting logic added to `getSortedItems()` for 'requester' (alphabetical) and 'release' (date comparison)
-- [ ] Requester sorts alphabetically (ascending by default)
-- [ ] Release sorts by date (descending by default - newest first)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Requester column header is wrapped in a sort button and clickable
+- [x] Release column header is wrapped in a sort button and clickable
+- [x] Sort indicators (↑/↓) appear on active sort column
+- [x] Add 'requester' and 'release' to the `SortField` type
+- [x] Sorting logic added to `getSortedItems()` for 'requester' (alphabetical) and 'release' (date comparison)
+- [x] Requester sorts alphabetically (ascending by default)
+- [x] Release sorts by date (descending by default - newest first)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added 'requester' and 'release' to SortField type. Implemented sorting logic: requester sorts alphabetically with nulls last, release sorts by date with nulls last. Both column headers wrapped in sort buttons with sort indicators.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Update SortField type, add sort buttons to headers, extend getSortedItems()
@@ -453,15 +465,17 @@ When sorting by the Watched column, the order is incorrect. Currently, "Never" a
 4. "Never" (never watched)
 
 **Acceptance Criteria:**
-- [ ] Clicking Watched column header sorts items in correct order: date DESC → "Watched" → "Never"
-- [ ] Items with last_played_date display in descending order (newest first)
-- [ ] Items with played=true but no last_played_date show "Watched" and sort after dated items
-- [ ] Items with played=false show "Never" and sort last
-- [ ] Clicking the column again reverses the order: "Never" → "Watched" → date ASC
-- [ ] Sort works correctly for both movies and series
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Clicking Watched column header sorts items in correct order: date DESC → "Watched" → "Never"
+- [x] Items with last_played_date display in descending order (newest first)
+- [x] Items with played=true but no last_played_date show "Watched" and sort after dated items
+- [x] Items with played=false show "Never" and sort last
+- [x] Clicking the column again reverses the order: "Never" → "Watched" → date ASC
+- [x] Sort works correctly for both movies and series
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added 'watched' sort field to SortField type. Implemented three-tier sorting in getSortedItems: priority 1 (has date) → priority 2 (played=true, no date) → priority 3 (never watched). Descending shows most recent first, ascending shows never-watched first. Column header now uses 'watched' field instead of 'date' for non-requests tabs.
 
 **Files:**
 - `frontend/src/routes/issues/+page.svelte` - Fix `getSortedItems()` logic for 'watched' field
@@ -702,14 +716,14 @@ The user nickname mapping feature currently requires manual entry of Jellyseerr 
 **So that** the nicknames table is prepopulated without user intervention
 
 **Acceptance Criteria:**
-- [ ] During sync, after fetching Jellyfin users, upsert UserNickname records for each user
-- [ ] Use Jellyfin username as `jellyseerr_username` (assumption: same username across systems)
-- [ ] Leave `display_name` empty (user will fill in their preferred friendly name)
-- [ ] If nickname record already exists for a username, skip it (preserve existing mappings)
-- [ ] Add `has_jellyseerr_account` boolean field to UserNickname model (default False)
-- [ ] Query Jellyseerr users API during sync and mark matching usernames as `has_jellyseerr_account=True`
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] During sync, after fetching Jellyfin users, upsert UserNickname records for each user
+- [x] Use Jellyfin username as `jellyseerr_username` (assumption: same username across systems)
+- [x] Leave `display_name` empty (user will fill in their preferred friendly name)
+- [x] If nickname record already exists for a username, skip it (preserve existing mappings)
+- [x] Add `has_jellyseerr_account` boolean field to UserNickname model (default False)
+- [x] Query Jellyseerr users API during sync and mark matching usernames as `has_jellyseerr_account=True`
+- [x] Typecheck passes
+- [x] Unit tests pass
 
 **Technical Notes:**
 - Fetch Jellyseerr users: `GET /api/v1/user` (requires admin permissions)
@@ -758,15 +772,17 @@ The user nickname mapping feature currently requires manual entry of Jellyseerr 
 **So that** I can add newly created Jellyfin users to nicknames without waiting for next sync
 
 **Acceptance Criteria:**
-- [ ] Users page has "Refresh users" button above the table
-- [ ] Button triggers backend endpoint to fetch Jellyfin users and prefill nicknames
-- [ ] Shows loading spinner while fetching
-- [ ] On success: toast "X new users added", table updates
-- [ ] On error: toast with error message
-- [ ] Button disabled during refresh
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+- [x] Users page has "Refresh users" button above the table
+- [x] Button triggers backend endpoint to fetch Jellyfin users and prefill nicknames
+- [x] Shows loading spinner while fetching
+- [x] On success: toast "X new users added", table updates
+- [x] On error: toast with error message
+- [x] Button disabled during refresh
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser using browser tools
+
+**Note:** Added POST /api/settings/nicknames/refresh endpoint to fetch Jellyfin users and prefill nicknames. Frontend settings page has 'Refresh users' button (only shown when Jellyfin is configured) with loading state, success/error toasts.
 
 **Technical Notes:**
 - Create new endpoint: `POST /api/settings/nicknames/refresh`
@@ -835,14 +851,14 @@ Add a user setting to choose between English and French for the Recently Availab
 **So that** I can view and copy titles in my preferred language
 
 **Acceptance Criteria:**
-- [ ] Settings > Display Preferences has "Title language" dropdown with options: English (default), French
-- [ ] Add `title_language` column to `UserSettings` table (String(2), default='en')
-- [ ] Create database migration for new column
-- [ ] GET `/api/settings/display` returns `title_language` field
-- [ ] POST `/api/settings/display` accepts `title_language` field
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: dropdown appears in Settings > Display and persists
+- [x] Settings > Display Preferences has "Title language" dropdown with options: English (default), French
+- [x] Add `title_language` column to `UserSettings` table (String(2), default='en')
+- [x] Create database migration for new column
+- [x] GET `/api/settings/display` returns `title_language` field
+- [x] POST `/api/settings/display` accepts `title_language` field
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify in browser: dropdown appears in Settings > Display and persists
 
 **Files:**
 - `backend/app/database.py` - Add `title_language` column to UserSettings
@@ -860,16 +876,16 @@ Add a user setting to choose between English and French for the Recently Availab
 **So that** I can view content in French without API delays
 
 **Acceptance Criteria:**
-- [ ] Add `title_fr` column to `CachedJellyseerrRequest` model (String(500), nullable)
-- [ ] Create database migration for new column
-- [ ] Sync service fetches French titles from TMDB (`language=fr` parameter)
-- [ ] Add `language` parameter to `fetch_media_details()` function
-- [ ] During sync, fetch both English and French titles (two API calls per media item)
-- [ ] French titles stored in `title_fr` column
-- [ ] Sync handles missing French titles gracefully (stores None)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify after sync: `title_fr` column populated in database
+- [x] Add `title_fr` column to `CachedJellyseerrRequest` model (String(500), nullable)
+- [x] Create database migration for new column
+- [x] Sync service fetches French titles from TMDB (`language=fr` parameter)
+- [x] Add `language` parameter to `fetch_media_details()` function
+- [x] During sync, fetch both English and French titles (two API calls per media item)
+- [x] French titles stored in `title_fr` column
+- [x] Sync handles missing French titles gracefully (stores None)
+- [x] Typecheck passes
+- [x] Unit tests pass
+- [x] Verify after sync: `title_fr` column populated in database
 
 **Files:**
 - `backend/app/database.py` - Add `title_fr` column to CachedJellyseerrRequest
@@ -1578,14 +1594,16 @@ Implement password reset (forgot password) and password change functionality. Us
 **So that** we can securely track and validate reset requests
 
 **Acceptance Criteria:**
-- [ ] Create `PasswordResetToken` model in `backend/app/database.py`
-- [ ] Fields: `id`, `user_id` (FK to users), `token` (hashed), `expires_at`, `created_at`, `used` (boolean)
-- [ ] Add index on `token` for fast lookup
-- [ ] Add foreign key constraint to `users` table with cascade delete
-- [ ] Create Alembic migration for new table
-- [ ] Migration applies successfully: `alembic upgrade head`
-- [ ] Typecheck passes
-- [ ] Unit tests pass
+- [x] Create `PasswordResetToken` model in `backend/app/database.py`
+- [x] Fields: `id`, `user_id` (FK to users), `token` (hashed), `expires_at`, `created_at`, `used` (boolean)
+- [x] Add index on `token` for fast lookup
+- [x] Add foreign key constraint to `users` table with cascade delete
+- [x] Create Alembic migration for new table
+- [x] Migration applies successfully: `alembic upgrade head`
+- [x] Typecheck passes
+- [x] Unit tests pass
+
+**Note:** Created PasswordResetToken model with all required fields. Token stored as token_hash (indexed). Foreign key to users with CASCADE delete. Migration 98891c396773 created and verified.
 
 **Technical Notes:**
 ```python
@@ -1612,16 +1630,18 @@ class PasswordResetToken(Base):
 **So that** users can receive reset links
 
 **Acceptance Criteria:**
-- [ ] Create `backend/app/services/email.py` with `send_password_reset_email()` function
-- [ ] Function accepts: `to_email: str`, `reset_url: str`, `user_email: str`
-- [ ] Email subject: "Reset Your Media Janitor Password"
-- [ ] Email body includes: reset link (clickable), expiration time (15 minutes), user's email for reference
-- [ ] Use SMTP2GO API via SMTP (not HTTP API) with environment variables
-- [ ] Environment variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
-- [ ] Add email config to `backend/app/config.py` Settings class
-- [ ] Handle SMTP errors gracefully (log error, raise HTTPException 500)
-- [ ] Typecheck passes
-- [ ] Unit tests pass (mock smtplib.SMTP)
+- [x] Create `backend/app/services/email.py` with `send_password_reset_email()` function
+- [x] Function accepts: `to_email: str`, `reset_url: str`, `user_email: str`
+- [x] Email subject: "Reset Your Media Janitor Password"
+- [x] Email body includes: reset link (clickable), expiration time (15 minutes), user's email for reference
+- [x] Use SMTP2GO API via SMTP (not HTTP API) with environment variables
+- [x] Environment variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
+- [x] Add email config to `backend/app/config.py` Settings class
+- [x] Handle SMTP errors gracefully (log error, raise HTTPException 500)
+- [x] Typecheck passes
+- [x] Unit tests pass (mock smtplib.SMTP)
+
+**Note:** Created email service using smtplib with STARTTLS. HTML and plain text email formats. Raises HTTPException 500 on SMTP errors. 18 unit tests with mocked smtplib.SMTP. Config added: smtp_host, smtp_port, smtp_username, smtp_password, smtp_from_email, frontend_url.
 
 **Technical Notes:**
 ```python
@@ -1667,18 +1687,20 @@ def send_password_reset_email(to_email: str, reset_url: str) -> None:
 **So that** I can regain access to my account
 
 **Acceptance Criteria:**
-- [ ] Create `POST /api/auth/request-password-reset` endpoint
-- [ ] Request body: `{ "email": "user@example.com" }`
-- [ ] Generate secure random token (32 bytes, URL-safe base64)
-- [ ] Hash token with bcrypt before storing in database
-- [ ] Store token with expiration (15 minutes from now)
-- [ ] Delete any existing unused tokens for this user before creating new one
-- [ ] Send email with reset URL: `{FRONTEND_URL}/reset-password?token={raw_token}`
-- [ ] Return 200 OK even if email doesn't exist (prevent email enumeration)
-- [ ] Rate limit: max 3 requests per email per hour (use in-memory dict or Redis if available)
-- [ ] Typecheck passes
-- [ ] Unit tests pass (mock email sending)
-- [ ] Test in Docker: request reset, verify email sent (check logs if SMTP not configured)
+- [x] Create `POST /api/auth/request-password-reset` endpoint
+- [x] Request body: `{ "email": "user@example.com" }`
+- [x] Generate secure random token (32 bytes, URL-safe base64)
+- [x] Hash token with bcrypt before storing in database
+- [x] Store token with expiration (15 minutes from now)
+- [x] Delete any existing unused tokens for this user before creating new one
+- [x] Send email with reset URL: `{FRONTEND_URL}/reset-password?token={raw_token}`
+- [x] Return 200 OK even if email doesn't exist (prevent email enumeration)
+- [x] Rate limit: max 3 requests per email per hour (use in-memory dict or Redis if available)
+- [x] Typecheck passes
+- [x] Unit tests pass (mock email sending)
+- [x] Test in Docker: request reset, verify email sent (check logs if SMTP not configured)
+
+**Note:** Added POST /api/auth/request-password-reset endpoint. Generates secure token (secrets.token_urlsafe(32)), hashes with bcrypt, stores in PasswordResetToken table with 15-min expiration. Rate limited to 3 requests/email/hour. Returns 200 for any email to prevent enumeration. 10 new unit tests + 3 integration tests.
 
 **Technical Notes:**
 ```python
@@ -1739,19 +1761,21 @@ async def request_password_reset(
 **So that** I can access my account again
 
 **Acceptance Criteria:**
-- [ ] Create `POST /api/auth/reset-password` endpoint
-- [ ] Request body: `{ "token": "abc123...", "new_password": "newPass123!" }`
-- [ ] Validate new password meets requirements (8+ chars, uppercase, lowercase, number)
-- [ ] Find token in database (hash incoming token, compare with stored hashes)
-- [ ] Verify token is not expired (expires_at > now)
-- [ ] Verify token is not already used
-- [ ] Update user's password (hash with bcrypt)
-- [ ] Mark token as used
-- [ ] Return 200 OK with success message
-- [ ] Return 400 if token is invalid, expired, or already used
-- [ ] Typecheck passes
-- [ ] Unit tests pass (test valid token, expired token, used token, invalid token)
-- [ ] Test in Docker: full flow from request to reset
+- [x] Create `POST /api/auth/reset-password` endpoint
+- [x] Request body: `{ "token": "abc123...", "new_password": "newPass123!" }`
+- [x] Validate new password meets requirements (8+ chars, uppercase, lowercase, number)
+- [x] Find token in database (hash incoming token, compare with stored hashes)
+- [x] Verify token is not expired (expires_at > now)
+- [x] Verify token is not already used
+- [x] Update user's password (hash with bcrypt)
+- [x] Mark token as used
+- [x] Return 200 OK with success message
+- [x] Return 400 if token is invalid, expired, or already used
+- [x] Typecheck passes
+- [x] Unit tests pass (test valid token, expired token, used token, invalid token)
+- [x] Test in Docker: full flow from request to reset
+
+**Note:** Added POST /api/auth/reset-password endpoint. Validates password strength (8+ chars, uppercase, lowercase, number) with Pydantic validator. Compares incoming token against bcrypt hashes of non-expired, unused tokens. Updates user password and marks token as used. 11 new unit tests + 3 integration tests.
 
 **Technical Notes:**
 ```python
@@ -2390,25 +2414,31 @@ Replace text-based external link badges (JF, JS, RD, SN, TMDB) with 16x16px logo
 
 See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for all completed epics and stories.
 
-### Pending (41 stories)
-- [ ] US-17.2.1: Populate Sync Progress User Names
-- [ ] US-28.1: Loading States Accessibility
-- [ ] US-33.1: Calculate and Store Total Series Size
-- [ ] US-34.1: Hide Issues Column on Unavailable Tab
-- [ ] US-34.2: Normalize Table Header Casing
-- [ ] US-34.3: Add Sorting to Requester and Release Columns
-- [ ] US-35.1: Fix Watched Column Sort Order
+### Completed (15 stories)
+- [x] US-17.2.1: Populate Sync Progress User Names
+- [x] US-28.1: Loading States Accessibility
+- [x] US-33.1: Calculate and Store Total Series Size
+- [x] US-34.1: Hide Issues Column on Unavailable Tab
+- [x] US-34.2: Normalize Table Header Casing
+- [x] US-34.3: Add Sorting to Requester and Release Columns
+- [x] US-35.1: Fix Watched Column Sort Order
+- [x] US-37.1: Prefill Nicknames During Sync (Backend)
+- [x] US-37.3: Manual Refresh Button for Jellyfin Users
+- [x] US-38.1: Add Title Language User Setting
+- [x] US-38.2: Store French Titles During Sync
+- [x] US-44.1: Password Reset Token Model
+- [x] US-44.2: Email Service with SMTP2GO
+- [x] US-44.3: Request Password Reset Endpoint
+- [x] US-44.4: Reset Password Endpoint
+
+### Pending (26 stories)
 - [ ] US-35.2: Display Last Watched Date for Series
 - [ ] US-36.1: Settings Layout with Sidebar Navigation
 - [ ] US-36.2: Extract Connections Page
 - [ ] US-36.3: Extract Thresholds Page
 - [ ] US-36.4: Extract Users Page
 - [ ] US-36.5: Extract Display Page
-- [ ] US-37.1: Prefill Nicknames During Sync (Backend)
 - [ ] US-37.2: Display Prefilled Users in UI
-- [ ] US-37.3: Manual Refresh Button for Jellyfin Users
-- [ ] US-38.1: Add Title Language User Setting
-- [ ] US-38.2: Store French Titles During Sync
 - [ ] US-38.3: Recently Available Uses Language Preference
 - [ ] US-39.1: Add Manual Dismiss Button to Toasts
 - [ ] US-39.2: Add Type Icons to Toasts
@@ -2421,10 +2451,6 @@ See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for all completed epics and stories.
 - [ ] US-42.3: Use SearchInput in Issues Page
 - [ ] US-43.1: Audit Warning Color Contrast
 - [ ] US-43.2: Fix Warning Color for WCAG AA Compliance
-- [ ] US-44.1: Password Reset Token Model
-- [ ] US-44.2: Email Service with SMTP2GO
-- [ ] US-44.3: Request Password Reset Endpoint
-- [ ] US-44.4: Reset Password Endpoint
 - [ ] US-44.5: Forgot Password UI
 - [ ] US-44.6: Reset Password UI
 - [ ] US-44.7: Change Password in Settings
