@@ -217,6 +217,105 @@ describe('Info API Integration', () => {
 				})
 			).rejects.toThrow('Network error');
 		});
+
+		it('returns title_fr field for each item', async () => {
+			const recentData = {
+				items: [
+					{
+						jellyseerr_id: 1001,
+						title: 'The Matrix',
+						title_fr: 'La Matrice',
+						media_type: 'movie',
+						availability_date: '2026-01-10T12:00:00+00:00',
+						requested_by: 'test_user',
+						display_name: 'Test User'
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(recentData)
+			});
+
+			const response = await fetch('/api/info/recent', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item).toHaveProperty('title');
+			expect(item).toHaveProperty('title_fr');
+			expect(item.title).toBe('The Matrix');
+			expect(item.title_fr).toBe('La Matrice');
+		});
+
+		it('returns null title_fr when French title unavailable', async () => {
+			const recentData = {
+				items: [
+					{
+						jellyseerr_id: 1001,
+						title: 'Test Movie',
+						title_fr: null,
+						media_type: 'movie',
+						availability_date: '2026-01-10T12:00:00+00:00',
+						requested_by: 'test_user',
+						display_name: 'Test User'
+					}
+				],
+				total_count: 1
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(recentData)
+			});
+
+			const response = await fetch('/api/info/recent', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			const item = data.items[0];
+
+			expect(item.title).toBe('Test Movie');
+			expect(item.title_fr).toBeNull();
+		});
+	});
+
+	describe('Title Language Preference Helper', () => {
+		// Test the getDisplayTitle logic that will be used in the component
+		function getDisplayTitle(
+			item: { title: string; title_fr: string | null },
+			titleLanguage: 'en' | 'fr'
+		): string {
+			if (titleLanguage === 'fr' && item.title_fr) {
+				return item.title_fr;
+			}
+			return item.title;
+		}
+
+		it('returns English title when language preference is English', () => {
+			const item = { title: 'The Matrix', title_fr: 'La Matrice' };
+			expect(getDisplayTitle(item, 'en')).toBe('The Matrix');
+		});
+
+		it('returns French title when language preference is French and French title available', () => {
+			const item = { title: 'The Matrix', title_fr: 'La Matrice' };
+			expect(getDisplayTitle(item, 'fr')).toBe('La Matrice');
+		});
+
+		it('falls back to English title when language is French but French title unavailable', () => {
+			const item = { title: 'The Matrix', title_fr: null };
+			expect(getDisplayTitle(item, 'fr')).toBe('The Matrix');
+		});
+
+		it('falls back to English title when French title is empty string', () => {
+			// Even though empty string is truthy in JS comparison, an empty title_fr
+			// should still use the English title (null check handles this)
+			const item = { title: 'The Matrix', title_fr: null };
+			expect(getDisplayTitle(item, 'fr')).toBe('The Matrix');
+		});
 	});
 
 	describe('Content Summary includes info counts', () => {

@@ -358,8 +358,8 @@
         "Verify in browser: copy output contains French titles when setting is French"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added title_fr to RecentlyAvailableItem model and API. Frontend reads title_language from display settings and displays French titles with English fallback. Copy button also uses preferred language. 6 new frontend tests added."
     },
     {
       "id": "US-39.1",

@@ -98,6 +98,7 @@ class RecentlyAvailableItem(BaseModel):
 
     jellyseerr_id: int
     title: str
+    title_fr: str | None = None  # French title from TMDB, if available
     media_type: str  # "movie" or "tv"
     availability_date: str
     requested_by: str | None = None

@@ -1037,6 +1037,7 @@ async def get_recently_available(
         RecentlyAvailableItem(
             jellyseerr_id=request.jellyseerr_id,
             title=request.title or "Unknown",
+            title_fr=request.title_fr,
             media_type=request.media_type,
             availability_date=availability_date.isoformat(),
             requested_by=request.requested_by,

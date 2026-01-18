@@ -5,6 +5,7 @@
 	interface RecentlyAvailableItem {
 		jellyseerr_id: number;
 		title: string;
+		title_fr: string | null;
 		media_type: string;
 		availability_date: string;
 		requested_by: string | null;
@@ -27,12 +28,26 @@
 		items: RecentlyAvailableItem[];
 	}
 
+	type TitleLanguage = 'en' | 'fr';
+
 	let data = $state<RecentlyAvailableResponse | null>(null);
 	let groupedData = $state<GroupedByDate[]>([]);
 	let recentlyAvailableDays = $state(7);
+	let titleLanguage = $state<TitleLanguage>('en');
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+
+	/**
+	 * Get the display title based on user's language preference.
+	 * Falls back to English title if French title is unavailable.
+	 */
+	function getDisplayTitle(item: RecentlyAvailableItem): string {
+		if (titleLanguage === 'fr' && item.title_fr) {
+			return item.title_fr;
+		}
+		return item.title;
+	}
 
 	function formatDateShort(isoString: string): string {
 		const date = new Date(isoString);
@@ -134,7 +149,8 @@
 			for (const item of group.items) {
 				const type = item.media_type === 'tv' ? 'TV' : 'Movie';
 				const availableDate = formatDateForCopy(item.availability_date);
-				lines.push(`  - ${item.title} (${type}) - available since ${availableDate}`);
+				const displayTitle = getDisplayTitle(item);
+				lines.push(`  - ${displayTitle} (${type}) - available since ${availableDate}`);
 			}
 			lines.push('');
 		}
@@ -151,11 +167,12 @@
 
 	onMount(async () => {
 		try {
-			// Fetch display preferences to get the user's recently_available_days setting
+			// Fetch display preferences to get the user's settings
 			const displayResponse = await authenticatedFetch('/api/settings/display');
 			if (displayResponse.ok) {
 				const displayData = await displayResponse.json();
 				recentlyAvailableDays = displayData.recently_available_days ?? 7;
+				titleLanguage = displayData.title_language ?? 'en';
 			}
 
 			const response = await authenticatedFetch('/api/info/recent');
@@ -240,7 +257,7 @@
 										</td>
 									{/if}
 									<td class="col-title">
-										<span class="item-title">{item.title}</span>
+										<span class="item-title">{getDisplayTitle(item)}</span>
 									</td>
 									<td class="col-type">
 										<span class="type-badge type-{item.media_type}">
