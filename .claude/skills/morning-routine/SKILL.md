@@ -5,6 +5,8 @@ description: Daily morning routine to review Ralph progress, archive completed w
 
 # Morning Routine Checklist
 
+**IMPORTANT: This skill only displays the checklist. Do NOT execute any steps automatically. The user will run each step manually.**
+
 Reference guide for your daily workflow to review Ralph progress and prepare for the next session.
 
 ## The Flow
