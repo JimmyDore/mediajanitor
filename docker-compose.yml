@@ -20,6 +20,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=sqlite:///./data/plex_dashboard.db
       - REDIS_URL=redis://redis:6379/0
@@ -39,6 +41,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: celery -A app.celery_app worker --loglevel=info
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=sqlite:///./data/plex_dashboard.db
       - REDIS_URL=redis://redis:6379/0
@@ -54,6 +58,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: celery -A app.celery_app beat --loglevel=info
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=sqlite:///./data/plex_dashboard.db
       - REDIS_URL=redis://redis:6379/0

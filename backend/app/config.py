@@ -50,11 +50,8 @@ class Settings(BaseSettings):
     slack_webhook_new_users: str = ""
     slack_webhook_sync_failures: str = ""
 
-    # SMTP Email Configuration (for password reset)
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
+    # SMTP2GO Email Configuration (for password reset)
+    smtp2go_api_key: str = ""
     smtp_from_email: str = ""
     frontend_url: str = "http://localhost:5173"
 

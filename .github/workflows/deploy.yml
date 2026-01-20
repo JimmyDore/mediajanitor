@@ -25,6 +25,16 @@ jobs:
             # Pull latest code
             git pull origin main
 
+            # Write environment variables from GitHub Secrets
+            cat > .env <<EOF
+SECRET_KEY=${{ secrets.SECRET_KEY }}
+SMTP2GO_API_KEY=${{ secrets.SMTP2GO_API_KEY }}
+SMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}
+FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+SLACK_WEBHOOK_NEW_USERS=${{ secrets.SLACK_WEBHOOK_NEW_USERS }}
+SLACK_WEBHOOK_SYNC_FAILURES=${{ secrets.SLACK_WEBHOOK_SYNC_FAILURES }}
+EOF
+
             # Clean up old Docker resources to free disk space
             echo "Cleaning up Docker resources..."
             docker system prune -f --volumes

@@ -1,15 +1,15 @@
-"""Email service for sending transactional emails via SMTP."""
+"""Email service for sending transactional emails via SMTP2GO HTTP API."""
 
 import logging
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
+import httpx
 from fastapi import HTTPException
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+SMTP2GO_API_URL = "https://api.smtp2go.com/v3/email/send"
 
 
 def send_password_reset_email(to_email: str, reset_url: str, user_email: str) -> None:
@@ -26,8 +26,8 @@ def send_password_reset_email(to_email: str, reset_url: str, user_email: str) ->
     """
     settings = get_settings()
 
-    if not settings.smtp_host or not settings.smtp_from_email:
-        logger.error("SMTP not configured. Cannot send password reset email.")
+    if not settings.smtp2go_api_key or not settings.smtp_from_email:
+        logger.error("SMTP2GO not configured. Cannot send password reset email.")
         raise HTTPException(
             status_code=500, detail="Email service is not configured"
         )
@@ -76,28 +76,37 @@ If you didn't request this password reset, you can safely ignore this email. You
 This email was sent by Media Janitor.
 """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = settings.smtp_from_email
-    msg["To"] = to_email
-
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    payload = {
+        "api_key": settings.smtp2go_api_key,
+        "to": [to_email],
+        "sender": settings.smtp_from_email,
+        "subject": subject,
+        "html_body": html_body,
+        "text_body": text_body,
+    }
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-            server.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                server.login(settings.smtp_username, settings.smtp_password)
-            server.sendmail(settings.smtp_from_email, to_email, msg.as_string())
-        logger.info(f"Password reset email sent to {to_email}")
-    except smtplib.SMTPAuthenticationError as e:
-        logger.error(f"SMTP authentication failed: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to send email: authentication error"
-        )
-    except smtplib.SMTPException as e:
-        logger.error(f"SMTP error sending password reset email: {e}")
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(SMTP2GO_API_URL, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("data", {}).get("succeeded", 0) > 0:
+                logger.info(f"Password reset email sent to {to_email}")
+                return
+            else:
+                logger.error(f"SMTP2GO API returned failure: {data}")
+                raise HTTPException(
+                    status_code=500, detail="Failed to send email"
+                )
+        else:
+            logger.error(f"SMTP2GO API error: {response.status_code} - {response.text}")
+            raise HTTPException(
+                status_code=500, detail="Failed to send email"
+            )
+
+    except httpx.RequestError as e:
+        logger.error(f"HTTP error sending password reset email: {e}")
         raise HTTPException(
             status_code=500, detail="Failed to send email"
         )
