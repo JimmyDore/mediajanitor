@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import User, get_db
 from app.services.auth import get_current_user
 from app.services.jellyfin import get_user_jellyfin_settings
-from app.services.sync import run_user_sync, get_sync_status
+from app.services.sync import get_sync_status, update_sync_status
+from app.tasks import sync_user
 
 # Rate limit: max 1 sync per 5 minutes per user
 SYNC_RATE_LIMIT_MINUTES = 5
@@ -94,14 +95,17 @@ async def trigger_sync(
             detail="Jellyfin connection not configured. Please configure it in Settings first.",
         )
 
-    # Run the sync
-    result = await run_user_sync(db, current_user.id)
+    # Mark sync as started (for rate limiting and status tracking)
+    await update_sync_status(db, current_user.id, status="syncing", started=True)
+
+    # Dispatch sync to Celery worker (async, returns immediately)
+    sync_user.delay(current_user.id)
 
     return SyncResponse(
-        status=result["status"],
-        media_items_synced=result["media_items_synced"],
-        requests_synced=result["requests_synced"],
-        error=result.get("error"),
+        status="sync_started",
+        media_items_synced=0,
+        requests_synced=0,
+        error=None,
     )
 
 

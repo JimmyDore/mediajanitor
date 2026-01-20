@@ -1,6 +1,6 @@
 """Tests for data sync functionality (US-7.1)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 
 import pytest
@@ -413,17 +413,11 @@ class TestSyncEndpoints:
         assert response.status_code == 400
         assert "Jellyfin" in response.json()["detail"]
 
-    @patch("app.routers.sync.run_user_sync")
+    @patch("app.routers.sync.sync_user")
     def test_trigger_sync_success(
-        self, mock_run_sync: AsyncMock, client: TestClient
+        self, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """POST /api/sync should trigger a sync for authenticated user."""
-        mock_run_sync.return_value = {
-            "status": "success",
-            "media_items_synced": 10,
-            "requests_synced": 5,
-        }
-
         token = self._get_auth_token(client, "sync2@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -437,7 +431,9 @@ class TestSyncEndpoints:
 
         response = client.post("/api/sync", headers=headers)
         assert response.status_code == 200
-        assert response.json()["status"] == "success"
+        assert response.json()["status"] == "sync_started"
+        # Verify Celery task was dispatched
+        mock_sync_task.delay.assert_called_once()
 
     def test_get_sync_status_requires_auth(self, client: TestClient) -> None:
         """GET /api/sync/status should require authentication."""
@@ -617,15 +613,11 @@ class TestSyncRateLimiting:
         )
         return login_response.json()["access_token"]
 
-    @patch("app.services.sync.fetch_jellyfin_media")
-    @patch("app.services.sync.decrypt_value")
+    @patch("app.routers.sync.sync_user")
     def test_sync_rate_limited_after_recent_sync(
-        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+        self, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """POST /api/sync should return 429 if user synced within 5 minutes."""
-        mock_decrypt.return_value = "decrypted-key"
-        mock_fetch.return_value = []  # Empty response for simplicity
-
         token = self._get_auth_token(client, "ratelimit1@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -637,7 +629,7 @@ class TestSyncRateLimiting:
                 headers=headers,
             )
 
-        # First sync should succeed (this updates DB sync status)
+        # First sync should succeed (this updates DB sync status via update_sync_status)
         response1 = client.post("/api/sync", headers=headers)
         assert response1.status_code == 200
 
@@ -646,19 +638,13 @@ class TestSyncRateLimiting:
         assert response2.status_code == 429
         assert "rate" in response2.json()["detail"].lower() or "minute" in response2.json()["detail"].lower()
 
+    @patch("app.routers.sync.sync_user")
     @patch("app.routers.sync.get_sync_status")
-    @patch("app.routers.sync.run_user_sync")
     def test_sync_allowed_after_5_minutes(
-        self, mock_run_sync: AsyncMock, mock_get_status: AsyncMock, client: TestClient
+        self, mock_get_status: AsyncMock, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """POST /api/sync should succeed if last sync was >5 minutes ago."""
         from datetime import timedelta
-
-        mock_run_sync.return_value = {
-            "status": "success",
-            "media_items_synced": 10,
-            "requests_synced": 5,
-        }
 
         # Mock that last sync was 6 minutes ago
         old_sync_time = datetime.now(timezone.utc) - timedelta(minutes=6)
@@ -685,15 +671,11 @@ class TestSyncRateLimiting:
         response = client.post("/api/sync", headers=headers)
         assert response.status_code == 200
 
-    @patch("app.services.sync.fetch_jellyfin_media")
-    @patch("app.services.sync.decrypt_value")
+    @patch("app.routers.sync.sync_user")
     def test_sync_rate_limit_response_includes_wait_time(
-        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+        self, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """Rate limit response should include how long to wait."""
-        mock_decrypt.return_value = "decrypted-key"
-        mock_fetch.return_value = []
-
         token = self._get_auth_token(client, "ratelimit3@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -715,15 +697,11 @@ class TestSyncRateLimiting:
         detail = response.json()["detail"]
         assert "minute" in detail.lower()
 
-    @patch("app.services.sync.fetch_jellyfin_media")
-    @patch("app.services.sync.decrypt_value")
+    @patch("app.routers.sync.sync_user")
     def test_rate_limit_is_per_user(
-        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+        self, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """Rate limit should be per-user, not global."""
-        mock_decrypt.return_value = "decrypted-key"
-        mock_fetch.return_value = []
-
         # User 1
         token1 = self._get_auth_token(client, "ratelimit4@example.com")
         headers1 = {"Authorization": f"Bearer {token1}"}
@@ -752,18 +730,12 @@ class TestSyncRateLimiting:
         response2 = client.post("/api/sync", headers=headers2)
         assert response2.status_code == 200
 
-    @patch("app.routers.sync.run_user_sync")
+    @patch("app.routers.sync.sync_user")
     @patch("app.routers.sync.get_sync_status")
     def test_force_bypasses_rate_limit_for_first_sync(
-        self, mock_get_status: AsyncMock, mock_run_sync: AsyncMock, client: TestClient
+        self, mock_get_status: AsyncMock, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """POST /api/sync with force=true should bypass rate limit for first sync (US-18.2)."""
-        mock_run_sync.return_value = {
-            "status": "success",
-            "media_items_synced": 10,
-            "requests_synced": 5,
-        }
-
         # Mock a sync status that was just started but never completed (first sync)
         from datetime import timedelta
         recent_sync_time = datetime.now(timezone.utc) - timedelta(seconds=30)
@@ -794,14 +766,23 @@ class TestSyncRateLimiting:
         )
         assert response.status_code == 200
 
-    @patch("app.services.sync.fetch_jellyfin_media")
-    @patch("app.services.sync.decrypt_value")
+    @patch("app.routers.sync.sync_user")
+    @patch("app.routers.sync.get_sync_status")
     def test_force_does_not_bypass_rate_limit_for_subsequent_syncs(
-        self, mock_decrypt: AsyncMock, mock_fetch: AsyncMock, client: TestClient
+        self, mock_get_status: AsyncMock, mock_sync_task: MagicMock, client: TestClient
     ) -> None:
         """POST /api/sync with force=true should NOT bypass rate limit if already synced before."""
-        mock_decrypt.return_value = "decrypted-key"
-        mock_fetch.return_value = []
+        from datetime import timedelta
+
+        # Mock a sync status where sync has COMPLETED (not first sync)
+        recent_sync_time = datetime.now(timezone.utc) - timedelta(seconds=30)
+        mock_status = SyncStatus(
+            user_id=1,
+            last_sync_started=recent_sync_time,
+            last_sync_completed=recent_sync_time,  # Completed = not first sync
+            last_sync_status="success",
+        )
+        mock_get_status.return_value = mock_status
 
         token = self._get_auth_token(client, "force2@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -814,17 +795,13 @@ class TestSyncRateLimiting:
                 headers=headers,
             )
 
-        # First sync completes normally
-        response1 = client.post("/api/sync", headers=headers)
-        assert response1.status_code == 200
-
-        # Second sync with force=true should still be rate limited since user has synced before
-        response2 = client.post(
+        # Sync with force=true should still be rate limited since user has synced before
+        response = client.post(
             "/api/sync",
             json={"force": True},
             headers=headers,
         )
-        assert response2.status_code == 429
+        assert response.status_code == 429
 
 
 class TestMultiUserWatchDataAggregation:

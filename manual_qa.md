@@ -1,14 +1,10 @@
 PRD
 
 Manual
-- SMTP
-- Test slack notif
-- Change sonarr, radarr etc... logos
+- log out automatically if no token anymore does not work
 - Language issues not detected correctly for series episodes
-- if no pseudo available, then it shoud use default username
-- No whitelisting for large series/movies ? => should be added
 - Updated 3 days ago ? => Should be updated daily with celery task, there's a bug here
 
+- change secret key in production
 - DB backup 
 - Split exploratory qa skill in multiple skills
-- Test Email forgot password flow
