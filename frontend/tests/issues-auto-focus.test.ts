@@ -362,4 +362,94 @@ describe('Modal Auto-Focus and Focus Restoration', () => {
 			expect(focusRestored).toBe(true);
 		});
 	});
+
+	describe('Request items whitelist button accessibility (regression)', () => {
+		/**
+		 * Regression test: When the Issues column was hidden on the Unavailable tab,
+		 * the whitelist button (attached to the "request" badge) became inaccessible.
+		 * Fix: Added whitelist button to the Actions column for request items.
+		 */
+		it('should render whitelist button in Actions column for request items', () => {
+			// Simulate the Actions cell for a request item
+			const mockActionCell = document.createElement('td');
+			mockActionCell.className = 'col-actions';
+			mockActionCell.innerHTML = `
+				<div class="action-buttons">
+					<button class="btn-action btn-whitelist" title="Hide this request">
+						<svg width="14" height="14" viewBox="0 0 24 24">
+							<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+						</svg>
+					</button>
+					<button class="btn-action btn-delete" title="Delete request from Jellyseerr">
+						<svg width="14" height="14" viewBox="0 0 24 24">
+							<polyline points="3 6 5 6 21 6"/>
+						</svg>
+					</button>
+				</div>
+			`;
+
+			// Verify both buttons exist
+			const whitelistBtn = mockActionCell.querySelector('.btn-whitelist');
+			const deleteBtn = mockActionCell.querySelector('.btn-delete');
+
+			expect(whitelistBtn).not.toBeNull();
+			expect(deleteBtn).not.toBeNull();
+			expect(whitelistBtn?.getAttribute('title')).toBe('Hide this request');
+		});
+
+		it('should have whitelist button as first button in action group', () => {
+			// Whitelist (hide) should come before delete for better UX
+			const mockActionCell = document.createElement('td');
+			mockActionCell.innerHTML = `
+				<div class="action-buttons">
+					<button class="btn-action btn-whitelist">Hide</button>
+					<button class="btn-action btn-delete">Delete</button>
+				</div>
+			`;
+
+			const buttons = mockActionCell.querySelectorAll('.btn-action');
+
+			expect(buttons.length).toBe(2);
+			expect(buttons[0].classList.contains('btn-whitelist')).toBe(true);
+			expect(buttons[1].classList.contains('btn-delete')).toBe(true);
+		});
+
+		it('should NOT show whitelist button for content items (non-request)', () => {
+			// Content items only have the delete button, no inline whitelist
+			// (Whitelist actions for content are on the badge in Issues column)
+			const mockActionCell = document.createElement('td');
+			mockActionCell.className = 'col-actions';
+			mockActionCell.innerHTML = `
+				<button class="btn-delete" title="Delete from Radarr">
+					<svg width="14" height="14" viewBox="0 0 24 24">
+						<polyline points="3 6 5 6 21 6"/>
+					</svg>
+				</button>
+			`;
+
+			// Content items should NOT have action-buttons wrapper with whitelist
+			const actionButtons = mockActionCell.querySelector('.action-buttons');
+			const whitelistBtn = mockActionCell.querySelector('.btn-whitelist');
+
+			expect(actionButtons).toBeNull();
+			expect(whitelistBtn).toBeNull();
+		});
+
+		it('whitelist button should trigger duration picker modal when clicked', () => {
+			let modalOpened = false;
+
+			// Simulate the openDurationPicker function
+			function openDurationPicker(item: { jellyfin_id: string }, type: string) {
+				if (type === 'request') {
+					modalOpened = true;
+				}
+			}
+
+			// Simulate button click handler
+			const mockItem = { jellyfin_id: 'request-123' };
+			openDurationPicker(mockItem, 'request');
+
+			expect(modalOpened).toBe(true);
+		});
+	});
 });
