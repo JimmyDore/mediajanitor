@@ -932,3 +932,104 @@ class TestJellyseerrRequestLookupByTmdbId:
         mock_delete_media.assert_called_once()
         call_args = mock_delete_media.call_args
         assert call_args[0][2] == 333
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_series_handles_multiple_cached_requests_same_tmdb_id(
+        self,
+        mock_delete_media: AsyncMock,
+        mock_delete_series: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Regression test: delete_series should not fail when multiple requests exist for same TMDB ID.
+
+        This test verifies the fix for the bug where deleting a series would fail with
+        'MultipleResultsFound' when the same TMDB ID had multiple Jellyseerr requests
+        (e.g., the same show requested multiple times by different users).
+        """
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
+        mock_validate_sonarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "multiple_requests_tmdb@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr and Jellyseerr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create MULTIPLE cached Jellyseerr requests for the same TMDB ID
+        # This is the scenario that previously caused MultipleResultsFound error
+        async with TestingAsyncSessionLocal() as session:
+            # First request for this TMDB ID
+            cached_request_1 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=100,
+                jellyseerr_media_id=1425,  # All have same media_id since same media
+                tmdb_id=1425,
+                media_type="tv",
+                status=1,
+                title="Prison Break",
+            )
+            # Second request for the same TMDB ID (maybe requested again after deletion)
+            cached_request_2 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=101,
+                jellyseerr_media_id=1425,  # Same media_id
+                tmdb_id=1425,
+                media_type="tv",
+                status=2,
+                title="Prison Break",
+            )
+            # Third request with the same TMDB ID
+            cached_request_3 = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=102,
+                jellyseerr_media_id=1425,  # Same media_id
+                tmdb_id=1425,
+                media_type="tv",
+                status=1,
+                title="Prison Break",
+            )
+            session.add_all([cached_request_1, cached_request_2, cached_request_3])
+            await session.commit()
+
+        # Delete series - should NOT fail with MultipleResultsFound
+        response = client.request(
+            "DELETE",
+            "/api/content/series/1425",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 1425,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+                "jellyseerr_request_id": 59,  # Original request ID (ignored)
+            },
+        )
+
+        # The key assertion: request should succeed, not 500 error
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is True
+        # Verify media deletion was called with the correct media_id
+        mock_delete_media.assert_called_once()
+        call_args = mock_delete_media.call_args
+        assert call_args[0][2] == 1425  # media_id

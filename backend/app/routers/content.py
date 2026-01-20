@@ -191,6 +191,8 @@ async def _lookup_jellyseerr_media_by_tmdb(
         .where(CachedJellyseerrRequest.user_id == user_id)
         .where(CachedJellyseerrRequest.tmdb_id == tmdb_id)
         .where(CachedJellyseerrRequest.media_type == media_type)
+        .distinct()
+        .limit(1)
     )
     row = result.scalar_one_or_none()
     return row
