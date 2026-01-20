@@ -31,13 +31,14 @@
 		total_count: number;
 	}
 
-	type TabType = 'protected' | 'french' | 'exempt' | 'requests';
+	type TabType = 'protected' | 'french' | 'exempt' | 'large' | 'requests';
 
 	let loading = $state(true);
 	let activeTab = $state<TabType>('protected');
 	let protectedData = $state<WhitelistResponse | null>(null);
 	let frenchOnlyData = $state<WhitelistResponse | null>(null);
 	let languageExemptData = $state<WhitelistResponse | null>(null);
+	let largeContentData = $state<WhitelistResponse | null>(null);
 	let requestsData = $state<RequestWhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -47,6 +48,7 @@
 		protected: { label: 'Protected', desc: 'Won\'t appear in old/unwatched list' },
 		french: { label: 'French-Only', desc: 'Won\'t flag missing English audio' },
 		exempt: { label: 'Language Exempt', desc: 'Won\'t flag any language issues' },
+		large: { label: 'Large Content', desc: 'Won\'t appear in large files list' },
 		requests: { label: 'Hidden Requests', desc: 'Requests hidden from the Issues view' }
 	};
 
@@ -111,6 +113,7 @@
 			case 'protected': return protectedData;
 			case 'french': return frenchOnlyData;
 			case 'exempt': return languageExemptData;
+			case 'large': return largeContentData;
 			case 'requests': return requestsData;
 		}
 	}
@@ -120,6 +123,7 @@
 			case 'protected': return '/api/whitelist/content';
 			case 'french': return '/api/whitelist/french-only';
 			case 'exempt': return '/api/whitelist/language-exempt';
+			case 'large': return '/api/whitelist/large';
 			case 'requests': return '/api/whitelist/requests';
 		}
 	}
@@ -148,6 +152,7 @@
 				case 'protected': protectedData = updateData(protectedData); break;
 				case 'french': frenchOnlyData = updateData(frenchOnlyData); break;
 				case 'exempt': languageExemptData = updateData(languageExemptData); break;
+				case 'large': largeContentData = updateData(largeContentData); break;
 				case 'requests': requestsData = updateData(requestsData); break;
 			}
 
@@ -162,16 +167,18 @@
 
 	async function fetchAll() {
 		try {
-			const [p, f, e, r] = await Promise.all([
+			const [p, f, e, l, r] = await Promise.all([
 				authenticatedFetch('/api/whitelist/content'),
 				authenticatedFetch('/api/whitelist/french-only'),
 				authenticatedFetch('/api/whitelist/language-exempt'),
+				authenticatedFetch('/api/whitelist/large'),
 				authenticatedFetch('/api/whitelist/requests')
 			]);
 
 			if (p.ok) protectedData = await p.json();
 			if (f.ok) frenchOnlyData = await f.json();
 			if (e.ok) languageExemptData = await e.json();
+			if (l.ok) largeContentData = await l.json();
 			if (r.ok) requestsData = await r.json();
 		} catch {}
 		finally { loading = false; }
@@ -196,7 +203,7 @@
 	<!-- Tabs -->
 	<nav class="tabs">
 		{#each Object.entries(tabLabels) as [tab, { label }]}
-			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : tab === 'exempt' ? languageExemptData?.total_count : requestsData?.total_count}
+			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : tab === 'exempt' ? languageExemptData?.total_count : tab === 'large' ? largeContentData?.total_count : requestsData?.total_count}
 			<button
 				class="tab"
 				class:active={activeTab === tab}
@@ -226,6 +233,8 @@
 						Use "FR" on the <a href="/issues?filter=language">Issues</a> page
 					{:else if activeTab === 'exempt'}
 						Use the checkmark on the <a href="/issues?filter=language">Issues</a> page
+					{:else if activeTab === 'large'}
+						Use the shield icon on the <a href="/issues?filter=large">Issues</a> page
 					{:else}
 						Use "Hide" on the <a href="/issues?filter=requests">Issues</a> page
 					{/if}

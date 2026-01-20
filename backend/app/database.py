@@ -164,6 +164,22 @@ class LanguageExemptWhitelist(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
+class LargeContentWhitelist(Base):
+    """User's whitelist for content exempt from large content checks."""
+
+    __tablename__ = "large_content_whitelist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    jellyfin_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "Movie" or "Series"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
+
+
 class JellyseerrRequestWhitelist(Base):
     """User's whitelist to hide Jellyseerr requests from unavailable list."""
 

@@ -26,6 +26,9 @@ from app.services.content import (
     add_to_language_exempt_whitelist,
     get_language_exempt_whitelist,
     remove_from_language_exempt_whitelist,
+    add_to_large_whitelist,
+    get_large_whitelist,
+    remove_from_large_whitelist,
     add_to_request_whitelist,
     get_request_whitelist,
     remove_from_request_whitelist,
@@ -245,6 +248,79 @@ async def remove_from_language_exempt(
         )
 
     return WhitelistRemoveResponse(message="Removed from language-exempt whitelist")
+
+
+# Large Content Whitelist endpoints
+
+
+@router.get("/large", response_model=WhitelistListResponse)
+async def list_large_whitelist(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistListResponse:
+    """Get all items in the user's large content whitelist.
+
+    Items in this whitelist are exempt from large content checks.
+    """
+    return await get_large_whitelist(db=db, user_id=current_user.id)
+
+
+@router.post("/large", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+async def add_to_large(
+    request: WhitelistAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistAddResponse:
+    """Add content to the user's large content whitelist.
+
+    Items in this whitelist are exempt from large content checks.
+    Use this for content you want to keep in high quality.
+    """
+    try:
+        await add_to_large_whitelist(
+            db=db,
+            user_id=current_user.id,
+            jellyfin_id=request.jellyfin_id,
+            name=request.name,
+            media_type=request.media_type,
+            expires_at=request.expires_at,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    return WhitelistAddResponse(
+        message="Added to large content whitelist",
+        jellyfin_id=request.jellyfin_id,
+        name=request.name,
+    )
+
+
+@router.delete("/large/{whitelist_id}", response_model=WhitelistRemoveResponse)
+async def remove_from_large(
+    whitelist_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistRemoveResponse:
+    """Remove an item from the user's large content whitelist.
+
+    After removal, the content may reappear in the large content list.
+    """
+    removed = await remove_from_large_whitelist(
+        db=db,
+        user_id=current_user.id,
+        whitelist_id=whitelist_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Whitelist entry not found",
+        )
+
+    return WhitelistRemoveResponse(message="Removed from large content whitelist")
 
 
 # Request Whitelist endpoints (US-13.4)

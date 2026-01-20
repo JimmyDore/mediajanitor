@@ -627,6 +627,226 @@ describe('French-Only Whitelist API Integration (US-5.2)', () => {
 	});
 });
 
+describe('Large Content Whitelist API Integration', () => {
+	beforeEach(() => {
+		mockFetch.mockReset();
+	});
+
+	describe('POST /api/whitelist/large', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/large', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Big Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts POST with valid auth and returns 201', async () => {
+			const successResponse = {
+				message: 'Added to large content whitelist',
+				jellyfin_id: 'movie-123',
+				name: 'Big Movie'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/large', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Big Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(201);
+
+			const data = await response.json();
+			expect(data.message).toContain('large content whitelist');
+		});
+
+		it('returns 409 when item already in large whitelist', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () => Promise.resolve({ detail: 'Item already in large content whitelist' })
+			});
+
+			const response = await fetch('/api/whitelist/large', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Big Movie',
+					media_type: 'Movie'
+				})
+			});
+
+			expect(response.status).toBe(409);
+		});
+
+		it('accepts optional expires_at field for temporary exemption', async () => {
+			const futureDate = '2026-07-14T00:00:00Z';
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						message: 'Added to large content whitelist',
+						jellyfin_id: 'movie-123',
+						name: 'Big Movie'
+					})
+			});
+
+			await fetch('/api/whitelist/large', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: 'Bearer jwt-token'
+				},
+				body: JSON.stringify({
+					jellyfin_id: 'movie-123',
+					name: 'Big Movie',
+					media_type: 'Movie',
+					expires_at: futureDate
+				})
+			});
+
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(body.expires_at).toBe(futureDate);
+		});
+	});
+
+	describe('GET /api/whitelist/large', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/large');
+
+			expect(response.status).toBe(401);
+		});
+
+		it('returns list of large content whitelist items', async () => {
+			const largeResponse = {
+				items: [
+					{
+						id: 1,
+						jellyfin_id: 'movie-big-1',
+						name: 'A Very Large Movie',
+						media_type: 'Movie',
+						created_at: '2024-01-15T10:30:00Z',
+						expires_at: null
+					},
+					{
+						id: 2,
+						jellyfin_id: 'series-big-1',
+						name: 'A Large Series',
+						media_type: 'Series',
+						created_at: '2024-01-14T08:00:00Z',
+						expires_at: '2024-04-14T00:00:00Z'
+					}
+				],
+				total_count: 2
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve(largeResponse)
+			});
+
+			const response = await fetch('/api/whitelist/large', {
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			const data = await response.json();
+			expect(data.total_count).toBe(2);
+			expect(data.items[0].name).toBe('A Very Large Movie');
+			expect(data.items[0].jellyfin_id).toBe('movie-big-1');
+			expect(data.items[1].media_type).toBe('Series');
+			expect(data.items[1].expires_at).toBe('2024-04-14T00:00:00Z');
+		});
+	});
+
+	describe('DELETE /api/whitelist/large/{id}', () => {
+		it('requires authentication header', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				json: () => Promise.resolve({ detail: 'Not authenticated' })
+			});
+
+			const response = await fetch('/api/whitelist/large/1', {
+				method: 'DELETE'
+			});
+
+			expect(response.status).toBe(401);
+		});
+
+		it('accepts DELETE with valid auth and returns 200', async () => {
+			const successResponse = {
+				message: 'Removed from large content whitelist'
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve(successResponse)
+			});
+
+			const response = await fetch('/api/whitelist/large/1', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.ok).toBe(true);
+			expect(response.status).toBe(200);
+
+			const data = await response.json();
+			expect(data.message).toContain('large content whitelist');
+		});
+
+		it('returns 404 for non-existent item', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 404,
+				json: () => Promise.resolve({ detail: 'Whitelist entry not found' })
+			});
+
+			const response = await fetch('/api/whitelist/large/99999', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.status).toBe(404);
+		});
+	});
+});
+
 describe('Request Whitelist API Integration (US-13.5)', () => {
 	beforeEach(() => {
 		mockFetch.mockReset();

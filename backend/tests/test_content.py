@@ -14,6 +14,7 @@ from app.database import (
     ContentWhitelist,
     FrenchOnlyWhitelist,
     LanguageExemptWhitelist,
+    LargeContentWhitelist,
 )
 from tests.conftest import TestingAsyncSessionLocal
 
@@ -3146,6 +3147,264 @@ class TestLanguageExemptWhitelist:
         # Should have 'old' issue but NOT 'language' issue
         assert "old" in data["items"][0]["issues"]
         assert "language" not in data["items"][0]["issues"]
+
+
+class TestLargeContentWhitelist:
+    """Test /api/whitelist/large endpoints for large content whitelist."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "largewl@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def test_add_to_large_whitelist_requires_auth(self, client: TestClient) -> None:
+        """POST /api/whitelist/large should require authentication."""
+        response = client.post(
+            "/api/whitelist/large",
+            json={"jellyfin_id": "test", "name": "Test", "media_type": "Movie"},
+        )
+        assert response.status_code == 401
+
+    def test_add_to_large_whitelist_creates_entry(self, client: TestClient) -> None:
+        """Should create large content whitelist entry."""
+        token = self._get_auth_token(client, "largewl-add@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "large-movie-1",
+                "name": "A Big Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to large content whitelist"
+        assert data["jellyfin_id"] == "large-movie-1"
+
+    def test_add_to_large_whitelist_returns_409_if_duplicate(self, client: TestClient) -> None:
+        """Should return 409 if item already in large content whitelist."""
+        token = self._get_auth_token(client, "largewl-dup@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time - should succeed
+        client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "large-dup",
+                "name": "Duplicate Big Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Add second time - should fail
+        response = client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "large-dup",
+                "name": "Duplicate Big Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 409
+
+    def test_get_large_whitelist(self, client: TestClient) -> None:
+        """Should return list of large content whitelist items."""
+        token = self._get_auth_token(client, "largewl-list@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add some items
+        client.post(
+            "/api/whitelist/large",
+            json={"jellyfin_id": "lg1", "name": "Big Movie 1", "media_type": "Movie"},
+            headers=headers,
+        )
+        client.post(
+            "/api/whitelist/large",
+            json={"jellyfin_id": "lg2", "name": "Big Movie 2", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        response = client.get("/api/whitelist/large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+
+    def test_delete_from_large_whitelist(self, client: TestClient) -> None:
+        """Should remove item from large content whitelist."""
+        token = self._get_auth_token(client, "largewl-del@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add an item
+        client.post(
+            "/api/whitelist/large",
+            json={"jellyfin_id": "lg-del", "name": "To Delete", "media_type": "Movie"},
+            headers=headers,
+        )
+
+        # Get the list to find the ID
+        list_response = client.get("/api/whitelist/large", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete it
+        response = client.delete(f"/api/whitelist/large/{item_id}", headers=headers)
+        assert response.status_code == 200
+
+        # Verify it's gone
+        list_response = client.get("/api/whitelist/large", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_large_whitelist_excludes_from_large_issues(
+        self, client: TestClient
+    ) -> None:
+        """Items in large content whitelist should not appear in large issues."""
+        token = self._get_auth_token(client, "largewl-exclude@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a large movie (>13GB)
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="large-movie-wl",
+                name="A Very Large Movie",
+                media_type="Movie",
+                size_bytes=15_000_000_000,  # 15 GB
+            )
+            session.add(item)
+            await session.commit()
+
+        # Verify it shows up in large filter
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "large-movie-wl"
+
+        # Add to large content whitelist
+        client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "large-movie-wl",
+                "name": "A Very Large Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should no longer appear in large issues
+        response = client.get("/api/content/issues?filter=large", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_large_whitelist_excludes_from_summary(
+        self, client: TestClient
+    ) -> None:
+        """Large whitelisted items should not be counted in summary."""
+        token = self._get_auth_token(client, "largewl-summary@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a large movie (>13GB)
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="large-summary-movie",
+                name="Large Summary Movie",
+                media_type="Movie",
+                size_bytes=14_000_000_000,  # 14 GB
+            )
+            session.add(item)
+            await session.commit()
+
+        # Verify it's counted in summary
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["large_movies"]["count"] == 1
+
+        # Add to large content whitelist
+        client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "large-summary-movie",
+                "name": "Large Summary Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should not be counted in summary anymore
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["large_movies"]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_large_whitelist_does_not_affect_other_issues(
+        self, client: TestClient
+    ) -> None:
+        """Large whitelist should only exclude large issues, not other issues like old."""
+        token = self._get_auth_token(client, "largewl-other@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create a large, old movie (both large AND old issues)
+        old_date = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="old-large-movie",
+                name="Old Large Movie",
+                media_type="Movie",
+                size_bytes=15_000_000_000,  # Large
+                date_created=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),  # Old
+                played=False,
+            )
+            session.add(item)
+            await session.commit()
+
+        # Add to large content whitelist
+        client.post(
+            "/api/whitelist/large",
+            json={
+                "jellyfin_id": "old-large-movie",
+                "name": "Old Large Movie",
+                "media_type": "Movie",
+            },
+            headers=headers,
+        )
+
+        # Should still appear in old content filter (not large)
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "old-large-movie"
+        # Should have 'old' issue but NOT 'large' issue
+        assert "old" in data["items"][0]["issues"]
+        assert "large" not in data["items"][0]["issues"]
 
 
 class TestUnavailableRequests:

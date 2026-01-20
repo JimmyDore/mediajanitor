@@ -60,7 +60,7 @@
 	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added' | 'requester' | 'release' | 'watched';
 	type SortOrder = 'asc' | 'desc';
 	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
-	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'request';
+	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'large' | 'request';
 
 	// Tooltip text for informational badges
 	const badgeTooltips: Record<string, string> = {
@@ -76,6 +76,7 @@
 	let protectingIds = $state<Set<string>>(new Set());
 	let frenchOnlyIds = $state<Set<string>>(new Set());
 	let languageExemptIds = $state<Set<string>>(new Set());
+	let largeWhitelistIds = $state<Set<string>>(new Set());
 	let hidingRequestIds = $state<Set<string>>(new Set());
 	let deletingIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
@@ -473,6 +474,8 @@
 			await markAsFrenchOnlyWithExpiration(item, expiresAt);
 		} else if (type === 'language-exempt') {
 			await markAsLanguageExemptWithExpiration(item, expiresAt);
+		} else if (type === 'large') {
+			await addToLargeWhitelistWithExpiration(item, expiresAt);
 		} else if (type === 'request') {
 			await hideRequestWithExpiration(item, expiresAt);
 		}
@@ -699,6 +702,47 @@
 			const newSet = new Set(languageExemptIds);
 			newSet.delete(item.jellyfin_id);
 			languageExemptIds = newSet;
+		}
+	}
+
+	async function addToLargeWhitelistWithExpiration(item: ContentIssueItem, expiresAt: string | null) {
+		largeWhitelistIds = new Set([...largeWhitelistIds, item.jellyfin_id]);
+
+		try {
+			const response = await authenticatedFetch('/api/whitelist/large', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ jellyfin_id: item.jellyfin_id, name: item.name, media_type: item.media_type, expires_at: expiresAt })
+			});
+
+			if (response.status === 401) { showToast('Session expired', 'error'); return; }
+			if (response.status === 409) { showToast('Already whitelisted', 'error'); return; }
+			if (!response.ok) { showToast('Failed', 'error'); return; }
+
+			if (data) {
+				const currentItem = data.items.find((i) => i.jellyfin_id === item.jellyfin_id);
+				if (currentItem) {
+					const hasOnlyLargeIssue = currentItem.issues.length === 1 && currentItem.issues[0] === 'large';
+					if (hasOnlyLargeIssue) {
+						const removedSize = currentItem.size_bytes || 0;
+						data = {
+							...data,
+							items: data.items.filter((i) => i.jellyfin_id !== item.jellyfin_id),
+							total_count: data.total_count - 1,
+							total_size_bytes: data.total_size_bytes - removedSize,
+							total_size_formatted: formatSize(data.total_size_bytes - removedSize)
+						};
+					} else {
+						await fetchIssues(activeFilter);
+					}
+				}
+			}
+			showToast('Large content whitelisted', 'success');
+		} catch { showToast('Failed', 'error'); }
+		finally {
+			const newSet = new Set(largeWhitelistIds);
+			newSet.delete(item.jellyfin_id);
+			largeWhitelistIds = newSet;
 		}
 	}
 
@@ -1163,8 +1207,24 @@
 													</button>
 												</span>
 											{:else if issue === 'large'}
-												<!-- LARGE badge with info tooltip (no action) -->
-												<span class="badge badge-large" title={badgeTooltips.large}>large</span>
+												<!-- LARGE badge with whitelist action -->
+												<span class="badge-group">
+													<span class="badge badge-large" title={badgeTooltips.large}>large</span>
+													<button
+														class="badge-action"
+														onclick={() => openDurationPicker(item, 'large')}
+														disabled={largeWhitelistIds.has(item.jellyfin_id)}
+														title="Keep in high quality"
+													>
+														{#if largeWhitelistIds.has(item.jellyfin_id)}
+															<span class="badge-spin"></span>
+														{:else}
+															<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+																<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+															</svg>
+														{/if}
+													</button>
+												</span>
 											{:else if issue === 'request'}
 												<!-- REQUEST badge with hide action -->
 												<span class="badge-group">

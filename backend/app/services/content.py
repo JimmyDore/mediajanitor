@@ -596,6 +596,130 @@ async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
     return set(result.scalars().all())
 
 
+# Large Content Whitelist functions
+
+
+async def add_to_large_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    jellyfin_id: str,
+    name: str,
+    media_type: str,
+    expires_at: datetime | None = None,
+) -> None:
+    """Add an item to the user's large content whitelist.
+
+    Items in this whitelist are exempt from large content checks.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_id: Jellyfin content ID
+        name: Content name
+        media_type: "Movie" or "Series"
+        expires_at: Optional expiration datetime (None = permanent)
+
+    Raises ValueError if item already exists.
+    """
+    from app.database import LargeContentWhitelist
+
+    # Check if already whitelisted
+    result = await db.execute(
+        select(LargeContentWhitelist).where(
+            LargeContentWhitelist.user_id == user_id,
+            LargeContentWhitelist.jellyfin_id == jellyfin_id,
+        )
+    )
+    if result.scalar_one_or_none():
+        raise ValueError("Item already in large content whitelist")
+
+    entry = LargeContentWhitelist(
+        user_id=user_id,
+        jellyfin_id=jellyfin_id,
+        name=name,
+        media_type=media_type,
+        expires_at=expires_at,
+    )
+    db.add(entry)
+
+
+async def get_large_whitelist(
+    db: AsyncSession,
+    user_id: int,
+) -> WhitelistListResponse:
+    """Get all items in the user's large content whitelist."""
+    from app.database import LargeContentWhitelist
+
+    result = await db.execute(
+        select(LargeContentWhitelist)
+        .where(LargeContentWhitelist.user_id == user_id)
+        .order_by(LargeContentWhitelist.name)
+    )
+    entries = result.scalars().all()
+
+    items = [
+        WhitelistItem(
+            id=entry.id,
+            jellyfin_id=entry.jellyfin_id,
+            name=entry.name,
+            media_type=entry.media_type,
+            created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
+        )
+        for entry in entries
+    ]
+
+    return WhitelistListResponse(
+        items=items,
+        total_count=len(items),
+    )
+
+
+async def remove_from_large_whitelist(
+    db: AsyncSession,
+    user_id: int,
+    whitelist_id: int,
+) -> bool:
+    """Remove an item from the user's large content whitelist.
+
+    Returns True if item was found and deleted, False otherwise.
+    """
+    from app.database import LargeContentWhitelist
+
+    result = await db.execute(
+        select(LargeContentWhitelist).where(
+            LargeContentWhitelist.id == whitelist_id,
+            LargeContentWhitelist.user_id == user_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        return False
+
+    await db.delete(entry)
+    return True
+
+
+async def get_large_whitelist_ids(db: AsyncSession, user_id: int) -> set[str]:
+    """Get set of jellyfin_ids in user's large content whitelist (non-expired only)."""
+    from sqlalchemy import or_
+    from app.database import LargeContentWhitelist
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(LargeContentWhitelist.jellyfin_id).where(
+            LargeContentWhitelist.user_id == user_id,
+            # Only include non-expired entries (NULL = permanent, or expires_at > now)
+            or_(
+                LargeContentWhitelist.expires_at.is_(None),
+                LargeContentWhitelist.expires_at > now,
+            ),
+        )
+    )
+    return set(result.scalars().all())
+
+
 def is_large_movie(
     item: CachedMediaItem,
     threshold_gb: int = LARGE_MOVIE_SIZE_THRESHOLD_GB,
@@ -806,9 +930,14 @@ async def get_content_summary(
 
     old_content_size = sum(item.size_bytes or 0 for item in old_content_items)
 
-    # Calculate large content (movies + series)
+    # Get large content whitelist
+    large_whitelist_ids = await get_large_whitelist_ids(db, user_id)
+
+    # Calculate large content (movies + series), excluding whitelisted
     large_content_items: list[CachedMediaItem] = []
     for item in all_items:
+        if item.jellyfin_id in large_whitelist_ids:
+            continue
         if is_large_movie(item, threshold_gb=thresholds.large_movie_size_gb):
             large_content_items.append(item)
         elif is_large_series(item, threshold_gb=thresholds.large_season_size_gb):
@@ -1081,6 +1210,7 @@ def get_item_issues(
     whitelisted_ids: set[str],
     french_only_ids: set[str] | None = None,
     language_exempt_ids: set[str] | None = None,
+    large_whitelist_ids: set[str] | None = None,
     thresholds: UserThresholds | None = None,
 ) -> tuple[list[str], list[str]]:
     """Get all issue types that apply to a content item.
@@ -1090,6 +1220,7 @@ def get_item_issues(
         whitelisted_ids: Set of jellyfin_ids in content whitelist
         french_only_ids: Set of jellyfin_ids in french-only whitelist
         language_exempt_ids: Set of jellyfin_ids exempt from ALL language checks
+        large_whitelist_ids: Set of jellyfin_ids exempt from large content checks
         thresholds: User's custom thresholds (uses defaults if None)
 
     Returns tuple of:
@@ -1111,11 +1242,13 @@ def get_item_issues(
     ):
         issues.append("old")
 
-    # Check for large content (movie or series)
-    if is_large_movie(item, threshold_gb=large_movie_size):
-        issues.append("large")
-    elif is_large_series(item, threshold_gb=large_season_size):
-        issues.append("large")
+    # Check for large content (movie or series) - skip if large-whitelisted
+    is_large_exempt = large_whitelist_ids is not None and item.jellyfin_id in large_whitelist_ids
+    if not is_large_exempt:
+        if is_large_movie(item, threshold_gb=large_movie_size):
+            issues.append("large")
+        elif is_large_series(item, threshold_gb=large_season_size):
+            issues.append("large")
 
     # Check for language issues (skip if language-exempt, respect french-only whitelist)
     is_language_exempt = language_exempt_ids is not None and item.jellyfin_id in language_exempt_ids
@@ -1185,13 +1318,16 @@ async def get_content_issues(
     # Get user's language-exempt whitelist
     language_exempt_ids = await get_language_exempt_ids(db, user_id)
 
+    # Get user's large content whitelist
+    large_whitelist_ids = await get_large_whitelist_ids(db, user_id)
+
     # Build list of items with issues
     # Store tuple of (item, issues_list, language_issues_detail)
     items_with_issues: list[tuple[CachedMediaItem, list[str], list[str]]] = []
 
     for item in all_items:
         issues, language_issues_detail = get_item_issues(
-            item, whitelisted_ids, french_only_ids, language_exempt_ids, thresholds
+            item, whitelisted_ids, french_only_ids, language_exempt_ids, large_whitelist_ids, thresholds
         )
 
         # Skip items with no issues
