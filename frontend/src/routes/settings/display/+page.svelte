@@ -64,11 +64,10 @@
 		}
 	}
 
-	function handleThemeChange(event: Event) {
-		const select = event.target as HTMLSelectElement;
-		const value = select.value as ThemePreference;
-		themePreference = value;
-		savePreference('theme_preference', value);
+	function handleThemeChange(newTheme: ThemePreference) {
+		if (newTheme === themePreference) return;
+		themePreference = newTheme;
+		savePreference('theme_preference', newTheme);
 	}
 
 	function handleDaysChange(event: Event) {
@@ -107,22 +106,61 @@
 	{:else}
 		<div class="settings-list" aria-live="polite">
 			<!-- Theme selector -->
-			<div class="setting-row">
+			<div class="setting-row theme-row">
 				<div class="setting-label-group">
-					<label for="theme-select">Theme</label>
+					<label>Theme</label>
 					<span class="setting-help">Choose how Media Janitor looks</span>
 				</div>
-				<div class="setting-control">
-					<select
-						id="theme-select"
-						value={themePreference}
-						onchange={handleThemeChange}
+				<div class="theme-selector" class:loading={isSaving}>
+					<button
+						type="button"
+						class="theme-option"
+						class:active={themePreference === 'light'}
+						onclick={() => handleThemeChange('light')}
 						disabled={isSaving}
+						aria-pressed={themePreference === 'light'}
 					>
-						<option value="system">System</option>
-						<option value="light">Light</option>
-						<option value="dark">Dark</option>
-					</select>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+							<circle cx="12" cy="12" r="5"/>
+							<line x1="12" y1="1" x2="12" y2="3"/>
+							<line x1="12" y1="21" x2="12" y2="23"/>
+							<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+							<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+							<line x1="1" y1="12" x2="3" y2="12"/>
+							<line x1="21" y1="12" x2="23" y2="12"/>
+							<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+							<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+						</svg>
+						Light
+					</button>
+					<button
+						type="button"
+						class="theme-option"
+						class:active={themePreference === 'dark'}
+						onclick={() => handleThemeChange('dark')}
+						disabled={isSaving}
+						aria-pressed={themePreference === 'dark'}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+							<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+						</svg>
+						Dark
+					</button>
+					<button
+						type="button"
+						class="theme-option"
+						class:active={themePreference === 'system'}
+						onclick={() => handleThemeChange('system')}
+						disabled={isSaving}
+						aria-pressed={themePreference === 'system'}
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+							<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+							<line x1="8" y1="21" x2="16" y2="21"/>
+							<line x1="12" y1="17" x2="12" y2="21"/>
+						</svg>
+						System
+					</button>
 				</div>
 			</div>
 
@@ -263,6 +301,58 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+	}
+
+	/* Theme Selector */
+	.theme-row .setting-label-group {
+		flex-shrink: 0;
+	}
+
+	.theme-selector {
+		display: flex;
+		background: var(--bg-tertiary);
+		border-radius: var(--radius-md);
+		padding: 3px;
+		gap: 2px;
+	}
+
+	.theme-selector.loading {
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.theme-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		white-space: nowrap;
+	}
+
+	.theme-option:hover:not(:disabled) {
+		color: var(--text-primary);
+	}
+
+	.theme-option.active {
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+	}
+
+	.theme-option:disabled {
+		cursor: not-allowed;
+	}
+
+	.theme-option svg {
+		flex-shrink: 0;
 	}
 
 	/* Select inputs */
@@ -420,6 +510,16 @@
 
 		.setting-control select {
 			width: 100%;
+		}
+
+		.theme-selector {
+			width: 100%;
+			justify-content: space-between;
+		}
+
+		.theme-option {
+			flex: 1;
+			justify-content: center;
 		}
 	}
 </style>
