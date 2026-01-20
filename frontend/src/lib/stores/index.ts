@@ -182,7 +182,10 @@ export async function authenticatedFetch(
 	});
 
 	// If we get a 401, try to refresh the token and retry once
-	if (response.status === 401 && token) {
+	// This handles both cases:
+	// 1. Token existed but expired (token is not null)
+	// 2. Page refresh where memory token is lost but refresh token cookie still exists (token is null)
+	if (response.status === 401) {
 		const refreshed = await auth.refreshAccessToken();
 
 		if (refreshed) {

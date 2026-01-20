@@ -176,6 +176,77 @@ describe('Authenticated Fetch Behavior', () => {
 		mockFetch.mockReset();
 	});
 
+	it('401 without token should still attempt refresh (page reload scenario)', async () => {
+		// This tests the bug fix: when a page reloads, the in-memory token is lost
+		// but the refresh token cookie still exists. authenticatedFetch should
+		// still attempt to refresh, not just silently fail.
+
+		// Scenario: Page reload, no token in memory, request sent without Authorization header
+		// Server returns 401
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 401,
+			json: () => Promise.resolve({ detail: 'Not authenticated' })
+		});
+
+		// authenticatedFetch should then call /api/auth/refresh (with cookie)
+		// Refresh succeeds because the httpOnly cookie is still valid
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					access_token: 'fresh-token-from-refresh',
+					expires_in: 900
+				})
+		});
+
+		// Then retry the original request with the new token
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ data: 'protected content' })
+		});
+
+		// Simulate the authenticatedFetch flow for page reload:
+		// 1. Request without token gets 401
+		const firstResponse = await fetch('/api/protected', {
+			credentials: 'include'
+			// Note: NO Authorization header (token was null)
+		});
+		expect(firstResponse.status).toBe(401);
+
+		// 2. Even though there was no token, we should still try to refresh
+		// (the fix removes the `&& token` check)
+		const refreshResponse = await fetch('/api/auth/refresh', {
+			method: 'POST',
+			credentials: 'include'
+		});
+		expect(refreshResponse.ok).toBe(true);
+		const { access_token } = await refreshResponse.json();
+
+		// 3. Retry with the new token
+		const retryResponse = await fetch('/api/protected', {
+			headers: { Authorization: `Bearer ${access_token}` },
+			credentials: 'include'
+		});
+		expect(retryResponse.ok).toBe(true);
+
+		// Verify the flow happened correctly
+		expect(mockFetch).toHaveBeenCalledTimes(3);
+		expect(mockFetch).toHaveBeenNthCalledWith(1, '/api/protected', expect.objectContaining({
+			credentials: 'include'
+		}));
+		expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/auth/refresh', expect.objectContaining({
+			method: 'POST',
+			credentials: 'include'
+		}));
+		expect(mockFetch).toHaveBeenNthCalledWith(3, '/api/protected', expect.objectContaining({
+			headers: expect.objectContaining({
+				Authorization: 'Bearer fresh-token-from-refresh'
+			})
+		}));
+	});
+
 	it('authenticated request includes Authorization header', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
