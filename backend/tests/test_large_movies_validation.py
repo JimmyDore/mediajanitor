@@ -18,8 +18,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 BASE_URL = "http://localhost:8080"
-TEST_EMAIL = "jimmy291295+2@gmail.com"
-TEST_PASSWORD = "ZSh1YYNsr844!*"
+TEST_EMAIL = os.getenv("TEST_EMAIL", "test_email@email.com")
+TEST_PASSWORD = os.getenv("TEST_PASSWORD", "test_password")
 
 
 class TestLargeMoviesValidation:
