@@ -3,899 +3,254 @@
   "branchName": "main",
   "userStories": [
     {
-      "id": "US-17.2.1",
-      "title": "Populate Sync Progress User Names",
-      "story": "As a user I want to see which Jellyfin user is being synced So that I can understand the progress in detail",
+      "id": "US-48.1",
+      "title": "Ultra API Settings - Backend",
+      "story": "As a user, I want to configure my Ultra.cc API credentials, so that the app can fetch my storage and traffic stats",
       "acceptanceCriteria": [
-        "Backend: `fetch_jellyfin_media_with_progress()` passes `current_user_name` to `update_sync_progress()`",
-        "During batch processing, extract current user's display name from Jellyfin users list",
-        "Pass display name (e.g., \"John\", \"Admin\") to progress update function",
-        "Frontend displays \"Fetching user 3/10: John...\" instead of \"Syncing media...\"",
-        "Progress message updates with each user's name during sync",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: trigger sync and see user names in progress messages"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "Implementation already complete. Backend sync.py:456-460 extracts user name and passes to update_sync_progress(). Frontend +page.svelte:159-160 displays 'Fetching user X/Y: Name...' format."
-    },
-    {
-      "id": "US-28.1",
-      "title": "Loading States Accessibility",
-      "story": "As a screen reader user I want loading states to be announced So that I know when content is being fetched",
-      "acceptanceCriteria": [
-        "Add `aria-busy=\"true\"` to parent containers during loading",
-        "Loading spinners have `aria-label=\"Loading\"` or equivalent",
-        "Add `aria-live=\"polite\"` regions for dynamic content updates",
-        "Dashboard loading state is accessible",
-        "Issues page loading state is accessible",
-        "Settings page loading state is accessible",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify with screen reader or accessibility inspector"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": "Added aria-busy to parent containers (dashboard, issues-page, settings-page, library-page, whitelist-page, page), aria-label/role='status' to loading divs, aria-hidden to spinners, and aria-live='polite' to dynamic content regions."
-    },
-    {
-      "id": "US-33.1",
-      "title": "Calculate and Store Total Series Size",
-      "story": "As a media server owner I want to see the total size of each series in my library So that I can understand how much storage each series consumes",
-      "acceptanceCriteria": [
-        "`calculate_season_sizes()` calculates both largest season size AND total series size",
-        "Total series size is stored in `CachedMediaItem.size_bytes` for series",
-        "Library page displays actual series sizes instead of \"Unknown size\"",
-        "Size filter works correctly for series (e.g., min_size_gb, max_size_gb)",
-        "Size sort works correctly for series",
-        "Total library size header includes series sizes",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in Docker using local integration test"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "Modified calculate_season_sizes() to accumulate total_series_size across all seasons and store in size_bytes. Added unit tests to verify total series size calculation."
-    },
-    {
-      "id": "US-34.1",
-      "title": "Hide Issues Column on Unavailable Tab",
-      "story": "As a user viewing unavailable requests I want the Issues column hidden on the Unavailable tab So that I have more space for useful information like the content name",
-      "acceptanceCriteria": [
-        "Issues column is not rendered when `activeFilter === 'requests'`",
-        "Name column expands to use the freed space (increase from 35% to ~45%)",
-        "Other tabs (All, Old, Large, Language) still show the Issues column",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": "Added conditional rendering for Issues column header and cells using {#if activeFilter !== 'requests'}. Added requests-view class to table and CSS rule to expand .col-name from 35% to 45% when in requests view."
-    },
-    {
-      "id": "US-34.2",
-      "title": "Normalize Table Header Casing",
-      "story": "As a user I want consistent header casing across all columns So that the table looks professional and cohesive",
-      "acceptanceCriteria": [
-        "All headers use Title Case: Name, Requester, Issues, Size, Added, Release, Requested/Watched",
-        "No ALL CAPS headers remain in the table",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": "Removed text-transform: uppercase from .issues-table th CSS rule. Headers now display in Title Case as written in HTML."
-    },
-    {
-      "id": "US-34.3",
-      "title": "Add Sorting to Requester and Release Columns",
-      "story": "As a user viewing unavailable requests I want to sort by Requester or Release date So that I can find requests from specific users or by upcoming releases",
-      "acceptanceCriteria": [
-        "Requester column header is wrapped in a sort button and clickable",
-        "Release column header is wrapped in a sort button and clickable",
-        "Sort indicators (↑/↓) appear on active sort column",
-        "Add 'requester' and 'release' to the `SortField` type",
-        "Sorting logic added to `getSortedItems()` for 'requester' (alphabetical) and 'release' (date comparison)",
-        "Requester sorts alphabetically (ascending by default)",
-        "Release sorts by date (descending by default - newest first)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": "Added 'requester' and 'release' to SortField type. Implemented sorting logic: requester sorts alphabetically with nulls last, release sorts by date with nulls last. Both column headers wrapped in sort buttons with sort indicators."
-    },
-    {
-      "id": "US-35.1",
-      "title": "Fix Watched Column Sort Order",
-      "story": "As a media server owner I want the Watched column to sort chronologically from newest to oldest So that I can easily find recently watched content or identify never-watched items",
-      "acceptanceCriteria": [
-        "Clicking Watched column header sorts items in correct order: date DESC → \"Watched\" → \"Never\"",
-        "Items with last_played_date display in descending order (newest first)",
-        "Items with played=true but no last_played_date show \"Watched\" and sort after dated items",
-        "Items with played=false show \"Never\" and sort last",
-        "Clicking the column again reverses the order: \"Never\" → \"Watched\" → date ASC",
-        "Sort works correctly for both movies and series",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": "Added 'watched' sort field to SortField type. Implemented three-tier sorting in getSortedItems: priority 1 (has date) → priority 2 (played=true, no date) → priority 3 (never watched). Descending shows most recent first, ascending shows never-watched first. Column header now uses 'watched' field instead of 'date' for non-requests tabs."
-    },
-    {
-      "id": "US-35.2",
-      "title": "Display Last Watched Date for Series",
-      "story": "As a media server owner I want to see the last watched date for series, not just \"Watched\" status So that I can understand when I last engaged with each series",
-      "acceptanceCriteria": [
-        "Series with last_played_date display formatted date (e.g., \"Jan 15, 2025\")",
-        "Series with played=true but no last_played_date display \"Watched\"",
-        "Series with played=false display \"Never\"",
-        "Display logic matches movies exactly (same formatting function)",
-        "Backend API already provides last_played_date for series (verify in API response)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: series show dates instead of generic \"Watched\""
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": "Modified calculate_season_sizes() to fetch episode UserData from all Jellyfin users and aggregate last_played_date. Added get_most_recent_episode_played_date() helper function. Updated fetch_season_episodes() to accept optional jellyfin_user_id parameter. Frontend formatLastWatched() already handles date display correctly."
-    },
-    {
-      "id": "US-36.1",
-      "title": "Settings Layout with Sidebar Navigation",
-      "story": "As a user I want a sidebar navigation within Settings So that I can easily navigate between different settings sections",
-      "acceptanceCriteria": [
-        "Create `/settings/+layout.svelte` with sidebar navigation",
-        "Sidebar shows 4 nav items: Connections, Thresholds, Users, Display",
-        "Each nav item links to its respective route (`/settings/connections`, etc.)",
-        "Active nav item is visually highlighted",
-        "Breadcrumb shows: Dashboard > Settings > [Section Name]",
-        "`/settings` redirects to `/settings/connections` (default section)",
-        "Layout is responsive: sidebar collapses to horizontal tabs on mobile",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": "Created +layout.svelte with sidebar navigation, breadcrumb, and 4 placeholder sub-pages. Server-side redirect from /settings to /settings/connections via +page.server.ts. Responsive: sidebar becomes horizontal tabs on mobile. Old +page.svelte removed (content will be extracted to sub-pages in subsequent stories US-36.2-36.5)."
-    },
-    {
-      "id": "US-36.2",
-      "title": "Extract Connections Page",
-      "story": "As a user I want to manage API connections on a dedicated page So that I can focus on configuring my services without distraction",
-      "acceptanceCriteria": [
-        "Create `/settings/connections/+page.svelte` with all connection forms",
-        "Includes Jellyfin, Jellyseerr, Radarr, Sonarr connection cards",
-        "All existing functionality preserved: expand/collapse, validation, save, status indicators",
-        "Form state is local to the page (not shared with other settings pages)",
-        "Loading states work correctly on initial page load",
-        "Success/error messages display inline as before",
-        "Remove connections section from old settings page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: all connection flows work correctly"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Extracted connections section to /settings/connections/+page.svelte. Includes Jellyfin, Jellyseerr, Radarr, Sonarr connection cards with expand/collapse, validation, save, status indicators. 15 new unit tests added. All functionality preserved from original settings page."
-    },
-    {
-      "id": "US-36.3",
-      "title": "Extract Thresholds Page",
-      "story": "As a user I want to configure analysis thresholds on a dedicated page So that I can adjust detection settings without scrolling through other options",
-      "acceptanceCriteria": [
-        "Create `/settings/thresholds/+page.svelte` with threshold inputs",
-        "Includes: Old content months, Min age months, Large movie size, Large season size",
-        "Save and Reset buttons work correctly",
-        "Help text shows which feature uses each threshold",
-        "Loading state on initial fetch",
-        "Success/error messages display inline",
-        "Remove thresholds section from old settings page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: threshold changes save and persist"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": "Extracted thresholds section to /settings/thresholds/+page.svelte. Includes all 4 threshold inputs with help text. Save/Reset buttons work correctly. Loading state on initial fetch. Inline success/error messages. 15 new unit tests added. Old settings page was already deleted in US-36.1 (content extracted to sub-pages)."
-    },
-    {
-      "id": "US-36.4",
-      "title": "Extract Users Page",
-      "story": "As a user I want to manage user nicknames on a dedicated page So that I can easily configure display names for requesters",
-      "acceptanceCriteria": [
-        "Create `/settings/users/+page.svelte` with nickname management",
-        "Table displays existing mappings: Jellyseerr Username → Display Name",
-        "Add, edit, delete functionality preserved",
-        "Delete confirmation flow works",
-        "Empty state message with call to action",
-        "Toast feedback on CRUD operations",
-        "Remove nicknames section from old settings page",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: all nickname CRUD operations work"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": "Extracted users/nicknames section to /settings/users/+page.svelte. Table displays Jellyseerr username → Display Name mappings with warning badge for users without Jellyseerr accounts. Add/Edit/Delete functionality with inline confirmation. Refresh users button for Jellyfin-sourced users. 16 new unit tests added. Old settings page was already deleted in US-36.1 (content extracted to sub-pages)."
-    },
-    {
-      "id": "US-36.5",
-      "title": "Extract Display Page",
-      "story": "As a user I want to configure display preferences on a dedicated page So that I can customize my viewing experience",
-      "acceptanceCriteria": [
-        "Create `/settings/display/+page.svelte` with display options",
-        "Includes: Theme selector (Light/Dark/System), Recently available days, Show unreleased requests toggle",
-        "Theme changes apply immediately (no save button needed)",
-        "Days input saves on change",
-        "Toggle saves on change",
-        "Remove display section from old settings page",
-        "Delete the original `/settings/+page.svelte` (now empty)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: all display settings work correctly"
-      ],
-      "priority": 65,
-      "passes": true,
-      "notes": "Created /settings/display/+page.svelte with all display preferences: Theme selector (Light/Dark/System), Title language dropdown (English/French), Recently available days input (1-30), Show unreleased requests toggle. Each setting saves on change via POST /api/settings/display. 18 new unit tests added. Old settings page was already deleted in US-36.1."
-    },
-    {
-      "id": "US-37.1",
-      "title": "Prefill Nicknames During Sync (Backend)",
-      "story": "As a developer I want to automatically create nickname records for all Jellyfin users during sync So that the nicknames table is prepopulated without user intervention",
-      "acceptanceCriteria": [
-        "During sync, after fetching Jellyfin users, upsert UserNickname records for each user",
-        "Use Jellyfin username as `jellyseerr_username` (assumption: same username across systems)",
-        "Leave `display_name` empty (user will fill in their preferred friendly name)",
-        "If nickname record already exists for a username, skip it (preserve existing mappings)",
-        "Add `has_jellyseerr_account` boolean field to UserNickname model (default False)",
-        "Query Jellyseerr users API during sync and mark matching usernames as `has_jellyseerr_account=True`",
+        "Add `ultra_api_url` (String, nullable) and `ultra_api_key_encrypted` (String, nullable) columns to UserSettings model",
+        "Create Alembic migration for new columns",
+        "PATCH `/api/settings` accepts `ultra_api_url` and `ultra_api_key` fields",
+        "Ultra API key is encrypted before storage (like Jellyfin/Jellyseerr keys)",
+        "GET `/api/settings` returns `ultra_api_configured: bool` (not the actual key)",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 10,
-      "passes": true,
+      "context": "Epic 48: Ultra.cc seedbox monitoring integration. API endpoint: {base_url}/total-stats with Bearer token auth. Response fields: service_stats_info.free_storage_gb, service_stats_info.traffic_available_percentage. Follow existing pattern: encrypt API key like Jellyfin/Jellyseerr keys in UserSettings. Stats cached in DB, fetched during sync (not on page load). NON-GOALS: No Slack/email notifications, no automatic actions, no historical tracking.",
+      "priority": 1,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-37.2",
-      "title": "Display Prefilled Users in UI",
-      "story": "As a user I want to see all my Jellyfin users already listed in the nicknames table So that I can immediately add display names without typing usernames",
+      "id": "US-48.3",
+      "title": "Ultra Warning Thresholds - Settings",
+      "story": "As a user, I want to set my own warning thresholds for storage and traffic, so that I get alerts relevant to my usage patterns",
       "acceptanceCriteria": [
-        "When users page loads, prefilled Jellyfin users appear in the table",
-        "Prefilled rows show username in \"Jellyseerr Username\" column",
-        "Display name column is empty (awaiting user input)",
-        "Users with `has_jellyseerr_account=False` show warning badge next to username",
-        "Warning badge tooltip: \"This Jellyfin user was not found in Jellyseerr. They may not be able to request content.\"",
-        "Users can still edit/delete prefilled rows normally",
-        "Empty state only shows if NO nicknames exist (not even prefilled ones)",
+        "Add `ultra_storage_warning_gb` (Integer, default 100) and `ultra_traffic_warning_percent` (Integer, default 20) columns to UserSettings",
+        "Create Alembic migration for new columns",
+        "PATCH `/api/settings` accepts threshold values",
+        "GET `/api/settings` returns current threshold values",
+        "Settings page has number inputs for both thresholds in the 'Seedbox Monitoring' section",
+        "Inputs show defaults (100 GB, 20%) when not set",
         "Typecheck passes",
         "Unit tests pass",
         "Verify in browser using browser tools"
       ],
-      "priority": 66,
-      "passes": true,
-      "notes": "Implementation already complete from US-36.4 and US-37.1. Users page displays prefilled Jellyfin users with warning badges for users without Jellyseerr accounts. Empty display names show em-dash. Edit/delete functionality works. 16 unit tests pass."
+      "context": "Epic 48: Ultra.cc seedbox monitoring. This story adds user-configurable warning thresholds. Defaults: 100 GB storage, 20% traffic. Dashboard will use these to show yellow/red warnings. Follow existing UserSettings pattern for new columns. NON-GOALS: No Slack/email notifications, no automatic actions.",
+      "priority": 2,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-37.3",
-      "title": "Manual Refresh Button for Jellyfin Users",
-      "story": "As a user I want to manually refresh the Jellyfin users list So that I can add newly created Jellyfin users to nicknames without waiting for next sync",
+      "id": "US-48.4",
+      "title": "Fetch Ultra Stats During Sync",
+      "story": "As a user, I want my seedbox stats fetched when I sync, so that I always see current storage and traffic info",
       "acceptanceCriteria": [
-        "Users page has \"Refresh users\" button above the table",
-        "Button triggers backend endpoint to fetch Jellyfin users and prefill nicknames",
-        "Shows loading spinner while fetching",
-        "On success: toast \"X new users added\", table updates",
-        "On error: toast with error message",
-        "Button disabled during refresh",
+        "Create `ultra_service.py` with `fetch_ultra_stats(url, api_key)` function",
+        "Function calls `{url}/total-stats` with Bearer token authentication",
+        "Returns dict with `free_storage_gb` (float) and `traffic_available_percentage` (float), or None if API fails",
+        "Add `ultra_free_storage_gb` (Float, nullable), `ultra_traffic_available_percent` (Float, nullable), `ultra_last_synced_at` (DateTime, nullable) columns to UserSettings",
+        "Create Alembic migration for new columns",
+        "Sync process (`/api/sync`) calls Ultra API if credentials are configured",
+        "Stats are stored in UserSettings after successful fetch",
+        "Sync succeeds even if Ultra API call fails (non-blocking)",
         "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
+        "Unit tests pass"
       ],
-      "priority": 27,
-      "passes": true,
-      "notes": "Added POST /api/settings/nicknames/refresh endpoint to fetch Jellyfin users and prefill nicknames. Frontend settings page has 'Refresh users' button (only shown when Jellyfin is configured) with loading state, success/error toasts."
+      "context": "Epic 48: Ultra.cc seedbox monitoring. API endpoint: {base_url}/total-stats with Bearer token auth. Response JSON: service_stats_info.free_storage_gb (float), service_stats_info.traffic_available_percentage (float). Create new ultra_service.py following existing service patterns (jellyfin.py, sonarr.py). Stats stored in UserSettings table. Sync must NOT fail if Ultra API is down - log warning and continue. NON-GOALS: No historical tracking.",
+      "priority": 3,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-38.1",
-      "title": "Add Title Language User Setting",
-      "story": "As a media server owner I want to choose my preferred language (English or French) for content titles So that I can view and copy titles in my preferred language",
+      "id": "US-49.1",
+      "title": "Delete Movies from Cache After Deletion",
+      "story": "As a user, I want deleted movies to stay deleted after page refresh, so that I don't see ghost items that are already removed from my library",
       "acceptanceCriteria": [
-        "Settings > Display Preferences has \"Title language\" dropdown with options: English (default), French",
-        "Add `title_language` column to `UserSettings` table (String(2), default='en')",
-        "Create database migration for new column",
-        "GET `/api/settings/display` returns `title_language` field",
-        "POST `/api/settings/display` accepts `title_language` field",
+        "After successful Radarr deletion, delete matching `CachedMediaItem` from database",
+        "Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)",
+        "If Radarr deletion succeeds but Jellyseerr fails, still delete from cache",
+        "If Radarr deletion fails, do NOT delete from cache",
+        "Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: dropdown appears in Settings > Display and persists"
+        "Verify in Docker: delete a movie, refresh page, item stays deleted"
       ],
+      "context": "Epic 49: Fix deletion cache persistence. Problem: Items reappear after page refresh because cache isn't updated. Endpoint: DELETE /api/content/movie/{tmdb_id}. Match CachedMediaItem by TMDB ID in raw_data JSON (key: ProviderIds.Tmdb). Delete from cache ONLY after successful Radarr deletion. Also delete matching CachedJellyseerrRequest by TMDB ID. NON-GOALS: No undo/restore, no change to sync behavior, keep optimistic UI pattern.",
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-38.2",
-      "title": "Store French Titles During Sync",
-      "story": "As a media server owner I want French titles to be fetched and stored during sync So that I can view content in French without API delays",
+      "id": "US-49.2",
+      "title": "Delete Series from Cache After Deletion",
+      "story": "As a user, I want deleted TV series to stay deleted after page refresh, so that I don't see ghost items that are already removed from my library",
       "acceptanceCriteria": [
-        "Add `title_fr` column to `CachedJellyseerrRequest` model (String(500), nullable)",
-        "Create database migration for new column",
-        "Sync service fetches French titles from TMDB (`language=fr` parameter)",
-        "Add `language` parameter to `fetch_media_details()` function",
-        "During sync, fetch both English and French titles (two API calls per media item)",
-        "French titles stored in `title_fr` column",
-        "Sync handles missing French titles gracefully (stores None)",
+        "After successful Sonarr deletion, delete matching `CachedMediaItem` from database",
+        "Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)",
+        "If Sonarr deletion succeeds but Jellyseerr fails, still delete from cache",
+        "If Sonarr deletion fails, do NOT delete from cache",
+        "Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify after sync: `title_fr` column populated in database"
+        "Verify in Docker: delete a series, refresh page, item stays deleted"
       ],
+      "context": "Epic 49: Fix deletion cache persistence. Same pattern as US-49.1 but for series. Endpoint: DELETE /api/content/series/{tmdb_id}. Match CachedMediaItem by TMDB ID in raw_data JSON (key: ProviderIds.Tmdb). Delete from cache ONLY after successful Sonarr deletion. Also delete matching CachedJellyseerrRequest by TMDB ID. NON-GOALS: No undo/restore, no change to sync behavior.",
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-38.3",
-      "title": "Recently Available Uses Language Preference",
-      "story": "As a user who prefers French I want the Recently Available page to show French titles So that I can view and share content lists in French",
+      "id": "US-49.3",
+      "title": "Delete Requests from Cache After Deletion",
+      "story": "As a user, I want deleted Jellyseerr requests to stay deleted after page refresh, so that I don't see ghost requests in the Unavailable Requests tab",
       "acceptanceCriteria": [
-        "`RecentlyAvailableItem` model includes `title_fr` field (nullable string)",
-        "API `/api/info/recent` returns both `title` and `title_fr` for each item",
-        "Frontend reads user's `title_language` preference from display settings",
-        "Table displays titles in preferred language",
-        "Copy button outputs titles in preferred language",
-        "If French title unavailable, falls back to English title",
+        "After successful Jellyseerr media deletion, delete matching `CachedJellyseerrRequest` from database",
+        "Match by Jellyseerr ID (existing lookup already works)",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: table shows French titles when setting is French",
-        "Verify in browser: copy output contains French titles when setting is French"
+        "Verify in Docker: delete a request, refresh page, request stays deleted"
       ],
-      "priority": 67,
-      "passes": true,
-      "notes": "Added title_fr to RecentlyAvailableItem model and API. Frontend reads title_language from display settings and displays French titles with English fallback. Copy button also uses preferred language. 6 new frontend tests added."
+      "context": "Epic 49: Fix deletion cache persistence. Endpoint: DELETE /api/content/request/{jellyseerr_id}. Simpler than movies/series - just delete CachedJellyseerrRequest by Jellyseerr ID after successful API deletion. Existing lookup logic already works. NON-GOALS: No undo/restore.",
+      "priority": 13,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-39.1",
-      "title": "Add Manual Dismiss Button to Toasts",
-      "story": "As a user I want to manually dismiss toast notifications So that I can control when messages disappear",
+      "id": "US-51.1",
+      "title": "Fetch Episode Details During Sync",
+      "story": "As a user, I want episode air dates to be cached during sync, so that the Recently Available page can detect new episodes without API calls",
       "acceptanceCriteria": [
-        "All toasts (success, error, info) display an \"X\" close button in the top-right corner",
-        "Clicking the close button immediately removes the toast",
-        "Close button is keyboard accessible (Tab to focus, Enter/Space to activate)",
-        "Close button has `aria-label=\"Close notification\"`",
-        "Toasts still auto-dismiss after 3 seconds if not manually closed",
-        "Close button is visually distinct but doesn't dominate the toast",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 68,
-      "passes": true,
-      "notes": "Created Toast.svelte component with X close button, keyboard accessibility (Enter/Space), aria-label='Close notification'. Updated all pages (issues, whitelist, recent, dashboard, old-unwatched) to use Toast component. 28 new unit tests added. Auto-dismiss after 3 seconds still works."
-    },
-    {
-      "id": "US-39.2",
-      "title": "Add Type Icons to Toasts",
-      "story": "As a user I want to see an icon indicating the toast type So that I can quickly understand the message severity at a glance",
-      "acceptanceCriteria": [
-        "Success toasts show ✓ (checkmark) icon",
-        "Error toasts show ✕ (X) icon",
-        "Info toasts show ℹ (info) icon",
-        "Warning toasts show ⚠ (warning triangle) icon (if warning type exists)",
-        "Icons are positioned on the left side of the message text",
-        "Icons use semantic colors matching toast background (green for success, red for error, etc.)",
-        "Icons have appropriate `aria-hidden=\"true\"` (decorative, message text conveys meaning)",
-        "Icon size is proportional to text size (~16-20px)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser using browser tools"
-      ],
-      "priority": 69,
-      "passes": true,
-      "notes": "Added inline SVG icons to Toast.svelte: checkmark for success, X for error, i-circle for info, triangle for warning. Icons are 18x18px, positioned left of message, use stroke='currentColor' for white color. Icon container has aria-hidden='true'. Added 'warning' toast type with amber background. 9 new unit tests added."
-    },
-    {
-      "id": "US-40.1",
-      "title": "Fix GitHub Repository Link",
-      "story": "As a user seeking help I want the Help page to link to the correct project repository So that I can report issues or view the project code",
-      "acceptanceCriteria": [
-        "Help page link points to `https://github.com/jimmydore/mediajanitor`",
-        "Link opens in a new tab (`target=\"_blank\" rel=\"noopener noreferrer\"`)",
-        "Link text clearly indicates it's the project repository (e.g., \"View project on GitHub\" or \"Report an issue\")",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: clicking link opens correct repository"
-      ],
-      "priority": 70,
-      "passes": true,
-      "notes": "Updated Help page contact section with two links: 'view the project on GitHub' and 'report an issue'. Both point to jimmydore/mediajanitor with correct attributes."
-    },
-    {
-      "id": "US-41.1",
-      "title": "Add Escape Key to Close Modals",
-      "story": "As a keyboard user I want to press Escape to close modals So that I can quickly dismiss dialogs without using the mouse",
-      "acceptanceCriteria": [
-        "Pressing Escape key closes the whitelist duration picker modal",
-        "Pressing Escape key closes the delete confirmation modal",
-        "Escape key has same effect as clicking Cancel (doesn't trigger destructive actions)",
-        "Event listener is added when modal opens, removed when modal closes",
-        "Escape key only closes the topmost modal (if multiple modals exist)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: open each modal, press Escape, verify it closes"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": "Added svelte:window onkeydown handler with handleKeydown() function that checks for Escape key and closes the appropriate modal (duration picker or delete confirmation). Closes duration picker first if both are open. 8 new unit tests added."
-    },
-    {
-      "id": "US-41.2",
-      "title": "Implement Keyboard Focus Trap",
-      "story": "As a keyboard user I want Tab/Shift+Tab to stay within the modal So that I don't accidentally tab to background content",
-      "acceptanceCriteria": [
-        "When modal is open, Tab moves focus to next focusable element within modal",
-        "When on last focusable element, Tab wraps to first focusable element",
-        "Shift+Tab moves focus to previous focusable element within modal",
-        "When on first focusable element, Shift+Tab wraps to last focusable element",
-        "Focus trap works for both duration picker and delete modals",
-        "Focusable elements: buttons, inputs, select (if any)",
-        "Remove `svelte-ignore a11y_interactive_supports_focus` comments",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: open modal, tab through elements, verify focus stays in modal"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": "Added getFocusableElements() helper and focus trap logic to handleKeydown(). Tab from last element wraps to first, Shift+Tab from first wraps to last. Both modals have tabindex='0' for accessibility. Removed svelte-ignore a11y_interactive_supports_focus comments. 14 new unit tests added."
-    },
-    {
-      "id": "US-41.3",
-      "title": "Auto-Focus and Restore Focus",
-      "story": "As a keyboard user I want focus to automatically move into the modal when it opens So that I can immediately interact with it using keyboard",
-      "acceptanceCriteria": [
-        "When duration picker opens, first focusable element (first duration button) receives focus",
-        "When delete modal opens, Cancel button receives focus (safer default for destructive action)",
-        "Store reference to the element that triggered the modal (e.g., \"Add to whitelist\" button)",
-        "When modal closes (Escape, Cancel, or Confirm), focus returns to trigger element",
-        "Focus restoration works whether modal is closed by keyboard or mouse",
-        "Remove `svelte-ignore a11y_click_events_have_key_events` comments",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: open modal with keyboard (Tab + Enter), verify focus moves into modal",
-        "Verify in browser: close modal, verify focus returns to trigger button"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": "Added durationPickerTrigger and deleteModalTrigger state refs to capture trigger elements. openDurationPicker/openDeleteModal capture document.activeElement. closeDurationPicker/closeDeleteModal restore focus to trigger. Added $effect hooks for auto-focus: duration picker focuses first radio input, delete modal focuses Cancel button. Added onkeydown handler to modal overlays. 24 new unit tests added."
-    },
-    {
-      "id": "US-42.1",
-      "title": "Create SearchInput Component",
-      "story": "As a developer I want a reusable SearchInput component with built-in accessibility So that search inputs are consistently accessible across the app",
-      "acceptanceCriteria": [
-        "Create `frontend/src/lib/components/SearchInput.svelte`",
-        "Component accepts props: `value`, `placeholder`, `oninput`, `aria-label`",
-        "Input has `type=\"text\"` and `class=\"search-input\"`",
-        "aria-label is applied to the input element",
-        "Clear button appears when value is not empty",
-        "Clear button has aria-label=\"Clear search\"",
-        "Component uses same HTML structure as existing search inputs",
-        "Component uses same CSS classes as existing search inputs (no visual changes)",
-        "Typecheck passes",
-        "Unit tests pass (test component renders, accepts props, handles input/clear)"
-      ],
-      "priority": 74,
-      "passes": true,
-      "notes": "Created SearchInput.svelte component with value, placeholder, aria-label, oninput, and onclear props. Input has type=text and class=search-input. Clear button shows when value is not empty with aria-label='Clear search'. Same HTML structure and CSS as existing search inputs. 19 new unit tests added."
-    },
-    {
-      "id": "US-42.2",
-      "title": "Use SearchInput in Library Page",
-      "story": "As a screen reader user I want the search input on Library page to have a descriptive label So that I know what the input is for",
-      "acceptanceCriteria": [
-        "Import SearchInput component in `frontend/src/routes/library/+page.svelte`",
-        "Replace existing search input with `<SearchInput>` component",
-        "Set aria-label=\"Search library by title or year\"",
-        "Pass existing `searchQuery`, `placeholder`, and `handleSearchInput` as props",
-        "Remove old inline search input HTML",
-        "Search functionality works identically to before (debounced input, clear button)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: search input appears and functions correctly"
-      ],
-      "priority": 75,
-      "passes": true,
-      "notes": "Replaced inline search input with SearchInput component. Removed duplicated CSS. aria-label='Search library by title or year' applied. Debounced search and clear button work correctly."
-    },
-    {
-      "id": "US-42.3",
-      "title": "Use SearchInput in Issues Page",
-      "story": "As a screen reader user I want the search input on Issues page to have a descriptive label So that I know what the input is for",
-      "acceptanceCriteria": [
-        "Import SearchInput component in `frontend/src/routes/issues/+page.svelte`",
-        "Replace existing search input with `<SearchInput>` component",
-        "Set aria-label=\"Search issues by title or year\"",
-        "Pass existing `searchQuery`, `placeholder`, and `handleSearchInput` as props",
-        "Remove old inline search input HTML",
-        "Search functionality works identically to before (debounced input, clear button)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: search input appears and functions correctly"
-      ],
-      "priority": 76,
-      "passes": true,
-      "notes": "Replaced inline search input with SearchInput component. Removed ~53 lines of duplicated CSS. aria-label='Search issues by title or year' applied. Debounced search and clear button work correctly."
-    },
-    {
-      "id": "US-43.1",
-      "title": "Audit Warning Color Contrast",
-      "story": "As a developer I want to verify current warning color contrast ratios So that I know what needs to be fixed",
-      "acceptanceCriteria": [
-        "Use browser DevTools (Chrome/Firefox) contrast checker on warning text instances",
-        "Document current contrast ratios for light mode: Warning text on light background (e.g., `--warning` on `--bg-primary`) and Warning text on warning-light background (e.g., `--warning` on `--warning-light`)",
-        "Document current contrast ratios for dark mode",
-        "Identify which combinations fail WCAG AA (< 4.5:1 for normal text)",
-        "Create a list of files using `var(--warning)` that need testing (already identified in Grep results)"
-      ],
-      "priority": 77,
-      "passes": true,
-      "notes": "Audit completed. LIGHT MODE FAILS: warning #ca8a04 on white #ffffff = 2.94:1 (FAIL), on warning-light = 2.66:1 (FAIL), white on warning toast = 2.94:1 (FAIL). DARK MODE: warning #eab308 on dark #0f172a = 9.31:1 (PASS), on warning-light = 7.1:1 (PASS), white on warning toast = 1.92:1 (FAIL). Files: issues/+page.svelte, library/+page.svelte, old-unwatched/+page.svelte, register/+page.svelte, settings/users/+page.svelte, Toast.svelte, app.css (.badge-warning)"
-    },
-    {
-      "id": "US-43.2",
-      "title": "Fix Warning Color for WCAG AA Compliance",
-      "story": "As a user with visual impairments I want warning text to have sufficient contrast So that I can easily read important warnings",
-      "acceptanceCriteria": [
-        "Update `--warning` color in light mode to meet WCAG AA (4.5:1 contrast)",
-        "Update `--warning` color in dark mode if needed for WCAG AA compliance",
-        "Maintain visual distinction from other status colors (success, danger, info)",
-        "Warning color remains recognizable as \"yellow/amber\" (don't shift to orange/brown)",
-        "Test updated colors in browser DevTools contrast checker",
-        "Verify contrast on all instances: Issues page warning text, Register page warning elements, Library page warning text, badge-warning class (even if unused, for future use)",
-        "Typecheck passes",
-        "Unit tests pass (if any color-related tests exist)",
-        "Verify in browser: warning text is readable and meets WCAG AA"
-      ],
-      "priority": 78,
-      "passes": true,
-      "notes": "Changed light mode --warning from #ca8a04 (2.9:1) to #a16207 (5.5:1) for WCAG AA compliance. Updated toast-warning to use dark amber text (#451a03) instead of white for proper contrast on warning backgrounds in both modes. Dark mode --warning (#eab308) already passed WCAG AA."
-    },
-    {
-      "id": "US-44.1",
-      "title": "Password Reset Token Model",
-      "story": "As a developer I want a database model to store password reset tokens So that we can securely track and validate reset requests",
-      "acceptanceCriteria": [
-        "Create `PasswordResetToken` model in `backend/app/database.py`",
-        "Fields: `id`, `user_id` (FK to users), `token` (hashed), `expires_at`, `created_at`, `used` (boolean)",
-        "Add index on `token` for fast lookup",
-        "Add foreign key constraint to `users` table with cascade delete",
-        "Create Alembic migration for new table",
-        "Migration applies successfully: `alembic upgrade head`",
+        "Add `fetch_jellyseerr_season_episodes(client, server_url, api_key, tmdb_id, season_number)` function to `sync.py`",
+        "Function calls `GET /api/v1/tv/{tmdb_id}/season/{season_number}` endpoint",
+        "Returns list of `{episodeNumber, name, airDate}` dicts",
+        "Graceful failure: returns empty list on API error (logged as warning)",
+        "In `fetch_jellyseerr_requests()`, for status 4 TV shows, fetch episodes for each partially available season",
+        "Store episode data in `raw_data.media.seasons[].episodes` array",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Created PasswordResetToken model with all required fields. Token stored as token_hash (indexed). Foreign key to users with CASCADE delete. Migration 98891c396773 created and verified."
+      "context": "Epic 51: Recently Available - Show new episodes from ongoing series. Problem: Page doesn't show new episodes from status 4 (partially available) TV shows. Jellyseerr API: GET /api/v1/tv/{tmdb_id}/season/{season_number}. Response has episodes with episodeNumber, name, airDate. Store in raw_data.media.seasons[].episodes (already a JSON field). Reference: original_script.py lines 714-792 (fetch_season_episodes, get_recent_episodes_for_season). NON-GOALS: No individual episode entries, no push notifications.",
+      "priority": 14,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-44.2",
-      "title": "Email Service with SMTP2GO",
-      "story": "As a developer I want an email service to send password reset emails So that users can receive reset links",
+      "id": "US-51.2",
+      "title": "Include Ongoing Series in Recently Available",
+      "story": "As a user, I want to see ongoing series with new episodes in the Recently Available list, so that I know when new episodes of my shows become available",
       "acceptanceCriteria": [
-        "Create `backend/app/services/email.py` with `send_password_reset_email()` function",
-        "Function accepts: `to_email: str`, `reset_url: str`, `user_email: str`",
-        "Email subject: \"Reset Your Media Janitor Password\"",
-        "Email body includes: reset link (clickable), expiration time (15 minutes), user's email for reference",
-        "Use SMTP2GO API via SMTP (not HTTP API) with environment variables",
-        "Environment variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`",
-        "Add email config to `backend/app/config.py` Settings class",
-        "Handle SMTP errors gracefully (log error, raise HTTPException 500)",
+        "Add `_get_recent_episodes_from_cached_data(request, days_back)` helper function in `content.py`",
+        "Function checks `raw_data.media.seasons[].episodes[].airDate` for episodes within `days_back` window",
+        "Returns `{season_num: [episode_nums]}` dict if recent episodes found, None otherwise",
+        "Modify `get_recently_available()` to check for recent episodes on status 4 TV shows",
+        "If recent episodes found, use today's date as `availability_date` to force inclusion",
+        "Series appears once (not per episode) in the list",
         "Typecheck passes",
-        "Unit tests pass (mock smtplib.SMTP)"
+        "Unit tests pass"
       ],
-      "priority": 28,
-      "passes": true,
-      "notes": "Created email service using smtplib with STARTTLS. HTML and plain text email formats. Raises HTTPException 500 on SMTP errors. 18 unit tests with mocked smtplib.SMTP. Config added: smtp_host, smtp_port, smtp_username, smtp_password, smtp_from_email, frontend_url."
+      "context": "Epic 51: Recently Available - Show new episodes. Depends on US-51.1 for cached episode data. Status 4 = partially available TV show. Check raw_data.media.seasons[].episodes[].airDate against days_back window. Return dict of {season_num: [episode_nums]} for display. Force inclusion by setting availability_date to today. One entry per series, not per episode. NON-GOALS: No individual episode entries.",
+      "priority": 15,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-44.3",
-      "title": "Request Password Reset Endpoint",
-      "story": "As a user who forgot my password I want to request a password reset link via my email So that I can regain access to my account",
+      "id": "US-51.3",
+      "title": "API Response with Season/Episode Details",
+      "story": "As a frontend developer, I want the Recently Available API to return season and episode information, so that the UI can display episode counts",
       "acceptanceCriteria": [
-        "Create `POST /api/auth/request-password-reset` endpoint",
-        "Request body: `{ \"email\": \"user@example.com\" }`",
-        "Generate secure random token (32 bytes, URL-safe base64)",
-        "Hash token with bcrypt before storing in database",
-        "Store token with expiration (15 minutes from now)",
-        "Delete any existing unused tokens for this user before creating new one",
-        "Send email with reset URL: `{FRONTEND_URL}/reset-password?token={raw_token}`",
-        "Return 200 OK even if email doesn't exist (prevent email enumeration)",
-        "Rate limit: max 3 requests per email per hour (use in-memory dict or Redis if available)",
+        "Add optional fields to `RecentlyAvailableItem` model: season_info (str | None), episode_count (int | None), available_episodes (int | None), total_episodes (int | None)",
+        "For status 5 TV shows: populate with total seasons and episode count from `raw_data`",
+        "For status 4 TV shows: populate with current season progress",
+        "Movies return `None` for all these fields",
         "Typecheck passes",
-        "Unit tests pass (mock email sending)",
-        "Test in Docker: request reset, verify email sent (check logs if SMTP not configured)"
+        "Unit tests pass"
       ],
-      "priority": 29,
-      "passes": true,
-      "notes": "Added POST /api/auth/request-password-reset endpoint. Generates secure token (secrets.token_urlsafe(32)), hashes with bcrypt, stores in PasswordResetToken table with 15-min expiration. Rate limited to 3 requests/email/hour. Returns 200 for any email to prevent enumeration. 10 new unit tests + 3 integration tests."
+      "context": "Epic 51: Recently Available API enhancement. Add fields to RecentlyAvailableItem model: season_info (e.g., 'Seasons 1-3' or 'Season 4 in progress'), episode_count (total for status 5), available_episodes/total_episodes (for status 4 progress). Status 5 = fully available, Status 4 = partially available. Calculate from raw_data.media.seasons. Movies return None. NON-GOALS: No episode-level details like titles.",
+      "priority": 16,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-44.4",
-      "title": "Reset Password Endpoint",
-      "story": "As a user with a reset token I want to submit a new password using the token So that I can access my account again",
+      "id": "US-48.2",
+      "title": "Ultra API Settings - Frontend",
+      "story": "As a user, I want to enter my Ultra.cc API URL and token in the settings page, so that I can connect my seedbox monitoring",
       "acceptanceCriteria": [
-        "Create `POST /api/auth/reset-password` endpoint",
-        "Request body: `{ \"token\": \"abc123...\", \"new_password\": \"newPass123!\" }`",
-        "Validate new password meets requirements (8+ chars, uppercase, lowercase, number)",
-        "Find token in database (hash incoming token, compare with stored hashes)",
-        "Verify token is not expired (expires_at > now)",
-        "Verify token is not already used",
-        "Update user's password (hash with bcrypt)",
-        "Mark token as used",
-        "Return 200 OK with success message",
-        "Return 400 if token is invalid, expired, or already used",
-        "Typecheck passes",
-        "Unit tests pass (test valid token, expired token, used token, invalid token)",
-        "Test in Docker: full flow from request to reset"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Added POST /api/auth/reset-password endpoint. Validates password strength (8+ chars, uppercase, lowercase, number) with Pydantic validator. Compares incoming token against bcrypt hashes of non-expired, unused tokens. Updates user password and marks token as used. 11 new unit tests + 3 integration tests."
-    },
-    {
-      "id": "US-44.5",
-      "title": "Forgot Password UI",
-      "story": "As a user who forgot my password I want a UI to request a password reset So that I can easily reset my password",
-      "acceptanceCriteria": [
-        "Add \"Forgot password?\" link below login form on `/login` page",
-        "Link navigates to `/forgot-password` route",
-        "Create `frontend/src/routes/forgot-password/+page.svelte`",
-        "Page has: email input, \"Send Reset Link\" button, back to login link",
-        "On submit: call `POST /api/auth/request-password-reset`",
-        "Show success message: \"If that email exists, a reset link has been sent. Check your inbox.\"",
-        "Show error toast if request fails",
-        "Disable button while request is in flight",
-        "Typecheck passes",
-        "Unit tests pass (test form submission, success/error states)",
-        "Verify in browser: navigate to forgot password, enter email, see success message"
-      ],
-      "priority": 79,
-      "passes": true,
-      "notes": "Created /forgot-password/+page.svelte with email form. Added 'Forgot password?' link to login page. Added /forgot-password to publicRoutes in +layout.svelte. Success state shows green checkmark and message. 9 new unit tests added."
-    },
-    {
-      "id": "US-44.6",
-      "title": "Reset Password UI",
-      "story": "As a user who clicked a reset link I want a UI to enter my new password So that I can complete the password reset",
-      "acceptanceCriteria": [
-        "Create `frontend/src/routes/reset-password/+page.svelte`",
-        "Page reads token from URL query param: `/reset-password?token=abc123`",
-        "Page has: new password input, confirm password input, \"Reset Password\" button",
-        "Password inputs are type=\"password\" with show/hide toggle (eye icon)",
-        "Validate passwords match before submission",
-        "On submit: call `POST /api/auth/reset-password` with token and new password",
-        "On success: show success message, redirect to `/login` after 2 seconds",
-        "On error (400): show \"Invalid or expired token\" error",
-        "On error (network): show generic error toast",
-        "If no token in URL, show error: \"Invalid reset link\"",
-        "Typecheck passes",
-        "Unit tests pass (test validation, success/error states)",
-        "Verify in browser: use reset link from email, enter new password, redirect to login"
-      ],
-      "priority": 80,
-      "passes": true,
-      "notes": "Created /reset-password/+page.svelte with password reset form. Token extraction from URL query param. Password inputs with show/hide toggle (eye icon). Validates passwords match before submission. Calls POST /api/auth/reset-password. Shows success message and redirects to /login after 2 seconds. Shows 'Invalid or expired token' error on 400. Shows 'Invalid reset link' if no token. Added to publicRoutes in +layout.svelte. 19 new unit tests added."
-    },
-    {
-      "id": "US-44.7",
-      "title": "Change Password in Settings",
-      "story": "As a logged-in user I want to change my password from settings So that I can update my password without resetting it",
-      "acceptanceCriteria": [
-        "Create `POST /api/auth/change-password` endpoint (requires authentication)",
-        "Request body: `{ \"current_password\": \"old\", \"new_password\": \"new\" }`",
-        "Verify current password is correct",
-        "Validate new password meets requirements",
-        "Update user's password",
-        "Return 200 OK on success",
-        "Return 400 if current password is wrong",
+        "Settings page has a new 'Seedbox Monitoring' section with Ultra API URL and API Token fields",
+        "Fields are optional (form submits without them)",
+        "Shows 'Connected' badge when `ultra_api_configured` is true",
+        "Shows masked '••••••••' for token field when already configured",
         "Typecheck passes",
         "Unit tests pass",
-        "Add \"Change Password\" section to `/settings` page (or new `/settings/security` page)",
-        "Section has: current password input, new password input, confirm new password input, \"Change Password\" button",
-        "Show success toast on password change",
-        "Show error toast if current password is wrong",
-        "Verify in browser: change password, logout, login with new password"
+        "Verify in browser using browser tools"
       ],
-      "priority": 81,
-      "passes": true,
-      "notes": "Created POST /api/auth/change-password endpoint with authentication requirement. Returns 200 on success, 400 if current password wrong, 422 for weak new password. Added /settings/security page with Change Password form: current password, new password, confirm password inputs with show/hide toggles. Client-side validation (8+ chars, uppercase, lowercase, number). 10 backend unit tests + 3 integration tests + 17 frontend tests."
+      "context": "Epic 48: Ultra.cc seedbox monitoring frontend. Depends on US-48.1 backend. Add 'Seedbox Monitoring' section to Settings > Connections page (frontend/src/routes/settings/connections/+page.svelte). Follow existing pattern: URL input + API token input. Show 'Connected' badge when ultra_api_configured=true from API. Mask token with '••••••••' when configured. Fields are optional.",
+      "priority": 51,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-45.1",
-      "title": "Add CSS Breakpoints and Variables for Large Screens",
-      "story": "As a developer I want CSS custom properties for large screen breakpoints So that responsive styles can be applied consistently across the app",
+      "id": "US-48.5",
+      "title": "Display Ultra Stats on Dashboard",
+      "story": "As a user, I want to see my seedbox storage and traffic stats on the dashboard, so that I can monitor my resources at a glance",
       "acceptanceCriteria": [
-        "Add CSS custom properties in `frontend/src/app.css` for breakpoints: `--breakpoint-lg: 1440px` (large desktop), `--breakpoint-xl: 1920px` (ultrawide/4K)",
-        "Add CSS custom properties for responsive layout values: `--sidebar-width: 220px` (default), `--sidebar-width-lg: 260px` (≥1440px), `--sidebar-width-xl: 300px` (≥1920px), `--content-max-width: 1200px` (default), `--content-max-width-lg: 1600px` (≥1440px), `--content-max-width-xl: 1800px` (≥1920px)",
-        "Document breakpoint strategy in CSS comments",
+        "GET `/api/settings` returns `ultra_free_storage_gb`, `ultra_traffic_available_percent`, `ultra_last_synced_at` (if configured)",
+        "Dashboard shows 'Seedbox Status' card above issues section (only when Ultra is configured)",
+        "Card displays: free storage (GB), traffic available (%)",
+        "Card shows last synced timestamp",
+        "Storage value turns yellow/warning when below `ultra_storage_warning_gb` threshold",
+        "Storage value turns red/danger when below 50% of threshold",
+        "Traffic value turns yellow/warning when below `ultra_traffic_warning_percent` threshold",
+        "Traffic value turns red/danger when below 50% of threshold",
+        "Card is hidden entirely when Ultra API is not configured",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: variables are accessible in DevTools"
+        "Verify in browser using browser tools"
       ],
-      "priority": 82,
-      "passes": true,
-      "notes": "Added CSS custom properties to app.css: --breakpoint-lg (1440px), --breakpoint-xl (1920px), --sidebar-width (220/260/300px), --content-max-width (1200/1600/1800px). Documented breakpoint strategy in CSS comments."
+      "context": "Epic 48: Ultra.cc dashboard display. Depends on US-48.1/48.3/48.4 for backend data. Add 'Seedbox Status' card to Dashboard (frontend/src/routes/dashboard/+page.svelte) above issues section. Display free_storage_gb, traffic_available_percent, last_synced_at from GET /api/settings. Warning colors: yellow when below threshold, red when below 50% of threshold. Hide card entirely when ultra_api_configured=false. NON-GOALS: No Slack/email notifications.",
+      "priority": 52,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-45.2",
-      "title": "Expand Main Content Max-Width on Large Screens",
-      "story": "As a user on a large screen I want the content area to expand beyond 1200px So that I can use more of my screen space",
+      "id": "US-50.1",
+      "title": "Update Whitelist Duration Options",
+      "story": "As a user, I want shorter whitelist duration options (1 Week, 1 Month), so that I can temporarily whitelist content without long commitments",
       "acceptanceCriteria": [
-        "Update `frontend/src/routes/+layout.svelte` to use `var(--content-max-width)` instead of hardcoded `1200px`",
-        "Content expands to 1600px on screens ≥1440px",
-        "Content expands to 1800px on screens ≥1920px",
-        "Content remains centered with auto margins",
-        "No horizontal scrollbar appears on any screen size",
+        "Duration options are: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date (in that order)",
+        "1 Year option is removed",
+        "`DurationOption` type updated to include `1week` and `1month`, remove `1year`",
+        "`getExpirationDate()` function handles `1week` (adds 7 days) and `1month` (adds 1 month)",
+        "Duration picker displays correctly on Issues page",
+        "Duration picker displays correctly on Unavailable page",
+        "Existing frontend unit tests updated to reflect new options",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: resize window, see content width change at breakpoints"
+        "Verify in browser: whitelist an item with 1 Week duration, confirm expiration date is 7 days from now"
       ],
-      "priority": 83,
-      "passes": true,
-      "notes": "Updated +layout.svelte to use var(--content-max-width) for max-width and var(--sidebar-width) for margin-left. Added responsive media queries to app.css that update CSS variables at breakpoints: 1600px at ≥1440px, 1800px at ≥1920px. Content remains centered with auto margins. No horizontal scrollbar."
+      "context": "Epic 50: Update whitelist duration options. Frontend-only change in frontend/src/routes/issues/+page.svelte. Update durationOptions array to: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date. Remove 1 Year. Update DurationOption type: add '1week', '1month', remove '1year'. Update getExpirationDate(): 1week adds 7 days, 1month adds 1 month. No backend changes needed (expires_at is already flexible datetime). NON-GOALS: No additional duration options beyond this set.",
+      "priority": 53,
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-45.3",
-      "title": "Responsive Sidebar Width",
-      "story": "As a user on a large screen I want a wider sidebar with more readable navigation So that navigation items aren't cramped on large displays",
+      "id": "US-51.4",
+      "title": "Display Episode Details in UI",
+      "story": "As a user, I want to see season and episode information on the Recently Available page, so that I understand what content is actually new",
       "acceptanceCriteria": [
-        "Update `frontend/src/lib/components/Sidebar.svelte` to use `var(--sidebar-width)`",
-        "Update `frontend/src/routes/+layout.svelte` margin-left to use `var(--sidebar-width)`",
-        "Sidebar grows to 260px on screens ≥1440px",
-        "Sidebar grows to 300px on screens ≥1920px",
-        "Nav items remain properly aligned and spaced",
-        "User info section at bottom doesn't overflow",
-        "Mobile sidebar behavior unchanged (still 220px overlay)",
+        "Add 'Details' column to the table (between Title and Type)",
+        "For fully available TV: display 'Seasons 1-3 (30 eps)' format",
+        "For partially available TV: display 'S4: 5/12 episodes' format",
+        "For movies: display '—' or leave empty",
+        "Update the 'Copy' feature to include episode details in the copied text",
+        "Responsive: hide Details column on mobile (like Requested By)",
         "Typecheck passes",
         "Unit tests pass",
-        "Verify in browser: sidebar width changes at breakpoints"
+        "Verify in browser using browser tools"
       ],
-      "priority": 84,
-      "passes": true,
-      "notes": "Updated Sidebar.svelte to use var(--sidebar-width) instead of hardcoded 220px. +layout.svelte already used the CSS variable for margin-left (from US-45.2). Verified at breakpoints: 800px=220px, 1440px=260px, 1920px=300px. Mobile behavior unchanged (220px overlay)."
-    },
-    {
-      "id": "US-45.4",
-      "title": "Responsive Table Columns on Issues Page",
-      "story": "As a user viewing the Issues table on a large screen I want columns to expand and show full content So that I can see complete titles without truncation",
-      "acceptanceCriteria": [
-        "On ≥1440px: Name column expands, other columns use more space",
-        "On ≥1920px: Name column expands further, all columns comfortable",
-        "Columns use `min-width` + `flex-grow` pattern instead of fixed percentages",
-        "Text truncation (ellipsis) still applies for very long titles",
-        "Table header widths match content widths",
-        "Mobile column hiding unchanged (Size, Added, Watched hidden)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: table columns expand at breakpoints, no overflow"
-      ],
-      "priority": 85,
-      "passes": true,
-      "notes": "Added responsive column widths with min-width + percentage pattern. Name column expands from 32% to 38% (1440px) to 42% (1920px). Other columns (issues, size, added, release, watched, requester) also have responsive widths. Page max-width uses var(--content-max-width) for responsive layout. Mobile column hiding unchanged."
-    },
-    {
-      "id": "US-45.5",
-      "title": "Responsive Table Columns on Library Page",
-      "story": "As a user viewing the Library table on a large screen I want columns to expand similar to the Issues page So that I have a consistent experience across pages",
-      "acceptanceCriteria": [
-        "Column widths expand on large screens (≥1440px, ≥1920px)",
-        "Name/Title column gets more space",
-        "Columns use same pattern as Issues page (min-width + flex)",
-        "Mobile column hiding preserved",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: library table columns expand at breakpoints"
-      ],
-      "priority": 86,
-      "passes": true,
-      "notes": "Added responsive column widths with min-width + percentage pattern. Name column expands from 40% to 44% (1440px) to 48% (1920px). Other columns (year, size, added, watched) also have responsive widths. Page max-width uses var(--content-max-width) for responsive layout. Mobile column hiding unchanged (Added at ≤768px, Watched at ≤640px)."
-    },
-    {
-      "id": "US-45.6",
-      "title": "Responsive Dashboard Stats Grid",
-      "story": "As a user viewing the Dashboard on a large screen I want the stats grid to make better use of space So that stat cards aren't cramped on large displays",
-      "acceptanceCriteria": [
-        "Dashboard max-width increases on large screens (use `var(--content-max-width)` or page-specific value)",
-        "On ≥1440px: max-width increases to 1000px",
-        "On ≥1920px: max-width increases to 1200px (or full width if grid handles it)",
-        "Stats grid remains 4 columns but cards are larger",
-        "Spacing between cards increases proportionally",
-        "Mobile grid unchanged (2 columns on ≤640px)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: dashboard cards grow at breakpoints"
-      ],
-      "priority": 87,
-      "passes": true,
-      "notes": "Added responsive CSS media queries at 1440px and 1920px breakpoints. Dashboard max-width expands from 800px to 1000px (1440px) to 1200px (1920px). Stats grid gap increases from space-3 to space-4 (1440px) to space-5 (1920px). Mobile 2-column grid unchanged at ≤640px."
-    },
-    {
-      "id": "US-46.1",
-      "title": "Create ServiceBadge Component with Inline SVG Logos",
-      "story": "As a user I want to see recognizable service logos instead of text abbreviations So that I can quickly identify which service each link leads to",
-      "acceptanceCriteria": [
-        "Create `frontend/src/lib/components/ServiceBadge.svelte` component",
-        "Component accepts props: `service` (jellyfin|jellyseerr|radarr|sonarr|tmdb), `url`, `title`",
-        "Embed inline 16x16px SVGs for all 5 services with brand colors: Jellyfin blue (#00a4dc), Jellyseerr purple (#7b68ee), Radarr yellow (#ffc230), Sonarr green (#2ecc71), TMDB blue (#01b4e4)",
-        "Links open in new tab (`target=\"_blank\"`)",
-        "Hover effect provides visual feedback",
-        "Works in both light and dark modes",
-        "Unit tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 88,
-      "passes": true,
-      "notes": "Created ServiceBadge.svelte component with inline 16x16 SVG icons for all 5 services: Jellyfin (#00a4dc), Jellyseerr (#7b68ee), Radarr (#ffc230), Sonarr (#2ecc71), TMDB (#01b4e4). Component accepts service, url, title props. Links open in new tab with rel='noopener noreferrer'. Hover effect scales to 1.1 with opacity change. Focus outline uses --brand-color CSS variable. 28 unit tests added."
-    },
-    {
-      "id": "US-46.2",
-      "title": "Update Issues Page to Use ServiceBadge Component",
-      "story": "As a user viewing the Issues table I want to see logo icons instead of text badges So that external links are more visually recognizable",
-      "acceptanceCriteria": [
-        "Import and use `ServiceBadge` component in Issues page",
-        "Replace text badge rendering (lines 930-956) with component calls",
-        "Keep existing URL generation functions unchanged",
-        "Remove old `.service-badge-text.*` CSS styles",
-        "All 5 service logos display correctly when URL is available",
-        "Unit tests pass",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 89,
-      "passes": true,
-      "notes": "Imported ServiceBadge component and replaced text badge rendering (JF, JS, RD, SN, TMDB) with ServiceBadge component calls. Removed ~40 lines of .service-badge-text.* CSS styles. All 5 service logos display as inline SVG icons with brand colors."
-    },
-    {
-      "id": "US-46.3",
-      "title": "Add sonarr_title_slug to Library Backend",
-      "story": "As a developer I want the Library API to return `sonarr_title_slug` for series So that Sonarr links can be generated on the Library page",
-      "acceptanceCriteria": [
-        "Add `sonarr_title_slug: str | None = None` to `LibraryItem` model in `backend/app/models/content.py`",
-        "Modify `get_library()` in `backend/app/services/content.py` to enrich Series items with Sonarr slug",
-        "Use existing `build_sonarr_tmdb_slug_map()` pattern from Issues endpoint",
-        "Movie items return `null` for `sonarr_title_slug`",
-        "Unit tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 90,
-      "passes": true,
-      "notes": "Added sonarr_title_slug field to LibraryItem model. Modified get_library() to build Sonarr TMDB->slug map using get_sonarr_tmdb_to_slug_map() from sonarr service. Series items are enriched with titleSlug, movies return null. 2 new unit tests + integration test updated."
-    },
-    {
-      "id": "US-46.4",
-      "title": "Update Library Page with All Service Badges",
-      "story": "As a user viewing the Library table I want to see all 5 service logos (Jellyfin, Jellyseerr, Radarr, Sonarr, TMDB) So that I can quickly access any external service from the Library",
-      "acceptanceCriteria": [
-        "Update TypeScript interface to include `sonarr_title_slug: string | null`",
-        "Add missing URL generation functions (copy from Issues page): `getJellyseerrUrl()` - uses `tmdb_id` + media_type, `getRadarrUrl()` - uses `tmdb_id` (movies only), `getSonarrUrl()` - uses `sonarr_title_slug` (series only)",
-        "Import and use `ServiceBadge` component for all 5 services",
-        "Radarr shows for movies, Sonarr shows for series",
-        "Remove old text badge CSS",
-        "Unit tests pass",
-        "Typecheck passes",
-        "Verify in browser"
-      ],
-      "priority": 91,
-      "passes": true,
-      "notes": "Added sonarr_title_slug to LibraryItem interface. Added getJellyseerrUrl, getRadarrUrl, getSonarrUrl functions. Imported ServiceBadge component and replaced text badges (JF, TMDB) with ServiceBadge for all 5 services. Radarr shows for movies, Sonarr shows for series. Removed ~25 lines of old .service-badge-text CSS."
+      "context": "Epic 51: Recently Available UI enhancement. Depends on US-51.3 for API data. Add 'Details' column to frontend/src/routes/recent/+page.svelte. Use season_info, episode_count, available_episodes, total_episodes from API. Format: fully available shows 'Seasons 1-3 (30 eps)', partial shows 'S4: 5/12 episodes', movies show '—'. Update copy feature to include details. Hide column on mobile (follow Requested By pattern). NON-GOALS: No episode titles/descriptions.",
+      "priority": 54,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
