@@ -16,6 +16,12 @@ import os
 import httpx
 import pytest
 
+# Skip all tests in this module when running in CI (no Docker backend available)
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Integration tests require Docker backend (skipped in CI)",
+)
+
 # Base URL for the running Docker instance
 BASE_URL = os.getenv("TEST_BASE_URL", "http://localhost:8080")
 
