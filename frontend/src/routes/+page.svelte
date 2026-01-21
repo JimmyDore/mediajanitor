@@ -27,9 +27,10 @@
 
 	interface SyncResponse {
 		status: string;
-		media_items_synced: number;
-		requests_synced: number;
-		error: string | null;
+		media_items_synced?: number;
+		requests_synced?: number;
+		error?: string | null;
+		message?: string;
 	}
 
 	interface IssueCategorySummary {
@@ -75,6 +76,7 @@
 	let enhanceSetupDismissed = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let autoSyncTriggered = $state(false);  // Track if we've already triggered auto-sync
+	let waitingForAsyncCompletion = $state(false);  // Track if we're waiting for async sync to complete
 	const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds during sync
 
 	// Computed: Show checklist when Jellyfin not configured OR never synced
@@ -188,6 +190,22 @@
 			// Stop polling when sync is complete
 			if (syncStatus && !syncStatus.is_syncing) {
 				stopPolling();
+				// If we were waiting for async completion, handle it now
+				if (waitingForAsyncCompletion) {
+					waitingForAsyncCompletion = false;
+					syncLoading = false;
+					await fetchContentSummary();
+					if (syncStatus.status === 'success') {
+						showToast(
+							`Synced ${syncStatus.media_items_count ?? 0} media items and ${syncStatus.requests_count ?? 0} requests`,
+							'success'
+						);
+					} else if (syncStatus.status === 'partial') {
+						showToast(`Sync completed with warnings: ${syncStatus.error}`, 'success');
+					} else if (syncStatus.status === 'failed') {
+						showToast(syncStatus.error || 'Sync failed', 'error');
+					}
+				}
 			}
 		}, POLL_INTERVAL_MS);
 	}
@@ -298,6 +316,7 @@
 				const data = await response.json();
 				showToast(data.detail || 'Rate limited. Please wait before syncing again.', 'error');
 				stopPolling();
+				syncLoading = false;
 				return;
 			}
 
@@ -305,17 +324,28 @@
 				const data = await response.json();
 				showToast(data.detail || 'Sync failed', 'error');
 				stopPolling();
+				syncLoading = false;
 				return;
 			}
 
 			const data: SyncResponse = await response.json();
+
+			// Async sync - backend dispatched to Celery and returned immediately
+			if (data.status === 'sync_started') {
+				showToast('Sync started in background...', 'success');
+				waitingForAsyncCompletion = true;
+				// Keep polling - will detect completion in startPolling callback
+				return;
+			}
+
+			// Synchronous completion (legacy fallback or very fast sync)
 			stopPolling();
 			await fetchSyncStatus();
 			await fetchContentSummary();
 
 			if (data.status === 'success') {
 				showToast(
-					`Synced ${data.media_items_synced} media items and ${data.requests_synced} requests`,
+					`Synced ${data.media_items_synced ?? 0} media items and ${data.requests_synced ?? 0} requests`,
 					'success'
 				);
 			} else if (data.status === 'partial') {
@@ -326,8 +356,12 @@
 		} catch {
 			showToast('Failed to sync data', 'error');
 			stopPolling();
+			waitingForAsyncCompletion = false;
 		} finally {
-			syncLoading = false;
+			// Only clear syncLoading if not waiting for async completion
+			if (!waitingForAsyncCompletion) {
+				syncLoading = false;
+			}
 		}
 	}
 
@@ -353,6 +387,7 @@
 			// If sync is already in progress (e.g., page refresh during sync), start polling
 			if (syncStatus?.is_syncing) {
 				syncLoading = true;
+				waitingForAsyncCompletion = true;
 				startPolling();
 			}
 		} catch (e) {
