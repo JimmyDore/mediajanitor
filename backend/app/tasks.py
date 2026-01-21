@@ -5,7 +5,6 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.celery_app import celery_app
 from app.database import User, UserSettings, async_session_maker
@@ -19,6 +18,7 @@ def get_configured_user_ids() -> list[int]:
 
     Runs synchronously for use in Celery tasks.
     """
+
     async def _get_users() -> list[int]:
         async with async_session_maker() as session:
             result = await session.execute(
@@ -41,9 +41,7 @@ async def _run_sync_for_user(user_id: int) -> dict[str, Any]:
 async def _get_user_email(user_id: int) -> str | None:
     """Get user email by ID (async helper)."""
     async with async_session_maker() as session:
-        result = await session.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await session.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         return user.email if user else None
 
@@ -62,6 +60,7 @@ def send_sync_failure_notification_for_celery(
         user_id: The user ID whose sync failed
         error_message: The error message describing the failure
     """
+
     async def _send_notification() -> None:
         user_email = await _get_user_email(user_id)
         if not user_email:

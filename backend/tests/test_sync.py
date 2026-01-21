@@ -1,13 +1,17 @@
 """Tests for data sync functionality (US-7.1)."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database import User, UserSettings, CachedMediaItem, CachedJellyseerrRequest, SyncStatus
-from app.services.sync import extract_title_from_request, extract_release_date_from_request, extract_french_title_from_request
+from app.database import CachedJellyseerrRequest, CachedMediaItem, SyncStatus, User, UserSettings
+from app.services.sync import (
+    extract_french_title_from_request,
+    extract_release_date_from_request,
+    extract_title_from_request,
+)
 from tests.conftest import TestingAsyncSessionLocal
 
 
@@ -305,7 +309,9 @@ class TestSyncModels:
             assert request.id is not None
 
     @pytest.mark.asyncio
-    async def test_cached_jellyseerr_request_has_release_date_column(self, client: TestClient) -> None:
+    async def test_cached_jellyseerr_request_has_release_date_column(
+        self, client: TestClient
+    ) -> None:
         """CachedJellyseerrRequest should have release_date column (US-13.3)."""
         async with TestingAsyncSessionLocal() as session:
             request = CachedJellyseerrRequest(
@@ -375,8 +381,8 @@ class TestSyncModels:
         async with TestingAsyncSessionLocal() as session:
             status = SyncStatus(
                 user_id=1,
-                last_sync_started=datetime.now(timezone.utc),
-                last_sync_completed=datetime.now(timezone.utc),
+                last_sync_started=datetime.now(UTC),
+                last_sync_completed=datetime.now(UTC),
                 last_sync_status="success",
             )
             session.add(status)
@@ -414,9 +420,7 @@ class TestSyncEndpoints:
         assert "Jellyfin" in response.json()["detail"]
 
     @patch("app.routers.sync.sync_user")
-    def test_trigger_sync_success(
-        self, mock_sync_task: MagicMock, client: TestClient
-    ) -> None:
+    def test_trigger_sync_success(self, mock_sync_task: MagicMock, client: TestClient) -> None:
         """POST /api/sync should trigger a sync for authenticated user."""
         token = self._get_auth_token(client, "sync2@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -506,9 +510,7 @@ class TestSyncService:
             assert result["requests_synced"] == 2
 
     @pytest.mark.asyncio
-    async def test_run_user_sync_handles_failed_api_calls(
-        self, client: TestClient
-    ) -> None:
+    async def test_run_user_sync_handles_failed_api_calls(self, client: TestClient) -> None:
         """run_user_sync should handle API failures gracefully."""
         from app.services.sync import run_user_sync
 
@@ -530,7 +532,10 @@ class TestSyncService:
             await session.commit()
 
             # Mock API failure
-            with patch("app.services.sync.fetch_jellyfin_media_with_progress", side_effect=Exception("API Error")):
+            with patch(
+                "app.services.sync.fetch_jellyfin_media_with_progress",
+                side_effect=Exception("API Error"),
+            ):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                     result = await run_user_sync(session, user.id)
 
@@ -551,6 +556,7 @@ class TestSyncService:
     ) -> None:
         """Sync should replace old cached data with new data."""
         from sqlalchemy import select
+
         from app.services.sync import run_user_sync
 
         mock_jellyfin.return_value = mock_jellyfin_response["Items"]
@@ -636,7 +642,10 @@ class TestSyncRateLimiting:
         # Second sync immediately after should be rate limited
         response2 = client.post("/api/sync", headers=headers)
         assert response2.status_code == 429
-        assert "rate" in response2.json()["detail"].lower() or "minute" in response2.json()["detail"].lower()
+        assert (
+            "rate" in response2.json()["detail"].lower()
+            or "minute" in response2.json()["detail"].lower()
+        )
 
     @patch("app.routers.sync.sync_user")
     @patch("app.routers.sync.get_sync_status")
@@ -647,7 +656,7 @@ class TestSyncRateLimiting:
         from datetime import timedelta
 
         # Mock that last sync was 6 minutes ago
-        old_sync_time = datetime.now(timezone.utc) - timedelta(minutes=6)
+        old_sync_time = datetime.now(UTC) - timedelta(minutes=6)
         mock_status = SyncStatus(
             user_id=1,
             last_sync_started=old_sync_time,
@@ -698,9 +707,7 @@ class TestSyncRateLimiting:
         assert "minute" in detail.lower()
 
     @patch("app.routers.sync.sync_user")
-    def test_rate_limit_is_per_user(
-        self, mock_sync_task: MagicMock, client: TestClient
-    ) -> None:
+    def test_rate_limit_is_per_user(self, mock_sync_task: MagicMock, client: TestClient) -> None:
         """Rate limit should be per-user, not global."""
         # User 1
         token1 = self._get_auth_token(client, "ratelimit4@example.com")
@@ -738,7 +745,8 @@ class TestSyncRateLimiting:
         """POST /api/sync with force=true should bypass rate limit for first sync (US-18.2)."""
         # Mock a sync status that was just started but never completed (first sync)
         from datetime import timedelta
-        recent_sync_time = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+        recent_sync_time = datetime.now(UTC) - timedelta(seconds=30)
         mock_status = SyncStatus(
             user_id=1,
             last_sync_started=recent_sync_time,
@@ -775,7 +783,7 @@ class TestSyncRateLimiting:
         from datetime import timedelta
 
         # Mock a sync status where sync has COMPLETED (not first sync)
-        recent_sync_time = datetime.now(timezone.utc) - timedelta(seconds=30)
+        recent_sync_time = datetime.now(UTC) - timedelta(seconds=30)
         mock_status = SyncStatus(
             user_id=1,
             last_sync_started=recent_sync_time,
@@ -894,8 +902,9 @@ class TestMultiUserWatchDataAggregation:
         self,
     ) -> None:
         """fetch_jellyfin_users should return list of users from API."""
-        from app.services.sync import fetch_jellyfin_users
         import httpx
+
+        from app.services.sync import fetch_jellyfin_users
 
         users_response = [
             {"Id": "user1", "Name": "John"},
@@ -999,7 +1008,11 @@ class TestMultiUserWatchDataAggregation:
                 "Id": "movieA",
                 "Name": "Movie A",
                 "Type": "Movie",
-                "UserData": {"Played": True, "PlayCount": 2, "LastPlayedDate": "2024-01-10T10:00:00Z"},
+                "UserData": {
+                    "Played": True,
+                    "PlayCount": 2,
+                    "LastPlayedDate": "2024-01-10T10:00:00Z",
+                },
             }
         ]
         user2_items = [
@@ -1059,7 +1072,7 @@ class TestSyncProgressTracking:
         async with TestingAsyncSessionLocal() as session:
             status = SyncStatus(
                 user_id=999,
-                last_sync_started=datetime.now(timezone.utc),
+                last_sync_started=datetime.now(UTC),
                 last_sync_status="in_progress",
                 current_step="syncing_media",
                 total_steps=2,
@@ -1078,11 +1091,9 @@ class TestSyncProgressTracking:
             assert status.current_user_name == "John"
 
     @pytest.mark.asyncio
-    async def test_update_sync_progress_updates_progress_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_update_sync_progress_updates_progress_fields(self, client: TestClient) -> None:
         """update_sync_progress should update only progress fields."""
-        from app.services.sync import update_sync_status, update_sync_progress, get_sync_status
+        from app.services.sync import get_sync_status, update_sync_progress, update_sync_status
 
         async with TestingAsyncSessionLocal() as session:
             user = User(
@@ -1094,16 +1105,21 @@ class TestSyncProgressTracking:
 
             # Create initial sync status
             await update_sync_status(
-                session, user.id, "in_progress", started=True,
-                current_step="syncing_media", total_steps=2
+                session,
+                user.id,
+                "in_progress",
+                started=True,
+                current_step="syncing_media",
+                total_steps=2,
             )
 
             # Update progress
             await update_sync_progress(
-                session, user.id,
+                session,
+                user.id,
                 current_step_progress=5,
                 current_step_total=10,
-                current_user_name="TestUser"
+                current_user_name="TestUser",
             )
 
             # Verify progress was updated
@@ -1115,11 +1131,9 @@ class TestSyncProgressTracking:
             assert status.current_user_name == "TestUser"
 
     @pytest.mark.asyncio
-    async def test_sync_completion_clears_progress_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_sync_completion_clears_progress_fields(self, client: TestClient) -> None:
         """When sync completes, progress fields should be cleared."""
-        from app.services.sync import update_sync_status, update_sync_progress, get_sync_status
+        from app.services.sync import get_sync_status, update_sync_progress, update_sync_status
 
         async with TestingAsyncSessionLocal() as session:
             user = User(
@@ -1131,20 +1145,24 @@ class TestSyncProgressTracking:
 
             # Start sync with progress
             await update_sync_status(
-                session, user.id, "in_progress", started=True,
-                current_step="syncing_media", total_steps=2
+                session,
+                user.id,
+                "in_progress",
+                started=True,
+                current_step="syncing_media",
+                total_steps=2,
             )
             await update_sync_progress(
-                session, user.id,
+                session,
+                user.id,
                 current_step_progress=5,
                 current_step_total=10,
-                current_user_name="TestUser"
+                current_user_name="TestUser",
             )
 
             # Complete sync
             await update_sync_status(
-                session, user.id, "success",
-                media_count=100, requests_count=50
+                session, user.id, "success", media_count=100, requests_count=50
             )
 
             # Verify progress fields were cleared
@@ -1156,9 +1174,7 @@ class TestSyncProgressTracking:
             assert status.current_step_total is None
             assert status.current_user_name is None
 
-    def test_sync_status_returns_progress_when_syncing(
-        self, client: TestClient
-    ) -> None:
+    def test_sync_status_returns_progress_when_syncing(self, client: TestClient) -> None:
         """GET /api/sync/status should return progress when sync is active."""
         # Register user via API (proper password hash)
         token = self._get_auth_token(client, "progress_api@example.com")
@@ -1172,7 +1188,7 @@ class TestSyncProgressTracking:
         # We'll patch get_sync_status to return a mock with progress
         mock_status = SyncStatus(
             user_id=1,
-            last_sync_started=datetime.now(timezone.utc),
+            last_sync_started=datetime.now(UTC),
             current_step="syncing_media",
             total_steps=2,
             current_step_progress=3,
@@ -1198,9 +1214,7 @@ class TestCalculateSeasonSizes:
     """Test season size calculation (US-20.2)."""
 
     @pytest.mark.asyncio
-    async def test_calculate_season_sizes_updates_series_only(
-        self, client: TestClient
-    ) -> None:
+    async def test_calculate_season_sizes_updates_series_only(self, client: TestClient) -> None:
         """calculate_season_sizes should only update Series items, not Movies."""
         from app.services.sync import calculate_season_sizes
 
@@ -1271,19 +1285,28 @@ class TestCalculateSeasonSizes:
 
             async def mock_get(self, url, **kwargs):
                 import httpx
+
                 params = kwargs.get("params", {})
                 parent_id = params.get("ParentId", "")
 
                 # Seasons request for series-456
-                if "series-456" in str(parent_id) or ("Items" in str(url) and "Season" in str(params.get("IncludeItemTypes", ""))):
+                if "series-456" in str(parent_id) or (
+                    "Items" in str(url) and "Season" in str(params.get("IncludeItemTypes", ""))
+                ):
                     if parent_id == "series-456":
-                        return httpx.Response(200, json=mock_seasons_response, request=httpx.Request("GET", url))
+                        return httpx.Response(
+                            200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                        )
                 # Episodes for season1
                 if parent_id == "season1":
-                    return httpx.Response(200, json=mock_episodes_s1, request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200, json=mock_episodes_s1, request=httpx.Request("GET", url)
+                    )
                 # Episodes for season2
                 if parent_id == "season2":
-                    return httpx.Response(200, json=mock_episodes_s2, request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200, json=mock_episodes_s2, request=httpx.Request("GET", url)
+                    )
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
             # Mock Jellyfin users (needed for episode watch data aggregation)
@@ -1293,14 +1316,16 @@ class TestCalculateSeasonSizes:
 
             with patch("httpx.AsyncClient.get", new=mock_get):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
-                    with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                    with patch(
+                        "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                    ):
                         await calculate_season_sizes(
-                            session, user.id,
-                            "http://jellyfin.local", "decrypted-key"
+                            session, user.id, "http://jellyfin.local", "decrypted-key"
                         )
 
             # Refresh from DB
             from sqlalchemy import select
+
             result = await session.execute(
                 select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
             )
@@ -1359,29 +1384,42 @@ class TestCalculateSeasonSizes:
             }
             # Season 1: 5 GB, Season 2: 10 GB, Season 3: 8 GB
             mock_episodes_by_season = {
-                "season1": {"Items": [
-                    {"Id": "ep1", "MediaSources": [{"Size": 2_500_000_000}]},
-                    {"Id": "ep2", "MediaSources": [{"Size": 2_500_000_000}]},
-                ]},  # 5 GB total
-                "season2": {"Items": [
-                    {"Id": "ep3", "MediaSources": [{"Size": 5_000_000_000}]},
-                    {"Id": "ep4", "MediaSources": [{"Size": 5_000_000_000}]},
-                ]},  # 10 GB total
-                "season3": {"Items": [
-                    {"Id": "ep5", "MediaSources": [{"Size": 4_000_000_000}]},
-                    {"Id": "ep6", "MediaSources": [{"Size": 4_000_000_000}]},
-                ]},  # 8 GB total
+                "season1": {
+                    "Items": [
+                        {"Id": "ep1", "MediaSources": [{"Size": 2_500_000_000}]},
+                        {"Id": "ep2", "MediaSources": [{"Size": 2_500_000_000}]},
+                    ]
+                },  # 5 GB total
+                "season2": {
+                    "Items": [
+                        {"Id": "ep3", "MediaSources": [{"Size": 5_000_000_000}]},
+                        {"Id": "ep4", "MediaSources": [{"Size": 5_000_000_000}]},
+                    ]
+                },  # 10 GB total
+                "season3": {
+                    "Items": [
+                        {"Id": "ep5", "MediaSources": [{"Size": 4_000_000_000}]},
+                        {"Id": "ep6", "MediaSources": [{"Size": 4_000_000_000}]},
+                    ]
+                },  # 8 GB total
             }
 
             async def mock_get(self, url, **kwargs):
                 import httpx
+
                 params = kwargs.get("params", {})
                 parent_id = params.get("ParentId", "")
 
                 if parent_id == "series-total-test":
-                    return httpx.Response(200, json=mock_seasons_response, request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                    )
                 if parent_id in mock_episodes_by_season:
-                    return httpx.Response(200, json=mock_episodes_by_season[parent_id], request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200,
+                        json=mock_episodes_by_season[parent_id],
+                        request=httpx.Request("GET", url),
+                    )
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
             # Mock Jellyfin users (needed for episode watch data aggregation)
@@ -1391,14 +1429,16 @@ class TestCalculateSeasonSizes:
 
             with patch("httpx.AsyncClient.get", new=mock_get):
                 with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
-                    with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                    with patch(
+                        "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                    ):
                         await calculate_season_sizes(
-                            session, user.id,
-                            "http://jellyfin.local", "decrypted-key"
+                            session, user.id, "http://jellyfin.local", "decrypted-key"
                         )
 
             # Refresh from DB
             from sqlalchemy import select
+
             result = await session.execute(
                 select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
             )
@@ -1410,9 +1450,7 @@ class TestCalculateSeasonSizes:
             assert series_item.largest_season_size_bytes == 10_000_000_000
 
     @pytest.mark.asyncio
-    async def test_calculate_season_sizes_handles_api_errors(
-        self, client: TestClient
-    ) -> None:
+    async def test_calculate_season_sizes_handles_api_errors(self, client: TestClient) -> None:
         """calculate_season_sizes should continue if API fails for one series."""
         from app.services.sync import calculate_season_sizes
 
@@ -1445,19 +1483,24 @@ class TestCalculateSeasonSizes:
 
             async def mock_get(self, url, **kwargs):
                 import httpx
+
                 call_count["count"] += 1
                 params = kwargs.get("params", {})
                 parent_id = params.get("ParentId", "")
 
                 # First series call succeeds
                 if parent_id == "series-1":
-                    return httpx.Response(200, json={
-                        "Items": [{"Id": "s1-season1", "IndexNumber": 1}]
-                    }, request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200,
+                        json={"Items": [{"Id": "s1-season1", "IndexNumber": 1}]},
+                        request=httpx.Request("GET", url),
+                    )
                 elif parent_id == "s1-season1":
-                    return httpx.Response(200, json={
-                        "Items": [{"Id": "ep1", "MediaSources": [{"Size": 5_000_000_000}]}]
-                    }, request=httpx.Request("GET", url))
+                    return httpx.Response(
+                        200,
+                        json={"Items": [{"Id": "ep1", "MediaSources": [{"Size": 5_000_000_000}]}]},
+                        request=httpx.Request("GET", url),
+                    )
                 # Second series call fails
                 elif parent_id == "series-2":
                     raise httpx.RequestError("Connection failed")
@@ -1470,14 +1513,16 @@ class TestCalculateSeasonSizes:
             ]
 
             with patch("httpx.AsyncClient.get", new=mock_get):
-                with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                with patch(
+                    "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                ):
                     # Should not raise, just log warning and continue
                     await calculate_season_sizes(
-                        session, user.id,
-                        "http://jellyfin.local", "api-key"
+                        session, user.id, "http://jellyfin.local", "api-key"
                     )
 
             from sqlalchemy import select
+
             result = await session.execute(
                 select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
             )
@@ -1490,9 +1535,7 @@ class TestCalculateSeasonSizes:
             assert items["Series 2"].largest_season_size_bytes is None
 
     @pytest.mark.asyncio
-    async def test_calculate_season_sizes_handles_empty_series(
-        self, client: TestClient
-    ) -> None:
+    async def test_calculate_season_sizes_handles_empty_series(self, client: TestClient) -> None:
         """calculate_season_sizes should handle series with no seasons."""
         from app.services.sync import calculate_season_sizes
 
@@ -1515,16 +1558,15 @@ class TestCalculateSeasonSizes:
 
             async def mock_get(self, url, **kwargs):
                 import httpx
+
                 # Return empty seasons list
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
             with patch("httpx.AsyncClient.get", new=mock_get):
-                await calculate_season_sizes(
-                    session, user.id,
-                    "http://jellyfin.local", "api-key"
-                )
+                await calculate_season_sizes(session, user.id, "http://jellyfin.local", "api-key")
 
             from sqlalchemy import select
+
             result = await session.execute(
                 select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
             )
@@ -1534,16 +1576,15 @@ class TestCalculateSeasonSizes:
             assert items[0].largest_season_size_bytes is None
 
     @pytest.mark.asyncio
-    async def test_fetch_season_episodes_uses_recursive_parameter(
-        self, client: TestClient
-    ) -> None:
+    async def test_fetch_season_episodes_uses_recursive_parameter(self, client: TestClient) -> None:
         """fetch_season_episodes should include Recursive=true to find episodes in nested folders.
 
         Regression test: Without Recursive=true, Jellyfin API returns empty episodes
         for many series where episodes are stored in subdirectories.
         """
-        from app.services.sync import fetch_season_episodes
         import httpx
+
+        from app.services.sync import fetch_season_episodes
 
         captured_params: dict[str, str] = {}
 
@@ -1553,13 +1594,15 @@ class TestCalculateSeasonSizes:
             captured_params.update(params)
             return httpx.Response(
                 200,
-                json={"Items": [{"Id": "ep1", "Name": "Episode 1", "MediaSources": [{"Size": 1000}]}]},
-                request=httpx.Request("GET", url)
+                json={
+                    "Items": [{"Id": "ep1", "Name": "Episode 1", "MediaSources": [{"Size": 1000}]}]
+                },
+                request=httpx.Request("GET", url),
             )
 
         async with httpx.AsyncClient() as real_client:
             with patch.object(real_client, "get", side_effect=mock_get):
-                episodes = await fetch_season_episodes(
+                await fetch_season_episodes(
                     real_client,
                     "http://jellyfin.local",
                     "test-api-key",
@@ -1567,7 +1610,9 @@ class TestCalculateSeasonSizes:
                 )
 
         # Verify Recursive parameter is included
-        assert "Recursive" in captured_params, "Recursive parameter is required to find episodes in nested folders"
+        assert "Recursive" in captured_params, (
+            "Recursive parameter is required to find episodes in nested folders"
+        )
         assert captured_params["Recursive"] == "true"
         assert captured_params["ParentId"] == "season-123"
         assert captured_params["IncludeItemTypes"] == "Episode"
@@ -1579,6 +1624,7 @@ class TestCalculateSeasonSizes:
     ) -> None:
         """calculate_season_sizes should log progress."""
         import logging
+
         from app.services.sync import calculate_season_sizes
 
         caplog.set_level(logging.INFO)
@@ -1609,16 +1655,17 @@ class TestCalculateSeasonSizes:
 
             async def mock_get(self, url, **kwargs):
                 import httpx
+
                 return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
 
             with patch("httpx.AsyncClient.get", new=mock_get):
-                await calculate_season_sizes(
-                    session, user.id,
-                    "http://jellyfin.local", "api-key"
-                )
+                await calculate_season_sizes(session, user.id, "http://jellyfin.local", "api-key")
 
             # Should have log message about calculating sizes
-            assert any("Calculating season sizes for 2 series" in record.message for record in caplog.records)
+            assert any(
+                "Calculating season sizes for 2 series" in record.message
+                for record in caplog.records
+            )
 
     @pytest.mark.asyncio
     async def test_cached_media_item_has_largest_season_size_column(
@@ -1656,14 +1703,12 @@ class TestSyncCalculatingSizesState:
         return login_response.json()["access_token"]
 
     @pytest.mark.asyncio
-    async def test_sync_status_includes_calculating_sizes_step(
-        self, client: TestClient
-    ) -> None:
+    async def test_sync_status_includes_calculating_sizes_step(self, client: TestClient) -> None:
         """Sync status should show calculating_sizes step after main sync."""
         async with TestingAsyncSessionLocal() as session:
             status = SyncStatus(
                 user_id=999,
-                last_sync_started=datetime.now(timezone.utc),
+                last_sync_started=datetime.now(UTC),
                 last_sync_status="in_progress",
                 current_step="calculating_sizes",
                 total_steps=2,
@@ -1728,16 +1773,14 @@ class TestSyncCalculatingSizesState:
             assert call_args[0][2] == "http://jellyfin.local"  # server_url
             assert call_args[0][3] == "decrypted-key"  # api_key
 
-    def test_sync_status_returns_calculating_sizes_in_progress(
-        self, client: TestClient
-    ) -> None:
+    def test_sync_status_returns_calculating_sizes_in_progress(self, client: TestClient) -> None:
         """GET /api/sync/status should include calculating_sizes step."""
         token = self._get_auth_token(client, "calcsize1@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
         mock_status = SyncStatus(
             user_id=1,
-            last_sync_started=datetime.now(timezone.utc),
+            last_sync_started=datetime.now(UTC),
             current_step="calculating_sizes",
             total_steps=2,
             current_step_progress=5,
@@ -1771,7 +1814,8 @@ class TestSyncFailureNotifications:
     @pytest.mark.asyncio
     async def test_jellyfin_sync_failure_sends_notification(self, client: TestClient) -> None:
         """Jellyfin sync failure should trigger Slack notification."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import patch
+
         from app.services.sync import run_user_sync
 
         async with TestingAsyncSessionLocal() as session:
@@ -1811,7 +1855,8 @@ class TestSyncFailureNotifications:
     @pytest.mark.asyncio
     async def test_jellyseerr_sync_failure_sends_notification(self, client: TestClient) -> None:
         """Jellyseerr sync failure should trigger Slack notification."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import patch
+
         from app.services.sync import run_user_sync
 
         async with TestingAsyncSessionLocal() as session:
@@ -1840,25 +1885,35 @@ class TestSyncFailureNotifications:
                     with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                         with patch("app.services.sync.calculate_season_sizes"):
                             with patch("app.services.sync.fetch_jellyfin_users", return_value=[]):
-                                with patch("app.services.sync.fetch_jellyseerr_users", return_value=[]):
-                                    with patch("app.services.sync.send_sync_failure_notification") as mock_notify:
+                                with patch(
+                                    "app.services.sync.fetch_jellyseerr_users", return_value=[]
+                                ):
+                                    with patch(
+                                        "app.services.sync.send_sync_failure_notification"
+                                    ) as mock_notify:
                                         result = await run_user_sync(session, user.id)
 
-                                        # Sync should be partial (Jellyfin succeeded, Jellyseerr failed)
+                                        # Sync partial (Jellyfin OK, Jellyseerr failed)
                                         assert result["status"] == "partial"
                                         assert "Jellyseerr" in result["error"]
 
-                                        # Notification should have been called for Jellyseerr failure
+                                        # Notification called for Jellyseerr failure
                                         mock_notify.assert_called_once()
                                         call_kwargs = mock_notify.call_args[1]
-                                        assert call_kwargs["user_email"] == "js_fail_notify@example.com"
+                                        assert (
+                                            call_kwargs["user_email"]
+                                            == "js_fail_notify@example.com"
+                                        )
                                         assert call_kwargs["service"] == "Jellyseerr"
-                                        assert "Jellyseerr API error" in call_kwargs["error_message"]
+                                        assert (
+                                            "Jellyseerr API error" in call_kwargs["error_message"]
+                                        )
 
     @pytest.mark.asyncio
     async def test_sync_failure_notification_is_fire_and_forget(self, client: TestClient) -> None:
         """Notification failure should not affect sync error handling."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import patch
+
         from app.services.sync import run_user_sync
 
         async with TestingAsyncSessionLocal() as session:
@@ -1891,10 +1946,13 @@ class TestSyncFailureNotifications:
                         assert "Jellyfin" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_sync_failure_notification_without_webhook_configured(self, client: TestClient) -> None:
+    async def test_sync_failure_notification_without_webhook_configured(
+        self, client: TestClient
+    ) -> None:
         """Sync failure should work when Slack webhook is not configured."""
         from unittest.mock import patch
-        from app.services.sync import run_user_sync, send_sync_failure_notification
+
+        from app.services.sync import run_user_sync
 
         async with TestingAsyncSessionLocal() as session:
             user = User(
@@ -1924,9 +1982,12 @@ class TestSyncFailureNotifications:
                         assert result["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_sync_failure_notification_uses_block_kit_format(self, client: TestClient) -> None:
+    async def test_sync_failure_notification_uses_block_kit_format(
+        self, client: TestClient
+    ) -> None:
         """Sync failure notification should use Slack Block Kit format."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
+
         from app.services.sync import send_sync_failure_notification
 
         with patch("app.services.sync.send_slack_message", new_callable=AsyncMock) as mock_send:
@@ -1934,6 +1995,7 @@ class TestSyncFailureNotifications:
 
             with patch("app.services.sync.get_settings") as mock_settings_fn:
                 from app.config import Settings
+
                 mock_settings = Settings()
                 mock_settings.slack_webhook_sync_failures = "https://hooks.slack.com/test"
                 mock_settings_fn.return_value = mock_settings
@@ -1941,7 +2003,7 @@ class TestSyncFailureNotifications:
                 await send_sync_failure_notification(
                     user_email="test@example.com",
                     service="Jellyfin",
-                    error_message="Connection timed out"
+                    error_message="Connection timed out",
                 )
 
                 # Should have called send_slack_message with Block Kit format
@@ -1954,7 +2016,8 @@ class TestSyncFailureNotifications:
 
     def test_celery_sync_user_failure_sends_notification(self, client: TestClient) -> None:
         """Celery sync_user task failure should trigger Slack notification."""
-        from unittest.mock import patch, AsyncMock, MagicMock
+        from unittest.mock import patch
+
         from app.celery_app import celery_app
         from app.tasks import sync_user
 
@@ -1989,11 +2052,10 @@ class TestSyncRetryWithBackoff:
 
     @pytest.mark.asyncio
     @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
-    async def test_fetch_jellyfin_users_retries_on_timeout(
-        self, mock_sleep: AsyncMock
-    ) -> None:
+    async def test_fetch_jellyfin_users_retries_on_timeout(self, mock_sleep: AsyncMock) -> None:
         """fetch_jellyfin_users should retry on timeout errors."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2016,11 +2078,10 @@ class TestSyncRetryWithBackoff:
 
     @pytest.mark.asyncio
     @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
-    async def test_fetch_jellyfin_users_retries_on_500_error(
-        self, mock_sleep: AsyncMock
-    ) -> None:
+    async def test_fetch_jellyfin_users_retries_on_500_error(self, mock_sleep: AsyncMock) -> None:
         """fetch_jellyfin_users should retry on 500 server errors."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2035,6 +2096,7 @@ class TestSyncRetryWithBackoff:
 
                 def raise_error():
                     raise httpx.HTTPStatusError("Server error", request=request, response=response)
+
                 response.raise_for_status = raise_error
                 return response
             # Success on second attempt
@@ -2052,6 +2114,7 @@ class TestSyncRetryWithBackoff:
     async def test_fetch_jellyfin_users_does_not_retry_on_401(self) -> None:
         """fetch_jellyfin_users should NOT retry on 401 auth errors."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2064,6 +2127,7 @@ class TestSyncRetryWithBackoff:
 
             def raise_error():
                 raise httpx.HTTPStatusError("Unauthorized", request=request, response=response)
+
             response.raise_for_status = raise_error
             return response
 
@@ -2081,6 +2145,7 @@ class TestSyncRetryWithBackoff:
     ) -> None:
         """fetch_jellyfin_users should fail after 4 total attempts (1 + 3 retries)."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2104,6 +2169,7 @@ class TestSyncRetryWithBackoff:
     ) -> None:
         """fetch_jellyseerr_requests should retry on transient errors."""
         import httpx
+
         from app.services.sync import fetch_jellyseerr_requests
 
         request_call_count = 0
@@ -2111,17 +2177,24 @@ class TestSyncRetryWithBackoff:
         async def mock_get(self_or_url, url_or_headers=None, **kwargs):
             nonlocal request_call_count
             # Handle both (self, url, ...) and (url, ...) signatures
-            url = url_or_headers if url_or_headers and isinstance(url_or_headers, str) else str(self_or_url)
+            url = (
+                url_or_headers
+                if url_or_headers and isinstance(url_or_headers, str)
+                else str(self_or_url)
+            )
             # Only count calls to /api/v1/request (not media detail fetches)
             if "/api/v1/request" in url:
                 request_call_count += 1
                 if request_call_count == 1:
                     raise httpx.ConnectError("Connection refused")
                 # Success on second attempt
-                response = httpx.Response(200, json={
-                    "results": [{"id": 1, "media": {"tmdbId": 123, "mediaType": "movie"}}],
-                    "pageInfo": {"pages": 1}
-                })
+                response = httpx.Response(
+                    200,
+                    json={
+                        "results": [{"id": 1, "media": {"tmdbId": 123, "mediaType": "movie"}}],
+                        "pageInfo": {"pages": 1},
+                    },
+                )
                 response.raise_for_status = lambda: None
                 return response
             else:
@@ -2138,11 +2211,10 @@ class TestSyncRetryWithBackoff:
 
     @pytest.mark.asyncio
     @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
-    async def test_exponential_backoff_delays_1_2_4_seconds(
-        self, mock_sleep: AsyncMock
-    ) -> None:
+    async def test_exponential_backoff_delays_1_2_4_seconds(self, mock_sleep: AsyncMock) -> None:
         """Retry delays should follow exponential backoff: 1s, 2s, 4s."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2167,11 +2239,10 @@ class TestSyncRetryWithBackoff:
 
     @pytest.mark.asyncio
     @patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock)
-    async def test_successful_retry_continues_sync_normally(
-        self, mock_sleep: AsyncMock
-    ) -> None:
+    async def test_successful_retry_continues_sync_normally(self, mock_sleep: AsyncMock) -> None:
         """After successful retry, sync should continue normally (no partial state)."""
         import httpx
+
         from app.services.sync import fetch_jellyfin_users
 
         call_count = 0
@@ -2205,6 +2276,7 @@ class TestFetchMediaDetailsWithLanguage:
     async def test_fetch_media_details_uses_language_parameter(self) -> None:
         """fetch_media_details should pass language to API."""
         import httpx
+
         from app.services.sync import fetch_media_details
 
         captured_params: dict = {}
@@ -2216,7 +2288,9 @@ class TestFetchMediaDetailsWithLanguage:
             return response
 
         async with httpx.AsyncClient() as client:
-            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+            with patch.object(
+                client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)
+            ):
                 await fetch_media_details(
                     client, "http://jellyseerr.local", "api-key", 123, "movie", language="fr"
                 )
@@ -2227,6 +2301,7 @@ class TestFetchMediaDetailsWithLanguage:
     async def test_fetch_media_details_default_language_is_english(self) -> None:
         """fetch_media_details should default to English language."""
         import httpx
+
         from app.services.sync import fetch_media_details
 
         captured_params: dict = {}
@@ -2238,7 +2313,9 @@ class TestFetchMediaDetailsWithLanguage:
             return response
 
         async with httpx.AsyncClient() as client:
-            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+            with patch.object(
+                client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)
+            ):
                 await fetch_media_details(
                     client, "http://jellyseerr.local", "api-key", 123, "movie"
                 )
@@ -2249,6 +2326,7 @@ class TestFetchMediaDetailsWithLanguage:
     async def test_fetch_media_details_returns_french_title_when_requested(self) -> None:
         """fetch_media_details should return French title when language=fr."""
         import httpx
+
         from app.services.sync import fetch_media_details
 
         async def mock_get(self, url, **kwargs):
@@ -2258,7 +2336,9 @@ class TestFetchMediaDetailsWithLanguage:
             return httpx.Response(200, json={"title": "The Matrix"})  # English title
 
         async with httpx.AsyncClient() as client:
-            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+            with patch.object(
+                client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)
+            ):
                 result_en = await fetch_media_details(
                     client, "http://jellyseerr.local", "api-key", 123, "movie", language="en"
                 )
@@ -2273,6 +2353,7 @@ class TestFetchMediaDetailsWithLanguage:
     async def test_fetch_media_details_handles_missing_french_title(self) -> None:
         """fetch_media_details should handle cases where French title is unavailable."""
         import httpx
+
         from app.services.sync import fetch_media_details
 
         async def mock_get(self, url, **kwargs):
@@ -2280,7 +2361,9 @@ class TestFetchMediaDetailsWithLanguage:
             return httpx.Response(404)
 
         async with httpx.AsyncClient() as client:
-            with patch.object(client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)):
+            with patch.object(
+                client, "get", new=lambda url, **kwargs: mock_get(None, url, **kwargs)
+            ):
                 result = await fetch_media_details(
                     client, "http://jellyseerr.local", "api-key", 123, "movie", language="fr"
                 )

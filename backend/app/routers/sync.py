@@ -1,6 +1,6 @@
 """Sync router for data sync endpoints."""
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -77,14 +77,14 @@ async def trigger_sync(
     should_bypass_rate_limit = request and request.force and is_first_sync
 
     if not should_bypass_rate_limit and sync_status and sync_status.last_sync_started:
-        time_since_sync = datetime.now(timezone.utc) - sync_status.last_sync_started.replace(tzinfo=timezone.utc)
+        time_since_sync = datetime.now(UTC) - sync_status.last_sync_started.replace(tzinfo=UTC)
         rate_limit = timedelta(minutes=SYNC_RATE_LIMIT_MINUTES)
         if time_since_sync < rate_limit:
             remaining = rate_limit - time_since_sync
             minutes_remaining = int(remaining.total_seconds() // 60) + 1
             raise HTTPException(
                 status_code=429,
-                detail=f"Rate limited. Please wait {minutes_remaining} minute(s) before syncing again.",
+                detail=f"Rate limited. Wait {minutes_remaining} minute(s) to sync again.",
             )
 
     # Check if Jellyfin is configured
@@ -143,9 +143,7 @@ async def get_user_sync_status(
 
     return SyncStatusResponse(
         last_synced=(
-            sync_status.last_sync_completed.isoformat()
-            if sync_status.last_sync_completed
-            else None
+            sync_status.last_sync_completed.isoformat() if sync_status.last_sync_completed else None
         ),
         status=sync_status.last_sync_status,
         is_syncing=is_syncing,

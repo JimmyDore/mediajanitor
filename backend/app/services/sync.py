@@ -2,21 +2,21 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, TypedDict, cast
 
 import httpx
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import (
-    User,
-    UserSettings,
-    CachedMediaItem,
     CachedJellyseerrRequest,
+    CachedMediaItem,
     SyncStatus,
+    User,
     UserNickname,
+    UserSettings,
 )
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
@@ -47,7 +47,7 @@ async def send_sync_failure_notification(
         # Webhook not configured, silently skip
         return
 
-    failure_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    failure_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Create message in Slack Block Kit format
     message = {
@@ -58,36 +58,24 @@ async def send_sync_failure_notification(
                     "type": "plain_text",
                     "text": f"⚠️ {service} Sync Failed",
                     "emoji": True,
-                }
+                },
             },
             {
                 "type": "section",
                 "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*User:*\n{user_email}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Service:*\n{service}"
-                    }
-                ]
+                    {"type": "mrkdwn", "text": f"*User:*\n{user_email}"},
+                    {"type": "mrkdwn", "text": f"*Service:*\n{service}"},
+                ],
             },
             {
                 "type": "section",
                 "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Time:*\n{failure_time}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Error:*\n```{error_message[:200]}```"
-                    }
-                ]
-            }
+                    {"type": "mrkdwn", "text": f"*Time:*\n{failure_time}"},
+                    {"type": "mrkdwn", "text": f"*Error:*\n```{error_message[:200]}```"},
+                ],
+            },
         ],
-        "text": f"Sync failed for {user_email}: {service} - {error_message}"  # Fallback text
+        "text": f"Sync failed for {user_email}: {service} - {error_message}",  # Fallback text
     }
 
     try:
@@ -141,9 +129,7 @@ def aggregate_user_watch_data(user_data_list: list[dict[str, Any]]) -> Aggregate
     }
 
 
-async def fetch_jellyfin_users(
-    server_url: str, api_key: str
-) -> list[dict[str, Any]]:
+async def fetch_jellyfin_users(server_url: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch all users from Jellyfin API with retry on transient failures.
 
@@ -164,9 +150,7 @@ async def fetch_jellyfin_users(
     return await retry_with_backoff(_fetch, "Jellyfin")
 
 
-async def fetch_jellyseerr_users(
-    server_url: str, api_key: str
-) -> list[dict[str, Any]]:
+async def fetch_jellyseerr_users(server_url: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch all users from Jellyseerr API.
 
@@ -221,11 +205,16 @@ async def fetch_user_items(
     """
     logger.info(f"Fetching user {user_index}/{total_users}: {user_name}")
 
+    fields = ",".join([
+        "DateCreated", "DateLastSaved", "UserData", "Path", "Overview",
+        "Genres", "Studios", "People", "ProductionYear", "DateLastMediaAdded",
+        "MediaSources", "ProviderIds",
+    ])
     params: dict[str, str | int] = {
         "UserId": user_id,
         "IncludeItemTypes": "Movie,Series",
         "Recursive": "true",
-        "Fields": "DateCreated,DateLastSaved,UserData,Path,Overview,Genres,Studios,People,ProductionYear,DateLastMediaAdded,MediaSources,ProviderIds",
+        "Fields": fields,
         "SortBy": "SortName",
         "SortOrder": "Ascending",
         "StartIndex": 0,
@@ -248,9 +237,7 @@ async def fetch_user_items(
     return items
 
 
-async def fetch_all_users_media(
-    server_url: str, api_key: str
-) -> list[dict[str, Any]]:
+async def fetch_all_users_media(server_url: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch media from all Jellyfin users and aggregate watch data.
 
@@ -298,7 +285,9 @@ async def fetch_all_users_media(
         # Process results from each user
         for user, result in zip(users, results):
             if isinstance(result, Exception):
-                logger.warning(f"Failed to fetch items for user {user.get('Name', 'Unknown')}: {result}")
+                logger.warning(
+                    f"Failed to fetch items for user {user.get('Name', 'Unknown')}: {result}"
+                )
                 continue
 
             user_items = cast(list[dict[str, Any]], result)
@@ -379,17 +368,17 @@ async def fetch_media_details(
             return data
         else:
             logger.warning(
-                f"Failed to fetch {media_type} details for TMDB {tmdb_id} (language={language}): {response.status_code}"
+                f"Failed to fetch {media_type} TMDB {tmdb_id}: {response.status_code}"
             )
             return {}
     except (httpx.RequestError, httpx.TimeoutException) as e:
-        logger.warning(f"Error fetching {media_type} details for TMDB {tmdb_id} (language={language}): {e}")
+        logger.warning(
+            f"Error fetching {media_type} details for TMDB {tmdb_id} (language={language}): {e}"
+        )
         return {}
 
 
-async def fetch_jellyfin_media(
-    server_url: str, api_key: str
-) -> list[dict[str, Any]]:
+async def fetch_jellyfin_media(server_url: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch all movies and series from Jellyfin API with multi-user watch data.
 
@@ -434,11 +423,12 @@ async def fetch_jellyfin_media_with_progress(
 
         # Update progress with total user count
         await update_sync_progress(
-            db, user_id,
+            db,
+            user_id,
             current_step="syncing_media",
             current_step_progress=0,
             current_step_total=total_users,
-            current_user_name=None
+            current_user_name=None,
         )
 
         # Dictionary to store items by ID with watch data from all users
@@ -455,9 +445,10 @@ async def fetch_jellyfin_media_with_progress(
                 # Update progress to show first user in current batch
                 first_user_name = batch_users[0].get("Name", "Unknown")
                 await update_sync_progress(
-                    db, user_id,
+                    db,
+                    user_id,
                     current_step_progress=batch_start + 1,
-                    current_user_name=first_user_name
+                    current_user_name=first_user_name,
                 )
 
                 # Create tasks for this batch
@@ -480,7 +471,8 @@ async def fetch_jellyfin_media_with_progress(
                 # Process results from this batch
                 for user, result in zip(batch_users, results):
                     if isinstance(result, Exception):
-                        logger.warning(f"Failed to fetch items for user {user.get('Name', 'Unknown')}: {result}")
+                        user_name = user.get("Name", "Unknown")
+                        logger.warning(f"Failed to fetch items for {user_name}: {result}")
                         continue
 
                     user_items = cast(list[dict[str, Any]], result)
@@ -600,9 +592,7 @@ def extract_release_date_from_request(req: dict[str, Any]) -> str | None:
     return release_date
 
 
-async def fetch_jellyseerr_requests(
-    server_url: str, api_key: str
-) -> list[dict[str, Any]]:
+async def fetch_jellyseerr_requests(server_url: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch all requests from Jellyseerr API with pagination and retry on transient failures.
 
@@ -705,7 +695,9 @@ async def fetch_jellyseerr_requests(
                     else:  # tv
                         media["name_fr"] = details_fr.get("name")
 
-            logger.info(f"Enriched {len(title_cache_en)} unique media items with English and French titles")
+            logger.info(
+                f"Enriched {len(title_cache_en)} unique media items with English and French titles"
+            )
             return all_requests
 
     except httpx.HTTPStatusError as e:
@@ -911,9 +903,7 @@ async def calculate_season_sizes(
                         continue
 
                     # Fetch episodes without user context for size calculation
-                    episodes = await fetch_season_episodes(
-                        client, server_url, api_key, season_id
-                    )
+                    episodes = await fetch_season_episodes(client, server_url, api_key, season_id)
                     season_size = calculate_season_total_size(episodes)
 
                     # Accumulate total series size
@@ -949,14 +939,10 @@ async def calculate_season_sizes(
                 series_last_played = get_most_recent_episode_played_date(all_episodes_watch_data)
                 if series_last_played:
                     series.last_played_date = series_last_played
-                    logger.debug(
-                        f"Series '{series.name}': last_played_date = {series_last_played}"
-                    )
+                    logger.debug(f"Series '{series.name}': last_played_date = {series_last_played}")
 
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                logger.warning(
-                    f"Failed to calculate season sizes for series '{series.name}': {e}"
-                )
+                logger.warning(f"Failed to calculate season sizes for series '{series.name}': {e}")
                 # Continue to next series on error
                 continue
 
@@ -964,17 +950,13 @@ async def calculate_season_sizes(
     await db.commit()
 
 
-async def cache_media_items(
-    db: AsyncSession, user_id: int, items: list[dict[str, Any]]
-) -> int:
+async def cache_media_items(db: AsyncSession, user_id: int, items: list[dict[str, Any]]) -> int:
     """Cache media items in database, replacing old data.
 
     Commits immediately after caching to release database locks.
     """
     # Delete existing cached items for this user
-    await db.execute(
-        delete(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
-    )
+    await db.execute(delete(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
 
     # Insert new items
     cached_count = 0
@@ -1011,9 +993,7 @@ async def cache_jellyseerr_requests(
     """
     # Delete existing cached requests for this user
     await db.execute(
-        delete(CachedJellyseerrRequest).where(
-            CachedJellyseerrRequest.user_id == user_id
-        )
+        delete(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user_id)
     )
 
     # Insert new requests
@@ -1080,9 +1060,7 @@ async def prefill_user_nicknames(
     """
     # Build set of Jellyseerr usernames for quick lookup
     jellyseerr_usernames = {
-        user.get("displayName", "").lower()
-        for user in jellyseerr_users
-        if user.get("displayName")
+        user.get("displayName", "").lower() for user in jellyseerr_users if user.get("displayName")
     }
 
     created_count = 0
@@ -1142,12 +1120,10 @@ async def update_sync_status(
 
     Commits immediately to release database locks and make status visible to other connections.
     """
-    result = await db.execute(
-        select(SyncStatus).where(SyncStatus.user_id == user_id)
-    )
+    result = await db.execute(select(SyncStatus).where(SyncStatus.user_id == user_id))
     sync_status = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if sync_status:
         if started:
@@ -1203,9 +1179,7 @@ async def update_sync_progress(
 
     Commits immediately to release database locks and make progress visible to other connections.
     """
-    result = await db.execute(
-        select(SyncStatus).where(SyncStatus.user_id == user_id)
-    )
+    result = await db.execute(select(SyncStatus).where(SyncStatus.user_id == user_id))
     sync_status = result.scalar_one_or_none()
 
     if sync_status:
@@ -1223,15 +1197,11 @@ async def update_sync_progress(
 
 async def get_sync_status(db: AsyncSession, user_id: int) -> SyncStatus | None:
     """Get sync status for a user."""
-    result = await db.execute(
-        select(SyncStatus).where(SyncStatus.user_id == user_id)
-    )
+    result = await db.execute(select(SyncStatus).where(SyncStatus.user_id == user_id))
     return result.scalar_one_or_none()
 
 
-async def run_user_sync(
-    db: AsyncSession, user_id: int
-) -> dict[str, Any]:
+async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     """
     Run a full sync for a user.
 
@@ -1242,9 +1212,7 @@ async def run_user_sync(
     Sends Slack notifications on sync failures.
     """
     # Get user settings
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
 
     if not settings or not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:
@@ -1256,9 +1224,7 @@ async def run_user_sync(
         }
 
     # Get user email for notifications
-    user_result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
     user_email = user.email if user else f"user_{user_id}"
 
@@ -1268,8 +1234,12 @@ async def run_user_sync(
 
     # Mark sync as started with initial progress
     await update_sync_status(
-        db, user_id, "in_progress", started=True,
-        current_step="syncing_media", total_steps=total_steps
+        db,
+        user_id,
+        "in_progress",
+        started=True,
+        current_step="syncing_media",
+        total_steps=total_steps,
     )
 
     media_count = 0
@@ -1287,17 +1257,17 @@ async def run_user_sync(
 
         # Calculate season sizes for series (background task after main sync)
         await update_sync_progress(
-            db, user_id, current_step="calculating_sizes",
-            current_step_progress=None, current_step_total=None, current_user_name=None
+            db,
+            user_id,
+            current_step="calculating_sizes",
+            current_step_progress=None,
+            current_step_total=None,
+            current_user_name=None,
         )
-        await calculate_season_sizes(
-            db, user_id, settings.jellyfin_server_url, jellyfin_api_key
-        )
+        await calculate_season_sizes(db, user_id, settings.jellyfin_server_url, jellyfin_api_key)
 
         # Prefill user nicknames from Jellyfin users
-        jellyfin_users = await fetch_jellyfin_users(
-            settings.jellyfin_server_url, jellyfin_api_key
-        )
+        jellyfin_users = await fetch_jellyfin_users(settings.jellyfin_server_url, jellyfin_api_key)
 
         # Fetch Jellyseerr users if configured (to mark has_jellyseerr_account)
         jellyseerr_users: list[dict[str, Any]] = []
@@ -1336,8 +1306,12 @@ async def run_user_sync(
         if settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
             # Update progress to syncing requests
             await update_sync_progress(
-                db, user_id, current_step="syncing_requests",
-                current_step_progress=None, current_step_total=None, current_user_name=None
+                db,
+                user_id,
+                current_step="syncing_requests",
+                current_step_progress=None,
+                current_step_total=None,
+                current_user_name=None,
             )
 
             jellyseerr_api_key = decrypt_value(settings.jellyseerr_api_key_encrypted)

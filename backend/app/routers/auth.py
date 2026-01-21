@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,14 +43,17 @@ from app.services.auth import (
     get_user_by_email_async,
     get_user_by_id_async,
     hash_password,
-    hash_refresh_token,
     invalidate_refresh_token,
     rotate_refresh_token,
     validate_refresh_token,
     verify_password,
 )
 from app.services.email import send_password_reset_email
-from app.services.rate_limit import login_rate_limiter, password_reset_rate_limiter, register_rate_limiter
+from app.services.rate_limit import (
+    login_rate_limiter,
+    password_reset_rate_limiter,
+    register_rate_limiter,
+)
 from app.services.slack import send_slack_message
 
 if TYPE_CHECKING:
@@ -60,6 +71,7 @@ REFRESH_TOKEN_COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days in seconds
 def _is_testing() -> bool:
     """Check if we're running in test environment."""
     import os
+
     return os.environ.get("TESTING", "").lower() in ("1", "true", "yes")
 
 
@@ -119,7 +131,7 @@ async def send_signup_notification(email: str, user_id: int, total_users: int) -
         # Webhook not configured, silently skip
         return
 
-    signup_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    signup_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Create message in Slack Block Kit format
     message = {
@@ -130,36 +142,24 @@ async def send_signup_notification(email: str, user_id: int, total_users: int) -
                     "type": "plain_text",
                     "text": "🎉 New User Signup",
                     "emoji": True,
-                }
+                },
             },
             {
                 "type": "section",
                 "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Email:*\n{email}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*User ID:*\n{user_id}"
-                    }
-                ]
+                    {"type": "mrkdwn", "text": f"*Email:*\n{email}"},
+                    {"type": "mrkdwn", "text": f"*User ID:*\n{user_id}"},
+                ],
             },
             {
                 "type": "section",
                 "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Signup Time:*\n{signup_time}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Total Users:*\n{total_users}"
-                    }
-                ]
-            }
+                    {"type": "mrkdwn", "text": f"*Signup Time:*\n{signup_time}"},
+                    {"type": "mrkdwn", "text": f"*Total Users:*\n{total_users}"},
+                ],
+            },
         ],
-        "text": f"New user signup: {email} (Total users: {total_users})"  # Fallback text
+        "text": f"New user signup: {email} (Total users: {total_users})",  # Fallback text
     }
 
     try:
@@ -230,9 +230,7 @@ async def login(
 
     settings = get_settings()
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
 
     # Create refresh token and set as httpOnly cookie
     refresh_token = await create_refresh_token(db, user.id)
@@ -316,9 +314,7 @@ async def refresh(
     # Create new access token
     settings = get_settings()
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
 
     # Set new refresh token as cookie
     testing = _is_testing()
@@ -497,9 +493,7 @@ async def reset_password(
         )
 
     # Get the user
-    user_result = await db.execute(
-        select(User).where(User.id == matching_token.user_id)
-    )
+    user_result = await db.execute(select(User).where(User.id == matching_token.user_id))
     user = user_result.scalar_one_or_none()
 
     if not user:

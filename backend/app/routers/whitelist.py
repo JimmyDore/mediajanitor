@@ -17,23 +17,22 @@ from app.models.content import (
 )
 from app.services.auth import get_current_user
 from app.services.content import (
-    add_to_whitelist,
-    get_whitelist,
-    remove_from_whitelist,
     add_to_french_only_whitelist,
-    get_french_only_whitelist,
-    remove_from_french_only_whitelist,
     add_to_language_exempt_whitelist,
-    get_language_exempt_whitelist,
-    remove_from_language_exempt_whitelist,
     add_to_large_whitelist,
-    get_large_whitelist,
-    remove_from_large_whitelist,
     add_to_request_whitelist,
+    add_to_whitelist,
+    get_french_only_whitelist,
+    get_language_exempt_whitelist,
+    get_large_whitelist,
     get_request_whitelist,
+    get_whitelist,
+    remove_from_french_only_whitelist,
+    remove_from_language_exempt_whitelist,
+    remove_from_large_whitelist,
     remove_from_request_whitelist,
+    remove_from_whitelist,
 )
-
 
 router = APIRouter(prefix="/api/whitelist", tags=["whitelist"])
 
@@ -119,7 +118,9 @@ async def list_french_only_whitelist(
     return await get_french_only_whitelist(db=db, user_id=current_user.id)
 
 
-@router.post("/french-only", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/french-only", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_to_french_only(
     request: WhitelistAddRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -192,7 +193,9 @@ async def list_language_exempt_whitelist(
     return await get_language_exempt_whitelist(db=db, user_id=current_user.id)
 
 
-@router.post("/language-exempt", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/language-exempt", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_to_language_exempt(
     request: WhitelistAddRequest,
     current_user: Annotated[User, Depends(get_current_user)],

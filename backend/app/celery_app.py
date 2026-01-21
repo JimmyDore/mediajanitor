@@ -44,6 +44,7 @@ def init_worker(**kwargs: object) -> None:
     except Exception as e:
         logger.warning(f"Celery worker: Failed to initialize DB settings: {e}")
 
+
 # Celery configuration
 celery_app.conf.update(
     task_serializer="json",

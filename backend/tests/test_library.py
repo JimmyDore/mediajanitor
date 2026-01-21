@@ -1,7 +1,5 @@
 """Tests for Library API endpoints (US-22.1)."""
 
-from datetime import datetime, timedelta, timezone
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -30,9 +28,7 @@ class TestLibraryEndpoint:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_cached_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_empty_list_when_no_cached_items(self, client: TestClient) -> None:
         """Should return empty list when no cached items exist."""
         token = self._get_auth_token(client, "library_empty@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -46,9 +42,7 @@ class TestLibraryEndpoint:
         assert data["total_size_formatted"] == "0 B"
 
     @pytest.mark.asyncio
-    async def test_returns_all_cached_media_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_all_cached_media_items(self, client: TestClient) -> None:
         """Should return all cached media items for the user."""
         token = self._get_auth_token(client, "library_all@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -674,7 +668,7 @@ class TestLibraryEndpoint:
     @pytest.mark.asyncio
     async def test_series_includes_sonarr_title_slug(self, client: TestClient) -> None:
         """Series items should include sonarr_title_slug when Sonarr is configured."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
 
         token = self._get_auth_token(client, "library_sonarr_slug@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -713,7 +707,9 @@ class TestLibraryEndpoint:
         # Mock the Sonarr API call to return the slug map
         # Patch at app.services.sonarr since the import is inside get_library()
         mock_slug_map = {94605: "arcane"}  # TMDB ID -> titleSlug mapping
-        with patch("app.services.sonarr.get_sonarr_tmdb_to_slug_map", new_callable=AsyncMock) as mock_sonarr:
+        with patch(
+            "app.services.sonarr.get_sonarr_tmdb_to_slug_map", new_callable=AsyncMock
+        ) as mock_sonarr:
             mock_sonarr.return_value = mock_slug_map
             with patch("app.services.sonarr.get_decrypted_sonarr_api_key") as mock_key:
                 mock_key.return_value = "test_api_key"

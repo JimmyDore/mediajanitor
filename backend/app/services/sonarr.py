@@ -1,7 +1,6 @@
 """Sonarr service for API interactions and connection validation."""
 
 import httpx
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,13 +29,9 @@ async def validate_sonarr_connection(server_url: str, api_key: str) -> bool:
         return False
 
 
-async def get_user_sonarr_settings(
-    db: AsyncSession, user_id: int
-) -> UserSettings | None:
+async def get_user_sonarr_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
     """Get user's Sonarr settings from database."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
 
 
@@ -77,9 +72,7 @@ def get_decrypted_sonarr_api_key(settings: UserSettings) -> str | None:
     return None
 
 
-async def get_sonarr_series_by_tmdb_id(
-    server_url: str, api_key: str, tmdb_id: int
-) -> int | None:
+async def get_sonarr_series_by_tmdb_id(server_url: str, api_key: str, tmdb_id: int) -> int | None:
     """
     Find a Sonarr series by TMDB ID.
 
@@ -109,9 +102,7 @@ async def get_sonarr_series_by_tmdb_id(
         return None
 
 
-async def get_sonarr_tmdb_to_slug_map(
-    server_url: str, api_key: str
-) -> dict[int, str]:
+async def get_sonarr_tmdb_to_slug_map(server_url: str, api_key: str) -> dict[int, str]:
     """
     Build a mapping from TMDB ID to Sonarr titleSlug.
 

@@ -1,7 +1,8 @@
 """Unit tests for Jellyseerr service functions."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.jellyseerr import validate_jellyseerr_connection
 

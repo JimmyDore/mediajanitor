@@ -14,7 +14,6 @@ from app.services.content import (
     get_recently_available,
 )
 
-
 router = APIRouter(prefix="/api/info", tags=["info"])
 
 

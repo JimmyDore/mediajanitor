@@ -26,7 +26,6 @@ from app.services.content import (
 )
 from app.services.jellyseerr import (
     delete_jellyseerr_media,
-    delete_jellyseerr_request,
     get_decrypted_jellyseerr_api_key,
 )
 from app.services.radarr import (
@@ -38,7 +37,6 @@ from app.services.sonarr import (
     get_decrypted_sonarr_api_key,
     get_sonarr_tmdb_to_slug_map,
 )
-
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 
@@ -165,9 +163,7 @@ async def get_issues(
 
 async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
     """Get user settings from database."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
 
 
@@ -265,12 +261,15 @@ async def delete_movie(
         messages.append(arr_message)
     if delete_from_jellyseerr:
         if jellyseerr_media_id:
-            messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
+            messages.append(
+                jellyseerr_message if jellyseerr_message else "Jellyseerr not configured"
+            )
         else:
             messages.append(jellyseerr_message)
 
-    overall_success = (not delete_from_arr or arr_deleted) and \
-                      (not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted)
+    overall_success = (not delete_from_arr or arr_deleted) and (
+        not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
+    )
 
     return DeleteContentResponse(
         success=overall_success,
@@ -347,12 +346,15 @@ async def delete_series(
         messages.append(arr_message)
     if delete_from_jellyseerr:
         if jellyseerr_media_id:
-            messages.append(jellyseerr_message if jellyseerr_message else "Jellyseerr not configured")
+            messages.append(
+                jellyseerr_message if jellyseerr_message else "Jellyseerr not configured"
+            )
         else:
             messages.append(jellyseerr_message)
 
-    overall_success = (not delete_from_arr or arr_deleted) and \
-                      (not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted)
+    overall_success = (not delete_from_arr or arr_deleted) and (
+        not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
+    )
 
     return DeleteContentResponse(
         success=overall_success,
@@ -398,7 +400,11 @@ async def delete_request_endpoint(
     """
     settings = await _get_user_settings(db, current_user.id)
 
-    if not settings or not settings.jellyseerr_server_url or not settings.jellyseerr_api_key_encrypted:
+    if (
+        not settings
+        or not settings.jellyseerr_server_url
+        or not settings.jellyseerr_api_key_encrypted
+    ):
         raise HTTPException(
             status_code=400,
             detail="Jellyseerr is not configured. Please configure Jellyseerr in Settings.",

@@ -1,7 +1,6 @@
 """Jellyseerr service for API interactions and connection validation."""
 
 import httpx
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,13 +30,9 @@ async def validate_jellyseerr_connection(server_url: str, api_key: str) -> bool:
         return False
 
 
-async def get_user_jellyseerr_settings(
-    db: AsyncSession, user_id: int
-) -> UserSettings | None:
+async def get_user_jellyseerr_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
     """Get user's Jellyseerr settings from database."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
 
 
@@ -105,14 +100,15 @@ async def delete_jellyseerr_request(
                 return True, "Request deleted successfully from Jellyseerr"
             if response.status_code == 404:
                 return False, f"Request {request_id} not found in Jellyseerr"
-            return False, f"Failed to delete request from Jellyseerr (status: {response.status_code})"
+            return (
+                False,
+                f"Failed to delete request from Jellyseerr (status: {response.status_code})",
+            )
     except (httpx.RequestError, httpx.TimeoutException) as e:
         return False, f"Failed to connect to Jellyseerr: {str(e)}"
 
 
-async def delete_jellyseerr_media(
-    server_url: str, api_key: str, media_id: int
-) -> tuple[bool, str]:
+async def delete_jellyseerr_media(server_url: str, api_key: str, media_id: int) -> tuple[bool, str]:
     """
     Delete a media entry from Jellyseerr.
 

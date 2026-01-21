@@ -11,22 +11,17 @@ from httpx import Response
 from sqlalchemy import select
 
 from app.database import (
+    CachedJellyseerrRequest,
+    CachedMediaItem,
+    SyncStatus,
     User,
     UserSettings,
-    CachedMediaItem,
-    CachedJellyseerrRequest,
-    SyncStatus,
-)
-from app.services.sync import (
-    run_user_sync,
-    cache_media_items,
-    cache_jellyseerr_requests,
-    fetch_jellyfin_media,
-    fetch_jellyseerr_requests,
 )
 from app.services.encryption import encrypt_value
+from app.services.sync import (
+    run_user_sync,
+)
 from tests.conftest import TestingAsyncSessionLocal
-
 
 # Realistic Jellyfin API responses based on actual API documentation
 JELLYFIN_USERS_RESPONSE = [
@@ -91,9 +86,7 @@ JELLYFIN_ITEMS_USER2_RESPONSE = {
                 "Played": False,
                 "PlayCount": 0,
             },
-            "MediaSources": [
-                {"Size": 15000000000}
-            ],
+            "MediaSources": [{"Size": 15000000000}],
             "ProviderIds": {"Tmdb": "603"},
         },
         {
@@ -270,7 +263,12 @@ class TestSuccessfulSyncStoresData:
 
         # Mock Jellyseerr API
         respx.get("http://jellyseerr.local/api/v1/user").mock(
-            return_value=Response(200, json={"results": [{"id": 1, "displayName": "Admin"}, {"id": 2, "displayName": "Jane"}]})
+            return_value=Response(
+                200,
+                json={
+                    "results": [{"id": 1, "displayName": "Admin"}, {"id": 2, "displayName": "Jane"}]
+                },
+            )
         )
         respx.get("http://jellyseerr.local/api/v1/request").mock(
             return_value=Response(200, json=JELLYSEERR_REQUESTS_RESPONSE)
@@ -308,26 +306,20 @@ class TestSuccessfulSyncStoresData:
 
             # Verify Jellyseerr requests stored
             requests_result = await session.execute(
-                select(CachedJellyseerrRequest).where(
-                    CachedJellyseerrRequest.user_id == user.id
-                )
+                select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user.id)
             )
             requests = requests_result.scalars().all()
 
             assert len(requests) == 3
 
             # Check request data
-            dune_request = next(
-                (r for r in requests if r.tmdb_id == 12345), None
-            )
+            dune_request = next((r for r in requests if r.tmdb_id == 12345), None)
             assert dune_request is not None
             assert dune_request.title == "Dune: Part Two"
             assert dune_request.media_type == "movie"
             assert dune_request.requested_by == "Admin"
 
-            last_of_us = next(
-                (r for r in requests if r.tmdb_id == 67890), None
-            )
+            last_of_us = next((r for r in requests if r.tmdb_id == 67890), None)
             assert last_of_us is not None
             assert last_of_us.title == "The Last of Us"
             assert last_of_us.media_type == "tv"
@@ -578,6 +570,7 @@ class TestJellyseerrDownDoesntBreakSync:
         # Jellyseerr is not mocked - will timeout/fail
         # Using side_effect to simulate connection error
         import httpx
+
         respx.get("http://jellyseerr.local/api/v1/request").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
@@ -692,9 +685,7 @@ class TestEmptyResultsCreateEmptyCache:
 
             # Verify no requests in database
             requests_result = await session.execute(
-                select(CachedJellyseerrRequest).where(
-                    CachedJellyseerrRequest.user_id == user.id
-                )
+                select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user.id)
             )
             requests = requests_result.scalars().all()
             assert len(requests) == 0

@@ -1,9 +1,9 @@
 """Tests for rate limiting on auth endpoints."""
 
 import os
-import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import patch
+
+from fastapi.testclient import TestClient
 
 
 class TestRateLimitingLogin:
@@ -36,10 +36,10 @@ class TestRateLimitingLogin:
         # Need to disable TESTING mode to enable rate limiting
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
             # Import fresh app to pick up new TESTING value
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import login_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             login_rate_limiter.clear()
@@ -66,7 +66,9 @@ class TestRateLimitingLogin:
                         },
                     )
                     # First 10 should succeed (even if password wrong)
-                    assert response.status_code in (200, 401), f"Request {i+1} failed unexpectedly"
+                    assert response.status_code in (200, 401), (
+                        f"Request {i + 1} failed unexpectedly"
+                    )
 
                 # 11th request should be rate limited
                 response = test_client.post(
@@ -83,10 +85,10 @@ class TestRateLimitingLogin:
     def test_login_rate_limit_includes_retry_after_header(self) -> None:
         """Test that rate limited response includes Retry-After header."""
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import login_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             login_rate_limiter.clear()
@@ -131,10 +133,10 @@ class TestRateLimitingLogin:
     def test_login_rate_limit_error_message(self) -> None:
         """Test that rate limited response has clear error message."""
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import login_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             login_rate_limiter.clear()
@@ -195,10 +197,10 @@ class TestRateLimitingRegister:
     def test_register_rate_limit_returns_429(self) -> None:
         """Test that exceeding rate limit on register returns 429."""
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import register_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             register_rate_limiter.clear()
@@ -233,10 +235,10 @@ class TestRateLimitingRegister:
     def test_register_rate_limit_includes_retry_after_header(self) -> None:
         """Test that rate limited register response includes Retry-After header."""
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import register_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             register_rate_limiter.clear()
@@ -322,4 +324,4 @@ class TestRateLimitingDisabledInTests:
                 },
             )
             # Should never get 429 with TESTING=1
-            assert response.status_code != 429, f"Got 429 on request {i+1} despite TESTING=1"
+            assert response.status_code != 429, f"Got 429 on request {i + 1} despite TESTING=1"

@@ -2,7 +2,6 @@
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -104,9 +103,7 @@ class TestJellyfinSettings:
         )
         assert response.status_code == 422
 
-    def test_save_jellyfin_settings_invalid_url_format(
-        self, client: TestClient
-    ) -> None:
+    def test_save_jellyfin_settings_invalid_url_format(self, client: TestClient) -> None:
         """Test save fails when server URL has invalid format."""
         token = self._get_auth_token(client)
 
@@ -121,9 +118,7 @@ class TestJellyfinSettings:
         assert response.status_code == 422
 
     @patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock)
-    def test_get_jellyfin_settings(
-        self, mock_validate: AsyncMock, client: TestClient
-    ) -> None:
+    def test_get_jellyfin_settings(self, mock_validate: AsyncMock, client: TestClient) -> None:
         """Test retrieving saved Jellyfin settings."""
         mock_validate.return_value = True
         token = self._get_auth_token(client)
@@ -294,9 +289,7 @@ class TestRadarrSettings:
         )
         assert response.status_code == 422
 
-    def test_save_radarr_settings_invalid_url_format(
-        self, client: TestClient
-    ) -> None:
+    def test_save_radarr_settings_invalid_url_format(self, client: TestClient) -> None:
         """Test save fails when server URL has invalid format."""
         token = self._get_auth_token(client)
 
@@ -311,9 +304,7 @@ class TestRadarrSettings:
         assert response.status_code == 422
 
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
-    def test_get_radarr_settings(
-        self, mock_validate: AsyncMock, client: TestClient
-    ) -> None:
+    def test_get_radarr_settings(self, mock_validate: AsyncMock, client: TestClient) -> None:
         """Test retrieving saved Radarr settings."""
         mock_validate.return_value = True
         token = self._get_auth_token(client)
@@ -484,9 +475,7 @@ class TestSonarrSettings:
         )
         assert response.status_code == 422
 
-    def test_save_sonarr_settings_invalid_url_format(
-        self, client: TestClient
-    ) -> None:
+    def test_save_sonarr_settings_invalid_url_format(self, client: TestClient) -> None:
         """Test save fails when server URL has invalid format."""
         token = self._get_auth_token(client)
 
@@ -501,9 +490,7 @@ class TestSonarrSettings:
         assert response.status_code == 422
 
     @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
-    def test_get_sonarr_settings(
-        self, mock_validate: AsyncMock, client: TestClient
-    ) -> None:
+    def test_get_sonarr_settings(self, mock_validate: AsyncMock, client: TestClient) -> None:
         """Test retrieving saved Sonarr settings."""
         mock_validate.return_value = True
         token = self._get_auth_token(client)
@@ -674,9 +661,7 @@ class TestJellyseerrSettings:
         )
         assert response.status_code == 422
 
-    def test_save_jellyseerr_settings_invalid_url_format(
-        self, client: TestClient
-    ) -> None:
+    def test_save_jellyseerr_settings_invalid_url_format(self, client: TestClient) -> None:
         """Test save fails when server URL has invalid format."""
         token = self._get_auth_token(client)
 
@@ -691,9 +676,7 @@ class TestJellyseerrSettings:
         assert response.status_code == 422
 
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
-    def test_get_jellyseerr_settings(
-        self, mock_validate: AsyncMock, client: TestClient
-    ) -> None:
+    def test_get_jellyseerr_settings(self, mock_validate: AsyncMock, client: TestClient) -> None:
         """Test retrieving saved Jellyseerr settings."""
         mock_validate.return_value = True
         token = self._get_auth_token(client)
@@ -970,9 +953,7 @@ class TestAnalysisPreferences:
         )
         assert response.status_code == 422
 
-    def test_get_analysis_preferences_large_season_default(
-        self, client: TestClient
-    ) -> None:
+    def test_get_analysis_preferences_large_season_default(self, client: TestClient) -> None:
         """Test that default large_season_size_gb is 15."""
         token = self._get_auth_token(client, "large_season_default@example.com")
 
@@ -1024,9 +1005,7 @@ class TestAnalysisPreferences:
         )
         assert response.status_code == 422
 
-    def test_large_season_size_gb_accepts_boundary_values(
-        self, client: TestClient
-    ) -> None:
+    def test_large_season_size_gb_accepts_boundary_values(self, client: TestClient) -> None:
         """Test that large_season_size_gb accepts 1 and 100."""
         token = self._get_auth_token(client, "large_season_boundary@example.com")
 
@@ -1308,9 +1287,7 @@ class TestDisplayPreferences:
         )
         assert response.status_code == 422
 
-    def test_recently_available_days_accepts_boundary_values(
-        self, client: TestClient
-    ) -> None:
+    def test_recently_available_days_accepts_boundary_values(self, client: TestClient) -> None:
         """Test that recently_available_days accepts 1 and 30."""
         token = self._get_auth_token(client, "recent_days_boundary@example.com")
 
@@ -1588,9 +1565,7 @@ class TestNicknameSettings:
         response = client.post("/api/settings/nicknames/refresh")
         assert response.status_code == 401
 
-    def test_refresh_nicknames_requires_jellyfin_configured(
-        self, client: TestClient
-    ) -> None:
+    def test_refresh_nicknames_requires_jellyfin_configured(self, client: TestClient) -> None:
         """Test that refreshing nicknames requires Jellyfin to be configured."""
         token = self._get_auth_token(client, "nick_refresh_noconfig@example.com")
 

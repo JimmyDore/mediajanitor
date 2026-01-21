@@ -1,6 +1,6 @@
 """Tests for content analysis endpoints (US-3.1)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -8,13 +8,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.database import (
-    User,
-    CachedMediaItem,
     CachedJellyseerrRequest,
+    CachedMediaItem,
     ContentWhitelist,
     FrenchOnlyWhitelist,
     LanguageExemptWhitelist,
-    LargeContentWhitelist,
 )
 from tests.conftest import TestingAsyncSessionLocal
 
@@ -40,9 +38,7 @@ class TestOldUnwatchedContent:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_cached_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_empty_list_when_no_cached_items(self, client: TestClient) -> None:
         """Should return empty list when no cached items exist."""
         token = self._get_auth_token(client, "empty@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -69,7 +65,7 @@ class TestOldUnwatchedContent:
         # Create cached items directly in DB
         async with TestingAsyncSessionLocal() as session:
             # Item 1: Never watched, added 4 months ago (should appear)
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-old-unwatched",
@@ -84,7 +80,7 @@ class TestOldUnwatchedContent:
                 last_played_date=None,
             )
             # Item 2: Never watched, but added recently (should NOT appear)
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
             item2 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-recent-unwatched",
@@ -111,9 +107,7 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["name"] == "Old Unwatched Movie"
 
     @pytest.mark.asyncio
-    async def test_returns_content_not_watched_in_4_months(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_content_not_watched_in_4_months(self, client: TestClient) -> None:
         """Should return content last watched more than 4 months ago."""
         token = self._get_auth_token(client, "oldwatch@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -123,8 +117,8 @@ class TestOldUnwatchedContent:
 
         async with TestingAsyncSessionLocal() as session:
             # Item: Watched, but 5 months ago (should appear)
-            old_date = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
-            old_watched_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=200)).isoformat()
+            old_watched_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-old-watched",
@@ -139,7 +133,7 @@ class TestOldUnwatchedContent:
                 last_played_date=old_watched_date,
             )
             # Item: Watched recently (should NOT appear)
-            recent_watched = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            recent_watched = (datetime.now(UTC) - timedelta(days=30)).isoformat()
             item2 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-recent-watched",
@@ -164,9 +158,7 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["jellyfin_id"] == "movie-old-watched"
 
     @pytest.mark.asyncio
-    async def test_min_age_only_applies_to_unplayed_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_min_age_only_applies_to_unplayed_items(self, client: TestClient) -> None:
         """min_age_months should ONLY apply to unplayed items.
 
         Bug fix: Original script applies min_age check only to never-watched items.
@@ -180,9 +172,9 @@ class TestOldUnwatchedContent:
 
         async with TestingAsyncSessionLocal() as session:
             # Recently added date (1 month ago - within min_age window)
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
             # Old watched date (5 months ago - outside months_cutoff window)
-            old_watched_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_watched_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
 
             # Item 1: Added recently, PLAYED long ago -> SHOULD appear
             # min_age check should NOT apply to played items
@@ -227,9 +219,7 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["jellyfin_id"] == "movie-recent-add-old-watch"
 
     @pytest.mark.asyncio
-    async def test_excludes_whitelisted_content(
-        self, client: TestClient
-    ) -> None:
+    async def test_excludes_whitelisted_content(self, client: TestClient) -> None:
         """Should not return content that is in user's whitelist."""
         token = self._get_auth_token(client, "whitelist@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -239,7 +229,7 @@ class TestOldUnwatchedContent:
 
         async with TestingAsyncSessionLocal() as session:
             # Create old unwatched content
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-protected",
@@ -282,9 +272,7 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["jellyfin_id"] == "movie-not-protected"
 
     @pytest.mark.asyncio
-    async def test_sorted_by_size_descending(
-        self, client: TestClient
-    ) -> None:
+    async def test_sorted_by_size_descending(self, client: TestClient) -> None:
         """Items should be sorted by size, largest first."""
         token = self._get_auth_token(client, "sorted@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -293,7 +281,7 @@ class TestOldUnwatchedContent:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Small item
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -338,9 +326,7 @@ class TestOldUnwatchedContent:
         assert data["items"][2]["jellyfin_id"] == "movie-small"
 
     @pytest.mark.asyncio
-    async def test_returns_all_required_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_all_required_fields(self, client: TestClient) -> None:
         """Each item should have all required fields."""
         token = self._get_auth_token(client, "fields@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -349,7 +335,7 @@ class TestOldUnwatchedContent:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-fields",
@@ -381,9 +367,7 @@ class TestOldUnwatchedContent:
         assert "path" in item
 
     @pytest.mark.asyncio
-    async def test_calculates_total_size(
-        self, client: TestClient
-    ) -> None:
+    async def test_calculates_total_size(self, client: TestClient) -> None:
         """Should calculate total size of all items."""
         token = self._get_auth_token(client, "totalsize@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -392,7 +376,7 @@ class TestOldUnwatchedContent:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-1",
@@ -422,9 +406,7 @@ class TestOldUnwatchedContent:
         assert "total_size_formatted" in data
 
     @pytest.mark.asyncio
-    async def test_user_only_sees_their_own_content(
-        self, client: TestClient
-    ) -> None:
+    async def test_user_only_sees_their_own_content(self, client: TestClient) -> None:
         """User should only see their own cached content, not other users'."""
         token1 = self._get_auth_token(client, "user1@example.com")
         headers1 = {"Authorization": f"Bearer {token1}"}
@@ -435,7 +417,7 @@ class TestOldUnwatchedContent:
         me2 = client.get("/api/auth/me", headers=headers2).json()
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # User 1's content
             item1 = CachedMediaItem(
                 user_id=me1["id"],
@@ -493,7 +475,8 @@ class TestContentWhitelistModel:
     @pytest.mark.asyncio
     async def test_content_whitelist_has_expires_at_column(self, client: TestClient) -> None:
         """ContentWhitelist model should have nullable expires_at column."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
+
         async with TestingAsyncSessionLocal() as session:
             # Test with expires_at set
             entry_with_expiry = ContentWhitelist(
@@ -501,7 +484,7 @@ class TestContentWhitelistModel:
                 jellyfin_id="test-expiry-123",
                 name="Temporary Protected",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+                expires_at=datetime.now(UTC) + timedelta(days=90),
             )
             session.add(entry_with_expiry)
             await session.commit()
@@ -539,11 +522,7 @@ class TestAddToContentWhitelist:
         """POST /api/whitelist/content should require authentication."""
         response = client.post(
             "/api/whitelist/content",
-            json={
-                "jellyfin_id": "movie-123",
-                "name": "Test Movie",
-                "media_type": "Movie"
-            },
+            json={"jellyfin_id": "movie-123", "name": "Test Movie", "media_type": "Movie"},
         )
         assert response.status_code == 401
 
@@ -556,11 +535,7 @@ class TestAddToContentWhitelist:
         response = client.post(
             "/api/whitelist/content",
             headers=headers,
-            json={
-                "jellyfin_id": "movie-123",
-                "name": "Test Movie",
-                "media_type": "Movie"
-            },
+            json={"jellyfin_id": "movie-123", "name": "Test Movie", "media_type": "Movie"},
         )
 
         assert response.status_code == 201
@@ -583,11 +558,7 @@ class TestAddToContentWhitelist:
         client.post(
             "/api/whitelist/content",
             headers=headers,
-            json={
-                "jellyfin_id": "movie-persist",
-                "name": "Persisted Movie",
-                "media_type": "Movie"
-            },
+            json={"jellyfin_id": "movie-persist", "name": "Persisted Movie", "media_type": "Movie"},
         )
 
         # Verify in database
@@ -595,7 +566,7 @@ class TestAddToContentWhitelist:
             result = await session.execute(
                 select(ContentWhitelist).where(
                     ContentWhitelist.user_id == user_id,
-                    ContentWhitelist.jellyfin_id == "movie-persist"
+                    ContentWhitelist.jellyfin_id == "movie-persist",
                 )
             )
             entry = result.scalar_one_or_none()
@@ -616,7 +587,7 @@ class TestAddToContentWhitelist:
 
         # Create old unwatched content
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-to-protect",
@@ -642,7 +613,7 @@ class TestAddToContentWhitelist:
             json={
                 "jellyfin_id": "movie-to-protect",
                 "name": "Movie To Protect",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
         assert protect_response.status_code == 201
@@ -666,7 +637,7 @@ class TestAddToContentWhitelist:
             json={
                 "jellyfin_id": "movie-duplicate",
                 "name": "Duplicate Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
         assert response1.status_code == 201
@@ -678,7 +649,7 @@ class TestAddToContentWhitelist:
             json={
                 "jellyfin_id": "movie-duplicate",
                 "name": "Duplicate Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
         # Should return 409 Conflict
@@ -695,10 +666,7 @@ class TestAddToContentWhitelist:
         response = client.post(
             "/api/whitelist/content",
             headers=headers,
-            json={
-                "name": "Test Movie",
-                "media_type": "Movie"
-            },
+            json={"name": "Test Movie", "media_type": "Movie"},
         )
         assert response.status_code == 422
 
@@ -717,16 +685,12 @@ class TestAddToContentWhitelist:
         client.post(
             "/api/whitelist/content",
             headers=headers1,
-            json={
-                "jellyfin_id": "user1-movie",
-                "name": "User 1 Movie",
-                "media_type": "Movie"
-            },
+            json={"jellyfin_id": "user1-movie", "name": "User 1 Movie", "media_type": "Movie"},
         )
 
         # Create old content for both users
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Same jellyfin_id for both users
             item1 = CachedMediaItem(
                 user_id=me1["id"],
@@ -779,9 +743,7 @@ class TestGetContentWhitelist:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_whitelist_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_empty_list_when_no_whitelist_items(self, client: TestClient) -> None:
         """Should return empty list when user has no whitelist entries."""
         token = self._get_auth_token(client, "empty-wl@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -844,7 +806,7 @@ class TestGetContentWhitelist:
             json={
                 "jellyfin_id": "movie-fields-test",
                 "name": "Fields Test Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
 
@@ -874,7 +836,7 @@ class TestGetContentWhitelist:
             json={
                 "jellyfin_id": "user1-wl-movie",
                 "name": "User 1 WL Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
 
@@ -885,7 +847,7 @@ class TestGetContentWhitelist:
             json={
                 "jellyfin_id": "user2-wl-movie",
                 "name": "User 2 WL Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
 
@@ -935,7 +897,7 @@ class TestDeleteFromContentWhitelist:
             json={
                 "jellyfin_id": "movie-to-delete",
                 "name": "Movie To Delete",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
         assert add_response.status_code == 201
@@ -964,9 +926,7 @@ class TestDeleteFromContentWhitelist:
         assert "not found" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_cannot_delete_other_users_whitelist_items(
-        self, client: TestClient
-    ) -> None:
+    async def test_cannot_delete_other_users_whitelist_items(self, client: TestClient) -> None:
         """User should not be able to delete another user's whitelist items."""
         token1 = self._get_auth_token(client, "delete-user1@example.com")
         headers1 = {"Authorization": f"Bearer {token1}"}
@@ -980,7 +940,7 @@ class TestDeleteFromContentWhitelist:
             json={
                 "jellyfin_id": "user1-delete-movie",
                 "name": "User 1 Delete Movie",
-                "media_type": "Movie"
+                "media_type": "Movie",
             },
         )
 
@@ -997,9 +957,7 @@ class TestDeleteFromContentWhitelist:
         assert list_response.json()["total_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_removed_item_reappears_in_old_content_list(
-        self, client: TestClient
-    ) -> None:
+    async def test_removed_item_reappears_in_old_content_list(self, client: TestClient) -> None:
         """After removing from whitelist, item should reappear in old content list if still old."""
         token = self._get_auth_token(client, "reappear@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1010,7 +968,7 @@ class TestDeleteFromContentWhitelist:
 
         # Create old unwatched content
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-reappear",
@@ -1027,11 +985,7 @@ class TestDeleteFromContentWhitelist:
         client.post(
             "/api/whitelist/content",
             headers=headers,
-            json={
-                "jellyfin_id": "movie-reappear",
-                "name": "Movie Reappear",
-                "media_type": "Movie"
-            },
+            json={"jellyfin_id": "movie-reappear", "name": "Movie Reappear", "media_type": "Movie"},
         )
 
         # Verify item does NOT appear in old content list
@@ -1069,9 +1023,7 @@ class TestContentSummary:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_returns_all_zero_counts_when_no_data(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_all_zero_counts_when_no_data(self, client: TestClient) -> None:
         """Should return all zero counts when user has no cached items."""
         token = self._get_auth_token(client, "empty-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1089,9 +1041,7 @@ class TestContentSummary:
         assert data["unavailable_requests"]["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_returns_old_content_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_old_content_count(self, client: TestClient) -> None:
         """Should return correct count of old/unwatched content."""
         token = self._get_auth_token(client, "old-count@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1100,7 +1050,7 @@ class TestContentSummary:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old unwatched item
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -1133,9 +1083,7 @@ class TestContentSummary:
         assert "total_size_formatted" in data["old_content"]
 
     @pytest.mark.asyncio
-    async def test_returns_large_movies_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_large_movies_count(self, client: TestClient) -> None:
         """Should return correct count of large movies (>13GB)."""
         token = self._get_auth_token(client, "large-count@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1183,9 +1131,7 @@ class TestContentSummary:
         assert "total_size_formatted" in data["large_movies"]
 
     @pytest.mark.asyncio
-    async def test_large_movies_only_counts_movies_not_series(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_movies_only_counts_movies_not_series(self, client: TestClient) -> None:
         """Large movies count should only include movies, not series."""
         token = self._get_auth_token(client, "large-movies-only@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1224,9 +1170,7 @@ class TestContentSummary:
         assert data["large_movies"]["total_size_bytes"] == 20_000_000_000
 
     @pytest.mark.asyncio
-    async def test_large_movies_includes_exactly_threshold(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_movies_includes_exactly_threshold(self, client: TestClient) -> None:
         """Movies exactly at 13GB threshold should be counted (>= not >).
 
         This matches original_script.py list_large_movies() behavior which uses >=.
@@ -1270,9 +1214,7 @@ class TestContentSummary:
         assert data["large_movies"]["total_size_bytes"] == threshold_bytes
 
     @pytest.mark.asyncio
-    async def test_excludes_whitelisted_content_from_old_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_excludes_whitelisted_content_from_old_count(self, client: TestClient) -> None:
         """Whitelisted content should not be counted in old content."""
         token = self._get_auth_token(client, "whitelist-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1281,7 +1223,7 @@ class TestContentSummary:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old item 1 (will be whitelisted)
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -1321,9 +1263,7 @@ class TestContentSummary:
         assert data["old_content"]["total_size_bytes"] == 8_000_000_000
 
     @pytest.mark.asyncio
-    async def test_user_isolation(
-        self, client: TestClient
-    ) -> None:
+    async def test_user_isolation(self, client: TestClient) -> None:
         """Each user should only see counts for their own content."""
         token1 = self._get_auth_token(client, "summary-user1@example.com")
         headers1 = {"Authorization": f"Bearer {token1}"}
@@ -1334,7 +1274,7 @@ class TestContentSummary:
         me2 = client.get("/api/auth/me", headers=headers2).json()
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # User 1's content: 1 old item
             item1 = CachedMediaItem(
                 user_id=me1["id"],
@@ -1378,9 +1318,7 @@ class TestContentSummary:
         assert data2["old_content"]["count"] == 2
 
     @pytest.mark.asyncio
-    async def test_returns_language_issues_count_placeholder(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_language_issues_count_placeholder(self, client: TestClient) -> None:
         """Language issues count should be 0 (not implemented yet)."""
         token = self._get_auth_token(client, "language-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1393,9 +1331,7 @@ class TestContentSummary:
         assert data["language_issues"]["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_returns_unavailable_requests_count_placeholder(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_unavailable_requests_count_placeholder(self, client: TestClient) -> None:
         """Unavailable requests count should be 0 (not implemented yet)."""
         token = self._get_auth_token(client, "requests-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1457,7 +1393,7 @@ class TestInfoEndpoints:
 
         async with TestingAsyncSessionLocal() as session:
             # Request available 3 days ago (should appear)
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=3)).isoformat()
             recent_request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=1001,
@@ -1470,7 +1406,7 @@ class TestInfoEndpoints:
                 raw_data={"media": {"mediaAddedAt": recent_date}},
             )
             # Request available 10 days ago (should NOT appear)
-            old_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=10)).isoformat()
             old_request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=1002,
@@ -1493,9 +1429,7 @@ class TestInfoEndpoints:
         assert data["items"][0]["title"] == "Recently Available Movie"
 
     @pytest.mark.asyncio
-    async def test_recently_available_only_shows_available_status(
-        self, client: TestClient
-    ) -> None:
+    async def test_recently_available_only_shows_available_status(self, client: TestClient) -> None:
         """Should only return requests with status 4 (Partially Available) or 5 (Available)."""
         from app.database import CachedJellyseerrRequest
 
@@ -1506,7 +1440,7 @@ class TestInfoEndpoints:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
             # Available request (should appear)
             available_request = CachedJellyseerrRequest(
                 user_id=user_id,
@@ -1542,9 +1476,7 @@ class TestInfoEndpoints:
         assert data["items"][0]["title"] == "Available Movie"
 
     @pytest.mark.asyncio
-    async def test_recently_available_returns_required_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_recently_available_returns_required_fields(self, client: TestClient) -> None:
         """Each item should have: title, type, availability_date."""
         from app.database import CachedJellyseerrRequest
 
@@ -1555,7 +1487,7 @@ class TestInfoEndpoints:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=3001,
@@ -1580,9 +1512,7 @@ class TestInfoEndpoints:
         assert "availability_date" in item
 
     @pytest.mark.asyncio
-    async def test_recently_available_grouped_by_date(
-        self, client: TestClient
-    ) -> None:
+    async def test_recently_available_grouped_by_date(self, client: TestClient) -> None:
         """Items should be sorted by date, newest first."""
         from app.database import CachedJellyseerrRequest
 
@@ -1594,11 +1524,11 @@ class TestInfoEndpoints:
 
         async with TestingAsyncSessionLocal() as session:
             # Item from 1 day ago
-            day1 = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            day1 = (datetime.now(UTC) - timedelta(days=1)).isoformat()
             # Item from 3 days ago
-            day3 = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            day3 = (datetime.now(UTC) - timedelta(days=3)).isoformat()
             # Item from 5 days ago
-            day5 = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+            day5 = (datetime.now(UTC) - timedelta(days=5)).isoformat()
 
             req1 = CachedJellyseerrRequest(
                 user_id=user_id,
@@ -1637,9 +1567,7 @@ class TestInfoEndpoints:
         assert data["items"][2]["title"] == "Day 5 Movie"
 
     @pytest.mark.asyncio
-    async def test_summary_includes_recently_available_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_summary_includes_recently_available_count(self, client: TestClient) -> None:
         """GET /api/content/summary should include recently_available count."""
         from app.database import CachedJellyseerrRequest
 
@@ -1651,7 +1579,7 @@ class TestInfoEndpoints:
 
         async with TestingAsyncSessionLocal() as session:
             # Add recent available request
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=5001,
@@ -1672,9 +1600,7 @@ class TestInfoEndpoints:
         assert data["recently_available"]["count"] == 1
 
     @pytest.mark.asyncio
-    async def test_user_isolation_for_recently_available(
-        self, client: TestClient
-    ) -> None:
+    async def test_user_isolation_for_recently_available(self, client: TestClient) -> None:
         """Users should only see their own recently available content."""
         from app.database import CachedJellyseerrRequest
 
@@ -1687,7 +1613,7 @@ class TestInfoEndpoints:
         me2 = client.get("/api/auth/me", headers=headers2).json()
 
         async with TestingAsyncSessionLocal() as session:
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
             # User 1's request
             req1 = CachedJellyseerrRequest(
                 user_id=me1["id"],
@@ -1722,9 +1648,7 @@ class TestInfoEndpoints:
         assert data2["items"][0]["title"] == "User 2 Movie"
 
     @pytest.mark.asyncio
-    async def test_recently_available_uses_user_setting(
-        self, client: TestClient
-    ) -> None:
+    async def test_recently_available_uses_user_setting(self, client: TestClient) -> None:
         """GET /api/info/recent should use user's recently_available_days setting."""
         from app.database import CachedJellyseerrRequest, UserSettings
 
@@ -1742,8 +1666,8 @@ class TestInfoEndpoints:
             )
             session.add(user_settings)
 
-            # Request available 10 days ago (should appear with 14-day setting, not with 7-day default)
-            day10 = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+            # Request available 10 days ago (appears with 14-day, not 7-day default)
+            day10 = (datetime.now(UTC) - timedelta(days=10)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=7001,
@@ -1788,9 +1712,9 @@ class TestInfoEndpoints:
             session.add(user_settings)
 
             # Request available 6 days ago (should NOT appear with 5-day setting)
-            day6 = (datetime.now(timezone.utc) - timedelta(days=6)).isoformat()
+            day6 = (datetime.now(UTC) - timedelta(days=6)).isoformat()
             # Request available 3 days ago (should appear)
-            day3 = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            day3 = (datetime.now(UTC) - timedelta(days=3)).isoformat()
 
             request_old = CachedJellyseerrRequest(
                 user_id=user_id,
@@ -1824,9 +1748,7 @@ class TestInfoEndpoints:
         assert data["items"][0]["title"] == "3 Day Old Movie"
 
     @pytest.mark.asyncio
-    async def test_summary_recently_available_uses_user_setting(
-        self, client: TestClient
-    ) -> None:
+    async def test_summary_recently_available_uses_user_setting(self, client: TestClient) -> None:
         """GET /api/content/summary recently_available count should use user's setting."""
         from app.database import CachedJellyseerrRequest, UserSettings
 
@@ -1845,7 +1767,7 @@ class TestInfoEndpoints:
             session.add(user_settings)
 
             # Request available 15 days ago (should count with 20-day setting)
-            day15 = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+            day15 = (datetime.now(UTC) - timedelta(days=15)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=8001,
@@ -1887,9 +1809,7 @@ class TestUnifiedIssuesEndpoint:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_empty_list_when_no_issues(self, client: TestClient) -> None:
         """Should return empty list when user has no content with issues."""
         token = self._get_auth_token(client, "issues-empty@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1902,9 +1822,7 @@ class TestUnifiedIssuesEndpoint:
         assert data["total_size_bytes"] == 0
 
     @pytest.mark.asyncio
-    async def test_returns_all_issues_without_filter(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_all_issues_without_filter(self, client: TestClient) -> None:
         """Should return all content with issues when no filter specified."""
         token = self._get_auth_token(client, "issues-all@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1913,7 +1831,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old unwatched movie
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -1933,7 +1851,7 @@ class TestUnifiedIssuesEndpoint:
                 date_created=old_date,
                 size_bytes=15_000_000_000,  # 15GB > 13GB threshold
                 played=True,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
             )
             session.add_all([item1, item2])
             await session.commit()
@@ -1949,9 +1867,7 @@ class TestUnifiedIssuesEndpoint:
         assert "movie-large" in jellyfin_ids
 
     @pytest.mark.asyncio
-    async def test_filter_by_old_content(
-        self, client: TestClient
-    ) -> None:
+    async def test_filter_by_old_content(self, client: TestClient) -> None:
         """Should filter to only old content when filter=old."""
         token = self._get_auth_token(client, "issues-old@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -1960,7 +1876,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old unwatched movie
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -1980,7 +1896,7 @@ class TestUnifiedIssuesEndpoint:
                 date_created=old_date,
                 size_bytes=15_000_000_000,
                 played=True,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
             )
             session.add_all([item1, item2])
             await session.commit()
@@ -1994,9 +1910,7 @@ class TestUnifiedIssuesEndpoint:
         assert "old" in data["items"][0]["issues"]
 
     @pytest.mark.asyncio
-    async def test_filter_by_large_movies(
-        self, client: TestClient
-    ) -> None:
+    async def test_filter_by_large_movies(self, client: TestClient) -> None:
         """Should filter to only large movies when filter=large."""
         token = self._get_auth_token(client, "issues-large@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2005,7 +1919,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Small old movie
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -2037,9 +1951,7 @@ class TestUnifiedIssuesEndpoint:
         assert "large" in data["items"][0]["issues"]
 
     @pytest.mark.asyncio
-    async def test_item_shows_multiple_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_item_shows_multiple_issues(self, client: TestClient) -> None:
         """Content with multiple issues should show all applicable issue badges."""
         token = self._get_auth_token(client, "issues-multi@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2048,7 +1960,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old AND large movie
             item = CachedMediaItem(
                 user_id=user_id,
@@ -2072,9 +1984,7 @@ class TestUnifiedIssuesEndpoint:
         assert "large" in item_data["issues"]
 
     @pytest.mark.asyncio
-    async def test_excludes_whitelisted_from_old_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_excludes_whitelisted_from_old_issues(self, client: TestClient) -> None:
         """Whitelisted content should be excluded from old content issues."""
         token = self._get_auth_token(client, "issues-wl@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2083,7 +1993,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             # Old movie (will be whitelisted)
             item1 = CachedMediaItem(
                 user_id=user_id,
@@ -2122,9 +2032,7 @@ class TestUnifiedIssuesEndpoint:
         assert data["items"][0]["jellyfin_id"] == "movie-not-whitelisted-old"
 
     @pytest.mark.asyncio
-    async def test_returns_all_required_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_returns_all_required_fields(self, client: TestClient) -> None:
         """Each item should have all required fields."""
         token = self._get_auth_token(client, "issues-fields@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2133,7 +2041,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-fields-test",
@@ -2166,9 +2074,7 @@ class TestUnifiedIssuesEndpoint:
         assert isinstance(item_data["issues"], list)
 
     @pytest.mark.asyncio
-    async def test_sorted_by_size_descending_by_default(
-        self, client: TestClient
-    ) -> None:
+    async def test_sorted_by_size_descending_by_default(self, client: TestClient) -> None:
         """Items should be sorted by size (largest first) by default."""
         token = self._get_auth_token(client, "issues-sort@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2177,7 +2083,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-small",
@@ -2218,9 +2124,7 @@ class TestUnifiedIssuesEndpoint:
         assert data["items"][2]["jellyfin_id"] == "movie-small"
 
     @pytest.mark.asyncio
-    async def test_calculates_total_size(
-        self, client: TestClient
-    ) -> None:
+    async def test_calculates_total_size(self, client: TestClient) -> None:
         """Should calculate total size of all items with issues."""
         token = self._get_auth_token(client, "issues-total@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2229,7 +2133,7 @@ class TestUnifiedIssuesEndpoint:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-1",
@@ -2259,9 +2163,7 @@ class TestUnifiedIssuesEndpoint:
         assert "total_size_formatted" in data
 
     @pytest.mark.asyncio
-    async def test_user_isolation(
-        self, client: TestClient
-    ) -> None:
+    async def test_user_isolation(self, client: TestClient) -> None:
         """User should only see their own content issues."""
         token1 = self._get_auth_token(client, "issues-user1@example.com")
         headers1 = {"Authorization": f"Bearer {token1}"}
@@ -2272,7 +2174,7 @@ class TestUnifiedIssuesEndpoint:
         me2 = client.get("/api/auth/me", headers=headers2).json()
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item1 = CachedMediaItem(
                 user_id=me1["id"],
                 jellyfin_id="user1-movie",
@@ -2321,11 +2223,13 @@ class TestUnifiedIssuesEndpoint:
                 "Id": "movie-lang-issue",
                 "Name": "English Only",
                 "Type": "Movie",
-                "MediaSources": [{
-                    "MediaStreams": [
-                        {"Type": "Audio", "Language": "eng"},
-                    ]
-                }],
+                "MediaSources": [
+                    {
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "eng"},
+                        ]
+                    }
+                ],
             }
             item = CachedMediaItem(
                 user_id=user_id,
@@ -2345,9 +2249,7 @@ class TestUnifiedIssuesEndpoint:
         assert "language" in data["items"][0]["issues"]
 
     @pytest.mark.asyncio
-    async def test_filter_requests_returns_empty_placeholder(
-        self, client: TestClient
-    ) -> None:
+    async def test_filter_requests_returns_empty_placeholder(self, client: TestClient) -> None:
         """Requests filter should return empty (not implemented yet)."""
         token = self._get_auth_token(client, "issues-req@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2384,33 +2286,37 @@ class TestLanguageIssues:
         """Create raw_data for a movie with specific audio/subtitle tracks."""
         media_streams = []
         for i, lang in enumerate(audio_languages):
-            media_streams.append({
-                "Type": "Audio",
-                "Language": lang,
-                "Index": i,
-                "Codec": "aac",
-                "Channels": 6,
-                "IsDefault": i == 0,
-            })
+            media_streams.append(
+                {
+                    "Type": "Audio",
+                    "Language": lang,
+                    "Index": i,
+                    "Codec": "aac",
+                    "Channels": 6,
+                    "IsDefault": i == 0,
+                }
+            )
         for i, lang in enumerate(subtitle_languages or []):
-            media_streams.append({
-                "Type": "Subtitle",
-                "Language": lang,
-                "Index": len(audio_languages) + i,
-            })
+            media_streams.append(
+                {
+                    "Type": "Subtitle",
+                    "Language": lang,
+                    "Index": len(audio_languages) + i,
+                }
+            )
         return {
             "Id": jellyfin_id,
             "Name": name,
             "Type": "Movie",
-            "MediaSources": [{
-                "MediaStreams": media_streams,
-            }],
+            "MediaSources": [
+                {
+                    "MediaStreams": media_streams,
+                }
+            ],
         }
 
     @pytest.mark.asyncio
-    async def test_movie_missing_english_audio_has_language_issue(
-        self, client: TestClient
-    ) -> None:
+    async def test_movie_missing_english_audio_has_language_issue(self, client: TestClient) -> None:
         """Movie with only French audio should have language issue."""
         token = self._get_auth_token(client, "lang-missing-en@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2445,9 +2351,7 @@ class TestLanguageIssues:
         assert "language" in data["items"][0]["issues"]
 
     @pytest.mark.asyncio
-    async def test_movie_missing_french_audio_has_language_issue(
-        self, client: TestClient
-    ) -> None:
+    async def test_movie_missing_french_audio_has_language_issue(self, client: TestClient) -> None:
         """Movie with only English audio should have language issue."""
         token = self._get_auth_token(client, "lang-missing-fr@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2516,9 +2420,7 @@ class TestLanguageIssues:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_summary_includes_language_issues_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_summary_includes_language_issues_count(self, client: TestClient) -> None:
         """Summary should include count of items with language issues."""
         token = self._get_auth_token(client, "lang-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2551,9 +2453,7 @@ class TestLanguageIssues:
         assert data["language_issues"]["count"] == 1
 
     @pytest.mark.asyncio
-    async def test_language_issue_includes_specific_issue_type(
-        self, client: TestClient
-    ) -> None:
+    async def test_language_issue_includes_specific_issue_type(self, client: TestClient) -> None:
         """Language issue should specify what's missing (missing_en_audio, missing_fr_audio)."""
         token = self._get_auth_token(client, "lang-specific@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2588,9 +2488,7 @@ class TestLanguageIssues:
         assert "missing_en_audio" in item_data["language_issues"]
 
     @pytest.mark.asyncio
-    async def test_supports_language_code_variants(
-        self, client: TestClient
-    ) -> None:
+    async def test_supports_language_code_variants(self, client: TestClient) -> None:
         """Should recognize various language code formats (eng/en, fre/fr/fra)."""
         token = self._get_auth_token(client, "lang-variants@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2624,9 +2522,7 @@ class TestLanguageIssues:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_language_issue_combined_with_other_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_language_issue_combined_with_other_issues(self, client: TestClient) -> None:
         """Item can have language issue along with old/large issues."""
         token = self._get_auth_token(client, "lang-combined@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2635,7 +2531,7 @@ class TestLanguageIssues:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             raw_data = self._create_movie_with_audio(
                 "movie-multi-issues",
                 "Multi Issues Movie",
@@ -2688,18 +2584,22 @@ class TestFrenchOnlyWhitelist:
         """Create raw_data for a movie with specific audio tracks."""
         media_streams = []
         for i, lang in enumerate(audio_languages):
-            media_streams.append({
-                "Type": "Audio",
-                "Language": lang,
-                "Index": i,
-            })
+            media_streams.append(
+                {
+                    "Type": "Audio",
+                    "Language": lang,
+                    "Index": i,
+                }
+            )
         return {
             "Id": jellyfin_id,
             "Name": name,
             "Type": "Movie",
-            "MediaSources": [{
-                "MediaStreams": media_streams,
-            }],
+            "MediaSources": [
+                {
+                    "MediaStreams": media_streams,
+                }
+            ],
         }
 
     def test_add_to_french_only_requires_auth(self, client: TestClient) -> None:
@@ -2805,9 +2705,7 @@ class TestFrenchOnlyWhitelist:
         assert list_response.json()["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_french_only_excludes_missing_en_audio_issue(
-        self, client: TestClient
-    ) -> None:
+    async def test_french_only_excludes_missing_en_audio_issue(self, client: TestClient) -> None:
         """Items in french-only whitelist should not have missing_en_audio issue."""
         token = self._get_auth_token(client, "fronly-exclude@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2851,7 +2749,7 @@ class TestFrenchOnlyWhitelist:
             headers=headers,
         )
 
-        # Now should NOT have missing_en_audio issue (still might have missing_fr_audio if applicable)
+        # Now should NOT have missing_en_audio issue
         response = client.get("/api/content/issues?filter=language", headers=headers)
         assert response.status_code == 200
         data = response.json()
@@ -2859,9 +2757,7 @@ class TestFrenchOnlyWhitelist:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_french_only_still_flags_missing_french_audio(
-        self, client: TestClient
-    ) -> None:
+    async def test_french_only_still_flags_missing_french_audio(self, client: TestClient) -> None:
         """French-only items should still flag missing French audio."""
         token = self._get_auth_token(client, "fronly-french@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -2923,19 +2819,17 @@ class TestLanguageExemptWhitelist:
         )
         return login_response.json()["access_token"]
 
-    def _create_movie_with_audio(
-        self, jellyfin_id: str, name: str, audio_langs: list[str]
-    ) -> dict:
+    def _create_movie_with_audio(self, jellyfin_id: str, name: str, audio_langs: list[str]) -> dict:
         """Create a cached media item with specific audio languages."""
-        media_streams = [
-            {"Type": "Audio", "Language": lang} for lang in audio_langs
-        ]
+        media_streams = [{"Type": "Audio", "Language": lang} for lang in audio_langs]
         return {
             "Id": jellyfin_id,
             "Name": name,
-            "MediaSources": [{
-                "MediaStreams": media_streams,
-            }],
+            "MediaSources": [
+                {
+                    "MediaStreams": media_streams,
+                }
+            ],
         }
 
     def test_add_to_language_exempt_requires_auth(self, client: TestClient) -> None:
@@ -3041,9 +2935,7 @@ class TestLanguageExemptWhitelist:
         assert list_response.json()["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_language_exempt_excludes_all_language_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_language_exempt_excludes_all_language_issues(self, client: TestClient) -> None:
         """Items in language-exempt whitelist should not have any language issues."""
         token = self._get_auth_token(client, "langexempt-exclude@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3096,9 +2988,7 @@ class TestLanguageExemptWhitelist:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_language_exempt_does_not_affect_other_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_language_exempt_does_not_affect_other_issues(self, client: TestClient) -> None:
         """Language-exempt should only exclude language issues, not other issues like old."""
         token = self._get_auth_token(client, "langexempt-other@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3108,7 +2998,7 @@ class TestLanguageExemptWhitelist:
 
         # Create an old movie with language issues
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             raw_data = self._create_movie_with_audio(
                 "old-exempt-movie",
                 "Old Exempt Film",
@@ -3267,9 +3157,7 @@ class TestLargeContentWhitelist:
         assert list_response.json()["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_large_whitelist_excludes_from_large_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_whitelist_excludes_from_large_issues(self, client: TestClient) -> None:
         """Items in large content whitelist should not appear in large issues."""
         token = self._get_auth_token(client, "largewl-exclude@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3314,9 +3202,7 @@ class TestLargeContentWhitelist:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_large_whitelist_excludes_from_summary(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_whitelist_excludes_from_summary(self, client: TestClient) -> None:
         """Large whitelisted items should not be counted in summary."""
         token = self._get_auth_token(client, "largewl-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3360,9 +3246,7 @@ class TestLargeContentWhitelist:
         assert data["large_movies"]["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_large_whitelist_does_not_affect_other_issues(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_whitelist_does_not_affect_other_issues(self, client: TestClient) -> None:
         """Large whitelist should only exclude large issues, not other issues like old."""
         token = self._get_auth_token(client, "largewl-other@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3371,7 +3255,7 @@ class TestLargeContentWhitelist:
         user_id = me_response.json()["id"]
 
         # Create a large, old movie (both large AND old issues)
-        old_date = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        (datetime.now(UTC) - timedelta(days=200)).isoformat()
         async with TestingAsyncSessionLocal() as session:
             item = CachedMediaItem(
                 user_id=user_id,
@@ -3379,7 +3263,7 @@ class TestLargeContentWhitelist:
                 name="Old Large Movie",
                 media_type="Movie",
                 size_bytes=15_000_000_000,  # Large
-                date_created=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),  # Old
+                date_created=(datetime.now(UTC) - timedelta(days=200)).isoformat(),  # Old
                 played=False,
             )
             session.add(item)
@@ -3423,9 +3307,7 @@ class TestUnavailableRequests:
         return login_response.json()["access_token"]
 
     @pytest.mark.asyncio
-    async def test_summary_includes_unavailable_requests_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_summary_includes_unavailable_requests_count(self, client: TestClient) -> None:
         """Summary should include count of unavailable requests."""
         token = self._get_auth_token(client, "summary-requests@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3470,7 +3352,7 @@ class TestUnavailableRequests:
     async def test_unavailable_requests_includes_different_status_codes(
         self, client: TestClient
     ) -> None:
-        """Unavailable requests include status 0 (Unknown), 1 (Pending), 2 (Approved), 4 (Partially Available)."""
+        """Unavailable requests include status 0, 1, 2, 4 (not 3=Processing, 5=Available)."""
         token = self._get_auth_token(client, "statuses@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -3534,7 +3416,9 @@ class TestUnavailableRequests:
                 title="Available Movie",
                 raw_data={"media": {"title": "Available Movie"}},
             )
-            session.add_all([req_unknown, req_pending, req_approved, req_processing, req_partial, req_available])
+            session.add_all(
+                [req_unknown, req_pending, req_approved, req_processing, req_partial, req_available]
+            )
             await session.commit()
 
         response = client.get("/api/content/summary", headers=headers)
@@ -3636,9 +3520,7 @@ class TestUnavailableRequests:
         assert item["request_date"] == "2024-02-20T15:30:00Z"
 
     @pytest.mark.asyncio
-    async def test_tv_request_includes_missing_seasons_info(
-        self, client: TestClient
-    ) -> None:
+    async def test_tv_request_includes_missing_seasons_info(self, client: TestClient) -> None:
         """TV requests should include which seasons are requested but missing."""
         token = self._get_auth_token(client, "tv-seasons@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3747,9 +3629,7 @@ class TestUnavailableRequests:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_tv_show_with_missing_seasons_is_unavailable(
-        self, client: TestClient
-    ) -> None:
+    async def test_tv_show_with_missing_seasons_is_unavailable(self, client: TestClient) -> None:
         """TV show with status 4 and some missing seasons SHOULD be unavailable."""
         token = self._get_auth_token(client, "tv-missing@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3800,9 +3680,7 @@ class TestUnavailableRequests:
         assert 1 not in item["missing_seasons"]
 
     @pytest.mark.asyncio
-    async def test_unavailable_requests_filters_future_releases(
-        self, client: TestClient
-    ) -> None:
+    async def test_unavailable_requests_filters_future_releases(self, client: TestClient) -> None:
         """Unavailable requests with future release dates should be excluded."""
         token = self._get_auth_token(client, "future@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3810,8 +3688,9 @@ class TestUnavailableRequests:
         me_response = client.get("/api/auth/me", headers=headers)
         user_id = me_response.json()["id"]
 
-        from app.database import CachedJellyseerrRequest
         from datetime import datetime, timedelta
+
+        from app.database import CachedJellyseerrRequest
 
         future_date = (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
         past_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
@@ -3847,9 +3726,7 @@ class TestUnavailableRequests:
         assert data["items"][0]["name"] == "Past Movie"
 
     @pytest.mark.asyncio
-    async def test_unavailable_requests_filters_recent_releases(
-        self, client: TestClient
-    ) -> None:
+    async def test_unavailable_requests_filters_recent_releases(self, client: TestClient) -> None:
         """Unavailable requests released less than 3 months ago should be excluded."""
         token = self._get_auth_token(client, "recent-release@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3857,8 +3734,9 @@ class TestUnavailableRequests:
         me_response = client.get("/api/auth/me", headers=headers)
         user_id = me_response.json()["id"]
 
-        from app.database import CachedJellyseerrRequest
         from datetime import datetime, timedelta
+
+        from app.database import CachedJellyseerrRequest
 
         # Release date 1 month ago (recent - should be filtered)
         recent_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -3896,11 +3774,9 @@ class TestUnavailableRequests:
         assert data["items"][0]["name"] == "Old Release Movie"
 
     @pytest.mark.asyncio
-    async def test_tv_request_includes_sonarr_title_slug(
-        self, client: TestClient
-    ) -> None:
+    async def test_tv_request_includes_sonarr_title_slug(self, client: TestClient) -> None:
         """TV requests should include sonarr_title_slug when Sonarr is configured."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock
 
         token = self._get_auth_token(client, "sonarr-slug@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -3908,9 +3784,10 @@ class TestUnavailableRequests:
         me_response = client.get("/api/auth/me", headers=headers)
         user_id = me_response.json()["id"]
 
+        from datetime import datetime, timedelta
+
         from app.database import CachedJellyseerrRequest, UserSettings
         from app.services.encryption import encrypt_value
-        from datetime import datetime, timedelta
 
         past_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
 
@@ -3973,9 +3850,7 @@ class TestProviderIds:
         return login_response.json()["access_token"]
 
     @pytest.mark.asyncio
-    async def test_extract_provider_ids_with_both_ids(
-        self, client: TestClient
-    ) -> None:
+    async def test_extract_provider_ids_with_both_ids(self, client: TestClient) -> None:
         """Should extract both TMDB and IMDB IDs from raw_data."""
         from app.services.content import extract_provider_ids
 
@@ -3986,7 +3861,7 @@ class TestProviderIds:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-provider-both",
@@ -4017,9 +3892,7 @@ class TestProviderIds:
             assert imdb_id == "tt0123456"
 
     @pytest.mark.asyncio
-    async def test_extract_provider_ids_with_only_tmdb(
-        self, client: TestClient
-    ) -> None:
+    async def test_extract_provider_ids_with_only_tmdb(self, client: TestClient) -> None:
         """Should handle items with only TMDB ID."""
         from app.services.content import extract_provider_ids
 
@@ -4030,7 +3903,7 @@ class TestProviderIds:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-tmdb-only",
@@ -4059,9 +3932,7 @@ class TestProviderIds:
             assert imdb_id is None
 
     @pytest.mark.asyncio
-    async def test_extract_provider_ids_with_no_ids(
-        self, client: TestClient
-    ) -> None:
+    async def test_extract_provider_ids_with_no_ids(self, client: TestClient) -> None:
         """Should return None for both when no provider IDs present."""
         from app.services.content import extract_provider_ids
 
@@ -4072,7 +3943,7 @@ class TestProviderIds:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-no-ids",
@@ -4098,9 +3969,7 @@ class TestProviderIds:
             assert imdb_id is None
 
     @pytest.mark.asyncio
-    async def test_issues_endpoint_includes_provider_ids(
-        self, client: TestClient
-    ) -> None:
+    async def test_issues_endpoint_includes_provider_ids(self, client: TestClient) -> None:
         """Issues endpoint should include tmdb_id and imdb_id in response."""
         token = self._get_auth_token(client, "provider-api@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4109,7 +3978,7 @@ class TestProviderIds:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-api-ids",
@@ -4139,9 +4008,7 @@ class TestProviderIds:
         assert item_data["imdb_id"] == "tt9999999"
 
     @pytest.mark.asyncio
-    async def test_issues_endpoint_handles_missing_provider_ids(
-        self, client: TestClient
-    ) -> None:
+    async def test_issues_endpoint_handles_missing_provider_ids(self, client: TestClient) -> None:
         """Issues endpoint should handle items without provider IDs gracefully."""
         token = self._get_auth_token(client, "provider-missing@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4150,7 +4017,7 @@ class TestProviderIds:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            old_date = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-no-provider-ids",
@@ -4174,9 +4041,7 @@ class TestProviderIds:
         assert item_data["imdb_id"] is None
 
     @pytest.mark.asyncio
-    async def test_unavailable_requests_includes_tmdb_id(
-        self, client: TestClient
-    ) -> None:
+    async def test_unavailable_requests_includes_tmdb_id(self, client: TestClient) -> None:
         """Unavailable requests endpoint should include tmdb_id in response."""
         token = self._get_auth_token(client, "request-tmdb@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4213,11 +4078,9 @@ class TestWhitelistExpirationSchema:
     """Test whitelist expires_at column for all whitelist tables (US-11.1)."""
 
     @pytest.mark.asyncio
-    async def test_french_only_whitelist_has_expires_at_column(
-        self, client: TestClient
-    ) -> None:
+    async def test_french_only_whitelist_has_expires_at_column(self, client: TestClient) -> None:
         """FrenchOnlyWhitelist model should have nullable expires_at column."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         async with TestingAsyncSessionLocal() as session:
             # Test with expires_at set
@@ -4226,7 +4089,7 @@ class TestWhitelistExpirationSchema:
                 jellyfin_id="french-expiry-123",
                 name="Temporary French-Only",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+                expires_at=datetime.now(UTC) + timedelta(days=90),
             )
             session.add(entry_with_expiry)
             await session.commit()
@@ -4249,7 +4112,7 @@ class TestWhitelistExpirationSchema:
         self, client: TestClient
     ) -> None:
         """LanguageExemptWhitelist model should have nullable expires_at column."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         async with TestingAsyncSessionLocal() as session:
             # Test with expires_at set
@@ -4258,7 +4121,7 @@ class TestWhitelistExpirationSchema:
                 jellyfin_id="exempt-expiry-123",
                 name="Temporary Exempt",
                 media_type="Series",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=180),
+                expires_at=datetime.now(UTC) + timedelta(days=180),
             )
             session.add(entry_with_expiry)
             await session.commit()
@@ -4305,7 +4168,7 @@ class TestWhitelistExpirationLogic:
 
         async with TestingAsyncSessionLocal() as session:
             # Create old unwatched content
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-expired-whitelist",
@@ -4327,7 +4190,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-expired-whitelist",
                 name="Movie With Expired Whitelist",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+                expires_at=datetime.now(UTC) - timedelta(days=1),
             )
             session.add(expired_whitelist)
             await session.commit()
@@ -4340,9 +4203,7 @@ class TestWhitelistExpirationLogic:
         assert data["items"][0]["jellyfin_id"] == "movie-expired-whitelist"
 
     @pytest.mark.asyncio
-    async def test_non_expired_content_whitelist_protects_content(
-        self, client: TestClient
-    ) -> None:
+    async def test_non_expired_content_whitelist_protects_content(self, client: TestClient) -> None:
         """Content with non-expired whitelist entry should NOT appear in old content issues."""
         token = self._get_auth_token(client, "non-expired-content@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4352,7 +4213,7 @@ class TestWhitelistExpirationLogic:
 
         async with TestingAsyncSessionLocal() as session:
             # Create old unwatched content
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-valid-whitelist",
@@ -4374,7 +4235,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-valid-whitelist",
                 name="Movie With Valid Whitelist",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
             )
             session.add(valid_whitelist)
             await session.commit()
@@ -4386,9 +4247,7 @@ class TestWhitelistExpirationLogic:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_permanent_content_whitelist_protects_content(
-        self, client: TestClient
-    ) -> None:
+    async def test_permanent_content_whitelist_protects_content(self, client: TestClient) -> None:
         """Content with NULL expires_at (permanent) should NOT appear in old content issues."""
         token = self._get_auth_token(client, "permanent-content@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4398,7 +4257,7 @@ class TestWhitelistExpirationLogic:
 
         async with TestingAsyncSessionLocal() as session:
             # Create old unwatched content
-            old_date = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+            old_date = (datetime.now(UTC) - timedelta(days=120)).isoformat()
             item = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-permanent-whitelist",
@@ -4439,7 +4298,7 @@ class TestWhitelistExpirationLogic:
         token = self._get_auth_token(client, "add-with-expiry@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        expires_at = (datetime.now(UTC) + timedelta(days=90)).isoformat()
         response = client.post(
             "/api/whitelist/content",
             headers=headers,
@@ -4463,7 +4322,7 @@ class TestWhitelistExpirationLogic:
             result = await session.execute(
                 select(ContentWhitelist).where(
                     ContentWhitelist.user_id == user_id,
-                    ContentWhitelist.jellyfin_id == "movie-with-expiry"
+                    ContentWhitelist.jellyfin_id == "movie-with-expiry",
                 )
             )
             entry = result.scalar_one_or_none()
@@ -4489,18 +4348,20 @@ class TestWhitelistExpirationLogic:
                 name="French Movie With Expired Whitelist",
                 media_type="Movie",
                 production_year=2020,
-                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                date_created=(datetime.now(UTC) - timedelta(days=30)).isoformat(),
                 path="/media/movies/French Expired",
                 size_bytes=8_000_000_000,
                 played=True,
                 play_count=1,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
                 raw_data={
-                    "MediaSources": [{
-                        "MediaStreams": [
-                            {"Type": "Audio", "Language": "fra"},  # Only French audio
-                        ]
-                    }]
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "fra"},  # Only French audio
+                            ]
+                        }
+                    ]
                 },
             )
             session.add(item)
@@ -4511,7 +4372,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-french-expired",
                 name="French Movie With Expired Whitelist",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+                expires_at=datetime.now(UTC) - timedelta(days=1),
             )
             session.add(expired_french)
             await session.commit()
@@ -4543,18 +4404,20 @@ class TestWhitelistExpirationLogic:
                 name="French Movie With Valid Whitelist",
                 media_type="Movie",
                 production_year=2020,
-                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                date_created=(datetime.now(UTC) - timedelta(days=30)).isoformat(),
                 path="/media/movies/French Valid",
                 size_bytes=8_000_000_000,
                 played=True,
                 play_count=1,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
                 raw_data={
-                    "MediaSources": [{
-                        "MediaStreams": [
-                            {"Type": "Audio", "Language": "fra"},  # French audio only
-                        ]
-                    }]
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "fra"},  # French audio only
+                            ]
+                        }
+                    ]
                 },
             )
             session.add(item)
@@ -4565,7 +4428,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-french-valid",
                 name="French Movie With Valid Whitelist",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
             )
             session.add(valid_french)
             await session.commit()
@@ -4595,18 +4458,20 @@ class TestWhitelistExpirationLogic:
                 name="Movie With Expired Exempt",
                 media_type="Movie",
                 production_year=2020,
-                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                date_created=(datetime.now(UTC) - timedelta(days=30)).isoformat(),
                 path="/media/movies/Exempt Expired",
                 size_bytes=8_000_000_000,
                 played=True,
                 play_count=1,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
                 raw_data={
-                    "MediaSources": [{
-                        "MediaStreams": [
-                            {"Type": "Audio", "Language": "jpn"},  # Only Japanese
-                        ]
-                    }]
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "jpn"},  # Only Japanese
+                            ]
+                        }
+                    ]
                 },
             )
             session.add(item)
@@ -4617,7 +4482,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-exempt-expired",
                 name="Movie With Expired Exempt",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+                expires_at=datetime.now(UTC) - timedelta(days=1),
             )
             session.add(expired_exempt)
             await session.commit()
@@ -4630,9 +4495,7 @@ class TestWhitelistExpirationLogic:
         assert data["items"][0]["jellyfin_id"] == "movie-exempt-expired"
 
     @pytest.mark.asyncio
-    async def test_non_expired_language_exempt_whitelist_exempts(
-        self, client: TestClient
-    ) -> None:
+    async def test_non_expired_language_exempt_whitelist_exempts(self, client: TestClient) -> None:
         """Content with valid language-exempt entry should NOT flag language issues."""
         token = self._get_auth_token(client, "valid-exempt@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4648,18 +4511,20 @@ class TestWhitelistExpirationLogic:
                 name="Movie With Valid Exempt",
                 media_type="Movie",
                 production_year=2020,
-                date_created=(datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+                date_created=(datetime.now(UTC) - timedelta(days=30)).isoformat(),
                 path="/media/movies/Exempt Valid",
                 size_bytes=8_000_000_000,
                 played=True,
                 play_count=1,
-                last_played_date=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+                last_played_date=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
                 raw_data={
-                    "MediaSources": [{
-                        "MediaStreams": [
-                            {"Type": "Audio", "Language": "jpn"},  # Only Japanese
-                        ]
-                    }]
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "jpn"},  # Only Japanese
+                            ]
+                        }
+                    ]
                 },
             )
             session.add(item)
@@ -4670,7 +4535,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="movie-exempt-valid",
                 name="Movie With Valid Exempt",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
             )
             session.add(valid_exempt)
             await session.commit()
@@ -4689,7 +4554,7 @@ class TestWhitelistExpirationLogic:
         token = self._get_auth_token(client, "add-french-expiry@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        expires_at = (datetime.now(UTC) + timedelta(days=90)).isoformat()
         response = client.post(
             "/api/whitelist/french-only",
             headers=headers,
@@ -4713,7 +4578,7 @@ class TestWhitelistExpirationLogic:
             result = await session.execute(
                 select(FrenchOnlyWhitelist).where(
                     FrenchOnlyWhitelist.user_id == user_id,
-                    FrenchOnlyWhitelist.jellyfin_id == "french-movie-expiry"
+                    FrenchOnlyWhitelist.jellyfin_id == "french-movie-expiry",
                 )
             )
             entry = result.scalar_one_or_none()
@@ -4728,7 +4593,7 @@ class TestWhitelistExpirationLogic:
         token = self._get_auth_token(client, "add-exempt-expiry@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=180)).isoformat()
+        expires_at = (datetime.now(UTC) + timedelta(days=180)).isoformat()
         response = client.post(
             "/api/whitelist/language-exempt",
             headers=headers,
@@ -4752,7 +4617,7 @@ class TestWhitelistExpirationLogic:
             result = await session.execute(
                 select(LanguageExemptWhitelist).where(
                     LanguageExemptWhitelist.user_id == user_id,
-                    LanguageExemptWhitelist.jellyfin_id == "exempt-movie-expiry"
+                    LanguageExemptWhitelist.jellyfin_id == "exempt-movie-expiry",
                 )
             )
             entry = result.scalar_one_or_none()
@@ -4760,9 +4625,7 @@ class TestWhitelistExpirationLogic:
             assert entry.expires_at is not None
 
     @pytest.mark.asyncio
-    async def test_whitelist_list_includes_expires_at(
-        self, client: TestClient
-    ) -> None:
+    async def test_whitelist_list_includes_expires_at(self, client: TestClient) -> None:
         """GET /api/whitelist/content should return expires_at for each item."""
         token = self._get_auth_token(client, "list-expiry@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -4786,7 +4649,7 @@ class TestWhitelistExpirationLogic:
                 jellyfin_id="entry-with-expiry",
                 name="Entry With Expiry",
                 media_type="Movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+                expires_at=datetime.now(UTC) + timedelta(days=90),
             )
             session.add_all([permanent, with_expiry])
             await session.commit()
@@ -4926,7 +4789,7 @@ class TestRequestWhitelist:
         token = self._get_auth_token(client, "reqwl-exp@example.com")
         headers = {"Authorization": f"Bearer {token}"}
 
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+        expires_at = (datetime.now(UTC) + timedelta(days=90)).isoformat()
         response = client.post(
             "/api/whitelist/requests",
             json={
@@ -4996,9 +4859,7 @@ class TestRequestWhitelist:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_expired_whitelist_does_not_exclude_request(
-        self, client: TestClient
-    ) -> None:
+    async def test_expired_whitelist_does_not_exclude_request(self, client: TestClient) -> None:
         """Expired whitelist entries should not filter out requests."""
         token = self._get_auth_token(client, "reqwl-expired@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5027,7 +4888,7 @@ class TestRequestWhitelist:
                 jellyseerr_id=6001,
                 title="Expired Whitelist Movie",
                 media_type="movie",
-                expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # Expired
+                expires_at=datetime.now(UTC) - timedelta(days=1),  # Expired
             )
             session.add_all([request, whitelist_entry])
             await session.commit()
@@ -5039,9 +4900,7 @@ class TestRequestWhitelist:
         assert data["total_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_non_expired_whitelist_excludes_request(
-        self, client: TestClient
-    ) -> None:
+    async def test_non_expired_whitelist_excludes_request(self, client: TestClient) -> None:
         """Non-expired whitelist entries should filter out requests."""
         token = self._get_auth_token(client, "reqwl-valid@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5070,7 +4929,7 @@ class TestRequestWhitelist:
                 jellyseerr_id=7001,
                 title="Valid Whitelist Movie",
                 media_type="movie",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # Not expired
+                expires_at=datetime.now(UTC) + timedelta(days=30),  # Not expired
             )
             session.add_all([request, whitelist_entry])
             await session.commit()
@@ -5082,9 +4941,7 @@ class TestRequestWhitelist:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_summary_count_excludes_whitelisted_requests(
-        self, client: TestClient
-    ) -> None:
+    async def test_summary_count_excludes_whitelisted_requests(self, client: TestClient) -> None:
         """Content summary unavailable_requests count should exclude whitelisted."""
         token = self._get_auth_token(client, "reqwl-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5153,9 +5010,7 @@ class TestRecentlyAvailableDisplayName:
         return login_response.json()["access_token"]
 
     @pytest.mark.asyncio
-    async def test_recently_available_includes_display_name_field(
-        self, client: TestClient
-    ) -> None:
+    async def test_recently_available_includes_display_name_field(self, client: TestClient) -> None:
         """Should include display_name field in response items."""
         token = self._get_auth_token(client, "recent-dn1@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5164,7 +5019,7 @@ class TestRecentlyAvailableDisplayName:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=9001,
@@ -5210,7 +5065,7 @@ class TestRecentlyAvailableDisplayName:
             )
             session.add(nickname)
 
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=9002,
@@ -5246,7 +5101,7 @@ class TestRecentlyAvailableDisplayName:
         user_id = me_response.json()["id"]
 
         async with TestingAsyncSessionLocal() as session:
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
             request = CachedJellyseerrRequest(
                 user_id=user_id,
                 jellyseerr_id=9003,
@@ -5295,7 +5150,7 @@ class TestRecentlyAvailableDisplayName:
             )
             session.add_all([nickname1, nickname2])
 
-            recent_date = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+            recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
 
             # Request from alice_j (has nickname)
             request1 = CachedJellyseerrRequest(
@@ -5406,9 +5261,7 @@ class TestLargeSeriesDetection:
         assert is_large_series(item, threshold_gb=15) is False
 
     @pytest.mark.asyncio
-    async def test_is_large_series_returns_false_for_movies(
-        self, client: TestClient
-    ) -> None:
+    async def test_is_large_series_returns_false_for_movies(self, client: TestClient) -> None:
         """is_large_series() should return False for movies."""
         from app.services.content import is_large_series
 
@@ -5442,9 +5295,7 @@ class TestLargeSeriesDetection:
         assert is_large_series(item, threshold_gb=15) is False
 
     @pytest.mark.asyncio
-    async def test_is_large_series_includes_exactly_threshold(
-        self, client: TestClient
-    ) -> None:
+    async def test_is_large_series_includes_exactly_threshold(self, client: TestClient) -> None:
         """Series exactly at threshold should be counted (>= not >)."""
         from app.services.content import is_large_series
 
@@ -5462,9 +5313,7 @@ class TestLargeSeriesDetection:
         assert is_large_series(item, threshold_gb=15) is True
 
     @pytest.mark.asyncio
-    async def test_content_summary_includes_large_series_in_count(
-        self, client: TestClient
-    ) -> None:
+    async def test_content_summary_includes_large_series_in_count(self, client: TestClient) -> None:
         """Content summary should count both large movies AND large series."""
         token = self._get_auth_token(client, "large-summary@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5559,9 +5408,7 @@ class TestLargeSeriesDetection:
         assert "Large Series" in names
 
     @pytest.mark.asyncio
-    async def test_content_issues_large_series_has_correct_fields(
-        self, client: TestClient
-    ) -> None:
+    async def test_content_issues_large_series_has_correct_fields(self, client: TestClient) -> None:
         """Large series in issues response should have largest_season_size fields."""
         token = self._get_auth_token(client, "large-fields@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -5626,9 +5473,7 @@ class TestLargeSeriesDetection:
         assert item["largest_season_size_formatted"] is None
 
     @pytest.mark.asyncio
-    async def test_large_series_uses_user_threshold_setting(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_series_uses_user_threshold_setting(self, client: TestClient) -> None:
         """Large series detection should use user's large_season_size_gb setting."""
         from app.database import UserSettings
 
@@ -5667,9 +5512,7 @@ class TestLargeSeriesDetection:
         assert data["large_movies"]["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_large_series_issues_badge_is_large(
-        self, client: TestClient
-    ) -> None:
+    async def test_large_series_issues_badge_is_large(self, client: TestClient) -> None:
         """Large series should have 'large' in issues list."""
         token = self._get_auth_token(client, "large-badge@example.com")
         headers = {"Authorization": f"Bearer {token}"}

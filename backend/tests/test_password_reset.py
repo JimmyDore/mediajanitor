@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.database import User, PasswordResetToken
+from app.database import PasswordResetToken, User
 
 
 class TestPasswordResetTokenModel:
@@ -18,7 +18,7 @@ class TestPasswordResetTokenModel:
         """Helper to create a test user."""
         import bcrypt
 
-        hashed_password = bcrypt.hashpw("TestPassword123!".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed_password = bcrypt.hashpw(b"TestPassword123!", bcrypt.gensalt()).decode("utf-8")
         user = User(
             email=email,
             hashed_password=hashed_password,
@@ -88,6 +88,7 @@ class TestPasswordResetTokenModel:
         This test verifies the model structure is correct.
         """
         from sqlalchemy import inspect
+
         from tests.conftest import async_engine
 
         async with async_engine.connect() as conn:
@@ -271,9 +272,7 @@ class TestRequestPasswordResetEndpoint:
 
         # Verify token was created in database
         async with TestingAsyncSessionLocal() as session:
-            result = await session.execute(
-                select(PasswordResetToken)
-            )
+            result = await session.execute(select(PasswordResetToken))
             tokens = result.scalars().all()
             assert len(tokens) == 1
             token = tokens[0]
@@ -315,9 +314,8 @@ class TestRequestPasswordResetEndpoint:
         # Get user id
         async with TestingAsyncSessionLocal() as session:
             from app.database import User
-            result = await session.execute(
-                select(User).where(User.email == "oldtoken@example.com")
-            )
+
+            result = await session.execute(select(User).where(User.email == "oldtoken@example.com"))
             user = result.scalar_one()
 
             # Create existing unused token
@@ -340,9 +338,7 @@ class TestRequestPasswordResetEndpoint:
 
         # Verify old token is deleted and new one exists
         async with TestingAsyncSessionLocal() as session:
-            result = await session.execute(
-                select(PasswordResetToken)
-            )
+            result = await session.execute(select(PasswordResetToken))
             tokens = result.scalars().all()
             assert len(tokens) == 1
             assert tokens[0].token_hash != "old_token_hash"
@@ -357,7 +353,9 @@ class TestRequestPasswordResetEndpoint:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_request_password_reset_token_expires_in_15_minutes(self, client: TestClient) -> None:
+    async def test_request_password_reset_token_expires_in_15_minutes(
+        self, client: TestClient
+    ) -> None:
         """Test that created token expires in approximately 15 minutes."""
         from tests.conftest import TestingAsyncSessionLocal
 
@@ -380,9 +378,7 @@ class TestRequestPasswordResetEndpoint:
 
         # Verify token expires in ~15 minutes
         async with TestingAsyncSessionLocal() as session:
-            result = await session.execute(
-                select(PasswordResetToken)
-            )
+            result = await session.execute(select(PasswordResetToken))
             token = result.scalar_one()
             now = datetime.utcnow()
             # Token should expire between 14 and 16 minutes from now
@@ -421,13 +417,14 @@ class TestPasswordResetRateLimiting:
     def test_rate_limit_allows_first_three_requests(self) -> None:
         """Test that the first 3 requests are allowed."""
         import os
+
         # Need to disable TESTING mode to enable rate limiting
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
             # Import fresh app to pick up new TESTING value
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import password_reset_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             password_reset_rate_limiter.clear()
@@ -451,7 +448,7 @@ class TestPasswordResetRateLimiting:
                             "/api/auth/request-password-reset",
                             json={"email": "ratelimit@example.com"},
                         )
-                        assert response.status_code == 200, f"Request {i+1} should succeed"
+                        assert response.status_code == 200, f"Request {i + 1} should succeed"
 
             # Clean up
             password_reset_rate_limiter.clear()
@@ -460,11 +457,12 @@ class TestPasswordResetRateLimiting:
     def test_rate_limit_blocks_fourth_request(self) -> None:
         """Test that the 4th request within an hour is blocked."""
         import os
+
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import password_reset_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             password_reset_rate_limiter.clear()
@@ -504,11 +502,12 @@ class TestPasswordResetRateLimiting:
     def test_rate_limit_is_per_email(self) -> None:
         """Test that rate limit is tracked per email address."""
         import os
+
         with patch.dict(os.environ, {"TESTING": "0"}, clear=False):
-            from app.main import app as fresh_app
             from app.database import get_db
-            from tests.conftest import override_get_db
+            from app.main import app as fresh_app
             from app.services.rate_limit import password_reset_rate_limiter
+            from tests.conftest import override_get_db
 
             # Clear rate limiter state from previous tests
             password_reset_rate_limiter.clear()
@@ -589,9 +588,7 @@ class TestResetPasswordEndpoint:
         from tests.conftest import TestingAsyncSessionLocal
 
         async with TestingAsyncSessionLocal() as session:
-            result = await session.execute(
-                select(User).where(User.email == email)
-            )
+            result = await session.execute(select(User).where(User.email == email))
             user = result.scalar_one()
 
             # Create a valid token
@@ -634,11 +631,8 @@ class TestResetPasswordEndpoint:
     @pytest.mark.asyncio
     async def test_reset_password_updates_user_password(self, client: TestClient) -> None:
         """Test that password is actually updated after reset."""
-        from tests.conftest import TestingAsyncSessionLocal
 
-        raw_token, user_id = await self._create_user_with_reset_token(
-            client, "updated@example.com"
-        )
+        raw_token, user_id = await self._create_user_with_reset_token(client, "updated@example.com")
 
         response = client.post(
             "/api/auth/reset-password",
@@ -729,9 +723,7 @@ class TestResetPasswordEndpoint:
 
         # Create expired token
         async with TestingAsyncSessionLocal() as session:
-            result = await session.execute(
-                select(User).where(User.email == "expired@example.com")
-            )
+            result = await session.execute(select(User).where(User.email == "expired@example.com"))
             user = result.scalar_one()
 
             raw_token = secrets.token_urlsafe(32)
@@ -803,7 +795,11 @@ class TestResetPasswordEndpoint:
 
         assert response.status_code == 400
         data = response.json()
-        assert "invalid" in data["detail"].lower() or "expired" in data["detail"].lower() or "used" in data["detail"].lower()
+        assert (
+            "invalid" in data["detail"].lower()
+            or "expired" in data["detail"].lower()
+            or "used" in data["detail"].lower()
+        )
 
     def test_reset_password_too_short(self, client: TestClient) -> None:
         """Test that password less than 8 chars returns 422."""
@@ -856,9 +852,7 @@ class TestResetPasswordEndpoint:
     @pytest.mark.asyncio
     async def test_reset_password_token_cannot_be_reused(self, client: TestClient) -> None:
         """Test that a token cannot be used twice."""
-        raw_token, user_id = await self._create_user_with_reset_token(
-            client, "reuse@example.com"
-        )
+        raw_token, user_id = await self._create_user_with_reset_token(client, "reuse@example.com")
 
         # First reset should succeed
         response1 = client.post(
@@ -884,7 +878,12 @@ class TestResetPasswordEndpoint:
 class TestChangePasswordEndpoint:
     """Tests for POST /api/auth/change-password endpoint."""
 
-    def _register_and_login(self, client: TestClient, email: str = "changepass@example.com", password: str = "OldPassword123!") -> str:
+    def _register_and_login(
+        self,
+        client: TestClient,
+        email: str = "changepass@example.com",
+        password: str = "OldPassword123!",
+    ) -> str:
         """
         Helper to register a user and return their access token.
 

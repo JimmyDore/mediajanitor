@@ -12,6 +12,7 @@ Uses credentials from .env.example:
 """
 
 import os
+
 import httpx
 import pytest
 
@@ -99,7 +100,7 @@ class TestIntegrationAuth:
             assert "reset link" in data["message"].lower()
 
     def test_request_password_reset_nonexistent_email(self):
-        """Test POST /api/auth/request-password-reset returns 200 for non-existent email (no enumeration)."""
+        """Test password reset returns 200 for non-existent email (no enumeration)."""
         with httpx.Client(base_url=BASE_URL) as client:
             response = client.post(
                 "/api/auth/request-password-reset",
@@ -183,7 +184,10 @@ class TestIntegrationAuth:
             )
             assert response.status_code == 400
             data = response.json()
-            assert "incorrect" in data["detail"].lower() or "current password" in data["detail"].lower()
+            assert (
+                "incorrect" in data["detail"].lower()
+                or "current password" in data["detail"].lower()
+            )
 
     def test_change_password_weak_new_password(self, module_auth_headers):
         """Test POST /api/auth/change-password returns 422 for weak new password."""
@@ -279,7 +283,9 @@ class TestIntegrationContentIssues:
             for item in data["items"]:
                 assert "language" in item["issues"], f"Item {item['name']} missing 'language' issue"
                 # Should have language_issues detail
-                assert item.get("language_issues") is not None, f"Item {item['name']} missing language_issues"
+                assert item.get("language_issues") is not None, (
+                    f"Item {item['name']} missing language_issues"
+                )
 
     def test_issues_endpoint_filter_requests(self, auth_headers):
         """Test GET /api/content/issues?filter=requests returns unavailable requests.
@@ -305,13 +311,15 @@ class TestIntegrationContentIssues:
             # If there are items, verify they have required unified format fields
             if data["items"]:
                 item = data["items"][0]
-                # Unified format uses jellyfin_id (with request- prefix) and name instead of jellyseerr_id and title
+                # Unified format: jellyfin_id (request- prefix), name (not title)
                 required_fields = ["jellyfin_id", "name", "media_type", "issues"]
                 for field in required_fields:
                     assert field in item, f"Missing required field: {field}"
                 assert "request" in item["issues"]
                 # Verify jellyfin_id starts with 'request-' for request items
-                assert item["jellyfin_id"].startswith("request-"), "Request items should have jellyfin_id starting with 'request-'"
+                assert item["jellyfin_id"].startswith("request-"), (
+                    "Request items should have jellyfin_id starting with 'request-'"
+                )
 
     def test_issues_items_have_required_fields(self, auth_headers):
         """Test that each issue item has all required fields."""
@@ -380,7 +388,12 @@ class TestIntegrationContentSummary:
             assert "recently_available" in data
 
             # Verify structure of issue categories
-            for category in ["old_content", "large_movies", "language_issues", "unavailable_requests"]:
+            for category in [
+                "old_content",
+                "large_movies",
+                "language_issues",
+                "unavailable_requests",
+            ]:
                 assert "count" in data[category]
                 assert "total_size_bytes" in data[category]
                 assert "total_size_formatted" in data[category]

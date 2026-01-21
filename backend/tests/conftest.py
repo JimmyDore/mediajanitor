@@ -6,14 +6,14 @@ in production Docker. See CLAUDE.md "Async/Sync Consistency" section.
 """
 
 import os
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
 from fastapi.testclient import TestClient
 
 # Set TESTING environment variable to adjust cookie settings
 os.environ["TESTING"] = "1"
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db

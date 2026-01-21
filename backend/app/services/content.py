@@ -1,11 +1,36 @@
 """Content analysis service for filtering old/unwatched content."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import (
+    CachedJellyseerrRequest,
+    CachedMediaItem,
+    ContentWhitelist,
+    UserSettings,
+)
+from app.models.content import (
+    ContentIssueItem,
+    ContentIssuesResponse,
+    ContentSummaryResponse,
+    InfoCategorySummary,
+    IssueCategorySummary,
+    LibraryItem,
+    LibraryResponse,
+    OldUnwatchedItem,
+    OldUnwatchedResponse,
+    RecentlyAvailableItem,
+    RecentlyAvailableResponse,
+    RequestWhitelistItem,
+    RequestWhitelistListResponse,
+    UnavailableRequestItem,
+    WhitelistItem,
+    WhitelistListResponse,
+)
 
 
 class LanguageCheckResult(TypedDict):
@@ -26,26 +51,6 @@ class UserThresholds:
     large_movie_size_gb: int
     large_season_size_gb: int
 
-
-from app.database import CachedMediaItem, CachedJellyseerrRequest, ContentWhitelist, UserSettings
-from app.models.content import (
-    ContentIssueItem,
-    ContentIssuesResponse,
-    ContentSummaryResponse,
-    InfoCategorySummary,
-    IssueCategorySummary,
-    OldUnwatchedItem,
-    OldUnwatchedResponse,
-    RecentlyAvailableItem,
-    RecentlyAvailableResponse,
-    RequestWhitelistItem,
-    RequestWhitelistListResponse,
-    UnavailableRequestItem,
-    WhitelistItem,
-    WhitelistListResponse,
-)
-
-
 # Hardcoded thresholds per acceptance criteria
 OLD_CONTENT_MONTHS_CUTOFF = 4  # Content not watched in 4+ months
 MIN_AGE_MONTHS = 3  # Don't flag content added recently
@@ -64,9 +69,7 @@ UNAVAILABLE_STATUS_CODES = {0, 1, 2, 4}  # Status codes for unavailable requests
 
 async def get_user_thresholds(db: AsyncSession, user_id: int) -> UserThresholds:
     """Get user's analysis thresholds, falling back to defaults if not configured."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
 
     return UserThresholds(
@@ -137,7 +140,7 @@ def is_old_or_unwatched(
     Note: min_age_months only applies to UNPLAYED items (per original script logic).
     Played items are checked against last_played_date regardless of when added.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_date = now - timedelta(days=months_cutoff * 30)
     min_age_date = now - timedelta(days=min_age_months * 30)
 
@@ -147,7 +150,7 @@ def is_old_or_unwatched(
     if date_created:
         # Make timezone-aware if not already
         if date_created.tzinfo is None:
-            date_created = date_created.replace(tzinfo=timezone.utc)
+            date_created = date_created.replace(tzinfo=UTC)
         if date_created > min_age_date:
             item_age_ok = False  # Item is too new
 
@@ -166,7 +169,7 @@ def is_old_or_unwatched(
     if last_played:
         # Make timezone-aware if not already
         if last_played.tzinfo is None:
-            last_played = last_played.replace(tzinfo=timezone.utc)
+            last_played = last_played.replace(tzinfo=UTC)
         if last_played < cutoff_date:
             return True
 
@@ -185,14 +188,13 @@ async def get_old_unwatched_content(
     thresholds = await get_user_thresholds(db, user_id)
 
     # Get user's cached media items
-    result = await db.execute(
-        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
-    )
+    result = await db.execute(select(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
     all_items = result.scalars().all()
 
     # Get user's whitelist (only non-expired entries)
     from sqlalchemy import or_
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     whitelist_result = await db.execute(
         select(ContentWhitelist.jellyfin_id).where(
             ContentWhitelist.user_id == user_id,
@@ -456,9 +458,10 @@ async def remove_from_french_only_whitelist(
 async def get_french_only_ids(db: AsyncSession, user_id: int) -> set[str]:
     """Get set of jellyfin_ids in user's french-only whitelist (non-expired only)."""
     from sqlalchemy import or_
+
     from app.database import FrenchOnlyWhitelist
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(
         select(FrenchOnlyWhitelist.jellyfin_id).where(
             FrenchOnlyWhitelist.user_id == user_id,
@@ -580,9 +583,10 @@ async def remove_from_language_exempt_whitelist(
 async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
     """Get set of jellyfin_ids in user's language-exempt whitelist (non-expired only)."""
     from sqlalchemy import or_
+
     from app.database import LanguageExemptWhitelist
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(
         select(LanguageExemptWhitelist.jellyfin_id).where(
             LanguageExemptWhitelist.user_id == user_id,
@@ -704,9 +708,10 @@ async def remove_from_large_whitelist(
 async def get_large_whitelist_ids(db: AsyncSession, user_id: int) -> set[str]:
     """Get set of jellyfin_ids in user's large content whitelist (non-expired only)."""
     from sqlalchemy import or_
+
     from app.database import LargeContentWhitelist
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(
         select(LargeContentWhitelist.jellyfin_id).where(
             LargeContentWhitelist.user_id == user_id,
@@ -897,14 +902,13 @@ async def get_content_summary(
     thresholds = await get_user_thresholds(db, user_id)
 
     # Get user's cached media items
-    result = await db.execute(
-        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
-    )
+    result = await db.execute(select(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
     all_items = result.scalars().all()
 
     # Get user's whitelist (only non-expired entries)
     from sqlalchemy import or_
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     whitelist_result = await db.execute(
         select(ContentWhitelist.jellyfin_id).where(
             ContentWhitelist.user_id == user_id,
@@ -975,12 +979,16 @@ async def get_content_summary(
         large_movies=IssueCategorySummary(
             count=len(large_content_items),
             total_size_bytes=large_content_size,
-            total_size_formatted=format_size(large_content_size) if large_content_size > 0 else "0 B",
+            total_size_formatted=format_size(large_content_size)
+            if large_content_size > 0
+            else "0 B",
         ),
         language_issues=IssueCategorySummary(
             count=len(language_issues_items),
             total_size_bytes=language_issues_size,
-            total_size_formatted=format_size(language_issues_size) if language_issues_size > 0 else "0 B",
+            total_size_formatted=format_size(language_issues_size)
+            if language_issues_size > 0
+            else "0 B",
         ),
         unavailable_requests=IssueCategorySummary(
             count=unavailable_requests_count,
@@ -1000,9 +1008,7 @@ DEFAULT_RECENTLY_AVAILABLE_DAYS = 7  # Content available in past 7 days
 
 async def get_user_recently_available_days(db: AsyncSession, user_id: int) -> int:
     """Get user's recently_available_days setting, falling back to default."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
 
     if settings and settings.recently_available_days is not None:
@@ -1026,13 +1032,11 @@ async def get_recently_available_count(
         days_back = await get_user_recently_available_days(db, user_id)
 
     result = await db.execute(
-        select(CachedJellyseerrRequest).where(
-            CachedJellyseerrRequest.user_id == user_id
-        )
+        select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user_id)
     )
     all_requests = result.scalars().all()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_date = now - timedelta(days=days_back)
 
     count = 0
@@ -1082,9 +1086,7 @@ async def get_nickname_map(db: AsyncSession, user_id: int) -> dict[str, str]:
     """
     from app.database import UserNickname
 
-    result = await db.execute(
-        select(UserNickname).where(UserNickname.user_id == user_id)
-    )
+    result = await db.execute(select(UserNickname).where(UserNickname.user_id == user_id))
     nicknames = result.scalars().all()
 
     return {n.jellyseerr_username: n.display_name for n in nicknames}
@@ -1131,16 +1133,14 @@ async def get_recently_available(
         days_back = await get_user_recently_available_days(db, user_id)
 
     result = await db.execute(
-        select(CachedJellyseerrRequest).where(
-            CachedJellyseerrRequest.user_id == user_id
-        )
+        select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user_id)
     )
     all_requests = result.scalars().all()
 
     # Get nickname mappings for resolving display names
     nickname_map = await get_nickname_map(db, user_id)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_date = now - timedelta(days=days_back)
 
     recent_items: list[tuple[datetime, CachedJellyseerrRequest]] = []
@@ -1233,8 +1233,12 @@ def get_item_issues(
     # Use defaults if thresholds not provided
     old_months = thresholds.old_content_months if thresholds else OLD_CONTENT_MONTHS_CUTOFF
     min_age = thresholds.min_age_months if thresholds else MIN_AGE_MONTHS
-    large_movie_size = thresholds.large_movie_size_gb if thresholds else LARGE_MOVIE_SIZE_THRESHOLD_GB
-    large_season_size = thresholds.large_season_size_gb if thresholds else LARGE_SEASON_SIZE_THRESHOLD_GB
+    large_movie_size = (
+        thresholds.large_movie_size_gb if thresholds else LARGE_MOVIE_SIZE_THRESHOLD_GB
+    )
+    large_season_size = (
+        thresholds.large_season_size_gb if thresholds else LARGE_SEASON_SIZE_THRESHOLD_GB
+    )
 
     # Check for old/unwatched (exclude whitelisted)
     if item.jellyfin_id not in whitelisted_ids and is_old_or_unwatched(
@@ -1279,11 +1283,10 @@ async def get_content_issues(
     thresholds = await get_user_thresholds(db, user_id)
 
     # Build Sonarr TMDB -> titleSlug map for enriching series items
-    from app.services.sonarr import get_sonarr_tmdb_to_slug_map, get_decrypted_sonarr_api_key
+    from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_tmdb_to_slug_map
+
     sonarr_slug_map: dict[int, str] = {}
-    settings_result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    settings_result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     user_settings = settings_result.scalar_one_or_none()
     if user_settings and user_settings.sonarr_server_url and user_settings.sonarr_api_key_encrypted:
         sonarr_api_key = get_decrypted_sonarr_api_key(user_settings)
@@ -1293,14 +1296,13 @@ async def get_content_issues(
             )
 
     # Get user's cached media items
-    result = await db.execute(
-        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
-    )
+    result = await db.execute(select(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
     all_items = result.scalars().all()
 
     # Get user's whitelist (only non-expired entries)
     from sqlalchemy import or_
-    now = datetime.now(timezone.utc)
+
+    now = datetime.now(UTC)
     whitelist_result = await db.execute(
         select(ContentWhitelist.jellyfin_id).where(
             ContentWhitelist.user_id == user_id,
@@ -1327,7 +1329,12 @@ async def get_content_issues(
 
     for item in all_items:
         issues, language_issues_detail = get_item_issues(
-            item, whitelisted_ids, french_only_ids, language_exempt_ids, large_whitelist_ids, thresholds
+            item,
+            whitelisted_ids,
+            french_only_ids,
+            language_exempt_ids,
+            large_whitelist_ids,
+            thresholds,
         )
 
         # Skip items with no issues
@@ -1354,7 +1361,11 @@ async def get_content_issues(
     # This allows us to link Jellyfin items with their Jellyseerr requests
     jellyseerr_map: dict[tuple[int, str], int] = {}
     requests_result = await db.execute(
-        select(CachedJellyseerrRequest.tmdb_id, CachedJellyseerrRequest.media_type, CachedJellyseerrRequest.jellyseerr_id)
+        select(
+            CachedJellyseerrRequest.tmdb_id,
+            CachedJellyseerrRequest.media_type,
+            CachedJellyseerrRequest.jellyseerr_id,
+        )
         .where(CachedJellyseerrRequest.user_id == user_id)
         .where(CachedJellyseerrRequest.tmdb_id.isnot(None))
     )
@@ -1384,8 +1395,12 @@ async def get_content_issues(
                 pass
 
         # Calculate largest_season_size fields for series
-        largest_season_size_bytes = item.largest_season_size_bytes if item.media_type == "Series" else None
-        largest_season_size_formatted = format_size(largest_season_size_bytes) if largest_season_size_bytes else None
+        largest_season_size_bytes = (
+            item.largest_season_size_bytes if item.media_type == "Series" else None
+        )
+        largest_season_size_formatted = (
+            format_size(largest_season_size_bytes) if largest_season_size_bytes else None
+        )
 
         response_items.append(
             ContentIssueItem(
@@ -1437,7 +1452,7 @@ def _parse_release_date(date_str: str | None) -> datetime | None:
             return datetime.fromisoformat(date_str)
         else:
             # Simple date format (YYYY-MM-DD)
-            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
     except (ValueError, TypeError):
         return None
 
@@ -1482,7 +1497,7 @@ def _should_include_request(
     if not release_date:
         return True
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today = now.date()
     release_date_only = release_date.date()
 
@@ -1596,9 +1611,7 @@ async def get_user_show_unreleased_setting(db: AsyncSession, user_id: int) -> bo
 
     Returns False (default) if not configured.
     """
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
     return settings.show_unreleased_requests if settings else False
 
@@ -1616,9 +1629,7 @@ async def get_unavailable_requests_count(
     show_unreleased = await get_user_show_unreleased_setting(db, user_id)
 
     result = await db.execute(
-        select(CachedJellyseerrRequest).where(
-            CachedJellyseerrRequest.user_id == user_id
-        )
+        select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user_id)
     )
     all_requests = result.scalars().all()
 
@@ -1650,9 +1661,7 @@ async def get_unavailable_requests(
     show_unreleased = await get_user_show_unreleased_setting(db, user_id)
 
     result = await db.execute(
-        select(CachedJellyseerrRequest).where(
-            CachedJellyseerrRequest.user_id == user_id
-        )
+        select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user_id)
     )
     all_requests = result.scalars().all()
 
@@ -1708,7 +1717,7 @@ async def get_unavailable_requests(
         unavailable_items.append((request_date, item))
 
     # Sort by request date descending (newest first)
-    unavailable_items.sort(key=lambda x: x[0] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    unavailable_items.sort(key=lambda x: x[0] or datetime.min.replace(tzinfo=UTC), reverse=True)
 
     return [item for _, item in unavailable_items]
 
@@ -1819,9 +1828,10 @@ async def remove_from_request_whitelist(
 async def get_request_whitelist_ids(db: AsyncSession, user_id: int) -> set[int]:
     """Get set of jellyseerr_ids in user's request whitelist (non-expired only)."""
     from sqlalchemy import or_
+
     from app.database import JellyseerrRequestWhitelist
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = await db.execute(
         select(JellyseerrRequestWhitelist.jellyseerr_id).where(
             JellyseerrRequestWhitelist.user_id == user_id,
@@ -1836,9 +1846,6 @@ async def get_request_whitelist_ids(db: AsyncSession, user_id: int) -> set[int]:
 
 
 # US-22.1: Library API functions
-
-
-from app.models.content import LibraryItem, LibraryResponse
 
 
 async def get_library(
@@ -1873,11 +1880,10 @@ async def get_library(
         LibraryResponse with items, totals, and service URLs
     """
     # Build Sonarr TMDB -> titleSlug map for enriching series items
-    from app.services.sonarr import get_sonarr_tmdb_to_slug_map, get_decrypted_sonarr_api_key
+    from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_tmdb_to_slug_map
+
     sonarr_slug_map: dict[int, str] = {}
-    settings_result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    settings_result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     user_settings = settings_result.scalar_one_or_none()
     if user_settings and user_settings.sonarr_server_url and user_settings.sonarr_api_key_encrypted:
         sonarr_api_key = get_decrypted_sonarr_api_key(user_settings)
@@ -1887,9 +1893,7 @@ async def get_library(
             )
 
     # Get all cached media items for the user
-    result = await db.execute(
-        select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
-    )
+    result = await db.execute(select(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
     all_items = list(result.scalars().all())
 
     # Apply filters
@@ -1915,9 +1919,13 @@ async def get_library(
                 continue
 
         # Filter by year range
-        if min_year is not None and (item.production_year is None or item.production_year < min_year):
+        if min_year is not None and (
+            item.production_year is None or item.production_year < min_year
+        ):
             continue
-        if max_year is not None and (item.production_year is None or item.production_year > max_year):
+        if max_year is not None and (
+            item.production_year is None or item.production_year > max_year
+        ):
             continue
 
         # Filter by size range (convert GB to bytes)
