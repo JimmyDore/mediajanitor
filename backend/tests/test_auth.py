@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.services.auth import create_access_token, hash_refresh_token
+from app.services.auth import create_access_token
 
 
 class TestUserLogin:
@@ -309,7 +309,7 @@ class TestRefreshToken:
             json={"email": "refresh@example.com", "password": "SecurePassword123!"},
         )
         assert login_response.status_code == 200
-        old_access_token = login_response.json()["access_token"]
+        login_response.json()["access_token"]
 
         # Refresh (cookie is automatically sent by TestClient)
         refresh_response = client.post("/api/auth/refresh")
@@ -321,7 +321,7 @@ class TestRefreshToken:
 
         # New access token should be different
         new_access_token = data["access_token"]
-        # Note: tokens may be the same if generated within same second, but structure should be valid
+        # Tokens may be same if generated within same second, but structure is valid
         assert len(new_access_token.split(".")) == 3
 
         # New refresh token cookie should be set
@@ -331,7 +331,9 @@ class TestRefreshToken:
         """Test refresh without any token returns 401."""
         # Create a fresh client without any cookies
         from fastapi.testclient import TestClient
+
         from app.main import app
+
         fresh_client = TestClient(app)
 
         response = fresh_client.post("/api/auth/refresh")
@@ -386,7 +388,9 @@ class TestRefreshToken:
 
         # Create fresh client without cookies
         from fastapi.testclient import TestClient
+
         from app.main import app
+
         fresh_client = TestClient(app)
 
         # Refresh using body
@@ -428,7 +432,9 @@ class TestLogout:
     def test_logout_without_token_succeeds(self, client: TestClient) -> None:
         """Test logout works even without a refresh token (idempotent)."""
         from fastapi.testclient import TestClient
+
         from app.main import app
+
         fresh_client = TestClient(app)
 
         response = fresh_client.post("/api/auth/logout")
@@ -454,7 +460,10 @@ class TestLogout:
         # FastAPI/Starlette sets max-age=0 to delete cookies
         set_cookie = logout_response.headers.get("set-cookie", "")
         # Either cookie is cleared or max-age is 0
-        assert "refresh_token" in set_cookie.lower() or logout_response.cookies.get("refresh_token", "") == ""
+        assert (
+            "refresh_token" in set_cookie.lower()
+            or logout_response.cookies.get("refresh_token", "") == ""
+        )
 
 
 class TestNewUserSignupNotifications:
@@ -462,7 +471,7 @@ class TestNewUserSignupNotifications:
 
     def test_signup_sends_slack_notification(self, client: TestClient) -> None:
         """Test that successful registration sends Slack notification."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import patch
 
         with patch("app.routers.auth.send_signup_notification") as mock_notify:
             mock_notify.return_value = None  # fire-and-forget, no return needed
@@ -514,7 +523,7 @@ class TestNewUserSignupNotifications:
 
     def test_signup_notification_is_fire_and_forget(self, client: TestClient) -> None:
         """Test that notification failure doesn't block registration."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
 
         # Mock the Slack send function to fail (inside send_signup_notification)
         with patch("app.routers.auth.send_slack_message", new_callable=AsyncMock) as mock_send:
@@ -523,6 +532,7 @@ class TestNewUserSignupNotifications:
             # Configure webhook so notification is attempted
             with patch("app.routers.auth.get_settings") as mock_settings_fn:
                 from app.config import Settings
+
                 mock_settings = Settings()
                 mock_settings.slack_webhook_new_users = "https://hooks.slack.com/test"
                 mock_settings_fn.return_value = mock_settings
@@ -560,13 +570,14 @@ class TestNewUserSignupNotifications:
 
     def test_signup_notification_uses_block_kit_format(self, client: TestClient) -> None:
         """Test that Slack message uses Block Kit format."""
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
 
         with patch("app.services.slack.send_slack_message", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
 
             with patch("app.config.get_settings") as mock_settings_fn:
                 from app.config import Settings
+
                 mock_settings = Settings()
                 mock_settings.slack_webhook_new_users = "https://hooks.slack.com/test"
                 mock_settings_fn.return_value = mock_settings
@@ -587,6 +598,7 @@ class TestNewUserSignupNotifications:
                     # Block Kit messages should have "blocks" key
                     assert "blocks" in message or "text" in message
 
+
 class TestDatabaseConcurrency:
     """Tests for database concurrency (regression test for WAL mode)."""
 
@@ -603,7 +615,6 @@ class TestDatabaseConcurrency:
         if not ASYNC_DATABASE_URL.startswith("sqlite"):
             pytest.skip("Test only applicable for SQLite databases")
 
-        import sqlite3
         # Extract path from sqlite+aiosqlite:///path
         db_path = ASYNC_DATABASE_URL.replace("sqlite+aiosqlite:///", "")
         if db_path == ":memory:":
@@ -612,11 +623,13 @@ class TestDatabaseConcurrency:
         # WAL mode should be enabled in init_db_settings()
         # This test just verifies the configuration exists
         from app.database import init_db_settings
+
         assert init_db_settings is not None
 
         # Verify connect_args are configured
         from app.database import async_engine
-        if hasattr(async_engine, 'pool'):
+
+        if hasattr(async_engine, "pool"):
             # Engine is configured with timeout and connection settings
             assert True
         else:

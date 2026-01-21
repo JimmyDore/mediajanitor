@@ -1,7 +1,6 @@
 """Jellyfin service for API interactions and connection validation."""
 
 import httpx
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,13 +29,9 @@ async def validate_jellyfin_connection(server_url: str, api_key: str) -> bool:
         return False
 
 
-async def get_user_jellyfin_settings(
-    db: AsyncSession, user_id: int
-) -> UserSettings | None:
+async def get_user_jellyfin_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
     """Get user's Jellyfin settings from database."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
 
 

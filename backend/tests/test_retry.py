@@ -1,16 +1,15 @@
 """Tests for retry with exponential backoff functionality (US-26.1)."""
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
 from app.services.retry import (
+    INITIAL_DELAY,
+    MAX_RETRIES,
     is_transient_error,
     retry_with_backoff,
-    MAX_RETRIES,
-    INITIAL_DELAY,
 )
 
 
@@ -99,10 +98,12 @@ class TestRetryWithBackoff:
     async def test_retries_on_transient_error_then_succeeds(self) -> None:
         """Should retry on transient error and succeed if subsequent call works."""
         # First call: timeout error, second call: success
-        mock_func = AsyncMock(side_effect=[
-            httpx.TimeoutException("Timeout"),
-            "success",
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                httpx.TimeoutException("Timeout"),
+                "success",
+            ]
+        )
 
         with patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             result = await retry_with_backoff(mock_func, "Jellyfin")
@@ -116,12 +117,14 @@ class TestRetryWithBackoff:
     async def test_exponential_backoff_delays(self) -> None:
         """Should use exponential backoff: 1s, 2s, 4s between retries."""
         # Fail 3 times, succeed on 4th
-        mock_func = AsyncMock(side_effect=[
-            httpx.ConnectError("Connection failed"),
-            httpx.ConnectError("Connection failed"),
-            httpx.ConnectError("Connection failed"),
-            "success",
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                httpx.ConnectError("Connection failed"),
+                httpx.ConnectError("Connection failed"),
+                httpx.ConnectError("Connection failed"),
+                "success",
+            ]
+        )
 
         with patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             result = await retry_with_backoff(mock_func, "Jellyfin")
@@ -139,12 +142,14 @@ class TestRetryWithBackoff:
         """Should raise the error after all retries are exhausted."""
         # Fail all 4 attempts (1 initial + 3 retries)
         timeout_error = httpx.TimeoutException("Persistent timeout")
-        mock_func = AsyncMock(side_effect=[
-            timeout_error,
-            timeout_error,
-            timeout_error,
-            timeout_error,
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                timeout_error,
+                timeout_error,
+                timeout_error,
+                timeout_error,
+            ]
+        )
 
         with patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock):
             with pytest.raises(httpx.TimeoutException) as exc_info:
@@ -189,11 +194,13 @@ class TestRetryWithBackoff:
         server_error = httpx.HTTPStatusError("Server error", request=request, response=response)
 
         # Fail twice with 500, then succeed
-        mock_func = AsyncMock(side_effect=[
-            server_error,
-            server_error,
-            "success",
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                server_error,
+                server_error,
+                "success",
+            ]
+        )
 
         with patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock):
             result = await retry_with_backoff(mock_func, "Jellyfin")
@@ -204,10 +211,12 @@ class TestRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_logs_retry_attempts(self) -> None:
         """Should log each retry attempt with service name and delay."""
-        mock_func = AsyncMock(side_effect=[
-            httpx.TimeoutException("Timeout"),
-            "success",
-        ])
+        mock_func = AsyncMock(
+            side_effect=[
+                httpx.TimeoutException("Timeout"),
+                "success",
+            ]
+        )
 
         with patch("app.services.retry.asyncio.sleep", new_callable=AsyncMock):
             with patch("app.services.retry.logger") as mock_logger:

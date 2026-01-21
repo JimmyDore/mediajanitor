@@ -11,15 +11,12 @@ from app.models.content import LibraryResponse, ServiceUrls
 from app.services.auth import get_current_user
 from app.services.content import get_library
 
-
 router = APIRouter(prefix="/api/library", tags=["library"])
 
 
 async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
     """Get user settings from database."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
 
 

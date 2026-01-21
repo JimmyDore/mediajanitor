@@ -41,7 +41,7 @@ class TestLargeMoviesValidation:
             assert response.status_code == 200
             data = response.json()
 
-            print(f"\n=== Large Movies (>13GB) ===")
+            print("\n=== Large Movies (>13GB) ===")
             print(f"Count: {data['total_count']}")
             print(f"Total size: {data['total_size_formatted']}")
 
@@ -73,10 +73,10 @@ class TestLargeMoviesValidation:
             threshold_gb = 13
             threshold_bytes = threshold_gb * 1024 * 1024 * 1024
 
-            print(f"\n=== Movie Size Analysis ===")
+            print("\n=== Movie Size Analysis ===")
             print(f"Total movies with issues: {len(movies)}")
             print(f"Threshold: {threshold_gb} GB ({threshold_bytes:,} bytes)")
-            print(f"\nTop 15 largest movies:")
+            print("\nTop 15 largest movies:")
 
             for i, movie in enumerate(movies[:15], 1):
                 size_bytes = movie["size_bytes"] or 0
@@ -91,18 +91,17 @@ class TestLargeMoviesValidation:
                 print(f"  {i:2d}. {size_gb:7.2f} GB - {movie['name'][:45]:<45} {flag}")
 
             # Count movies at exactly threshold
-            exactly_threshold = [m for m in movies
-                               if (m["size_bytes"] or 0) == threshold_bytes]
-            movies_gte = [m for m in movies
-                        if (m["size_bytes"] or 0) >= threshold_bytes]
-            movies_gt = [m for m in movies
-                        if (m["size_bytes"] or 0) > threshold_bytes]
+            exactly_threshold = [m for m in movies if (m["size_bytes"] or 0) == threshold_bytes]
+            movies_gte = [m for m in movies if (m["size_bytes"] or 0) >= threshold_bytes]
+            movies_gt = [m for m in movies if (m["size_bytes"] or 0) > threshold_bytes]
 
-            print(f"\n=== Summary ===")
+            print("\n=== Summary ===")
             print(f"Movies >= 13GB (original script logic): {len(movies_gte)}")
             print(f"Movies > 13GB (current app logic): {len(movies_gt)}")
             print(f"Movies exactly = 13GB: {len(exactly_threshold)}")
-            print(f"\nDifference: {len(movies_gte) - len(movies_gt)} movies at exactly 13GB boundary")
+            print(
+                f"\nDifference: {len(movies_gte) - len(movies_gt)} movies at exactly 13GB boundary"
+            )
 
 
 if __name__ == "__main__":

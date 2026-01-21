@@ -28,6 +28,7 @@ from app.models.settings import (
     SonarrSettingsResponse,
 )
 from app.services.auth import get_current_user
+from app.services.encryption import decrypt_value
 from app.services.jellyfin import (
     get_user_jellyfin_settings,
     save_jellyfin_settings,
@@ -37,6 +38,12 @@ from app.services.jellyseerr import (
     get_user_jellyseerr_settings,
     save_jellyseerr_settings,
     validate_jellyseerr_connection,
+)
+from app.services.nicknames import (
+    create_nickname,
+    delete_nickname,
+    get_nicknames,
+    update_nickname,
 )
 from app.services.radarr import (
     get_user_radarr_settings,
@@ -48,18 +55,11 @@ from app.services.sonarr import (
     save_sonarr_settings,
     validate_sonarr_connection,
 )
-from app.services.nicknames import (
-    create_nickname,
-    delete_nickname,
-    get_nicknames,
-    update_nickname,
-)
 from app.services.sync import (
     fetch_jellyfin_users,
     fetch_jellyseerr_users,
     prefill_user_nicknames,
 )
-from app.services.encryption import decrypt_value
 
 # Default values for analysis preferences
 DEFAULT_OLD_CONTENT_MONTHS = 4
@@ -87,13 +87,11 @@ async def save_jellyfin_config(
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail="Could not establish connection to Jellyfin server. Please check URL and API key.",
+            detail="Connection to Jellyfin failed. Check URL and API key.",
         )
 
     # Save settings
-    await save_jellyfin_settings(
-        db, current_user.id, server_url, settings_data.api_key
-    )
+    await save_jellyfin_settings(db, current_user.id, server_url, settings_data.api_key)
 
     return SettingsSaveResponse(
         success=True,
@@ -136,13 +134,11 @@ async def save_jellyseerr_config(
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail="Could not establish connection to Jellyseerr server. Please check URL and API key.",
+            detail="Connection to Jellyseerr failed. Check URL and API key.",
         )
 
     # Save settings
-    await save_jellyseerr_settings(
-        db, current_user.id, server_url, settings_data.api_key
-    )
+    await save_jellyseerr_settings(db, current_user.id, server_url, settings_data.api_key)
 
     return SettingsSaveResponse(
         success=True,
@@ -192,9 +188,7 @@ async def save_radarr_config(
         )
 
     # Save settings
-    await save_radarr_settings(
-        db, current_user.id, server_url, settings_data.api_key
-    )
+    await save_radarr_settings(db, current_user.id, server_url, settings_data.api_key)
 
     return SettingsSaveResponse(
         success=True,
@@ -244,9 +238,7 @@ async def save_sonarr_config(
         )
 
     # Save settings
-    await save_sonarr_settings(
-        db, current_user.id, server_url, settings_data.api_key
-    )
+    await save_sonarr_settings(db, current_user.id, server_url, settings_data.api_key)
 
     return SettingsSaveResponse(
         success=True,
@@ -277,13 +269,9 @@ async def get_sonarr_config(
 # Analysis Preferences Endpoints
 
 
-async def _get_or_create_user_settings(
-    db: AsyncSession, user_id: int
-) -> UserSettings:
+async def _get_or_create_user_settings(db: AsyncSession, user_id: int) -> UserSettings:
     """Get existing user settings or create new one with defaults."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == user_id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     settings = result.scalar_one_or_none()
 
     if not settings:
@@ -303,9 +291,7 @@ async def get_analysis_preferences(
 
     Returns defaults if not configured.
     """
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     # Return user values or defaults
@@ -367,9 +353,7 @@ async def reset_analysis_preferences(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SettingsSaveResponse:
     """Reset analysis preferences to defaults."""
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     if settings:
@@ -396,9 +380,7 @@ async def get_display_preferences(
 
     Returns defaults if not configured.
     """
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     # Return user values or defaults
@@ -413,9 +395,7 @@ async def get_display_preferences(
     if title_lang not in ("en", "fr"):
         title_lang = "en"
     return DisplayPreferencesResponse(
-        show_unreleased_requests=(
-            settings.show_unreleased_requests if settings else False
-        ),
+        show_unreleased_requests=(settings.show_unreleased_requests if settings else False),
         theme_preference=theme_pref,  # type: ignore[arg-type]
         recently_available_days=(
             settings.recently_available_days
@@ -579,9 +559,7 @@ async def refresh_nicknames_from_jellyfin(
     Also checks Jellyseerr to mark users that have Jellyseerr accounts.
     """
     # Get Jellyfin settings
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     if not settings or not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:

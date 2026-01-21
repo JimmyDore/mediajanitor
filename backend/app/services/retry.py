@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, TypeVar
+from collections.abc import Callable, Coroutine
+from typing import Any, TypeVar
 
 import httpx
 
@@ -96,9 +97,7 @@ async def retry_with_backoff(
             retries_remaining = max_retries - attempt
             if retries_remaining <= 0:
                 # All retries exhausted
-                logger.error(
-                    f"{service_name} API failed after {max_retries + 1} attempts: {e}"
-                )
+                logger.error(f"{service_name} API failed after {max_retries + 1} attempts: {e}")
                 raise
 
             # Log retry attempt

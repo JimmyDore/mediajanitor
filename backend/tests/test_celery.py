@@ -1,8 +1,6 @@
 """Tests for Celery configuration and tasks."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 class TestCeleryConfiguration:
@@ -111,8 +109,10 @@ class TestSyncAllUsersTask:
 
         try:
             # Mock the database query and sync_user task
-            with patch("app.tasks.get_configured_user_ids") as mock_get_users, \
-                 patch.object(sync_user, "delay") as mock_sync:
+            with (
+                patch("app.tasks.get_configured_user_ids") as mock_get_users,
+                patch.object(sync_user, "delay") as mock_sync,
+            ):
                 mock_get_users.return_value = [1, 2, 3]
 
                 result = sync_all_users()

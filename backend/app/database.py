@@ -1,10 +1,23 @@
 """Database setup and models using SQLAlchemy."""
 
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator
+from typing import Any
 
-from sqlalchemy import Boolean, String, Integer, BigInteger, DateTime, Text, ForeignKey, create_engine, JSON, UniqueConstraint, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    text,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import get_settings
@@ -53,8 +66,12 @@ class UserSettings(Base):
     large_season_size_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Display preferences
     show_unreleased_requests: Mapped[bool] = mapped_column(Boolean, default=False)
-    theme_preference: Mapped[str] = mapped_column(String(10), default="system")  # light, dark, system
-    recently_available_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Default: 7
+    theme_preference: Mapped[str] = mapped_column(
+        String(10), default="system"
+    )  # light, dark, system
+    recently_available_days: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Default: 7
     title_language: Mapped[str] = mapped_column(String(2), default="en")  # en, fr
     # Radarr settings (API key is encrypted)
     radarr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -88,7 +105,9 @@ class CachedMediaItem(Base):
     played: Mapped[bool] = mapped_column(Boolean, default=False)
     play_count: Mapped[int] = mapped_column(Integer, default=0)
     last_played_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    largest_season_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # For series only
+    largest_season_size_bytes: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )  # For series only
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -103,15 +122,21 @@ class CachedJellyseerrRequest(Base):
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
     jellyseerr_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    jellyseerr_media_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # media.id for deletion
+    jellyseerr_media_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )  # media.id for deletion
     tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     media_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "movie" or "tv"
     status: Mapped[int] = mapped_column(Integer, nullable=False)  # Jellyseerr status code
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    title_fr: Mapped[str | None] = mapped_column(String(500), nullable=True)  # French title from TMDB
+    title_fr: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )  # French title from TMDB
     requested_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    release_date: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Movie releaseDate or TV firstAirDate
+    release_date: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # Movie releaseDate or TV firstAirDate
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -207,14 +232,20 @@ class SyncStatus(Base):
     )
     last_sync_started: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_completed: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_sync_status: Mapped[str | None] = mapped_column(String(50), nullable=True)  # "success", "failed"
+    last_sync_status: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # "success", "failed"
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_items_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requests_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Progress tracking (for UI feedback during sync)
-    current_step: Mapped[str | None] = mapped_column(String(100), nullable=True)  # e.g., "fetching_users", "syncing_media"
+    current_step: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # e.g., "fetching_users", "syncing_media"
     total_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    current_step_progress: Mapped[int | None] = mapped_column(Integer, nullable=True)  # e.g., user 3 of 10
+    current_step_progress: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # e.g., user 3 of 10
     current_step_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     current_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

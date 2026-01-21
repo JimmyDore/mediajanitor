@@ -138,7 +138,9 @@ class ContentIssueItem(BaseModel):
     path: str | None
     date_created: str | None = None  # When content was added to the library (ISO format)
     issues: list[str]  # List of issue types: "old", "large", "language", "request"
-    language_issues: list[str] | None = None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
+    language_issues: list[str] | None = (
+        None  # Specific language issues: "missing_en_audio", "missing_fr_audio", "missing_fr_subs"
+    )
     tmdb_id: str | None = None  # TMDB ID for external links
     imdb_id: str | None = None  # IMDB ID for external links
     sonarr_title_slug: str | None = None  # Sonarr titleSlug for external links (e.g., "arcane")

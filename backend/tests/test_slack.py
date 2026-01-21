@@ -1,11 +1,12 @@
 """Unit tests for Slack notification service."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
-import httpx
 
-from app.services.slack import send_slack_message
+import httpx
+import pytest
+
 from app.config import Settings
+from app.services.slack import send_slack_message
 
 
 class TestSendSlackMessage:
@@ -115,6 +116,7 @@ class TestSendSlackMessage:
 
             # If this doesn't block, the test will pass
             import asyncio
+
             result = await asyncio.wait_for(
                 send_slack_message(
                     "https://hooks.slack.com/services/T00/B00/XXX",

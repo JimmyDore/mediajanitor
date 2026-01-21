@@ -118,8 +118,8 @@ class TestDeleteMovie:
         client: TestClient,
     ) -> None:
         """Test movie deletion that also deletes Jellyseerr media entry."""
-        from tests.conftest import TestingAsyncSessionLocal
         from app.database import CachedJellyseerrRequest
+        from tests.conftest import TestingAsyncSessionLocal
 
         mock_delete_movie.return_value = (True, "Movie deleted successfully from Radarr")
         mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
@@ -349,8 +349,8 @@ class TestDeleteRequest:
         client: TestClient,
     ) -> None:
         """Test successful request deletion from Jellyseerr (via media deletion)."""
-        from tests.conftest import TestingAsyncSessionLocal
         from app.database import CachedJellyseerrRequest
+        from tests.conftest import TestingAsyncSessionLocal
 
         mock_delete.return_value = (True, "Media deleted successfully from Jellyseerr")
         token = self._get_auth_token(client)
@@ -421,6 +421,7 @@ class TestDeleteServiceFunctions:
     async def test_get_radarr_movie_by_tmdb_id_success(self, mock_client_class: AsyncMock) -> None:
         """Test finding a Radarr movie by TMDB ID."""
         from unittest.mock import MagicMock
+
         from app.services.radarr import get_radarr_movie_by_tmdb_id
 
         # Use MagicMock for non-async methods like json()
@@ -434,16 +435,17 @@ class TestDeleteServiceFunctions:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await get_radarr_movie_by_tmdb_id(
-            "https://radarr.example.com", "api-key", 12345
-        )
+        result = await get_radarr_movie_by_tmdb_id("https://radarr.example.com", "api-key", 12345)
         assert result == 42
 
     @pytest.mark.asyncio
     @patch("app.services.radarr.httpx.AsyncClient")
-    async def test_get_radarr_movie_by_tmdb_id_not_found(self, mock_client_class: AsyncMock) -> None:
+    async def test_get_radarr_movie_by_tmdb_id_not_found(
+        self, mock_client_class: AsyncMock
+    ) -> None:
         """Test finding a Radarr movie when not found."""
         from unittest.mock import MagicMock
+
         from app.services.radarr import get_radarr_movie_by_tmdb_id
 
         mock_response = MagicMock()
@@ -456,9 +458,7 @@ class TestDeleteServiceFunctions:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await get_radarr_movie_by_tmdb_id(
-            "https://radarr.example.com", "api-key", 99999
-        )
+        result = await get_radarr_movie_by_tmdb_id("https://radarr.example.com", "api-key", 99999)
         assert result is None
 
     @pytest.mark.asyncio
@@ -466,6 +466,7 @@ class TestDeleteServiceFunctions:
     async def test_delete_radarr_movie_success(self, mock_client_class: AsyncMock) -> None:
         """Test deleting a movie from Radarr."""
         from unittest.mock import MagicMock
+
         from app.services.radarr import delete_radarr_movie
 
         mock_response = MagicMock()
@@ -477,9 +478,7 @@ class TestDeleteServiceFunctions:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await delete_radarr_movie(
-            "https://radarr.example.com", "api-key", 42
-        )
+        result = await delete_radarr_movie("https://radarr.example.com", "api-key", 42)
         assert result is True
 
     @pytest.mark.asyncio
@@ -487,6 +486,7 @@ class TestDeleteServiceFunctions:
     async def test_get_sonarr_series_by_tmdb_id_success(self, mock_client_class: AsyncMock) -> None:
         """Test finding a Sonarr series by TMDB ID."""
         from unittest.mock import MagicMock
+
         from app.services.sonarr import get_sonarr_series_by_tmdb_id
 
         mock_response = MagicMock()
@@ -502,9 +502,7 @@ class TestDeleteServiceFunctions:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await get_sonarr_series_by_tmdb_id(
-            "https://sonarr.example.com", "api-key", 12345
-        )
+        result = await get_sonarr_series_by_tmdb_id("https://sonarr.example.com", "api-key", 12345)
         assert result == 20
 
     @pytest.mark.asyncio
@@ -512,6 +510,7 @@ class TestDeleteServiceFunctions:
     async def test_delete_sonarr_series_success(self, mock_client_class: AsyncMock) -> None:
         """Test deleting a series from Sonarr."""
         from unittest.mock import MagicMock
+
         from app.services.sonarr import delete_sonarr_series
 
         mock_response = MagicMock()
@@ -523,9 +522,7 @@ class TestDeleteServiceFunctions:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await delete_sonarr_series(
-            "https://sonarr.example.com", "api-key", 20
-        )
+        result = await delete_sonarr_series("https://sonarr.example.com", "api-key", 20)
         assert result is True
 
     @pytest.mark.asyncio
@@ -533,6 +530,7 @@ class TestDeleteServiceFunctions:
     async def test_delete_jellyseerr_request_success(self, mock_client_class: AsyncMock) -> None:
         """Test deleting a request from Jellyseerr."""
         from unittest.mock import MagicMock
+
         from app.services.jellyseerr import delete_jellyseerr_request
 
         mock_response = MagicMock()
@@ -555,6 +553,7 @@ class TestDeleteServiceFunctions:
     async def test_delete_jellyseerr_request_not_found(self, mock_client_class: AsyncMock) -> None:
         """Test deleting a request that doesn't exist in Jellyseerr."""
         from unittest.mock import MagicMock
+
         from app.services.jellyseerr import delete_jellyseerr_request
 
         mock_response = MagicMock()
@@ -802,10 +801,10 @@ class TestJellyseerrRequestLookupByTmdbId:
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
     @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
     @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
-    @patch("app.routers.content.delete_jellyseerr_request", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
     async def test_delete_movie_skips_lookup_when_jellyseerr_unchecked(
         self,
-        mock_delete_request: AsyncMock,
+        mock_delete_media: AsyncMock,
         mock_delete_movie: AsyncMock,
         mock_validate_jellyseerr: AsyncMock,
         mock_validate_radarr: AsyncMock,
@@ -858,8 +857,8 @@ class TestJellyseerrRequestLookupByTmdbId:
         assert data["success"] is True
         assert data["arr_deleted"] is True
         assert data["jellyseerr_deleted"] is False
-        # Delete request should NOT have been called
-        mock_delete_request.assert_not_called()
+        # Delete media should NOT have been called
+        mock_delete_media.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock)
@@ -946,7 +945,7 @@ class TestJellyseerrRequestLookupByTmdbId:
         mock_validate_sonarr: AsyncMock,
         client: TestClient,
     ) -> None:
-        """Regression test: delete_series should not fail when multiple requests exist for same TMDB ID.
+        """Regression: delete_series handles multiple requests for same TMDB ID.
 
         This test verifies the fix for the bug where deleting a series would fail with
         'MultipleResultsFound' when the same TMDB ID had multiple Jellyseerr requests

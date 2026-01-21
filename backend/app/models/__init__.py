@@ -1,19 +1,19 @@
 """Pydantic models for the API."""
 
-from app.models.user import (
-    UserCreate,
-    UserLogin,
-    UserResponse,
-    Token,
+from app.models.content import (
+    OldUnwatchedItem,
+    OldUnwatchedResponse,
 )
 from app.models.settings import (
     JellyfinSettingsCreate,
     JellyfinSettingsResponse,
     SettingsSaveResponse,
 )
-from app.models.content import (
-    OldUnwatchedItem,
-    OldUnwatchedResponse,
+from app.models.user import (
+    Token,
+    UserCreate,
+    UserLogin,
+    UserResponse,
 )
 
 __all__ = [

@@ -2,8 +2,8 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any, Union
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any
 
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -29,9 +29,7 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def get_user_by_email_sync(db: Session, email: str) -> User | None:
@@ -66,7 +64,7 @@ async def create_user_async(db: AsyncSession, email: str, password: str) -> User
     return user
 
 
-def create_user(db: Union[Session, AsyncSession], email: str, password: str) -> User:
+def create_user(db: Session | AsyncSession, email: str, password: str) -> User:
     """Create a new user with hashed password (sync version for compatibility)."""
     hashed_password = hash_password(password)
     user = User(email=email, hashed_password=hashed_password)
@@ -81,11 +79,9 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     settings = get_settings()
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.access_token_expire_minutes
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
     encoded_jwt: str = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
     return encoded_jwt
@@ -106,7 +102,7 @@ async def create_refresh_token(db: AsyncSession, user_id: int) -> str:
     settings = get_settings()
     token = generate_refresh_token()
     token_hash = hash_refresh_token(token)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
 
     refresh_token = RefreshToken(
         user_id=user_id,
@@ -125,7 +121,7 @@ async def validate_refresh_token(db: AsyncSession, token: str) -> RefreshToken |
     result = await db.execute(
         select(RefreshToken).where(
             RefreshToken.token_hash == token_hash,
-            RefreshToken.expires_at > datetime.now(timezone.utc),
+            RefreshToken.expires_at > datetime.now(UTC),
         )
     )
     return result.scalar_one_or_none()
@@ -133,16 +129,12 @@ async def validate_refresh_token(db: AsyncSession, token: str) -> RefreshToken |
 
 async def invalidate_refresh_token(db: AsyncSession, token_hash: str) -> None:
     """Invalidate (delete) a refresh token by its hash."""
-    await db.execute(
-        delete(RefreshToken).where(RefreshToken.token_hash == token_hash)
-    )
+    await db.execute(delete(RefreshToken).where(RefreshToken.token_hash == token_hash))
 
 
 async def invalidate_user_refresh_tokens(db: AsyncSession, user_id: int) -> None:
     """Invalidate all refresh tokens for a user (logout from all devices)."""
-    await db.execute(
-        delete(RefreshToken).where(RefreshToken.user_id == user_id)
-    )
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
 
 
 async def rotate_refresh_token(db: AsyncSession, old_token: str) -> tuple[str, int] | None:
@@ -172,9 +164,7 @@ async def get_user_by_id_async(db: AsyncSession, user_id: int) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def authenticate_user_async(
-    db: AsyncSession, email: str, password: str
-) -> User | None:
+async def authenticate_user_async(db: AsyncSession, email: str, password: str) -> User | None:
     """Authenticate a user by email and password (async version)."""
     user = await get_user_by_email_async(db, email)
     if not user:

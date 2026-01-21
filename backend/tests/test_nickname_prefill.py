@@ -1,12 +1,11 @@
 """Tests for nickname prefill during sync (US-37.1)."""
 
-from unittest.mock import AsyncMock, patch
-from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database import User, UserSettings, UserNickname
+from app.database import User, UserNickname, UserSettings
 from tests.conftest import TestingAsyncSessionLocal
 
 
@@ -72,6 +71,7 @@ class TestNicknamePrefillDuringSync:
     ) -> None:
         """Sync should create nickname records for all Jellyfin users."""
         from sqlalchemy import select
+
         from app.services.sync import run_user_sync
 
         # Mock Jellyfin users response
@@ -100,7 +100,10 @@ class TestNicknamePrefillDuringSync:
             with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                 with patch("app.services.sync.fetch_jellyfin_media_with_progress", return_value=[]):
                     with patch("app.services.sync.calculate_season_sizes"):
-                        with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                        with patch(
+                            "app.services.sync.fetch_jellyfin_users",
+                            return_value=mock_jellyfin_users,
+                        ):
                             with patch("app.services.sync.fetch_jellyseerr_users", return_value=[]):
                                 await run_user_sync(session, user.id)
 
@@ -125,6 +128,7 @@ class TestNicknamePrefillDuringSync:
     ) -> None:
         """Sync should mark users that have Jellyseerr accounts."""
         from sqlalchemy import select
+
         from app.services.sync import run_user_sync
 
         # Mock Jellyfin users
@@ -161,9 +165,17 @@ class TestNicknamePrefillDuringSync:
             with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                 with patch("app.services.sync.fetch_jellyfin_media_with_progress", return_value=[]):
                     with patch("app.services.sync.calculate_season_sizes"):
-                        with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
-                            with patch("app.services.sync.fetch_jellyseerr_users", return_value=mock_jellyseerr_users):
-                                with patch("app.services.sync.fetch_jellyseerr_requests", return_value=[]):
+                        with patch(
+                            "app.services.sync.fetch_jellyfin_users",
+                            return_value=mock_jellyfin_users,
+                        ):
+                            with patch(
+                                "app.services.sync.fetch_jellyseerr_users",
+                                return_value=mock_jellyseerr_users,
+                            ):
+                                with patch(
+                                    "app.services.sync.fetch_jellyseerr_requests", return_value=[]
+                                ):
                                     await run_user_sync(session, user.id)
 
             # Check that has_jellyseerr_account is set correctly
@@ -183,6 +195,7 @@ class TestNicknamePrefillDuringSync:
     ) -> None:
         """Sync should NOT overwrite existing nickname mappings."""
         from sqlalchemy import select
+
         from app.services.sync import run_user_sync
 
         mock_jellyfin_users = [
@@ -218,7 +231,10 @@ class TestNicknamePrefillDuringSync:
             with patch("app.services.sync.decrypt_value", return_value="decrypted-key"):
                 with patch("app.services.sync.fetch_jellyfin_media_with_progress", return_value=[]):
                     with patch("app.services.sync.calculate_season_sizes"):
-                        with patch("app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users):
+                        with patch(
+                            "app.services.sync.fetch_jellyfin_users",
+                            return_value=mock_jellyfin_users,
+                        ):
                             with patch("app.services.sync.fetch_jellyseerr_users", return_value=[]):
                                 await run_user_sync(session, user.id)
 
@@ -252,8 +268,9 @@ class TestFetchJellyseerrUsers:
     @pytest.mark.asyncio
     async def test_fetch_jellyseerr_users_returns_users_list(self) -> None:
         """fetch_jellyseerr_users should return list of users from API."""
-        from app.services.sync import fetch_jellyseerr_users
         import httpx
+
+        from app.services.sync import fetch_jellyseerr_users
 
         users_response = [
             {"id": 1, "displayName": "John", "email": "john@example.com"},
@@ -277,8 +294,9 @@ class TestFetchJellyseerrUsers:
     @pytest.mark.asyncio
     async def test_fetch_jellyseerr_users_handles_error_gracefully(self) -> None:
         """fetch_jellyseerr_users should return empty list on error."""
-        from app.services.sync import fetch_jellyseerr_users
         import httpx
+
+        from app.services.sync import fetch_jellyseerr_users
 
         async def mock_get(*args, **kwargs):
             raise httpx.RequestError("Connection failed")

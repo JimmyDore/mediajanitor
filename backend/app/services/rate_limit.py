@@ -9,6 +9,7 @@ from threading import Lock
 @dataclass
 class RateLimitRecord:
     """Record of requests from an IP address."""
+
     count: int
     window_start: float
 
