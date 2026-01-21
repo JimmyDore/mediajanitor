@@ -3660,14 +3660,18 @@ class TestUnavailableRequests:
                 requested_by="JaneDoe",
                 created_at_source="2024-03-10T12:00:00Z",
                 raw_data={
-                    "media": {"title": "Test TV Series", "firstAirDate": "2022-01-01"},
+                    "media": {
+                        "title": "Test TV Series",
+                        "firstAirDate": "2022-01-01",
+                        "status": 4,  # Partially Available
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5},  # Available
+                            {"seasonNumber": 2, "status": 1},  # Pending (missing)
+                            {"seasonNumber": 3, "status": 1},  # Pending (missing)
+                        ],
+                    },
                     "requestedBy": {"displayName": "JaneDoe"},
                     "createdAt": "2024-03-10T12:00:00Z",
-                    "seasons": [
-                        {"seasonNumber": 1, "status": 5},  # Available
-                        {"seasonNumber": 2, "status": 1},  # Pending (missing)
-                        {"seasonNumber": 3, "status": 1},  # Pending (missing)
-                    ],
                 },
             )
             session.add(request)
@@ -3686,6 +3690,114 @@ class TestUnavailableRequests:
         assert 2 in item["missing_seasons"]
         assert 3 in item["missing_seasons"]
         assert 1 not in item["missing_seasons"]  # Season 1 is available
+
+    @pytest.mark.asyncio
+    async def test_tv_show_with_all_seasons_available_not_unavailable(
+        self, client: TestClient
+    ) -> None:
+        """TV show with status 4 but all seasons available should NOT be unavailable.
+
+        This tests the "After Life" bug fix - when a TV show has status 4 (Partially
+        Available) at the request level, but all seasons have status 5 (Available),
+        it should NOT appear in the unavailable requests list.
+        """
+        token = self._get_auth_token(client, "tv-complete@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # TV request with status 4 but ALL seasons are available
+            # This simulates the "After Life" scenario
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=79410,
+                tmdb_id=79410,
+                media_type="tv",
+                status=4,  # Partially Available (at request level)
+                title="After Life",
+                requested_by="TestUser",
+                created_at_source="2023-01-01T12:00:00Z",
+                raw_data={
+                    "media": {
+                        "title": "After Life",
+                        "firstAirDate": "2019-03-08",
+                        "status": 4,  # Partially Available at media level
+                        "seasons": [
+                            {"seasonNumber": 0, "status": 5},  # Specials - ignored
+                            {"seasonNumber": 1, "status": 5},  # Available
+                            {"seasonNumber": 2, "status": 5},  # Available
+                            {"seasonNumber": 3, "status": 5},  # Available
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                    "createdAt": "2023-01-01T12:00:00Z",
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Should NOT appear as unavailable since all seasons are available
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_tv_show_with_missing_seasons_is_unavailable(
+        self, client: TestClient
+    ) -> None:
+        """TV show with status 4 and some missing seasons SHOULD be unavailable."""
+        token = self._get_auth_token(client, "tv-missing@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # TV request with status 4 and some seasons NOT available
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=5002,
+                tmdb_id=44444,
+                media_type="tv",
+                status=4,  # Partially Available
+                title="Incomplete Show",
+                requested_by="TestUser",
+                created_at_source="2023-01-01T12:00:00Z",
+                raw_data={
+                    "media": {
+                        "title": "Incomplete Show",
+                        "firstAirDate": "2020-01-01",
+                        "status": 4,
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5},  # Available
+                            {"seasonNumber": 2, "status": 3},  # Processing
+                            {"seasonNumber": 3, "status": 1},  # Pending
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                    "createdAt": "2023-01-01T12:00:00Z",
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=requests", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # SHOULD appear as unavailable since not all seasons are available
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["name"] == "Incomplete Show"
+        assert 2 in item["missing_seasons"]
+        assert 3 in item["missing_seasons"]
+        assert 1 not in item["missing_seasons"]
 
     @pytest.mark.asyncio
     async def test_unavailable_requests_filters_future_releases(

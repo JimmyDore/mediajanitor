@@ -1503,12 +1503,14 @@ def _get_missing_seasons(request: CachedJellyseerrRequest) -> list[int]:
     """Get list of missing season numbers for a TV request.
 
     Missing means status is not 5 (Available).
+    Reads from media.seasons[] which contains actual availability status.
     """
     if request.media_type != "tv":
         return []
 
     raw_data = request.raw_data or {}
-    seasons = raw_data.get("seasons", [])
+    media = raw_data.get("media", {})
+    seasons = media.get("seasons", [])
 
     missing = []
     for season in seasons:
@@ -1516,10 +1518,48 @@ def _get_missing_seasons(request: CachedJellyseerrRequest) -> list[int]:
         season_status = season.get("status", 0)
 
         # Season is missing if not Available (status 5)
-        if season_num is not None and season_status != 5:
+        # Skip specials (season 0)
+        if season_num and season_num > 0 and season_status != 5:
             missing.append(season_num)
 
     return sorted(missing)
+
+
+def _is_tv_complete_for_released(request: CachedJellyseerrRequest) -> bool:
+    """Check if TV show has all released seasons available (status 5).
+
+    For TV shows with status 4 (Partially Available), the request.status may
+    not accurately reflect availability. This happens when Jellyseerr marks
+    the overall show as partial but all individual seasons are actually available.
+
+    Returns True if:
+    - media.status is 5 (fully available), OR
+    - media.status is 4 AND all seasons have status 5
+    """
+    if request.media_type != "tv":
+        return False
+
+    raw_data = request.raw_data or {}
+    media = raw_data.get("media", {})
+    media_status = media.get("status", 0)
+
+    # Media fully available at top level
+    if media_status == 5:
+        return True
+
+    # Check season-level for partial status
+    if media_status == 4:
+        seasons = media.get("seasons", [])
+        if not seasons:
+            return False
+        for season in seasons:
+            season_num = season.get("seasonNumber", 0)
+            # Skip specials (season 0)
+            if season_num > 0 and season.get("status", 0) != 5:
+                return False
+        return True
+
+    return False
 
 
 def is_unavailable_request(
@@ -1531,6 +1571,7 @@ def is_unavailable_request(
     A request is unavailable if:
     - Status is 0 (Unknown), 1 (Pending), 2 (Approved), or 4 (Partially Available)
     - NOT status 3 (Processing) or 5 (Available)
+    - For TV shows with status 4: also checks if all seasons are available
     - Release date is not in the future (unless show_unreleased=True)
     - Release date is not too recent (< 3 months)
 
@@ -1540,6 +1581,12 @@ def is_unavailable_request(
     """
     if request.status not in UNAVAILABLE_STATUS_CODES:
         return False
+
+    # For TV shows with status 4 (Partially Available), check if actually complete
+    # This handles cases where Jellyseerr marks show as partial but all seasons are available
+    if request.media_type == "tv" and request.status == 4:
+        if _is_tv_complete_for_released(request):
+            return False
 
     return _should_include_request(request, show_unreleased)
 
