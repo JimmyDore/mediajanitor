@@ -6,8 +6,16 @@ and compare against the 13GB threshold.
 Run with: cd backend && uv run pytest tests/test_large_movies_validation.py -v -s
 """
 
+import os
+
 import httpx
 import pytest
+
+# Skip all tests in this module when running in CI (no Docker backend available)
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Validation tests require Docker backend (skipped in CI)",
+)
 
 BASE_URL = "http://localhost:8080"
 TEST_EMAIL = "jimmy291295+2@gmail.com"
