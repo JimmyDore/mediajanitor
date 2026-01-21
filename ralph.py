@@ -53,6 +53,7 @@ QA_SKILLS = [
     "qa-ux",
     "qa-accessibility",
     "qa-documentation",
+    "qa-infra",
 ]
 RETRY_WAIT_SECONDS = 60
 DEFAULT_LOG_FILE = "ralph-output.log"
