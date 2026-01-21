@@ -785,6 +785,7 @@ async def fetch_season_episodes(
         "ParentId": season_id,
         "IncludeItemTypes": "Episode",
         "Fields": "MediaSources,UserData",
+        "Recursive": "true",
     }
 
     # Add user ID to get user-specific watch data

@@ -1534,6 +1534,46 @@ class TestCalculateSeasonSizes:
             assert items[0].largest_season_size_bytes is None
 
     @pytest.mark.asyncio
+    async def test_fetch_season_episodes_uses_recursive_parameter(
+        self, client: TestClient
+    ) -> None:
+        """fetch_season_episodes should include Recursive=true to find episodes in nested folders.
+
+        Regression test: Without Recursive=true, Jellyfin API returns empty episodes
+        for many series where episodes are stored in subdirectories.
+        """
+        from app.services.sync import fetch_season_episodes
+        import httpx
+
+        captured_params: dict[str, str] = {}
+
+        async def mock_get(url, **kwargs):
+            # Capture the params from the request
+            params = kwargs.get("params", {})
+            captured_params.update(params)
+            return httpx.Response(
+                200,
+                json={"Items": [{"Id": "ep1", "Name": "Episode 1", "MediaSources": [{"Size": 1000}]}]},
+                request=httpx.Request("GET", url)
+            )
+
+        async with httpx.AsyncClient() as real_client:
+            with patch.object(real_client, "get", side_effect=mock_get):
+                episodes = await fetch_season_episodes(
+                    real_client,
+                    "http://jellyfin.local",
+                    "test-api-key",
+                    "season-123",
+                )
+
+        # Verify Recursive parameter is included
+        assert "Recursive" in captured_params, "Recursive parameter is required to find episodes in nested folders"
+        assert captured_params["Recursive"] == "true"
+        assert captured_params["ParentId"] == "season-123"
+        assert captured_params["IncludeItemTypes"] == "Episode"
+        assert captured_params["Fields"] == "MediaSources,UserData"
+
+    @pytest.mark.asyncio
     async def test_calculate_season_sizes_progress_logging(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
     ) -> None:
