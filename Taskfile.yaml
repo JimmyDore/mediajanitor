@@ -246,3 +246,37 @@ tasks:
     desc: Show frontend Docker logs
     cmds:
       - docker-compose logs -f frontend
+
+  # =============================================================================
+  # Ralph (Autonomous Development)
+  # =============================================================================
+
+  ralph:once:
+    desc: Run single Ralph iteration (human-in-the-loop)
+    cmds:
+      - uv run --with typer --with rich python ralph.py once
+
+  ralph:run:
+    desc: Run Ralph autonomous loop (default 10 iterations)
+    cmds:
+      - uv run --with typer --with rich python ralph.py run {{.CLI_ARGS | default "10"}}
+
+  ralph:run:qa-first:
+    desc: Run Ralph with QA review first
+    cmds:
+      - uv run --with typer --with rich python ralph.py run --qa-first {{.CLI_ARGS | default "10"}}
+
+  ralph:qa:
+    desc: Run all QA skills
+    cmds:
+      - uv run --with typer --with rich python ralph.py qa
+
+  ralph:qa:quick:
+    desc: Run quick QA (security + api-contracts only)
+    cmds:
+      - uv run --with typer --with rich python ralph.py qa security api-contracts
+
+  ralph:dry-run:
+    desc: Preview what Ralph would do (dry run)
+    cmds:
+      - uv run --with typer --with rich python ralph.py run --dry-run {{.CLI_ARGS | default "10"}}
