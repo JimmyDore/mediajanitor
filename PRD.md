@@ -76,6 +76,373 @@ See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for the complete list of **191 complete
 
 ## Pending Stories
 
-No pending stories. Add new epics below as needed.
+---
+
+## Epic 48: Ultra.cc Storage & Traffic Monitoring
+
+### Overview
+
+Integrate Ultra.cc API to monitor seedbox storage and traffic usage. Display stats on the dashboard above issues, with configurable warning thresholds. This helps users proactively manage their seedbox resources before running out of storage or traffic.
+
+### Goals
+
+- Allow users to configure Ultra.cc API credentials in settings
+- Fetch storage/traffic stats during the existing sync process
+- Display stats prominently on dashboard with visual warning indicators
+- Let users set their own warning thresholds
+
+### Non-Goals
+
+- Slack/email notifications (future enhancement)
+- Automatic actions when thresholds are exceeded
+- Historical tracking of storage/traffic over time
+
+### Technical Considerations
+
+- Ultra API endpoint: `{base_url}/total-stats` with Bearer token auth
+- Response includes: `service_stats_info.free_storage_gb` and `service_stats_info.traffic_available_percentage`
+- Store encrypted auth token like existing Jellyfin/Jellyseerr keys
+- Stats should be cached in database (fetched during sync, not on every page load)
+
+---
+
+### US-48.1: Ultra API Settings - Backend
+
+**As a** user
+**I want** to configure my Ultra.cc API credentials
+**So that** the app can fetch my storage and traffic stats
+
+**Acceptance Criteria:**
+
+- [ ] Add `ultra_api_url` (String, nullable) and `ultra_api_key_encrypted` (String, nullable) columns to UserSettings model
+- [ ] Create Alembic migration for new columns
+- [ ] PATCH `/api/settings` accepts `ultra_api_url` and `ultra_api_key` fields
+- [ ] Ultra API key is encrypted before storage (like Jellyfin/Jellyseerr keys)
+- [ ] GET `/api/settings` returns `ultra_api_configured: bool` (not the actual key)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-48.2: Ultra API Settings - Frontend
+
+**As a** user
+**I want** to enter my Ultra.cc API URL and token in the settings page
+**So that** I can connect my seedbox monitoring
+
+**Acceptance Criteria:**
+
+- [ ] Settings page has a new "Seedbox Monitoring" section with Ultra API URL and API Token fields
+- [ ] Fields are optional (form submits without them)
+- [ ] Shows "Connected" badge when `ultra_api_configured` is true
+- [ ] Shows masked "••••••••" for token field when already configured
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+### US-48.3: Ultra Warning Thresholds - Settings
+
+**As a** user
+**I want** to set my own warning thresholds for storage and traffic
+**So that** I get alerts relevant to my usage patterns
+
+**Acceptance Criteria:**
+
+- [ ] Add `ultra_storage_warning_gb` (Integer, default 100) and `ultra_traffic_warning_percent` (Integer, default 20) columns to UserSettings
+- [ ] Create Alembic migration for new columns
+- [ ] PATCH `/api/settings` accepts threshold values
+- [ ] GET `/api/settings` returns current threshold values
+- [ ] Settings page has number inputs for both thresholds in the "Seedbox Monitoring" section
+- [ ] Inputs show defaults (100 GB, 20%) when not set
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+### US-48.4: Fetch Ultra Stats During Sync
+
+**As a** user
+**I want** my seedbox stats fetched when I sync
+**So that** I always see current storage and traffic info
+
+**Acceptance Criteria:**
+
+- [ ] Create `ultra_service.py` with `fetch_ultra_stats(url, api_key)` function
+- [ ] Function calls `{url}/total-stats` with Bearer token authentication
+- [ ] Returns dict with `free_storage_gb` (float) and `traffic_available_percentage` (float), or None if API fails
+- [ ] Add `ultra_free_storage_gb` (Float, nullable), `ultra_traffic_available_percent` (Float, nullable), `ultra_last_synced_at` (DateTime, nullable) columns to UserSettings
+- [ ] Create Alembic migration for new columns
+- [ ] Sync process (`/api/sync`) calls Ultra API if credentials are configured
+- [ ] Stats are stored in UserSettings after successful fetch
+- [ ] Sync succeeds even if Ultra API call fails (non-blocking)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+## Epic 49: Fix Deletion Cache Persistence
+
+### Overview
+
+When users delete content from Radarr/Sonarr/Jellyseerr via the Issues page, the item disappears due to optimistic UI updates but reappears after a page refresh. This happens because the internal cache (`CachedMediaItem`, `CachedJellyseerrRequest` tables) is not updated after deletion - items only disappear after a full sync. This creates a confusing user experience.
+
+### Goals
+
+- Delete items from internal cache immediately after successful external API deletion
+- Prevent deleted items from reappearing on page refresh
+- Handle partial deletion failures gracefully (delete from cache if primary deletion succeeds)
+
+### Non-Goals
+
+- Changing the sync behavior (sync will still replace entire cache)
+- Adding undo/restore functionality for deleted items
+- Changing the optimistic UI update pattern (it works well)
+
+### Technical Considerations
+
+- Three delete endpoints need modification: `DELETE /api/content/movie/{tmdb_id}`, `DELETE /api/content/series/{tmdb_id}`, `DELETE /api/content/request/{jellyseerr_id}`
+- For movies/series: delete from `CachedMediaItem` by TMDB ID (need to match via `raw_data` JSON field)
+- For requests: delete from `CachedJellyseerrRequest` by Jellyseerr ID
+- Cache deletion should happen after successful external API deletion
+- If Radarr/Sonarr deletion succeeds but Jellyseerr fails, still delete from cache
+
+---
+
+### US-49.1: Delete Movies from Cache After Deletion
+
+**As a** user
+**I want** deleted movies to stay deleted after page refresh
+**So that** I don't see ghost items that are already removed from my library
+
+**Acceptance Criteria:**
+
+- [ ] After successful Radarr deletion, delete matching `CachedMediaItem` from database
+- [ ] Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)
+- [ ] If Radarr deletion succeeds but Jellyseerr fails, still delete from cache
+- [ ] If Radarr deletion fails, do NOT delete from cache
+- [ ] Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in Docker: delete a movie, refresh page, item stays deleted
+
+---
+
+### US-49.2: Delete Series from Cache After Deletion
+
+**As a** user
+**I want** deleted TV series to stay deleted after page refresh
+**So that** I don't see ghost items that are already removed from my library
+
+**Acceptance Criteria:**
+
+- [ ] After successful Sonarr deletion, delete matching `CachedMediaItem` from database
+- [ ] Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)
+- [ ] If Sonarr deletion succeeds but Jellyseerr fails, still delete from cache
+- [ ] If Sonarr deletion fails, do NOT delete from cache
+- [ ] Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in Docker: delete a series, refresh page, item stays deleted
+
+---
+
+### US-49.3: Delete Requests from Cache After Deletion
+
+**As a** user
+**I want** deleted Jellyseerr requests to stay deleted after page refresh
+**So that** I don't see ghost requests in the Unavailable Requests tab
+
+**Acceptance Criteria:**
+
+- [ ] After successful Jellyseerr media deletion, delete matching `CachedJellyseerrRequest` from database
+- [ ] Match by Jellyseerr ID (existing lookup already works)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in Docker: delete a request, refresh page, request stays deleted
+
+---
+
+### US-48.5: Display Ultra Stats on Dashboard
+
+**As a** user
+**I want** to see my seedbox storage and traffic stats on the dashboard
+**So that** I can monitor my resources at a glance
+
+**Acceptance Criteria:**
+
+- [ ] GET `/api/settings` returns `ultra_free_storage_gb`, `ultra_traffic_available_percent`, `ultra_last_synced_at` (if configured)
+- [ ] Dashboard shows "Seedbox Status" card above issues section (only when Ultra is configured)
+- [ ] Card displays: free storage (GB), traffic available (%)
+- [ ] Card shows last synced timestamp
+- [ ] Storage value turns yellow/warning when below `ultra_storage_warning_gb` threshold
+- [ ] Storage value turns red/danger when below 50% of threshold
+- [ ] Traffic value turns yellow/warning when below `ultra_traffic_warning_percent` threshold
+- [ ] Traffic value turns red/danger when below 50% of threshold
+- [ ] Card is hidden entirely when Ultra API is not configured
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
+
+---
+
+## Epic 50: Update Whitelist Duration Options
+
+### Overview
+
+Update the whitelist duration picker to offer more granular short-term options. Currently the options are: Permanent, 3 Months, 6 Months, 1 Year, Custom Date. Users want shorter durations like 1 Week and 1 Month for temporary whitelisting, and the 1 Year option is rarely used.
+
+### Goals
+
+- Replace current duration options with: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date
+- Apply to all whitelist types (content, french-only, language-exempt, large, requests)
+- No backend changes needed (expires_at is already a flexible datetime)
+
+### Non-Goals
+
+- Adding more duration options beyond the specified set
+- Changing how expiration is stored or processed in the backend
+
+### Technical Considerations
+
+- Frontend-only change in `frontend/src/routes/issues/+page.svelte`
+- The `getExpirationDate()` function needs new cases for `1week` and `1month`
+- The `durationOptions` array needs to be updated
+- The `DurationOption` type needs to be updated
+
+---
+
+### US-50.1: Update Whitelist Duration Options
+
+**As a** user
+**I want** shorter whitelist duration options (1 Week, 1 Month)
+**So that** I can temporarily whitelist content without long commitments
+
+**Acceptance Criteria:**
+
+- [ ] Duration options are: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date (in that order)
+- [ ] 1 Year option is removed
+- [ ] `DurationOption` type updated to include `1week` and `1month`, remove `1year`
+- [ ] `getExpirationDate()` function handles `1week` (adds 7 days) and `1month` (adds 1 month)
+- [ ] Duration picker displays correctly on Issues page
+- [ ] Duration picker displays correctly on Unavailable page
+- [ ] Existing frontend unit tests updated to reflect new options
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: whitelist an item with 1 Week duration, confirm expiration date is 7 days from now
+
+---
+
+## Epic 51: Recently Available - Show New Episodes from Ongoing Series
+
+### Overview
+
+The "Recently Available" page currently doesn't show new episodes from ongoing TV series. When a series is partially available (status 4 in Jellyseerr) and new episodes air, they don't appear because the app only checks `mediaAddedAt` date, which doesn't update when new episodes are added.
+
+Additionally, the page only shows the title without any season/episode context. Users want to see:
+- For fully available content: Which seasons are available (e.g., "Seasons 1-3 (30 eps)")
+- For partially available series: Which episodes recently aired (e.g., "S4: 5/12 episodes")
+
+### Goals
+
+- Include ongoing series with recently aired episodes in the "Recently Available" list
+- Display season and episode counts for all TV content
+- Fetch and cache episode air dates during sync
+- No additional API calls at page load time
+
+### Non-Goals
+
+- Showing individual episode entries (one entry per series)
+- Episode-level details like episode titles or descriptions
+- Push notifications for new episodes
+
+### Technical Considerations
+
+- During sync, fetch episode details from Jellyseerr API for status 4 TV shows: `GET /api/v1/tv/{tmdb_id}/season/{season_number}`
+- Store episode list in `raw_data.media.seasons[].episodes` (already a JSON field)
+- Episode data includes `episodeNumber`, `name`, `airDate`
+- For display, calculate episode counts from cached data
+- Reference implementation: `original_script.py` lines 714-792 (`fetch_season_episodes`, `get_recent_episodes_for_season`)
+
+---
+
+### US-51.1: Fetch Episode Details During Sync
+
+**As a** user
+**I want** episode air dates to be cached during sync
+**So that** the Recently Available page can detect new episodes without API calls
+
+**Acceptance Criteria:**
+
+- [ ] Add `fetch_jellyseerr_season_episodes(client, server_url, api_key, tmdb_id, season_number)` function to `sync.py`
+- [ ] Function calls `GET /api/v1/tv/{tmdb_id}/season/{season_number}` endpoint
+- [ ] Returns list of `{episodeNumber, name, airDate}` dicts
+- [ ] Graceful failure: returns empty list on API error (logged as warning)
+- [ ] In `fetch_jellyseerr_requests()`, for status 4 TV shows, fetch episodes for each partially available season
+- [ ] Store episode data in `raw_data.media.seasons[].episodes` array
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-51.2: Include Ongoing Series in Recently Available
+
+**As a** user
+**I want** to see ongoing series with new episodes in the Recently Available list
+**So that** I know when new episodes of my shows become available
+
+**Acceptance Criteria:**
+
+- [ ] Add `_get_recent_episodes_from_cached_data(request, days_back)` helper function in `content.py`
+- [ ] Function checks `raw_data.media.seasons[].episodes[].airDate` for episodes within `days_back` window
+- [ ] Returns `{season_num: [episode_nums]}` dict if recent episodes found, None otherwise
+- [ ] Modify `get_recently_available()` to check for recent episodes on status 4 TV shows
+- [ ] If recent episodes found, use today's date as `availability_date` to force inclusion
+- [ ] Series appears once (not per episode) in the list
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-51.3: API Response with Season/Episode Details
+
+**As a** frontend developer
+**I want** the Recently Available API to return season and episode information
+**So that** the UI can display episode counts
+
+**Acceptance Criteria:**
+
+- [ ] Add optional fields to `RecentlyAvailableItem` model:
+  - `season_info: str | None` - e.g., "Seasons 1-3" or "Season 4 in progress"
+  - `episode_count: int | None` - total episodes for fully available
+  - `available_episodes: int | None` - episodes available so far (for partial)
+  - `total_episodes: int | None` - total episodes in current season (for partial)
+- [ ] For status 5 TV shows: populate with total seasons and episode count from `raw_data`
+- [ ] For status 4 TV shows: populate with current season progress
+- [ ] Movies return `None` for all these fields
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-51.4: Display Episode Details in UI
+
+**As a** user
+**I want** to see season and episode information on the Recently Available page
+**So that** I understand what content is actually new
+
+**Acceptance Criteria:**
+
+- [ ] Add "Details" column to the table (between Title and Type)
+- [ ] For fully available TV: display "Seasons 1-3 (30 eps)" format
+- [ ] For partially available TV: display "S4: 5/12 episodes" format
+- [ ] For movies: display "—" or leave empty
+- [ ] Update the "Copy" feature to include episode details in the copied text
+- [ ] Responsive: hide Details column on mobile (like Requested By)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser using browser tools
 
 ---
