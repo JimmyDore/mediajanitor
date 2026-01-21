@@ -446,3 +446,135 @@ Additionally, the page only shows the title without any season/episode context. 
 - [ ] Verify in browser using browser tools
 
 ---
+
+## Epic 52: TV Series Language Detection & Per-Episode Whitelisting
+
+### Overview
+
+Language detection currently only flags movies, never TV series episodes. The root cause is that `check_audio_languages()` reads `MediaSources` from Series-level `raw_data`, which doesn't contain individual episode audio tracks. Additionally, users need the ability to whitelist specific episodes (not entire series) from language checks - matching the original script's `LANGUAGE_CHECK_EPISODE_ALLOWLIST` behavior.
+
+### Goals
+
+- Detect language issues (missing EN/FR audio) at the episode level for TV series
+- Cache episode language check results during sync to keep UI responses fast
+- Allow users to whitelist individual episodes from language checks
+- Display which specific episodes have language issues in the Issues page
+
+### Non-Goals
+
+- Changing how movie language detection works (already working)
+- Adding subtitles-only exemption at episode level (only audio for now)
+- Automatic detection of intentionally monolingual content
+
+### Technical Considerations
+
+- Reuse existing `calculate_season_sizes()` loop which already fetches all episodes
+- Store language check results in new JSON fields on `CachedMediaItem`
+- Create new `EpisodeLanguageExempt` table for per-episode whitelisting
+- Episode exemptions checked during sync, not at display time
+
+---
+
+### US-52.1: Cache Episode Language Data During Sync
+
+**As a** user with a Jellyfin server configured
+**I want** the sync process to check language tracks for all TV series episodes
+**So that** series with missing audio tracks are correctly flagged in the Issues page
+
+**Acceptance Criteria:**
+
+- [ ] Add `language_check_result` JSON field to `CachedMediaItem` model (structure: `{has_english, has_french, has_french_subs, checked_at}`)
+- [ ] Add `problematic_episodes` JSON field to `CachedMediaItem` model (structure: `[{identifier, name, season, episode, missing_languages}]`)
+- [ ] Create Alembic migration for new fields
+- [ ] Add `check_episode_audio_languages(episode)` helper in `sync.py`
+- [ ] Add `check_series_episodes_languages(client, server_url, api_key, series_id, series_name)` function
+- [ ] Call language checking in `calculate_season_sizes()` loop after size calculation
+- [ ] Add movie language checking in `cache_media_items()` from raw_data MediaSources
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-52.2: Use Cached Language Data in Content Service
+
+**As a** user viewing the Issues page
+**I want** TV series with language issues to appear in the Language tab
+**So that** I can identify and fix series with missing audio tracks
+
+**Acceptance Criteria:**
+
+- [ ] Modify `check_audio_languages()` to use cached `language_check_result` field when available
+- [ ] Keep fallback to raw_data parsing for backwards compatibility (movies without cached data)
+- [ ] Add `problematic_episodes` field to `ContentIssueItem` response model
+- [ ] Include problematic episodes data in `/api/content/issues` response for series with language issues
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in Docker: sync, then check `/api/content/issues` returns series with language issues
+
+---
+
+### US-52.3: Per-Episode Language Whitelist - Backend
+
+**As a** user with specific episodes that have intentional language differences
+**I want** to whitelist individual episodes from language checks
+**So that** I don't see false positives for episodes that are meant to have limited audio tracks
+
+**Acceptance Criteria:**
+
+- [ ] Create `EpisodeLanguageExempt` model with: `id`, `user_id`, `jellyfin_id` (series ID), `series_name`, `season_number`, `episode_number`, `episode_name`, `created_at`, `expires_at`
+- [ ] Add unique constraint on `(user_id, jellyfin_id, season_number, episode_number)`
+- [ ] Create Alembic migration for new table
+- [ ] Add `add_episode_language_exempt()` service function
+- [ ] Add `get_episode_language_exempt()` service function (list all for user)
+- [ ] Add `remove_episode_language_exempt()` service function
+- [ ] Add `get_episode_exempt_set(db, user_id)` returning set of `(jellyfin_id, season, episode)` tuples
+- [ ] Add API endpoints:
+  - `GET /api/whitelist/episode-exempt` - List all exemptions
+  - `POST /api/whitelist/episode-exempt` - Add exemption (body: `{jellyfin_id, series_name, season_number, episode_number, episode_name, expires_at?}`)
+  - `DELETE /api/whitelist/episode-exempt/{id}` - Remove exemption
+- [ ] Integrate exemption checking into `check_series_episodes_languages()` - skip exempt episodes
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+---
+
+### US-52.4: Display Problematic Episodes with Whitelist Actions
+
+**As a** user viewing a TV series with language issues
+**I want** to see which specific episodes have problems and whitelist them individually
+**So that** I can manage language issues at the episode level
+
+**Acceptance Criteria:**
+
+- [ ] Update Issues page to show expandable episode list when a series has `problematic_episodes`
+- [ ] Click on series row to expand/collapse episode list
+- [ ] Each episode row shows: identifier (S01E05), name, missing languages (badges)
+- [ ] Each episode row has a "Whitelist" button with duration picker
+- [ ] Whitelisting calls `POST /api/whitelist/episode-exempt` with episode details
+- [ ] After successful whitelist, remove episode from displayed list (optimistic update)
+- [ ] Show loading state on whitelist button during API call
+- [ ] Show toast notification on success/error
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: expand series, whitelist an episode, episode disappears from list
+
+---
+
+### US-52.5: Episode Exemptions Tab in Whitelist Page
+
+**As a** user managing my whitelists
+**I want** to see and manage episode-level language exemptions
+**So that** I can review and remove exemptions I no longer need
+
+**Acceptance Criteria:**
+
+- [ ] Add "Episode Exempt" tab to Whitelist page (between "Language Exempt" and "Large Content")
+- [ ] Tab displays list of exempted episodes with: series name, episode identifier (S01E05), episode name, expiration status
+- [ ] Each item has a remove button (trash icon)
+- [ ] Remove calls `DELETE /api/whitelist/episode-exempt/{id}`
+- [ ] Show empty state when no exemptions exist
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: view exemptions, remove one, list updates
+
+---
