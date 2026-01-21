@@ -1,10 +1,15 @@
 """Celery application configuration."""
 
+import asyncio
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Use celery_broker_url if set, otherwise fall back to redis_url
@@ -17,6 +22,27 @@ celery_app = Celery(
     backend=result_backend,
     include=["app.tasks"],
 )
+
+
+@worker_process_init.connect  # type: ignore[untyped-decorator]
+def init_worker(**kwargs: object) -> None:
+    """Initialize database settings when Celery worker starts.
+
+    This ensures SQLite WAL mode and busy_timeout are set for Celery connections,
+    matching the FastAPI backend configuration.
+    """
+    from app.database import init_db_settings
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(init_db_settings())
+            logger.info("Celery worker: SQLite WAL mode and busy_timeout initialized")
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"Celery worker: Failed to initialize DB settings: {e}")
 
 # Celery configuration
 celery_app.conf.update(

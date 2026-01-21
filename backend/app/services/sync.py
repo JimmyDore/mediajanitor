@@ -959,13 +959,17 @@ async def calculate_season_sizes(
                 # Continue to next series on error
                 continue
 
-    await db.flush()
+    # Commit to release database locks
+    await db.commit()
 
 
 async def cache_media_items(
     db: AsyncSession, user_id: int, items: list[dict[str, Any]]
 ) -> int:
-    """Cache media items in database, replacing old data."""
+    """Cache media items in database, replacing old data.
+
+    Commits immediately after caching to release database locks.
+    """
     # Delete existing cached items for this user
     await db.execute(
         delete(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
@@ -992,14 +996,18 @@ async def cache_media_items(
         db.add(cached_item)
         cached_count += 1
 
-    await db.flush()
+    # Commit to release database locks (important for SQLite concurrency)
+    await db.commit()
     return cached_count
 
 
 async def cache_jellyseerr_requests(
     db: AsyncSession, user_id: int, requests: list[dict[str, Any]]
 ) -> int:
-    """Cache Jellyseerr requests in database, replacing old data."""
+    """Cache Jellyseerr requests in database, replacing old data.
+
+    Commits immediately after caching to release database locks.
+    """
     # Delete existing cached requests for this user
     await db.execute(
         delete(CachedJellyseerrRequest).where(
@@ -1039,7 +1047,8 @@ async def cache_jellyseerr_requests(
         db.add(cached_request)
         cached_count += 1
 
-    await db.flush()
+    # Commit to release database locks (important for SQLite concurrency)
+    await db.commit()
     return cached_count
 
 
@@ -1056,6 +1065,8 @@ async def prefill_user_nicknames(
     - Uses Jellyfin username as jellyseerr_username (assumption: same across systems)
     - Leaves display_name empty for user to fill in
     - Sets has_jellyseerr_account=True for users found in Jellyseerr
+
+    Commits immediately after to release database locks.
 
     Args:
         db: Database session
@@ -1106,7 +1117,8 @@ async def prefill_user_nicknames(
         db.add(nickname)
         created_count += 1
 
-    await db.flush()
+    # Commit to release database locks
+    await db.commit()
     logger.info(f"Prefilled {created_count} new nickname records for user {user_id}")
     return created_count
 
@@ -1125,7 +1137,10 @@ async def update_sync_status(
     current_step_total: int | None = None,
     current_user_name: str | None = None,
 ) -> None:
-    """Update sync status for a user."""
+    """Update sync status for a user.
+
+    Commits immediately to release database locks and make status visible to other connections.
+    """
     result = await db.execute(
         select(SyncStatus).where(SyncStatus.user_id == user_id)
     )
@@ -1171,7 +1186,8 @@ async def update_sync_status(
         )
         db.add(sync_status)
 
-    await db.flush()
+    # Commit to release database locks
+    await db.commit()
 
 
 async def update_sync_progress(
@@ -1182,7 +1198,10 @@ async def update_sync_progress(
     current_step_total: int | None = None,
     current_user_name: str | None = None,
 ) -> None:
-    """Update sync progress for a user (without changing overall status)."""
+    """Update sync progress for a user (without changing overall status).
+
+    Commits immediately to release database locks and make progress visible to other connections.
+    """
     result = await db.execute(
         select(SyncStatus).where(SyncStatus.user_id == user_id)
     )
@@ -1197,7 +1216,8 @@ async def update_sync_progress(
             sync_status.current_step_total = current_step_total
         if current_user_name is not None:
             sync_status.current_user_name = current_user_name
-        await db.flush()
+        # Commit to release database locks
+        await db.commit()
 
 
 async def get_sync_status(db: AsyncSession, user_id: int) -> SyncStatus | None:
