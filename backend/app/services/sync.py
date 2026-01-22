@@ -21,6 +21,7 @@ from app.database import (
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
+from app.services.ultra import fetch_ultra_stats, get_decrypted_ultra_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -1334,6 +1335,32 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
             )
         except Exception:
             pass  # Don't let notification failure affect sync error handling
+
+    # Fetch Ultra.cc stats (if configured) - non-blocking
+    try:
+        if settings.ultra_api_url and settings.ultra_api_key_encrypted:
+            ultra_api_key = get_decrypted_ultra_api_key(settings)
+            if ultra_api_key:
+                ultra_stats = await fetch_ultra_stats(settings.ultra_api_url, ultra_api_key)
+                if ultra_stats:
+                    # Store stats in UserSettings
+                    settings.ultra_free_storage_gb = ultra_stats["free_storage_gb"]
+                    settings.ultra_traffic_available_percent = ultra_stats[
+                        "traffic_available_percentage"
+                    ]
+                    settings.ultra_last_synced_at = datetime.now(UTC)
+                    await db.commit()
+                    logger.info(
+                        f"Updated Ultra stats for user {user_id}: "
+                        f"storage={ultra_stats['free_storage_gb']:.1f}GB, "
+                        f"traffic={ultra_stats['traffic_available_percentage']:.1f}%"
+                    )
+                else:
+                    logger.warning(f"Failed to fetch Ultra stats for user {user_id}")
+    except Exception as e:
+        # Ultra sync failure is not critical - we still have Jellyfin/Jellyseerr data
+        logger.warning(f"Ultra.cc sync failed for user {user_id}: {str(e)}")
+        # Don't update error_message - Ultra failure shouldn't affect overall sync status
 
     # Update sync status
     final_status = "success" if not error_message else "partial"

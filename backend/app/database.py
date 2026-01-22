@@ -9,6 +9,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -89,6 +90,10 @@ class UserSettings(Base):
     ultra_traffic_warning_percent: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )  # Default: 20%
+    # Ultra.cc cached stats (fetched during sync)
+    ultra_free_storage_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ultra_traffic_available_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ultra_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
