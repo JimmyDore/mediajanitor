@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     filter_future_releases: bool = True
     filter_recent_releases: bool = True
     recent_release_months_cutoff: int = 3
+    disable_signups: bool = False  # Set to true to block new registrations
 
     # Slack Notifications (optional)
     slack_webhook_new_users: str = ""

@@ -599,6 +599,96 @@ class TestNewUserSignupNotifications:
                     assert "blocks" in message or "text" in message
 
 
+class TestDisabledSignups:
+    """Tests for DISABLE_SIGNUPS feature flag."""
+
+    def test_register_blocked_when_signups_disabled(self, client: TestClient) -> None:
+        """Test that registration returns 403 when signups are disabled."""
+        from unittest.mock import patch
+
+        with patch("app.routers.auth.get_settings") as mock_settings_fn:
+            from app.config import Settings
+
+            mock_settings = Settings()
+            mock_settings.disable_signups = True
+            mock_settings_fn.return_value = mock_settings
+
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "blocked@example.com",
+                    "password": "SecurePassword123!",
+                },
+            )
+            assert response.status_code == 403
+            assert response.json()["detail"] == "Sign ups are closed for now"
+
+    def test_register_allowed_when_signups_enabled(self, client: TestClient) -> None:
+        """Test that registration works when signups are enabled (default)."""
+        response = client.post(
+            "/api/auth/register",
+            json={
+                "email": "allowed@example.com",
+                "password": "SecurePassword123!",
+            },
+        )
+        assert response.status_code == 201
+        assert response.json()["email"] == "allowed@example.com"
+
+    @pytest.mark.asyncio
+    async def test_blocked_signup_notification_format(self) -> None:
+        """Test that blocked signup notification has correct Slack format."""
+        from unittest.mock import AsyncMock, patch
+
+        with patch("app.routers.auth.send_slack_message", new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = True
+
+            with patch("app.routers.auth.get_settings") as mock_settings_fn:
+                from app.config import Settings
+
+                mock_settings = Settings()
+                mock_settings.slack_webhook_new_users = "https://hooks.slack.com/test"
+                mock_settings_fn.return_value = mock_settings
+
+                from app.routers.auth import send_blocked_signup_notification
+
+                await send_blocked_signup_notification("blocked@example.com")
+
+                # Verify Slack notification was sent with correct format
+                mock_send.assert_called_once()
+                call_args = mock_send.call_args
+                webhook_url = call_args[0][0]
+                message = call_args[0][1]
+
+                assert webhook_url == "https://hooks.slack.com/test"
+                assert "blocks" in message
+                assert "Blocked Signup Attempt" in message["blocks"][0]["text"]["text"]
+                assert "blocked@example.com" in message["text"]
+
+    def test_blocked_signup_notification_skipped_without_webhook(self, client: TestClient) -> None:
+        """Test that blocked signup doesn't fail when webhook is not configured."""
+        from unittest.mock import patch
+
+        with patch("app.routers.auth.get_settings") as mock_settings_fn:
+            from app.config import Settings
+
+            mock_settings = Settings()
+            mock_settings.disable_signups = True
+            mock_settings.slack_webhook_new_users = ""  # No webhook configured
+            mock_settings_fn.return_value = mock_settings
+
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": "nowebook@example.com",
+                    "password": "SecurePassword123!",
+                },
+            )
+            # Registration should still be blocked
+            assert response.status_code == 403
+            assert response.json()["detail"] == "Sign ups are closed for now"
+
+
 class TestDatabaseConcurrency:
     """Tests for database concurrency (regression test for WAL mode)."""
 
