@@ -414,6 +414,14 @@ async def delete_series(
         else:
             jellyseerr_message = "No media found for this TMDB ID"
 
+    # US-49.2: Delete from cache if Sonarr deletion succeeded
+    # (must be after Jellyseerr lookup but before response)
+    if arr_deleted:
+        await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
+        await _delete_cached_jellyseerr_request_by_tmdb_id(
+            db, current_user.id, tmdb_id, "tv"
+        )
+
     # Compose response message
     messages = []
     if delete_from_arr:

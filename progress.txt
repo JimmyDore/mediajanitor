@@ -99,4 +99,13 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `routers/content.py`, `tests/test_delete_content.py`
 - 4 new unit tests added (611 total tests pass), mypy passes, verified in Docker with integration tests
 
+**US-49.2: Delete Series from Cache After Deletion**
+- Reused existing `_delete_cached_media_by_tmdb_id()` and `_delete_cached_jellyseerr_request_by_tmdb_id()` helper functions
+- Integrated cache deletion into `delete_series` endpoint after successful Sonarr deletion
+- Cache deletion happens AFTER Jellyseerr API lookup but before response (same pattern as US-49.1)
+- If Sonarr deletion fails, cache is NOT deleted (items stay in list)
+- If Sonarr succeeds but Jellyseerr fails, cache is still deleted
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 4 new unit tests added (615 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---
