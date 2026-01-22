@@ -8,8 +8,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CachedJellyseerrRequest, CachedMediaItem, User, UserSettings, get_db
-
-logger = logging.getLogger(__name__)
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
@@ -40,6 +38,8 @@ from app.services.sonarr import (
     get_decrypted_sonarr_api_key,
     get_sonarr_tmdb_to_slug_map,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 
@@ -197,9 +197,7 @@ async def _lookup_jellyseerr_media_by_tmdb(
     return row
 
 
-async def _delete_cached_media_by_tmdb_id(
-    db: AsyncSession, user_id: int, tmdb_id: int
-) -> int:
+async def _delete_cached_media_by_tmdb_id(db: AsyncSession, user_id: int, tmdb_id: int) -> int:
     """Delete CachedMediaItem by TMDB ID stored in raw_data.ProviderIds.Tmdb.
 
     Args:
@@ -232,9 +230,7 @@ async def _delete_cached_media_by_tmdb_id(
         return 0
 
     # Delete the matching items
-    await db.execute(
-        delete(CachedMediaItem).where(CachedMediaItem.id.in_(items_to_delete))
-    )
+    await db.execute(delete(CachedMediaItem).where(CachedMediaItem.id.in_(items_to_delete)))
 
     logger.info(f"Deleted {len(items_to_delete)} CachedMediaItem(s) for TMDB ID {tmdb_id}")
     return len(items_to_delete)
@@ -343,9 +339,7 @@ async def delete_movie(
     # (must be after Jellyseerr lookup but before response)
     if arr_deleted:
         await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
-        await _delete_cached_jellyseerr_request_by_tmdb_id(
-            db, current_user.id, tmdb_id, "movie"
-        )
+        await _delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "movie")
 
     # Compose response message
     messages = []
@@ -436,9 +430,7 @@ async def delete_series(
     # (must be after Jellyseerr lookup but before response)
     if arr_deleted:
         await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
-        await _delete_cached_jellyseerr_request_by_tmdb_id(
-            db, current_user.id, tmdb_id, "tv"
-        )
+        await _delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "tv")
 
     # Compose response message
     messages = []

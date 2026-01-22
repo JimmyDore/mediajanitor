@@ -76,7 +76,8 @@ async def fetch_ultra_stats(url: str, api_key: str) -> UltraStatsResult | None:
         or None if the API call fails.
 
     API endpoint: {url}/total-stats
-    Response structure: service_stats_info.free_storage_gb, service_stats_info.traffic_available_percentage
+    Response structure: service_stats_info.free_storage_gb,
+        service_stats_info.traffic_available_percentage
     """
     url = url.rstrip("/")
 
@@ -95,9 +96,7 @@ async def fetch_ultra_stats(url: str, api_key: str) -> UltraStatsResult | None:
             traffic_available_percentage = service_stats.get("traffic_available_percentage")
 
             if free_storage_gb is None or traffic_available_percentage is None:
-                logger.warning(
-                    f"Ultra API response missing expected fields: {data.keys()}"
-                )
+                logger.warning(f"Ultra API response missing expected fields: {data.keys()}")
                 return None
 
             return {
