@@ -50,6 +50,24 @@
 	let hasSonarrConfigured = $state(false);
 	let currentSonarrUrl = $state<string | null>(null);
 
+	// Ultra form state
+	let ultraUrl = $state('');
+	let ultraApiKey = $state('');
+	let ultraError = $state<string | null>(null);
+	let ultraSuccess = $state<string | null>(null);
+	let isUltraLoading = $state(false);
+
+	// Ultra current settings state
+	let hasUltraConfigured = $state(false);
+	let currentUltraUrl = $state<string | null>(null);
+
+	// Ultra thresholds state
+	let ultraStorageWarningGb = $state(100);
+	let ultraTrafficWarningPercent = $state(20);
+	let ultraThresholdsError = $state<string | null>(null);
+	let ultraThresholdsSuccess = $state<string | null>(null);
+	let isUltraThresholdsLoading = $state(false);
+
 	// Loading state
 	let isFetchingSettings = $state(true);
 
@@ -58,6 +76,7 @@
 	let jellyseerrExpanded = $state(false);
 	let radarrExpanded = $state(false);
 	let sonarrExpanded = $state(false);
+	let ultraExpanded = $state(false);
 
 	onMount(async () => {
 		await loadCurrentSettings();
@@ -115,6 +134,27 @@
 				if (data.server_url) {
 					sonarrUrl = data.server_url;
 				}
+			}
+
+			// Load Ultra settings
+			const ultraResponse = await authenticatedFetch('/api/settings/ultra');
+
+			if (ultraResponse.ok) {
+				const data = await ultraResponse.json();
+				hasUltraConfigured = data.api_key_configured;
+				currentUltraUrl = data.server_url;
+				if (data.server_url) {
+					ultraUrl = data.server_url;
+				}
+			}
+
+			// Load Ultra thresholds
+			const ultraThresholdsResponse = await authenticatedFetch('/api/settings/ultra/thresholds');
+
+			if (ultraThresholdsResponse.ok) {
+				const data = await ultraThresholdsResponse.json();
+				ultraStorageWarningGb = data.storage_warning_gb;
+				ultraTrafficWarningPercent = data.traffic_warning_percent;
 			}
 
 			// Load sync status to check if user has never synced
@@ -278,6 +318,72 @@
 			sonarrError = e instanceof Error ? e.message : 'Failed to save settings';
 		} finally {
 			isSonarrLoading = false;
+		}
+	}
+
+	async function handleUltraSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		ultraError = null;
+		ultraSuccess = null;
+		isUltraLoading = true;
+
+		try {
+			const response = await authenticatedFetch('/api/settings/ultra', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					server_url: ultraUrl,
+					api_key: ultraApiKey
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save settings');
+			}
+
+			ultraSuccess = 'Connected';
+			hasUltraConfigured = true;
+			currentUltraUrl = ultraUrl;
+			ultraApiKey = '';
+			ultraExpanded = false;
+			setTimeout(() => (ultraSuccess = null), 3000);
+		} catch (e) {
+			ultraError = e instanceof Error ? e.message : 'Failed to save settings';
+		} finally {
+			isUltraLoading = false;
+		}
+	}
+
+	async function handleUltraThresholdsSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		ultraThresholdsError = null;
+		ultraThresholdsSuccess = null;
+		isUltraThresholdsLoading = true;
+
+		try {
+			const response = await authenticatedFetch('/api/settings/ultra/thresholds', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					storage_warning_gb: ultraStorageWarningGb,
+					traffic_warning_percent: ultraTrafficWarningPercent
+				})
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.detail || 'Failed to save thresholds');
+			}
+
+			ultraThresholdsSuccess = 'Saved';
+			setTimeout(() => (ultraThresholdsSuccess = null), 3000);
+		} catch (e) {
+			ultraThresholdsError = e instanceof Error ? e.message : 'Failed to save thresholds';
+		} finally {
+			isUltraThresholdsLoading = false;
 		}
 	}
 
@@ -594,6 +700,143 @@
 				</div>
 			</form>
 		{/if}
+
+		<!-- Seedbox Monitoring Section -->
+		<div class="section-header">
+			<h2>Seedbox Monitoring</h2>
+			<p class="section-description">Monitor your Ultra.cc seedbox storage and traffic.</p>
+		</div>
+
+		<!-- Ultra.cc -->
+		<div class="connection-row">
+			<div class="connection-info">
+				<div class="connection-header">
+					<span class="connection-name">Ultra.cc</span>
+					{#if hasUltraConfigured}
+						<span class="status-dot status-connected" title="Connected"></span>
+					{:else}
+						<span class="status-dot status-disconnected" title="Not connected"></span>
+					{/if}
+				</div>
+				{#if hasUltraConfigured && currentUltraUrl}
+					<span class="connection-url">{extractDomain(currentUltraUrl)}</span>
+				{:else}
+					<span class="connection-url muted">Not configured</span>
+				{/if}
+			</div>
+			<button
+				class="btn-edit"
+				onclick={() => (ultraExpanded = !ultraExpanded)}
+				aria-expanded={ultraExpanded}
+			>
+				{ultraExpanded ? 'Cancel' : hasUltraConfigured ? 'Edit' : 'Configure'}
+			</button>
+		</div>
+
+		{#if ultraExpanded}
+			<form onsubmit={handleUltraSubmit} class="connection-form">
+				{#if ultraError}
+					<div class="inline-error">{ultraError}</div>
+				{/if}
+				{#if ultraSuccess}
+					<div class="inline-success">{ultraSuccess}</div>
+				{/if}
+				<div class="form-row">
+					<div class="form-field">
+						<label for="ultra-url">API URL</label>
+						<input
+							type="url"
+							id="ultra-url"
+							bind:value={ultraUrl}
+							required
+							placeholder="https://api.ultra.cc"
+						/>
+					</div>
+					<div class="form-field">
+						<label for="ultra-key">
+							API Token
+							{#if hasUltraConfigured}
+								<span class="optional">(leave blank to keep)</span>
+							{/if}
+						</label>
+						<input
+							type="password"
+							id="ultra-key"
+							bind:value={ultraApiKey}
+							required={!hasUltraConfigured}
+							placeholder={hasUltraConfigured ? '••••••••' : 'API token'}
+							autocomplete="off"
+						/>
+					</div>
+					<button type="submit" class="btn-save" disabled={isUltraLoading}>
+						{#if isUltraLoading}
+							<span class="spinner-small"></span>
+						{:else}
+							Save
+						{/if}
+					</button>
+				</div>
+			</form>
+		{/if}
+
+		<div class="divider"></div>
+
+		<!-- Ultra Warning Thresholds -->
+		<div class="thresholds-section">
+			<h3 class="thresholds-title">Warning Thresholds</h3>
+			<form onsubmit={handleUltraThresholdsSubmit} class="thresholds-form">
+				{#if ultraThresholdsError}
+					<div class="inline-error">{ultraThresholdsError}</div>
+				{/if}
+				{#if ultraThresholdsSuccess}
+					<div class="inline-success">{ultraThresholdsSuccess}</div>
+				{/if}
+
+				<div class="threshold-row">
+					<div class="threshold-label-group">
+						<label for="storage-warning">Warn when storage falls below</label>
+					</div>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="storage-warning"
+							bind:value={ultraStorageWarningGb}
+							min="1"
+							max="1000"
+							required
+						/>
+						<span class="unit">GB</span>
+					</div>
+				</div>
+
+				<div class="threshold-row">
+					<div class="threshold-label-group">
+						<label for="traffic-warning">Warn when traffic falls below</label>
+					</div>
+					<div class="threshold-input">
+						<input
+							type="number"
+							id="traffic-warning"
+							bind:value={ultraTrafficWarningPercent}
+							min="1"
+							max="100"
+							required
+						/>
+						<span class="unit">%</span>
+					</div>
+				</div>
+
+				<div class="threshold-actions">
+					<button type="submit" class="btn-save" disabled={isUltraThresholdsLoading}>
+						{#if isUltraThresholdsLoading}
+							<span class="spinner-small"></span>
+						{:else}
+							Save
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
 	{/if}
 </div>
 
@@ -819,6 +1062,99 @@
 		}
 	}
 
+	/* Section Header */
+	.section-header {
+		margin-top: var(--space-8);
+		margin-bottom: var(--space-4);
+		padding-top: var(--space-6);
+		border-top: 1px solid var(--border);
+	}
+
+	.section-header h2 {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: -0.01em;
+		margin-bottom: var(--space-1);
+	}
+
+	.section-description {
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
+
+	/* Thresholds Section */
+	.thresholds-section {
+		margin-top: var(--space-2);
+	}
+
+	.thresholds-title {
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		margin-bottom: var(--space-3);
+	}
+
+	.thresholds-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.threshold-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		padding: var(--space-2) 0;
+	}
+
+	.threshold-row label {
+		font-size: var(--font-size-md);
+		color: var(--text-primary);
+	}
+
+	.threshold-label-group {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.threshold-input {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.threshold-input input {
+		width: 64px;
+		padding: var(--space-2);
+		font-size: var(--font-size-md);
+		font-family: var(--font-mono);
+		text-align: center;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-primary);
+		color: var(--text-primary);
+	}
+
+	.threshold-input input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.unit {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		min-width: 30px;
+	}
+
+	.threshold-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
+		margin-top: var(--space-3);
+	}
+
 	/* Responsive */
 	@media (max-width: 600px) {
 		.form-row {
@@ -832,6 +1168,20 @@
 
 		.btn-save {
 			width: 100%;
+		}
+
+		.threshold-row {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-2);
+		}
+
+		.threshold-input {
+			width: 100%;
+		}
+
+		.threshold-input input {
+			flex: 1;
 		}
 	}
 </style>
