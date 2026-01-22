@@ -26,6 +26,8 @@ from app.models.settings import (
     SettingsSaveResponse,
     SonarrSettingsCreate,
     SonarrSettingsResponse,
+    UltraSettingsCreate,
+    UltraSettingsResponse,
 )
 from app.services.auth import get_current_user
 from app.services.encryption import decrypt_value
@@ -54,6 +56,10 @@ from app.services.sonarr import (
     get_user_sonarr_settings,
     save_sonarr_settings,
     validate_sonarr_connection,
+)
+from app.services.ultra import (
+    get_user_ultra_settings,
+    save_ultra_settings,
 )
 from app.services.sync import (
     fetch_jellyfin_users,
@@ -261,6 +267,52 @@ async def get_sonarr_config(
         )
 
     return SonarrSettingsResponse(
+        server_url=None,
+        api_key_configured=False,
+    )
+
+
+# Ultra.cc Endpoints
+
+
+@router.post("/ultra", response_model=SettingsSaveResponse)
+async def save_ultra_config(
+    settings_data: UltraSettingsCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save Ultra.cc seedbox connection settings.
+
+    Note: Unlike other services, we don't validate the connection before saving
+    since Ultra API may have rate limits and this is a simpler integration.
+    """
+    # Convert HttpUrl to string
+    server_url = str(settings_data.server_url)
+
+    # Save settings (no validation - just save)
+    await save_ultra_settings(db, current_user.id, server_url, settings_data.api_key)
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Ultra settings saved successfully.",
+    )
+
+
+@router.get("/ultra", response_model=UltraSettingsResponse)
+async def get_ultra_config(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UltraSettingsResponse:
+    """Get current Ultra.cc connection settings for the user."""
+    settings = await get_user_ultra_settings(db, current_user.id)
+
+    if settings and settings.ultra_api_url:
+        return UltraSettingsResponse(
+            server_url=settings.ultra_api_url,
+            api_key_configured=settings.ultra_api_key_encrypted is not None,
+        )
+
+    return UltraSettingsResponse(
         server_url=None,
         api_key_configured=False,
     )

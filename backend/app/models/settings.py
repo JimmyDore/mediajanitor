@@ -67,6 +67,20 @@ class SonarrSettingsResponse(BaseModel):
     api_key_configured: bool
 
 
+class UltraSettingsCreate(BaseModel):
+    """Request model for saving Ultra.cc seedbox settings."""
+
+    server_url: HttpUrl
+    api_key: str
+
+
+class UltraSettingsResponse(BaseModel):
+    """Response model for Ultra settings (without exposing API key)."""
+
+    server_url: str | None
+    api_key_configured: bool
+
+
 class SettingsSaveResponse(BaseModel):
     """Response model for successful settings save."""
 

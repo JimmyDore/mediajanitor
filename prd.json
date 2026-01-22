@@ -17,8 +17,8 @@
       ],
       "context": "Epic 48: Ultra.cc seedbox monitoring integration. API endpoint: {base_url}/total-stats with Bearer token auth. Response fields: service_stats_info.free_storage_gb, service_stats_info.traffic_available_percentage. Follow existing pattern: encrypt API key like Jellyfin/Jellyseerr keys in UserSettings. Stats cached in DB, fetched during sync (not on page load). NON-GOALS: No Slack/email notifications, no automatic actions, no historical tracking.",
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented with POST/GET /api/settings/ultra endpoints (follows existing pattern like Radarr/Sonarr)"
     },
     {
       "id": "US-48.3",
