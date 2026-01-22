@@ -87,7 +87,6 @@
 - [ ] Architecture overview doc
 - [ ] API documentation
 - [ ] Database schema doc
-- [ ] `CHANGELOG.md`
 
 ---
 

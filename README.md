@@ -15,33 +15,6 @@ A self-hosted web application for Jellyfin users to analyze their media librarie
 
 [![Watch the demo](https://img.youtube.com/vi/WAsHbp1Zyes/maxresdefault.jpg)](https://www.youtube.com/watch?v=WAsHbp1Zyes)
 
-## Screenshots
-
-### Dashboard
-Overview of your library with issue counts and storage metrics.
-
-![Dashboard](docs/screenshots/dashboard.png)
-
-### Issues
-Browse and filter content with detected issues (old, large, language problems).
-
-![Issues](docs/screenshots/issues.png)
-
-### Library
-Browse your entire media library with filtering and sorting options.
-
-![Library](docs/screenshots/library.png)
-
-### Whitelist
-Manage content protected from cleanup suggestions.
-
-![Whitelist](docs/screenshots/whitelist.png)
-
-### Settings
-Configure connections to Jellyfin, Jellyseerr, Radarr, and Sonarr.
-
-![Settings](docs/screenshots/settings.png)
-
 ## Quick Start
 
 ```bash
