@@ -73,6 +73,56 @@ Updated 3 stories in PRD.md:
 
 Write the updated PRD.md file.
 
+### Step 6: Generate Next Steps Summary
+
+After syncing, generate a "Next Steps" summary for the user. This helps them know what manual work remains.
+
+**Extract from prd.json stories with `passes: false`:**
+
+1. **Setup Requirements** - Look at story `context` fields for:
+   - API credentials needed (e.g., "Ultra.cc API", "Jellyfin API")
+   - External services to configure
+   - Test account requirements
+
+2. **Manual QA Checklist** - Scan `acceptanceCriteria` arrays for items containing:
+   - "Verify in Docker:" → Extract the verification step
+   - "Verify in browser" → Extract what to verify
+   - Any criteria about manual testing
+
+3. **What to Test** - Summarize the key features being implemented:
+   - Group by Epic (extract from story IDs like "US-48.x")
+   - List user-facing functionality
+
+**Output format:**
+
+```markdown
+## 📋 Next Steps Summary
+
+### 🔑 Setup Requirements
+- [ ] Configure Ultra.cc API credentials in Settings > Connections
+- [ ] Ensure test account has Jellyfin/Jellyseerr configured
+
+### ✅ Manual QA Checklist
+- [ ] US-48.2: Verify Seedbox Monitoring section appears in Settings
+- [ ] US-49.1: Delete a movie, refresh page, confirm it stays deleted
+- [ ] US-50.1: Whitelist item with 1 Week duration, verify expiration date
+
+### 🎯 Features to Test
+**Epic 48 - Ultra.cc Monitoring:**
+- Settings page connection UI
+- Dashboard stats display with warning colors
+
+**Epic 49 - Deletion Cache Fix:**
+- Movies/series stay deleted after refresh
+- Requests stay deleted after refresh
+```
+
+**Rules:**
+- Only include incomplete stories (`passes: false`)
+- Group QA items by story ID for traceability
+- Extract exact verification text from acceptance criteria
+- If no setup requirements found, omit that section
+
 ---
 
 ## Field Mapping
@@ -149,6 +199,14 @@ cat prd.json | jq '.userStories[] | select(.passes == true) | {id, title}'
 # Run this skill to sync to PRD.md
 /prd-sync
 ```
+
+**Output:** The skill will:
+1. Update PRD.md with completion status
+2. Show a summary of changes made
+3. **Generate a "Next Steps Summary"** with:
+   - Setup requirements (API keys, services to configure)
+   - Manual QA checklist (verification steps from acceptance criteria)
+   - Features to test (grouped by Epic)
 
 Then review, commit, and regenerate prd.json:
 ```bash

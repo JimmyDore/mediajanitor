@@ -18,6 +18,8 @@ This skill focuses on **infrastructure concerns only**:
 
 ## Workflow
 
+> **Note:** Before running VPS commands, check `.claude/local.md` for the actual SSH command and paths. The examples below use `ssh your-server` and `~/mediajanitor` as placeholders.
+
 ### Step 1: Database Backup Review
 
 Check if backup strategy exists:
@@ -33,10 +35,10 @@ Check if backup strategy exists:
 For SQLite databases:
 ```bash
 # Check database size on VPS
-ssh vpsjim "du -h /home/jimmydore/mediajanitor/data/plex_dashboard.db"
+ssh your-server "du -h ~/mediajanitor/data/plex_dashboard.db"
 
 # Check last modification
-ssh vpsjim "ls -la /home/jimmydore/mediajanitor/data/"
+ssh your-server "ls -la ~/mediajanitor/data/"
 ```
 
 ### Step 2: Docker Compose Review
@@ -79,22 +81,22 @@ Run these commands to check VPS state:
 
 ```bash
 # Disk space
-ssh vpsjim "df -h"
+ssh your-server "df -h"
 
 # Memory usage
-ssh vpsjim "free -h"
+ssh your-server "free -h"
 
 # CPU load
-ssh vpsjim "uptime"
+ssh your-server "uptime"
 
 # Container resource usage
-ssh vpsjim "docker stats --no-stream"
+ssh your-server "docker stats --no-stream"
 
 # Container health
-ssh vpsjim "docker ps --format 'table {{.Names}}\t{{.Status}}'"
+ssh your-server "docker ps --format 'table {{.Names}}\t{{.Status}}'"
 
 # Recent container restarts (indicates problems)
-ssh vpsjim "docker ps --format '{{.Names}}: {{.Status}}' | grep -i restart"
+ssh your-server "docker ps --format '{{.Names}}: {{.Status}}' | grep -i restart"
 ```
 
 Flag issues if:
@@ -109,16 +111,16 @@ For SQLite production databases:
 
 ```bash
 # Check database integrity
-ssh vpsjim "sqlite3 /home/jimmydore/mediajanitor/data/plex_dashboard.db 'PRAGMA integrity_check;'"
+ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'PRAGMA integrity_check;'"
 
 # Check database size
-ssh vpsjim "sqlite3 /home/jimmydore/mediajanitor/data/plex_dashboard.db 'SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();'"
+ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();'"
 
 # Check if VACUUM is needed (fragmentation)
-ssh vpsjim "sqlite3 /home/jimmydore/mediajanitor/data/plex_dashboard.db 'PRAGMA freelist_count;'"
+ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'PRAGMA freelist_count;'"
 
 # Check migration status
-ssh vpsjim "docker exec mediajanitor_backend_1 alembic current"
+ssh your-server "docker exec mediajanitor_backend_1 alembic current"
 ```
 
 ### Step 5: Deployment Pipeline Review
@@ -154,7 +156,7 @@ Look for:
 # Check for missing or default values
 
 # List env vars in container
-ssh vpsjim "docker exec mediajanitor_backend_1 env | grep -v PASSWORD | grep -v KEY | sort"
+ssh your-server "docker exec mediajanitor_backend_1 env | grep -v PASSWORD | grep -v KEY | sort"
 ```
 
 Check for:
@@ -166,10 +168,10 @@ Check for:
 
 ```bash
 # Check certificate expiry
-ssh vpsjim "echo | openssl s_client -servername mediajanitor.com -connect mediajanitor.com:443 2>/dev/null | openssl x509 -noout -dates"
+ssh your-server "echo | openssl s_client -servername mediajanitor.com -connect mediajanitor.com:443 2>/dev/null | openssl x509 -noout -dates"
 
 # Check if auto-renewal is configured (certbot)
-ssh vpsjim "certbot certificates 2>/dev/null || echo 'certbot not found'"
+ssh your-server "certbot certificates 2>/dev/null || echo 'certbot not found'"
 ```
 
 ### Step 9: Update SUGGESTIONS.md

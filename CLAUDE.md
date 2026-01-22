@@ -319,13 +319,13 @@ Can't locate revision identified by 'XXXXX'
 
 To check what revision production is at:
 ```bash
-ssh vpsjim "sqlite3 /home/jimmydore/mediajanitor/data/plex_dashboard.db 'SELECT * FROM alembic_version;'"
+ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'SELECT * FROM alembic_version;'"
 ```
 
 If you MUST delete a migration, first update production's alembic_version:
 ```bash
-ssh vpsjim
-cd /home/jimmydore/mediajanitor
+ssh your-server
+cd ~/mediajanitor
 sudo sqlite3 data/plex_dashboard.db "UPDATE alembic_version SET version_num = 'NEW_REVISION';"
 docker-compose up -d
 ```
@@ -402,14 +402,16 @@ class UserSettings(Base):
 
 ### Production Debugging (VPS)
 
+> **Note:** For actual SSH commands and paths, check `.claude/local.md` (gitignored). The examples below use generic placeholders.
+
 **Accessing production logs:**
 ```bash
-ssh vpsjim "docker logs mediajanitor_backend_1 --tail 100 2>&1"
+ssh your-server "docker logs mediajanitor_backend_1 --tail 100 2>&1"
 ```
 
 **Checking database schema in production:**
 ```bash
-ssh vpsjim "docker exec mediajanitor_backend_1 python3 -c \"
+ssh your-server "docker exec mediajanitor_backend_1 python3 -c \"
 import sqlite3
 conn = sqlite3.connect('/app/data/plex_dashboard.db')
 cursor = conn.execute('PRAGMA table_info(TABLE_NAME)')
@@ -425,7 +427,7 @@ print([row[1] for row in cursor])
 
 Doing both causes conflicts - the automated deployment may restart containers mid-manual-fix.
 
-**Production location:** `/home/jimmydore/mediajanitor`
+**Production location:** `~/mediajanitor` (or your configured deploy path)
 
 **Nginx config:** `/etc/nginx/sites-enabled/mediajanitor*`
 - Frontend: `localhost:5173`
