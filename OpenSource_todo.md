@@ -44,10 +44,6 @@
 - [X] How to contribute (link to CONTRIBUTING.md)
 - [X] License section
 
-### Demo Video (Optional)
-- [ ] Record demo video showing app walkthrough
-- [ ] Upload to YouTube or embed in repo
-- [ ] Add to README.md
 
 ---
 
@@ -82,8 +78,12 @@
 
 ## Phase 5: Nice to Have (Post-Launch)
 
+### Demo Video (Optional)
+- [X] Record demo video showing app walkthrough
+- [X] Upload to YouTube or embed in repo
+- [X] Add to README.md
+
 ### Documentation
-- [ ] Video of the app with zoom
 - [ ] Architecture overview doc
 - [ ] API documentation
 - [ ] Database schema doc
