@@ -11,6 +11,10 @@ A self-hosted web application for Jellyfin users to analyze their media librarie
 - **Recently Available** - See new content added to your library
 - **Whitelist Management** - Protect specific content from cleanup suggestions
 
+## Demo
+
+[![Watch the demo](https://img.youtube.com/vi/WAsHbp1Zyes/maxresdefault.jpg)](https://www.youtube.com/watch?v=WAsHbp1Zyes)
+
 ## Screenshots
 
 ### Dashboard
