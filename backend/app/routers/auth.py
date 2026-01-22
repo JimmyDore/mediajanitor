@@ -169,6 +169,40 @@ async def send_signup_notification(email: str, user_id: int, total_users: int) -
         logger.warning(f"Failed to send signup notification for {email}: {e}")
 
 
+async def send_blocked_signup_notification(email: str) -> None:
+    """Send Slack notification about a blocked signup attempt."""
+    settings = get_settings()
+    webhook_url = settings.slack_webhook_new_users
+    if not webhook_url:
+        return
+
+    attempt_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    message = {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "⚠️ Blocked Signup Attempt", "emoji": True},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Email:*\n{email}"},
+                    {"type": "mrkdwn", "text": f"*Time:*\n{attempt_time}"},
+                ],
+            },
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Signups are currently disabled."}],
+            },
+        ],
+        "text": f"Blocked signup attempt: {email}",
+    }
+    try:
+        await send_slack_message(webhook_url, message)
+    except Exception as e:
+        logger.warning(f"Failed to send blocked signup notification: {e}")
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     request: Request,
@@ -177,6 +211,15 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Register a new user."""
+    # Check if signups are disabled (before rate limiting)
+    settings = get_settings()
+    if settings.disable_signups:
+        background_tasks.add_task(send_blocked_signup_notification, email=user_data.email)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sign ups are closed for now",
+        )
+
     # Check rate limit
     _check_rate_limit(request, register_rate_limiter)
 

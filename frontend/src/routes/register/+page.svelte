@@ -93,6 +93,12 @@
 
 			if (!response.ok) {
 				const data = await response.json();
+				// Check for signup disabled error
+				if (response.status === 403 && data.detail === 'Sign ups are closed for now') {
+					throw new Error(
+						'SIGNUPS_CLOSED'
+					);
+				}
 				throw new Error(data.detail || 'Registration failed');
 			}
 
@@ -126,7 +132,14 @@
 		</div>
 
 		<form onsubmit={handleSubmit} class="auth-form">
-			{#if error}
+			{#if error === 'SIGNUPS_CLOSED'}
+				<div class="error-message" role="alert">
+					Signups are currently closed! If you're interested in using the app,
+					<a href="https://github.com/JimmyDore/mediajanitor/issues/2" target="_blank" rel="noopener noreferrer">
+						check out this issue
+					</a> for more info. Or self-host it yourself — it's free and open source!
+				</div>
+			{:else if error}
 				<div class="error-message" role="alert">
 					{error}
 				</div>
@@ -378,6 +391,16 @@
 		border-radius: var(--radius-md);
 		color: var(--danger);
 		font-size: var(--font-size-base);
+	}
+
+	.error-message a {
+		color: var(--danger);
+		font-weight: var(--font-weight-semibold);
+		text-decoration: underline;
+	}
+
+	.error-message a:hover {
+		opacity: 0.8;
 	}
 
 	.submit-button {

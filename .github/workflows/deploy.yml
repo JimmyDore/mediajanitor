@@ -32,6 +32,7 @@ jobs:
             echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
             echo "SLACK_WEBHOOK_NEW_USERS=${{ secrets.SLACK_WEBHOOK_NEW_USERS }}" >> .env
             echo "SLACK_WEBHOOK_SYNC_FAILURES=${{ secrets.SLACK_WEBHOOK_SYNC_FAILURES }}" >> .env
+            echo "DISABLE_SIGNUPS=${{ secrets.DISABLE_SIGNUPS }}" >> .env
 
             # Clean up old Docker resources to free disk space
             echo "Cleaning up Docker resources..."
