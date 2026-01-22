@@ -178,7 +178,10 @@ def check_prd_completion() -> int:
 
 
 def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None) -> subprocess.CompletedProcess:
-    """Run claude command and return result."""
+    """Run claude command and return result.
+
+    Streams output in real-time (like shell's tee) while also writing to log file.
+    """
     cmd = ["claude", "--permission-mode", "acceptEdits"]
 
     if streaming:
@@ -188,34 +191,54 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
 
     cmd.extend(["-p", prompt])
 
-    if log_file:
-        with open(log_file, "a") as f:
-            # Run with output going to both console and log file
-            result = subprocess.run(
-                cmd,
-                text=True,
-                capture_output=True,
-            )
-            f.write(result.stdout)
-            f.write(result.stderr)
+    # Use Popen for real-time streaming (like shell's tee)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout
+        text=True,
+        bufsize=1,  # Line buffered
+    )
 
-            # For streaming, parse and print assistant text
-            if streaming and result.stdout:
-                for line in result.stdout.splitlines():
-                    try:
-                        data = json.loads(line)
-                        if data.get("type") == "assistant" and data.get("message", {}).get("content"):
-                            for content in data["message"]["content"]:
-                                if content.get("type") == "text" and content.get("text"):
-                                    console.print(content["text"], end="")
-                    except json.JSONDecodeError:
-                        pass
+    stdout_lines: list[str] = []
+    log_handle = open(log_file, "a") if log_file else None
+
+    try:
+        for line in iter(process.stdout.readline, ""):
+            stdout_lines.append(line)
+
+            # Write to log file
+            if log_handle:
+                log_handle.write(line)
+                log_handle.flush()
+
+            # Print to console
+            if streaming:
+                # Parse stream-json format and extract assistant text
+                try:
+                    data = json.loads(line.strip())
+                    if data.get("type") == "assistant" and data.get("message", {}).get("content"):
+                        for content in data["message"]["content"]:
+                            if content.get("type") == "text" and content.get("text"):
+                                console.print(content["text"], end="")
+                except json.JSONDecodeError:
+                    pass
             else:
-                console.print(result.stdout)
+                # Text output - print as-is
+                console.print(line, end="")
 
-            return result
-    else:
-        return subprocess.run(cmd, text=True)
+        process.wait()
+    finally:
+        if log_handle:
+            log_handle.close()
+
+    # Return CompletedProcess-like object for compatibility
+    return subprocess.CompletedProcess(
+        args=cmd,
+        returncode=process.returncode,
+        stdout="".join(stdout_lines),
+        stderr="",
+    )
 
 
 def run_with_retry(prompt: str, streaming: bool = False, log_file: str | None = None) -> None:
