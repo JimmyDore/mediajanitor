@@ -185,8 +185,8 @@
       ],
       "context": "Epic 48: Ultra.cc seedbox monitoring frontend. Depends on US-48.1 backend. Add 'Seedbox Monitoring' section to Settings > Connections page (frontend/src/routes/settings/connections/+page.svelte). Follow existing pattern: URL input + API token input. Show 'Connected' badge when ultra_api_configured=true from API. Mask token with '••••••••' when configured. Fields are optional.",
       "priority": 51,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added frontend/tests/settings-ultra.test.ts with 12 API integration tests. UI was already implemented in US-48.3 - Seedbox Monitoring section with Ultra.cc connection form, green Connected badge, and masked API Token placeholder."
     },
     {
       "id": "US-48.5",
