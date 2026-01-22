@@ -1687,3 +1687,162 @@ class TestDeleteSeriesCachePersistence:
             assert (
                 request_result.scalar_one_or_none() is None
             ), "CachedJellyseerrRequest should be deleted"
+
+
+class TestDeleteRequestCachePersistence:
+    """Tests for US-49.3: Delete requests from cache after deletion."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "request_cache@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def _get_user_id(self, client: TestClient, token: str) -> int:
+        """Helper to get user ID from token."""
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return response.json()["id"]
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_request_removes_cached_jellyseerr_request(
+        self,
+        mock_delete_media: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that successful Jellyseerr deletion removes CachedJellyseerrRequest from DB."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_media.return_value = (True, "Media deleted successfully from Jellyseerr")
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "request_cache_delete@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Jellyseerr
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=12345,
+                jellyseerr_media_id=500,
+                tmdb_id=99999,
+                media_type="movie",
+                status=1,
+                title="Test Request Movie",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Verify item exists before deletion
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user_id,
+                    CachedJellyseerrRequest.jellyseerr_id == 12345,
+                )
+            )
+            assert result.scalar_one_or_none() is not None
+
+        # Delete request via API
+        response = client.delete(
+            "/api/content/request/12345",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+
+        # Verify cached request was removed from database
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user_id,
+                    CachedJellyseerrRequest.jellyseerr_id == 12345,
+                )
+            )
+            assert result.scalar_one_or_none() is None, "CachedJellyseerrRequest should be deleted"
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_request_keeps_cache_on_jellyseerr_failure(
+        self,
+        mock_delete_media: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that failed Jellyseerr deletion does NOT remove cached request."""
+        from app.database import CachedJellyseerrRequest
+
+        mock_delete_media.return_value = (False, "Jellyseerr API error")
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "request_cache_keep@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Jellyseerr
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached Jellyseerr request
+        async with TestingAsyncSessionLocal() as session:
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=67890,
+                jellyseerr_media_id=600,
+                tmdb_id=88888,
+                media_type="tv",
+                status=2,
+                title="Test Request Series",
+            )
+            session.add(cached_request)
+            await session.commit()
+
+        # Attempt delete (Jellyseerr API fails)
+        response = client.delete(
+            "/api/content/request/67890",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # API should return 400 when deletion fails
+        assert response.status_code == 400
+
+        # Verify cached request was NOT removed (deletion failed)
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user_id,
+                    CachedJellyseerrRequest.jellyseerr_id == 67890,
+                )
+            )
+            assert (
+                result.scalar_one_or_none() is not None
+            ), "CachedJellyseerrRequest should NOT be deleted on failure"

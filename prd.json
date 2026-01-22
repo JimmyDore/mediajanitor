@@ -112,8 +112,8 @@
       ],
       "context": "Epic 49: Fix deletion cache persistence. Endpoint: DELETE /api/content/request/{jellyseerr_id}. Simpler than movies/series - just delete CachedJellyseerrRequest by Jellyseerr ID after successful API deletion. Existing lookup logic already works. NON-GOALS: No undo/restore.",
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added _delete_cached_jellyseerr_request_by_id() helper function. Cache deletion happens AFTER successful Jellyseerr media deletion. If deletion fails, cache is NOT deleted."
     },
     {
       "id": "US-51.1",
