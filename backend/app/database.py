@@ -79,6 +79,9 @@ class UserSettings(Base):
     # Sonarr settings (API key is encrypted)
     sonarr_server_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sonarr_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Ultra.cc seedbox settings (API key is encrypted)
+    ultra_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ultra_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

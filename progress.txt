@@ -61,4 +61,15 @@ Reusable patterns discovered during development. Update this section when you fi
 
 Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 
+### 2026-01-22
+
+**US-48.1: Ultra API Settings - Backend**
+- Added `ultra_api_url` and `ultra_api_key_encrypted` columns to UserSettings model
+- Created Alembic migration `30dd116f11f8_add_ultra_api_settings_to_user_settings`
+- Created `app/services/ultra.py` with save/get functions (following Radarr/Sonarr pattern)
+- Added Pydantic models: `UltraSettingsCreate`, `UltraSettingsResponse`
+- Added POST/GET `/api/settings/ultra` endpoints
+- Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `services/ultra.py`, migration file
+- 8 unit tests added (all pass), verified in Docker
+
 ---
