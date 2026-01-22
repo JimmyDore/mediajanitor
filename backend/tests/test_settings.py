@@ -1743,3 +1743,159 @@ class TestNicknameSettings:
         )
         assert response.status_code == 500
         assert "failed to fetch" in response.json()["detail"].lower()
+
+
+class TestUltraSettings:
+    """Tests for Ultra.cc seedbox API settings endpoints (US-48.1)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "ultra@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_save_ultra_settings_requires_auth(self, client: TestClient) -> None:
+        """Test that saving Ultra settings requires authentication."""
+        response = client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+                "api_key": "test-api-key-12345",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_save_ultra_settings_success(self, client: TestClient) -> None:
+        """Test successful save of Ultra settings (no validation - just saves)."""
+        token = self._get_auth_token(client)
+
+        response = client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+                "api_key": "test-api-key-12345",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "ultra" in data["message"].lower()
+
+    def test_save_ultra_settings_missing_url(self, client: TestClient) -> None:
+        """Test save fails when server URL is missing."""
+        token = self._get_auth_token(client)
+
+        response = client.post(
+            "/api/settings/ultra",
+            json={
+                "api_key": "test-api-key-12345",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_save_ultra_settings_missing_api_key(self, client: TestClient) -> None:
+        """Test save fails when API key is missing."""
+        token = self._get_auth_token(client)
+
+        response = client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_save_ultra_settings_invalid_url_format(self, client: TestClient) -> None:
+        """Test save fails when server URL has invalid format."""
+        token = self._get_auth_token(client)
+
+        response = client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "not-a-valid-url",
+                "api_key": "test-api-key-12345",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_get_ultra_settings(self, client: TestClient) -> None:
+        """Test retrieving saved Ultra settings."""
+        token = self._get_auth_token(client, "ultra_get@example.com")
+
+        # First save settings
+        client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+                "api_key": "test-api-key-12345",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Then retrieve them
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["server_url"] == "https://ultra.cc"
+        # API key should be masked for security
+        assert data["api_key_configured"] is True
+        assert "api_key" not in data  # Full key should not be returned
+
+    def test_get_ultra_settings_not_configured(self, client: TestClient) -> None:
+        """Test retrieving Ultra settings when not configured."""
+        token = self._get_auth_token(client, "ultra_not_configured@example.com")
+
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["server_url"] is None
+        assert data["api_key_configured"] is False
+
+    def test_ultra_settings_per_user_isolation(self, client: TestClient) -> None:
+        """Test that users can only see their own Ultra settings."""
+        # Create first user and save settings
+        token1 = self._get_auth_token(client, "ultra_user1@example.com")
+
+        client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://user1-ultra.cc",
+                "api_key": "user1-api-key",
+            },
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+
+        # Create second user
+        token2 = self._get_auth_token(client, "ultra_user2@example.com")
+
+        # Second user should not see first user's settings
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["server_url"] is None
+        assert data["api_key_configured"] is False
