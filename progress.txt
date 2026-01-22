@@ -115,4 +115,16 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `routers/content.py`, `tests/test_delete_content.py`
 - 2 new unit tests added (617 total tests pass), mypy passes, verified in Docker with integration tests
 
+### 2026-01-23
+
+**US-51.1: Fetch Episode Details During Sync**
+- Added `fetch_jellyseerr_season_episodes(client, server_url, api_key, tmdb_id, season_number)` function to `sync.py`
+- Function calls Jellyseerr `GET /api/v1/tv/{tmdb_id}/season/{season_number}` endpoint with X-Api-Key auth
+- Returns list of `{episodeNumber, name, airDate}` dicts, empty list on error (graceful failure)
+- Integrated into `fetch_jellyseerr_requests()` for status 4 TV shows
+- Skips specials (season 0) when fetching episodes
+- Episodes stored in `raw_data.media.seasons[].episodes` array
+- Files changed: `app/services/sync.py`, `tests/test_sync.py`
+- 13 new unit tests added (634 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---

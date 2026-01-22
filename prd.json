@@ -131,8 +131,8 @@
       ],
       "context": "Epic 51: Recently Available - Show new episodes from ongoing series. Problem: Page doesn't show new episodes from status 4 (partially available) TV shows. Jellyseerr API: GET /api/v1/tv/{tmdb_id}/season/{season_number}. Response has episodes with episodeNumber, name, airDate. Store in raw_data.media.seasons[].episodes (already a JSON field). Reference: original_script.py lines 714-792 (fetch_season_episodes, get_recent_episodes_for_season). NON-GOALS: No individual episode entries, no push notifications.",
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added fetch_jellyseerr_season_episodes() function in sync.py with graceful error handling. Integrated into fetch_jellyseerr_requests() to fetch episodes for status 4 TV shows, skipping specials (season 0). Episodes stored in raw_data.media.seasons[].episodes array with {episodeNumber, name, airDate} structure. 13 new unit tests added."
     },
     {
       "id": "US-51.2",

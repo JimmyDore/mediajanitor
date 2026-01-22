@@ -1610,9 +1610,9 @@ class TestCalculateSeasonSizes:
                 )
 
         # Verify Recursive parameter is included
-        assert "Recursive" in captured_params, (
-            "Recursive parameter is required to find episodes in nested folders"
-        )
+        assert (
+            "Recursive" in captured_params
+        ), "Recursive parameter is required to find episodes in nested folders"
         assert captured_params["Recursive"] == "true"
         assert captured_params["ParentId"] == "season-123"
         assert captured_params["IncludeItemTypes"] == "Episode"
@@ -2448,3 +2448,590 @@ class TestGetMostRecentEpisodePlayedDate:
 
         result = get_most_recent_episode_played_date(episodes)
         assert result == "2025-01-25T18:00:00Z"
+
+
+class TestFetchJellyseerrSeasonEpisodes:
+    """Test fetching episode details from Jellyseerr API (US-51.1)."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_success(self) -> None:
+        """Should fetch episode details from Jellyseerr API."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        mock_response = {
+            "episodes": [
+                {"episodeNumber": 1, "name": "Pilot", "airDate": "2024-01-15"},
+                {"episodeNumber": 2, "name": "Second Episode", "airDate": "2024-01-22"},
+                {"episodeNumber": 3, "name": "Third Episode", "airDate": "2024-01-29"},
+            ]
+        }
+
+        captured_url: str = ""
+        captured_headers: dict[str, str] = {}
+
+        async def mock_get(url, **kwargs):
+            nonlocal captured_url, captured_headers
+            captured_url = url
+            captured_headers = kwargs.get("headers", {})
+            return httpx.Response(
+                200,
+                json=mock_response,
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        # Verify API call was correct
+        assert "/api/v1/tv/12345/season/1" in captured_url
+        assert captured_headers.get("X-Api-Key") == "test-api-key"
+
+        # Verify result format
+        assert len(result) == 3
+        assert result[0] == {"episodeNumber": 1, "name": "Pilot", "airDate": "2024-01-15"}
+        assert result[1] == {"episodeNumber": 2, "name": "Second Episode", "airDate": "2024-01-22"}
+        assert result[2] == {"episodeNumber": 3, "name": "Third Episode", "airDate": "2024-01-29"}
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_api_error_returns_empty_list(self) -> None:
+        """Should return empty list on API error (graceful failure)."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(
+                500,
+                json={"error": "Internal Server Error"},
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        # Should return empty list, not raise exception
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_connection_error_returns_empty_list(
+        self,
+    ) -> None:
+        """Should return empty list on connection error (graceful failure)."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        async def mock_get(url, **kwargs):
+            raise httpx.RequestError("Connection refused")
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_timeout_returns_empty_list(self) -> None:
+        """Should return empty list on timeout (graceful failure)."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        async def mock_get(url, **kwargs):
+            raise httpx.TimeoutException("Request timed out")
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_empty_episodes_array(self) -> None:
+        """Should handle empty episodes array from API."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(
+                200,
+                json={"episodes": []},
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_missing_episodes_key(self) -> None:
+        """Should handle missing 'episodes' key in response."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(
+                200,
+                json={"name": "Season 1", "seasonNumber": 1},  # No 'episodes' key
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_extracts_required_fields(self) -> None:
+        """Should extract only required fields from episode data."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        # Full Jellyseerr episode response with extra fields
+        mock_response = {
+            "episodes": [
+                {
+                    "episodeNumber": 1,
+                    "name": "Pilot",
+                    "airDate": "2024-01-15",
+                    "overview": "The first episode...",  # Extra field
+                    "runtime": 45,  # Extra field
+                    "stillPath": "/path/to/still.jpg",  # Extra field
+                },
+            ]
+        }
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(
+                200,
+                json=mock_response,
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        # Should only contain the required fields
+        assert len(result) == 1
+        assert result[0] == {"episodeNumber": 1, "name": "Pilot", "airDate": "2024-01-15"}
+
+    @pytest.mark.asyncio
+    async def test_fetch_jellyseerr_season_episodes_handles_null_air_date(self) -> None:
+        """Should handle episodes with null airDate (unannounced)."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_season_episodes
+
+        mock_response = {
+            "episodes": [
+                {"episodeNumber": 1, "name": "Episode 1", "airDate": "2024-01-15"},
+                {"episodeNumber": 2, "name": "Episode 2", "airDate": None},  # Unannounced
+            ]
+        }
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(
+                200,
+                json=mock_response,
+                request=httpx.Request("GET", url),
+            )
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await fetch_jellyseerr_season_episodes(
+                    client,
+                    "http://jellyseerr.local",
+                    "test-api-key",
+                    tmdb_id=12345,
+                    season_number=1,
+                )
+
+        # Should include episode with null airDate
+        assert len(result) == 2
+        assert result[1]["airDate"] is None
+
+
+class TestFetchJellyseerrRequestsWithEpisodes:
+    """Test integration of episode fetching into fetch_jellyseerr_requests (US-51.1)."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_episodes_for_status_4_tv_shows(self) -> None:
+        """Should fetch episode details for partially available (status 4) TV shows."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_requests
+
+        # Mock requests list with one status 4 TV show
+        mock_requests_response = {
+            "results": [
+                {
+                    "id": 1,
+                    "status": 2,  # Request status (approved)
+                    "media": {
+                        "tmdbId": 12345,
+                        "mediaType": "tv",
+                        "status": 4,  # Media status = partially available
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5},  # Available
+                            {"seasonNumber": 2, "status": 4},  # Partially available
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                },
+            ],
+            "pageInfo": {"pages": 1},
+        }
+
+        # Mock media details (English and French)
+        mock_tv_details_en = {"name": "Breaking Bad", "firstAirDate": "2008-01-20"}
+        mock_tv_details_fr = {"name": "Breaking Bad"}
+
+        # Mock season episodes
+        mock_season_1_episodes = {
+            "episodes": [
+                {"episodeNumber": 1, "name": "Pilot", "airDate": "2008-01-20"},
+                {"episodeNumber": 2, "name": "Cat's in the Bag...", "airDate": "2008-01-27"},
+            ]
+        }
+        mock_season_2_episodes = {
+            "episodes": [
+                {"episodeNumber": 1, "name": "Seven Thirty-Seven", "airDate": "2009-03-08"},
+                {"episodeNumber": 2, "name": "Grilled", "airDate": "2009-03-15"},
+                {"episodeNumber": 3, "name": "Bit by a Dead Bee", "airDate": "2009-03-22"},
+            ]
+        }
+
+        call_log: list[str] = []
+
+        async def mock_get(self, url, **kwargs):
+            call_log.append(url)
+
+            # Pagination endpoint
+            if "/api/v1/request" in url:
+                return httpx.Response(
+                    200, json=mock_requests_response, request=httpx.Request("GET", url)
+                )
+            # Media details - English
+            elif "/api/v1/tv/12345" in url and "language=en" in str(kwargs.get("params", {})):
+                return httpx.Response(
+                    200, json=mock_tv_details_en, request=httpx.Request("GET", url)
+                )
+            # Media details - French
+            elif "/api/v1/tv/12345" in url and "language=fr" in str(kwargs.get("params", {})):
+                return httpx.Response(
+                    200, json=mock_tv_details_fr, request=httpx.Request("GET", url)
+                )
+            # Season 1 episodes
+            elif "/api/v1/tv/12345/season/1" in url:
+                return httpx.Response(
+                    200, json=mock_season_1_episodes, request=httpx.Request("GET", url)
+                )
+            # Season 2 episodes
+            elif "/api/v1/tv/12345/season/2" in url:
+                return httpx.Response(
+                    200, json=mock_season_2_episodes, request=httpx.Request("GET", url)
+                )
+
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            requests = await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        # Verify season episode calls were made
+        season_calls = [c for c in call_log if "/season/" in c]
+        assert len(season_calls) == 2  # Both seasons should be fetched
+
+        # Verify episodes are stored in the raw_data
+        assert len(requests) == 1
+        media = requests[0].get("media", {})
+        seasons = media.get("seasons", [])
+
+        # Season 1 should have episodes
+        season_1 = next(s for s in seasons if s["seasonNumber"] == 1)
+        assert "episodes" in season_1
+        assert len(season_1["episodes"]) == 2
+        assert season_1["episodes"][0] == {
+            "episodeNumber": 1,
+            "name": "Pilot",
+            "airDate": "2008-01-20",
+        }
+
+        # Season 2 should have episodes
+        season_2 = next(s for s in seasons if s["seasonNumber"] == 2)
+        assert "episodes" in season_2
+        assert len(season_2["episodes"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_skips_episode_fetch_for_status_5_tv_shows(self) -> None:
+        """Should NOT fetch episodes for fully available (status 5) TV shows."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_requests
+
+        mock_requests_response = {
+            "results": [
+                {
+                    "id": 1,
+                    "status": 2,
+                    "media": {
+                        "tmdbId": 11111,
+                        "mediaType": "tv",
+                        "status": 5,  # Fully available - should skip episode fetch
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5},
+                            {"seasonNumber": 2, "status": 5},
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                },
+            ],
+            "pageInfo": {"pages": 1},
+        }
+
+        mock_tv_details = {"name": "Complete Show", "firstAirDate": "2020-01-01"}
+
+        call_log: list[str] = []
+
+        async def mock_get(self, url, **kwargs):
+            call_log.append(url)
+
+            if "/api/v1/request" in url:
+                return httpx.Response(
+                    200, json=mock_requests_response, request=httpx.Request("GET", url)
+                )
+            elif "/api/v1/tv/11111" in url:
+                return httpx.Response(200, json=mock_tv_details, request=httpx.Request("GET", url))
+
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        # Verify NO season episode calls were made
+        season_calls = [c for c in call_log if "/season/" in c]
+        assert len(season_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_skips_episode_fetch_for_movies(self) -> None:
+        """Should NOT fetch episodes for movies."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_requests
+
+        mock_requests_response = {
+            "results": [
+                {
+                    "id": 1,
+                    "status": 2,
+                    "media": {
+                        "tmdbId": 22222,
+                        "mediaType": "movie",
+                        "status": 4,  # Even with status 4, movies don't have episodes
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                },
+            ],
+            "pageInfo": {"pages": 1},
+        }
+
+        mock_movie_details = {"title": "Test Movie", "releaseDate": "2024-01-15"}
+
+        call_log: list[str] = []
+
+        async def mock_get(self, url, **kwargs):
+            call_log.append(url)
+
+            if "/api/v1/request" in url:
+                return httpx.Response(
+                    200, json=mock_requests_response, request=httpx.Request("GET", url)
+                )
+            elif "/api/v1/movie/22222" in url:
+                return httpx.Response(
+                    200, json=mock_movie_details, request=httpx.Request("GET", url)
+                )
+
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        # Verify NO season episode calls were made
+        season_calls = [c for c in call_log if "/season/" in c]
+        assert len(season_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_handles_episode_fetch_failure_gracefully(self) -> None:
+        """Should continue processing when episode fetch fails for a season."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_requests
+
+        mock_requests_response = {
+            "results": [
+                {
+                    "id": 1,
+                    "status": 2,
+                    "media": {
+                        "tmdbId": 33333,
+                        "mediaType": "tv",
+                        "status": 4,
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5},
+                            {"seasonNumber": 2, "status": 4},  # This fetch will fail
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                },
+            ],
+            "pageInfo": {"pages": 1},
+        }
+
+        mock_tv_details = {"name": "Show with Error", "firstAirDate": "2020-01-01"}
+        mock_season_1_episodes = {
+            "episodes": [{"episodeNumber": 1, "name": "Pilot", "airDate": "2020-01-15"}]
+        }
+
+        async def mock_get(self, url, **kwargs):
+            if "/api/v1/request" in url:
+                return httpx.Response(
+                    200, json=mock_requests_response, request=httpx.Request("GET", url)
+                )
+            elif "/api/v1/tv/33333" in url and "/season/" not in url:
+                return httpx.Response(200, json=mock_tv_details, request=httpx.Request("GET", url))
+            elif "/api/v1/tv/33333/season/1" in url:
+                return httpx.Response(
+                    200, json=mock_season_1_episodes, request=httpx.Request("GET", url)
+                )
+            elif "/api/v1/tv/33333/season/2" in url:
+                # Simulate API error
+                raise httpx.RequestError("Connection failed")
+
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            requests = await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        # Should return the request without failing
+        assert len(requests) == 1
+        seasons = requests[0]["media"]["seasons"]
+
+        # Season 1 should have episodes
+        season_1 = next(s for s in seasons if s["seasonNumber"] == 1)
+        assert "episodes" in season_1
+        assert len(season_1["episodes"]) == 1
+
+        # Season 2 should have empty episodes list (fetch failed)
+        season_2 = next(s for s in seasons if s["seasonNumber"] == 2)
+        assert season_2.get("episodes", []) == []
+
+    @pytest.mark.asyncio
+    async def test_skips_special_seasons(self) -> None:
+        """Should skip fetching episodes for season 0 (specials)."""
+        import httpx
+
+        from app.services.sync import fetch_jellyseerr_requests
+
+        mock_requests_response = {
+            "results": [
+                {
+                    "id": 1,
+                    "status": 2,
+                    "media": {
+                        "tmdbId": 44444,
+                        "mediaType": "tv",
+                        "status": 4,
+                        "seasons": [
+                            {"seasonNumber": 0, "status": 5},  # Specials - should skip
+                            {"seasonNumber": 1, "status": 5},
+                        ],
+                    },
+                    "requestedBy": {"displayName": "TestUser"},
+                },
+            ],
+            "pageInfo": {"pages": 1},
+        }
+
+        mock_tv_details = {"name": "Show with Specials", "firstAirDate": "2020-01-01"}
+        mock_season_1_episodes = {
+            "episodes": [{"episodeNumber": 1, "name": "Pilot", "airDate": "2020-01-15"}]
+        }
+
+        call_log: list[str] = []
+
+        async def mock_get(self, url, **kwargs):
+            call_log.append(url)
+
+            if "/api/v1/request" in url:
+                return httpx.Response(
+                    200, json=mock_requests_response, request=httpx.Request("GET", url)
+                )
+            elif "/api/v1/tv/44444" in url and "/season/" not in url:
+                return httpx.Response(200, json=mock_tv_details, request=httpx.Request("GET", url))
+            elif "/api/v1/tv/44444/season/1" in url:
+                return httpx.Response(
+                    200, json=mock_season_1_episodes, request=httpx.Request("GET", url)
+                )
+
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            await fetch_jellyseerr_requests("http://jellyseerr.local", "api-key")
+
+        # Verify only season 1 was fetched (not season 0)
+        season_calls = [c for c in call_log if "/season/" in c]
+        assert len(season_calls) == 1
+        assert "/season/1" in season_calls[0]
+        assert "/season/0" not in str(season_calls)

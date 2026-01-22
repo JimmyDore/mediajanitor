@@ -206,11 +206,22 @@ async def fetch_user_items(
     """
     logger.info(f"Fetching user {user_index}/{total_users}: {user_name}")
 
-    fields = ",".join([
-        "DateCreated", "DateLastSaved", "UserData", "Path", "Overview",
-        "Genres", "Studios", "People", "ProductionYear", "DateLastMediaAdded",
-        "MediaSources", "ProviderIds",
-    ])
+    fields = ",".join(
+        [
+            "DateCreated",
+            "DateLastSaved",
+            "UserData",
+            "Path",
+            "Overview",
+            "Genres",
+            "Studios",
+            "People",
+            "ProductionYear",
+            "DateLastMediaAdded",
+            "MediaSources",
+            "ProviderIds",
+        ]
+    )
     params: dict[str, str | int] = {
         "UserId": user_id,
         "IncludeItemTypes": "Movie,Series",
@@ -368,9 +379,7 @@ async def fetch_media_details(
             data: dict[str, Any] = response.json()
             return data
         else:
-            logger.warning(
-                f"Failed to fetch {media_type} TMDB {tmdb_id}: {response.status_code}"
-            )
+            logger.warning(f"Failed to fetch {media_type} TMDB {tmdb_id}: {response.status_code}")
             return {}
     except (httpx.RequestError, httpx.TimeoutException) as e:
         logger.warning(
@@ -525,6 +534,55 @@ async def fetch_jellyfin_media_with_progress(
     except httpx.RequestError as e:
         logger.error(f"Jellyfin connection error: {e}")
         raise
+
+
+async def fetch_jellyseerr_season_episodes(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    tmdb_id: int,
+    season_number: int,
+) -> list[dict[str, Any]]:
+    """
+    Fetch episode details for a TV season from Jellyseerr API.
+
+    Args:
+        client: httpx client to reuse connection
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+        tmdb_id: TMDB ID of the TV show
+        season_number: Season number to fetch episodes for
+
+    Returns:
+        List of episode dicts with {episodeNumber, name, airDate}.
+        Returns empty list on error (graceful failure).
+    """
+    try:
+        response = await client.get(
+            f"{server_url}/api/v1/tv/{tmdb_id}/season/{season_number}",
+            headers={"X-Api-Key": api_key},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            episodes = data.get("episodes", [])
+            # Extract only required fields
+            return [
+                {
+                    "episodeNumber": ep.get("episodeNumber"),
+                    "name": ep.get("name"),
+                    "airDate": ep.get("airDate"),
+                }
+                for ep in episodes
+            ]
+        else:
+            logger.warning(
+                f"Failed to fetch season {season_number} episodes for TMDB {tmdb_id}: "
+                f"{response.status_code}"
+            )
+            return []
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Error fetching season {season_number} episodes for TMDB {tmdb_id}: {e}")
+        return []
 
 
 def extract_title_from_request(req: dict[str, Any]) -> str:
@@ -695,6 +753,21 @@ async def fetch_jellyseerr_requests(server_url: str, api_key: str) -> list[dict[
                         media["title_fr"] = details_fr.get("title")
                     else:  # tv
                         media["name_fr"] = details_fr.get("name")
+
+                # Fetch episode details for partially available (status 4) TV shows
+                if media_type == "tv" and media.get("status") == 4:
+                    seasons = media.get("seasons", [])
+                    for season in seasons:
+                        season_number = season.get("seasonNumber")
+                        # Skip specials (season 0) and missing season numbers
+                        if season_number is None or season_number == 0:
+                            continue
+
+                        # Fetch episodes for this season
+                        episodes = await fetch_jellyseerr_season_episodes(
+                            client, server_url, api_key, tmdb_id, season_number
+                        )
+                        season["episodes"] = episodes
 
             logger.info(
                 f"Enriched {len(title_cache_en)} unique media items with English and French titles"
