@@ -59,14 +59,14 @@ from app.services.sonarr import (
     save_sonarr_settings,
     validate_sonarr_connection,
 )
-from app.services.ultra import (
-    get_user_ultra_settings,
-    save_ultra_settings,
-)
 from app.services.sync import (
     fetch_jellyfin_users,
     fetch_jellyseerr_users,
     prefill_user_nicknames,
+)
+from app.services.ultra import (
+    get_user_ultra_settings,
+    save_ultra_settings,
 )
 
 # Default values for analysis preferences
@@ -335,9 +335,7 @@ async def get_ultra_thresholds(
 
     Returns defaults if not configured.
     """
-    result = await db.execute(
-        select(UserSettings).where(UserSettings.user_id == current_user.id)
-    )
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     settings = result.scalar_one_or_none()
 
     # Return user values or defaults
