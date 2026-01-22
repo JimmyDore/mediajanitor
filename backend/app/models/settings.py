@@ -81,6 +81,20 @@ class UltraSettingsResponse(BaseModel):
     api_key_configured: bool
 
 
+class UltraThresholdsCreate(BaseModel):
+    """Request model for saving Ultra.cc warning thresholds."""
+
+    storage_warning_gb: int | None = Field(default=None, ge=1, le=1000)
+    traffic_warning_percent: int | None = Field(default=None, ge=1, le=100)
+
+
+class UltraThresholdsResponse(BaseModel):
+    """Response model for Ultra warning thresholds."""
+
+    storage_warning_gb: int
+    traffic_warning_percent: int
+
+
 class SettingsSaveResponse(BaseModel):
     """Response model for successful settings save."""
 

@@ -28,6 +28,8 @@ from app.models.settings import (
     SonarrSettingsResponse,
     UltraSettingsCreate,
     UltraSettingsResponse,
+    UltraThresholdsCreate,
+    UltraThresholdsResponse,
 )
 from app.services.auth import get_current_user
 from app.services.encryption import decrypt_value
@@ -74,6 +76,9 @@ DEFAULT_LARGE_MOVIE_SIZE_GB = 13
 DEFAULT_LARGE_SEASON_SIZE_GB = 15
 # Default value for display preferences
 DEFAULT_RECENTLY_AVAILABLE_DAYS = 7
+# Default values for Ultra.cc warning thresholds
+DEFAULT_ULTRA_STORAGE_WARNING_GB = 100
+DEFAULT_ULTRA_TRAFFIC_WARNING_PERCENT = 20
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -315,6 +320,62 @@ async def get_ultra_config(
     return UltraSettingsResponse(
         server_url=None,
         api_key_configured=False,
+    )
+
+
+# Ultra.cc Warning Thresholds Endpoints
+
+
+@router.get("/ultra/thresholds", response_model=UltraThresholdsResponse)
+async def get_ultra_thresholds(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UltraThresholdsResponse:
+    """Get Ultra.cc warning thresholds for the user.
+
+    Returns defaults if not configured.
+    """
+    result = await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    # Return user values or defaults
+    return UltraThresholdsResponse(
+        storage_warning_gb=(
+            settings.ultra_storage_warning_gb
+            if settings and settings.ultra_storage_warning_gb is not None
+            else DEFAULT_ULTRA_STORAGE_WARNING_GB
+        ),
+        traffic_warning_percent=(
+            settings.ultra_traffic_warning_percent
+            if settings and settings.ultra_traffic_warning_percent is not None
+            else DEFAULT_ULTRA_TRAFFIC_WARNING_PERCENT
+        ),
+    )
+
+
+@router.post("/ultra/thresholds", response_model=SettingsSaveResponse)
+async def save_ultra_thresholds(
+    thresholds: UltraThresholdsCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SettingsSaveResponse:
+    """Save Ultra.cc warning thresholds for the user.
+
+    Supports partial updates - only provided fields are updated.
+    """
+    settings = await _get_or_create_user_settings(db, current_user.id)
+
+    # Only update fields that were provided
+    if thresholds.storage_warning_gb is not None:
+        settings.ultra_storage_warning_gb = thresholds.storage_warning_gb
+    if thresholds.traffic_warning_percent is not None:
+        settings.ultra_traffic_warning_percent = thresholds.traffic_warning_percent
+
+    return SettingsSaveResponse(
+        success=True,
+        message="Ultra thresholds saved successfully.",
     )
 
 

@@ -1899,3 +1899,227 @@ class TestUltraSettings:
         data = response.json()
         assert data["server_url"] is None
         assert data["api_key_configured"] is False
+
+
+class TestUltraThresholds:
+    """Tests for Ultra.cc warning thresholds endpoints (US-48.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "ultra_thresh@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_get_ultra_thresholds_defaults(self, client: TestClient) -> None:
+        """Test retrieving Ultra thresholds returns defaults when not configured."""
+        token = self._get_auth_token(client, "ultra_thresh_defaults@example.com")
+
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["storage_warning_gb"] == 100  # Default: 100 GB
+        assert data["traffic_warning_percent"] == 20  # Default: 20%
+
+    def test_get_ultra_thresholds_requires_auth(self, client: TestClient) -> None:
+        """Test that getting Ultra thresholds requires authentication."""
+        response = client.get("/api/settings/ultra/thresholds")
+        assert response.status_code == 401
+
+    def test_save_ultra_thresholds_requires_auth(self, client: TestClient) -> None:
+        """Test that saving Ultra thresholds requires authentication."""
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 50,
+                "traffic_warning_percent": 10,
+            },
+        )
+        assert response.status_code == 401
+
+    def test_save_ultra_thresholds_success(self, client: TestClient) -> None:
+        """Test successful save of Ultra thresholds."""
+        token = self._get_auth_token(client, "ultra_thresh_save@example.com")
+
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 50,
+                "traffic_warning_percent": 10,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "threshold" in data["message"].lower()
+
+    def test_saved_ultra_thresholds_are_returned(self, client: TestClient) -> None:
+        """Test that saved Ultra thresholds are returned on GET."""
+        token = self._get_auth_token(client, "ultra_thresh_verify@example.com")
+
+        # Save custom thresholds
+        client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 200,
+                "traffic_warning_percent": 30,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Verify they are returned
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["storage_warning_gb"] == 200
+        assert data["traffic_warning_percent"] == 30
+
+    def test_ultra_thresholds_partial_update(self, client: TestClient) -> None:
+        """Test that partial update only changes specified fields."""
+        token = self._get_auth_token(client, "ultra_thresh_partial@example.com")
+
+        # Save only storage threshold
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 75,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        # Verify: only storage changed, traffic remains default
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        data = response.json()
+        assert data["storage_warning_gb"] == 75
+        assert data["traffic_warning_percent"] == 20  # Default
+
+    def test_ultra_thresholds_per_user_isolation(self, client: TestClient) -> None:
+        """Test that users can only see their own Ultra thresholds."""
+        # Create first user and save thresholds
+        token1 = self._get_auth_token(client, "ultra_thresh_user1@example.com")
+
+        client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 500,
+                "traffic_warning_percent": 50,
+            },
+            headers={"Authorization": f"Bearer {token1}"},
+        )
+
+        # Create second user - should get defaults, not first user's settings
+        token2 = self._get_auth_token(client, "ultra_thresh_user2@example.com")
+
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Second user should get defaults
+        assert data["storage_warning_gb"] == 100
+        assert data["traffic_warning_percent"] == 20
+
+    def test_storage_warning_gb_validates_min(self, client: TestClient) -> None:
+        """Test that storage_warning_gb validates minimum of 1."""
+        token = self._get_auth_token(client, "ultra_thresh_min_storage@example.com")
+
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={"storage_warning_gb": 0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_storage_warning_gb_validates_max(self, client: TestClient) -> None:
+        """Test that storage_warning_gb validates maximum of 1000."""
+        token = self._get_auth_token(client, "ultra_thresh_max_storage@example.com")
+
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={"storage_warning_gb": 1001},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_traffic_warning_percent_validates_min(self, client: TestClient) -> None:
+        """Test that traffic_warning_percent validates minimum of 1."""
+        token = self._get_auth_token(client, "ultra_thresh_min_traffic@example.com")
+
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={"traffic_warning_percent": 0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_traffic_warning_percent_validates_max(self, client: TestClient) -> None:
+        """Test that traffic_warning_percent validates maximum of 100."""
+        token = self._get_auth_token(client, "ultra_thresh_max_traffic@example.com")
+
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={"traffic_warning_percent": 101},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_ultra_thresholds_accepts_boundary_values(self, client: TestClient) -> None:
+        """Test that thresholds accept boundary values (1 and max)."""
+        token = self._get_auth_token(client, "ultra_thresh_boundary@example.com")
+
+        # Test min boundary (1)
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 1,
+                "traffic_warning_percent": 1,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["storage_warning_gb"] == 1
+        assert response.json()["traffic_warning_percent"] == 1
+
+        # Test max boundary (1000 for storage, 100 for traffic)
+        response = client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 1000,
+                "traffic_warning_percent": 100,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        response = client.get(
+            "/api/settings/ultra/thresholds",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.json()["storage_warning_gb"] == 1000
+        assert response.json()["traffic_warning_percent"] == 100

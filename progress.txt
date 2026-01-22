@@ -72,4 +72,13 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `services/ultra.py`, migration file
 - 8 unit tests added (all pass), verified in Docker
 
+**US-48.3: Ultra Warning Thresholds - Settings**
+- Added `ultra_storage_warning_gb` and `ultra_traffic_warning_percent` columns to UserSettings model
+- Created Alembic migration `26a3b23ff8ca_add_ultra_warning_thresholds_to_user_settings`
+- Added Pydantic models: `UltraThresholdsCreate`, `UltraThresholdsResponse`
+- Added POST/GET `/api/settings/ultra/thresholds` endpoints with defaults (100 GB, 20%)
+- Added Seedbox Monitoring section to Settings/Connections page with Ultra.cc connection and Warning Thresholds
+- Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `connections/+page.svelte`, migration file
+- 12 backend tests + 14 frontend tests added (all pass), verified in Docker and browser
+
 ---

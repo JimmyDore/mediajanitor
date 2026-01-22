@@ -37,8 +37,8 @@
       ],
       "context": "Epic 48: Ultra.cc seedbox monitoring. This story adds user-configurable warning thresholds. Defaults: 100 GB storage, 20% traffic. Dashboard will use these to show yellow/red warnings. Follow existing UserSettings pattern for new columns. NON-GOALS: No Slack/email notifications, no automatic actions.",
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added threshold columns to UserSettings, POST/GET /api/settings/ultra/thresholds endpoints, Seedbox Monitoring section in Settings/Connections with Ultra.cc connection and Warning Thresholds inputs"
     },
     {
       "id": "US-48.4",
