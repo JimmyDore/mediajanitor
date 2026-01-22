@@ -81,4 +81,22 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `connections/+page.svelte`, migration file
 - 12 backend tests + 14 frontend tests added (all pass), verified in Docker and browser
 
+**US-48.4: Fetch Ultra Stats During Sync**
+- Added `fetch_ultra_stats(url, api_key)` function to `services/ultra.py` with Bearer token auth
+- Added `ultra_free_storage_gb`, `ultra_traffic_available_percent`, `ultra_last_synced_at` columns to UserSettings
+- Created Alembic migration `54b0e03433c5_add_ultra_stats_columns_to_user_settings`
+- Integrated Ultra API call into `run_user_sync()` as non-blocking call after Jellyseerr sync
+- Sync succeeds even if Ultra API fails (logs warning and continues)
+- Files changed: `database.py`, `services/sync.py`, `services/ultra.py`, migration file, `tests/test_ultra_service.py`
+- 9 unit tests added for fetch_ultra_stats (all pass), 607 total tests pass, verified in Docker
+
+**US-49.1: Delete Movies from Cache After Deletion**
+- Added `_delete_cached_media_by_tmdb_id()` helper function to delete CachedMediaItem by TMDB ID in raw_data.ProviderIds.Tmdb
+- Added `_delete_cached_jellyseerr_request_by_tmdb_id()` helper function to delete matching CachedJellyseerrRequest by TMDB ID
+- Integrated cache deletion into `delete_movie` endpoint after successful Radarr deletion
+- Cache deletion happens AFTER Jellyseerr API lookup but before response (order matters)
+- If Radarr deletion fails, cache is NOT deleted (items stay in list)
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 4 new unit tests added (611 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---

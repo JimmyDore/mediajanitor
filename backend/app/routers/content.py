@@ -1,12 +1,15 @@
 """Content analysis API endpoints."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import CachedJellyseerrRequest, User, UserSettings, get_db
+from app.database import CachedJellyseerrRequest, CachedMediaItem, User, UserSettings, get_db
+
+logger = logging.getLogger(__name__)
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
@@ -194,6 +197,69 @@ async def _lookup_jellyseerr_media_by_tmdb(
     return row
 
 
+async def _delete_cached_media_by_tmdb_id(
+    db: AsyncSession, user_id: int, tmdb_id: int
+) -> int:
+    """Delete CachedMediaItem by TMDB ID stored in raw_data.ProviderIds.Tmdb.
+
+    Args:
+        db: Database session
+        user_id: User ID to filter by
+        tmdb_id: TMDB ID to match in raw_data.ProviderIds.Tmdb
+
+    Returns:
+        Number of items deleted
+    """
+    # First, find all matching media items (TMDB ID is stored as string in JSON)
+    tmdb_id_str = str(tmdb_id)
+    result = await db.execute(
+        select(CachedMediaItem)
+        .where(CachedMediaItem.user_id == user_id)
+        .where(CachedMediaItem.raw_data.isnot(None))
+    )
+    items = result.scalars().all()
+
+    # Filter items by TMDB ID in raw_data
+    items_to_delete = []
+    for item in items:
+        raw_data = item.raw_data or {}
+        provider_ids = raw_data.get("ProviderIds", {})
+        if provider_ids.get("Tmdb") == tmdb_id_str:
+            items_to_delete.append(item.id)
+
+    if not items_to_delete:
+        logger.debug(f"No CachedMediaItem found for TMDB ID {tmdb_id}")
+        return 0
+
+    # Delete the matching items
+    await db.execute(
+        delete(CachedMediaItem).where(CachedMediaItem.id.in_(items_to_delete))
+    )
+
+    logger.info(f"Deleted {len(items_to_delete)} CachedMediaItem(s) for TMDB ID {tmdb_id}")
+    return len(items_to_delete)
+
+
+async def _delete_cached_jellyseerr_request_by_tmdb_id(
+    db: AsyncSession, user_id: int, tmdb_id: int, media_type: str
+) -> None:
+    """Delete CachedJellyseerrRequest by TMDB ID.
+
+    Args:
+        db: Database session
+        user_id: User ID to filter by
+        tmdb_id: TMDB ID to match
+        media_type: "movie" or "tv" (lowercase)
+    """
+    await db.execute(
+        delete(CachedJellyseerrRequest)
+        .where(CachedJellyseerrRequest.user_id == user_id)
+        .where(CachedJellyseerrRequest.tmdb_id == tmdb_id)
+        .where(CachedJellyseerrRequest.media_type == media_type)
+    )
+    logger.debug(f"Deleted CachedJellyseerrRequest(s) for TMDB ID {tmdb_id}")
+
+
 @router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
 async def delete_movie(
     tmdb_id: int,
@@ -254,6 +320,14 @@ async def delete_movie(
                     jellyseerr_message = message
         else:
             jellyseerr_message = "No media found for this TMDB ID"
+
+    # US-49.1: Delete from cache if Radarr deletion succeeded
+    # (must be after Jellyseerr lookup but before response)
+    if arr_deleted:
+        await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
+        await _delete_cached_jellyseerr_request_by_tmdb_id(
+            db, current_user.id, tmdb_id, "movie"
+        )
 
     # Compose response message
     messages = []
