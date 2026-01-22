@@ -150,8 +150,8 @@
       ],
       "context": "Epic 51: Recently Available - Show new episodes. Depends on US-51.1 for cached episode data. Status 4 = partially available TV show. Check raw_data.media.seasons[].episodes[].airDate against days_back window. Return dict of {season_num: [episode_nums]} for display. Force inclusion by setting availability_date to today. One entry per series, not per episode. NON-GOALS: No individual episode entries.",
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added _get_recent_episodes_from_cached_data() helper function that checks episode airDates. Modified get_recently_available() and get_recently_available_count() to include status 4 TV shows with recent episodes, using today's date as availability_date. 13 new unit tests added."
     },
     {
       "id": "US-51.3",

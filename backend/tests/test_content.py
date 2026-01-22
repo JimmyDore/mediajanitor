@@ -5543,3 +5543,542 @@ class TestLargeSeriesDetection:
         )
         assert series_item is not None
         assert "large" in series_item["issues"]
+
+
+class TestRecentEpisodesFromCachedData:
+    """Test _get_recent_episodes_from_cached_data() helper function (US-51.2)."""
+
+    def test_returns_none_when_no_episodes(self) -> None:
+        """Should return None when no episodes exist in raw_data."""
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        # Request with no episodes in seasons
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1001,
+            tmdb_id=12345,
+            media_type="tv",
+            status=4,
+            title="Test Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5},
+                        {"seasonNumber": 2, "status": 4},
+                    ]
+                }
+            },
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is None
+
+    def test_returns_none_when_no_seasons(self) -> None:
+        """Should return None when no seasons exist."""
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1002,
+            tmdb_id=12346,
+            media_type="tv",
+            status=4,
+            title="Test Show No Seasons",
+            raw_data={"media": {}},
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is None
+
+    def test_returns_none_when_episodes_outside_window(self) -> None:
+        """Should return None when all episodes are outside the days_back window."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        # Episodes from 30 days ago
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1003,
+            tmdb_id=12347,
+            media_type="tv",
+            status=4,
+            title="Old Episodes Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Old Ep 1", "airDate": old_date},
+                                {"episodeNumber": 2, "name": "Old Ep 2", "airDate": old_date},
+                            ],
+                        }
+                    ]
+                }
+            },
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is None
+
+    def test_returns_dict_with_recent_episodes(self) -> None:
+        """Should return dict of {season_num: [episode_nums]} for recent episodes."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        # Episodes from 2 days ago
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1004,
+            tmdb_id=12348,
+            media_type="tv",
+            status=4,
+            title="Recent Episodes Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Ep 1", "airDate": old_date},
+                            ],
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S2 Ep 1", "airDate": old_date},
+                                {"episodeNumber": 2, "name": "S2 Ep 2", "airDate": recent_date},
+                                {"episodeNumber": 3, "name": "S2 Ep 3", "airDate": recent_date},
+                            ],
+                        },
+                    ]
+                }
+            },
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is not None
+        assert result == {2: [2, 3]}
+
+    def test_returns_multiple_seasons_with_recent_episodes(self) -> None:
+        """Should return episodes from multiple seasons if both have recent episodes."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1005,
+            tmdb_id=12349,
+            media_type="tv",
+            status=4,
+            title="Multi-Season Recent Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 5, "name": "S1 Ep 5", "airDate": recent_date},
+                            ],
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S2 Ep 1", "airDate": recent_date},
+                            ],
+                        },
+                    ]
+                }
+            },
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is not None
+        assert result == {1: [5], 2: [1]}
+
+    def test_handles_null_air_date(self) -> None:
+        """Should skip episodes with null airDate."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1006,
+            tmdb_id=12350,
+            media_type="tv",
+            status=4,
+            title="Null AirDate Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Ep 1", "airDate": recent_date},
+                                {"episodeNumber": 2, "name": "Ep 2", "airDate": None},
+                            ],
+                        }
+                    ]
+                }
+            },
+        )
+
+        result = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result is not None
+        assert result == {1: [1]}
+
+    def test_respects_days_back_parameter(self) -> None:
+        """Should respect the days_back parameter."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.content import _get_recent_episodes_from_cached_data
+
+        # Episode from 10 days ago
+        ten_days_ago = (datetime.now(UTC) - timedelta(days=10)).strftime("%Y-%m-%d")
+
+        request = CachedJellyseerrRequest(
+            user_id=1,
+            jellyseerr_id=1007,
+            tmdb_id=12351,
+            media_type="tv",
+            status=4,
+            title="Days Back Test Show",
+            raw_data={
+                "media": {
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Ep 1", "airDate": ten_days_ago},
+                            ],
+                        }
+                    ]
+                }
+            },
+        )
+
+        # With 7 days window, episode should not be found
+        result_7 = _get_recent_episodes_from_cached_data(request, days_back=7)
+        assert result_7 is None
+
+        # With 14 days window, episode should be found
+        result_14 = _get_recent_episodes_from_cached_data(request, days_back=14)
+        assert result_14 is not None
+        assert result_14 == {1: [1]}
+
+
+class TestRecentlyAvailableWithOngoingSeries:
+    """Test get_recently_available() includes ongoing series with recent episodes (US-51.2)."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_includes_status_4_show_with_recent_episodes(self, client: TestClient) -> None:
+        """Status 4 TV shows with recent episodes should appear in recently available."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-recent1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 show with recent episode
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2001,
+                tmdb_id=22001,
+                media_type="tv",
+                status=4,  # Partially Available
+                title="Ongoing Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": old_date,  # Original add date is old
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 5,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
+                                ],
+                            },
+                            {
+                                "seasonNumber": 2,
+                                "status": 4,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
+                                ],
+                            },
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should include the ongoing series
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Ongoing Series"
+
+    @pytest.mark.asyncio
+    async def test_excludes_status_4_show_without_recent_episodes(self, client: TestClient) -> None:
+        """Status 4 TV shows without recent episodes should NOT appear in recently available."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-old1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # ISO format for mediaAddedAt, date format for airDate
+        old_date_iso = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 show with only old episodes
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2002,
+                tmdb_id=22002,
+                media_type="tv",
+                status=4,  # Partially Available
+                title="Old Ongoing Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": old_date_iso,
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 4,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
+                                ],
+                            }
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should NOT include the ongoing series (no recent episodes)
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_series_appears_once_not_per_episode(self, client: TestClient) -> None:
+        """Series with multiple recent episodes should appear once, not per episode."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-once1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Series with multiple recent episodes
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2003,
+                tmdb_id=22003,
+                media_type="tv",
+                status=4,
+                title="Multi-Episode Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": (datetime.now(UTC) - timedelta(days=60)).isoformat(),
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 4,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "Ep1", "airDate": recent_date},
+                                    {"episodeNumber": 2, "name": "Ep2", "airDate": recent_date},
+                                    {"episodeNumber": 3, "name": "Ep3", "airDate": recent_date},
+                                ],
+                            }
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should appear exactly once
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Multi-Episode Series"
+
+    @pytest.mark.asyncio
+    async def test_status_5_shows_still_work_normally(self, client: TestClient) -> None:
+        """Status 5 (fully available) shows should still appear based on mediaAddedAt."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-status5@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 5 show with recent mediaAddedAt
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2004,
+                tmdb_id=22004,
+                media_type="tv",
+                status=5,  # Fully Available
+                title="Complete Series",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should include the complete series
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Complete Series"
+
+    @pytest.mark.asyncio
+    async def test_movies_still_work_normally(self, client: TestClient) -> None:
+        """Movies should still appear based on mediaAddedAt (not episodes check)."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-movie1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            # Movie with recent availability
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2005,
+                tmdb_id=22005,
+                media_type="movie",
+                status=5,
+                title="Recent Movie",
+                raw_data={"media": {"mediaAddedAt": recent_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should include the movie
+        assert data["total_count"] == 1
+        assert data["items"][0]["title"] == "Recent Movie"
+
+    @pytest.mark.asyncio
+    async def test_ongoing_series_uses_today_as_availability_date(self, client: TestClient) -> None:
+        """Ongoing series with recent episodes should use today's date as availability_date."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "ongoing-date1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC) - timedelta(days=100)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=2006,
+                tmdb_id=22006,
+                media_type="tv",
+                status=4,
+                title="Ongoing With Date Check",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": old_date,  # Original add was long ago
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 4,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "Ep1", "airDate": recent_date},
+                                ],
+                            }
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        # The availability_date should be today (not the old mediaAddedAt)
+        # Parse the returned date and check it's within the recent window
+        from datetime import datetime as dt
+
+        availability = dt.fromisoformat(
+            data["items"][0]["availability_date"].replace("Z", "+00:00")
+        )
+        now = datetime.now(UTC)
+        diff = (now - availability).days
+        assert diff <= 1  # Should be today or very recent

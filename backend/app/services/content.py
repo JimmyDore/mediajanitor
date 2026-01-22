@@ -51,6 +51,7 @@ class UserThresholds:
     large_movie_size_gb: int
     large_season_size_gb: int
 
+
 # Hardcoded thresholds per acceptance criteria
 OLD_CONTENT_MONTHS_CUTOFF = 4  # Content not watched in 4+ months
 MIN_AGE_MONTHS = 3  # Don't flag content added recently
@@ -1027,6 +1028,9 @@ async def get_recently_available_count(
         db: Database session
         user_id: User ID
         days_back: Number of days to look back. If None, uses user's setting.
+
+    For status 4 (Partially Available) TV shows, also checks for recent episodes
+    using cached episode air dates.
     """
     if days_back is None:
         days_back = await get_user_recently_available_days(db, user_id)
@@ -1045,7 +1049,19 @@ async def get_recently_available_count(
         if request.status not in [4, 5]:
             continue
 
-        # Get availability date from raw_data
+        # For status 4 TV shows, check for recent episodes first
+        if request.status == 4 and request.media_type == "tv":
+            recent_episodes = _get_recent_episodes_from_cached_data(request, days_back)
+            if recent_episodes:
+                count += 1
+                continue
+            # Status 4 TV without recent episodes: check regular availability date
+            availability_date = _get_availability_date(request)
+            if availability_date and availability_date >= cutoff_date:
+                count += 1
+            continue
+
+        # For status 5 or movies: use regular availability date logic
         availability_date = _get_availability_date(request)
         if not availability_date:
             continue
@@ -1077,6 +1093,69 @@ def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
         return None
 
     return parse_jellyfin_datetime(date_str)
+
+
+def _get_recent_episodes_from_cached_data(
+    request: CachedJellyseerrRequest,
+    days_back: int,
+) -> dict[int, list[int]] | None:
+    """Check for recent episodes in cached Jellyseerr request data.
+
+    For status 4 (Partially Available) TV shows, checks raw_data.media.seasons[].episodes[]
+    for episodes with airDate within the days_back window.
+
+    Args:
+        request: CachedJellyseerrRequest with raw_data containing episode info
+        days_back: Number of days to look back for recent episodes
+
+    Returns:
+        Dict mapping season_number -> list of episode_numbers for recent episodes,
+        or None if no recent episodes found.
+        Example: {2: [5, 6, 7]} means season 2, episodes 5, 6, 7 are recent.
+    """
+    raw_data = request.raw_data or {}
+    media = raw_data.get("media", {})
+    seasons = media.get("seasons", [])
+
+    if not seasons:
+        return None
+
+    now = datetime.now(UTC)
+    cutoff_date = now - timedelta(days=days_back)
+
+    recent_episodes: dict[int, list[int]] = {}
+
+    for season in seasons:
+        season_number = season.get("seasonNumber")
+        if not season_number:
+            continue
+
+        episodes = season.get("episodes", [])
+        if not episodes:
+            continue
+
+        recent_in_season: list[int] = []
+
+        for episode in episodes:
+            air_date_str = episode.get("airDate")
+            if not air_date_str:
+                continue
+
+            # Parse airDate (format: "YYYY-MM-DD")
+            try:
+                air_date = datetime.strptime(air_date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+            except (ValueError, TypeError):
+                continue
+
+            if air_date >= cutoff_date:
+                episode_number = episode.get("episodeNumber")
+                if episode_number:
+                    recent_in_season.append(episode_number)
+
+        if recent_in_season:
+            recent_episodes[season_number] = recent_in_season
+
+    return recent_episodes if recent_episodes else None
 
 
 async def get_nickname_map(db: AsyncSession, user_id: int) -> dict[str, str]:
@@ -1128,6 +1207,10 @@ async def get_recently_available(
 
     Returns items sorted by date, newest first.
     Includes display_name field resolved from user's nickname mappings.
+
+    For status 4 (Partially Available) TV shows, also checks for recent episodes
+    using cached episode air dates. If recent episodes are found, the show is
+    included with today's date as the availability_date.
     """
     if days_back is None:
         days_back = await get_user_recently_available_days(db, user_id)
@@ -1150,7 +1233,20 @@ async def get_recently_available(
         if request.status not in [4, 5]:
             continue
 
-        # Get availability date from raw_data
+        # For status 4 TV shows, check for recent episodes first
+        if request.status == 4 and request.media_type == "tv":
+            recent_episodes = _get_recent_episodes_from_cached_data(request, days_back)
+            if recent_episodes:
+                # Use today's date as availability_date to force inclusion
+                recent_items.append((now, request))
+                continue
+            # Status 4 TV without recent episodes: check regular availability date
+            availability_date = _get_availability_date(request)
+            if availability_date and availability_date >= cutoff_date:
+                recent_items.append((availability_date, request))
+            continue
+
+        # For status 5 or movies: use regular availability date logic
         availability_date = _get_availability_date(request)
         if not availability_date:
             continue

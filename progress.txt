@@ -127,4 +127,15 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `app/services/sync.py`, `tests/test_sync.py`
 - 13 new unit tests added (634 total tests pass), mypy passes, verified in Docker with integration tests
 
+**US-51.2: Include Ongoing Series in Recently Available**
+- Added `_get_recent_episodes_from_cached_data(request, days_back)` helper function in `content.py`
+- Function checks `raw_data.media.seasons[].episodes[].airDate` for episodes within `days_back` window
+- Returns `{season_num: [episode_nums]}` dict if recent episodes found, None otherwise
+- Modified `get_recently_available()` to check for recent episodes on status 4 TV shows
+- Modified `get_recently_available_count()` with same logic for dashboard summary consistency
+- If recent episodes found, uses today's date as `availability_date` to force inclusion
+- Series appears once (not per episode) in the list
+- Files changed: `app/services/content.py`, `tests/test_content.py`
+- 13 new unit tests added (647 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---
