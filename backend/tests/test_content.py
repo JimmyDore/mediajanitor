@@ -6082,3 +6082,421 @@ class TestRecentlyAvailableWithOngoingSeries:
         now = datetime.now(UTC)
         diff = (now - availability).days
         assert diff <= 1  # Should be today or very recent
+
+
+class TestRecentlyAvailableSeasonEpisodeDetails:
+    """Tests for US-51.3: Season/episode details in recently available API response."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to create user and get auth token."""
+        password = "testpass123"
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_status_5_tv_show_returns_season_info_and_episode_count(
+        self, client: TestClient
+    ) -> None:
+        """Status 5 TV shows should return season_info and episode_count."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details1@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 5 TV show with 3 complete seasons, 30 total episodes
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3001,
+                tmdb_id=33001,
+                media_type="tv",
+                status=5,  # Fully Available
+                title="Complete Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 5,
+                                "episodeCount": 10,
+                            },
+                            {
+                                "seasonNumber": 2,
+                                "status": 5,
+                                "episodeCount": 10,
+                            },
+                            {
+                                "seasonNumber": 3,
+                                "status": 5,
+                                "episodeCount": 10,
+                            },
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["season_info"] == "Seasons 1-3"
+        assert item["episode_count"] == 30
+        # Status 5 shows don't have available/total episode fields
+        assert item["available_episodes"] is None
+        assert item["total_episodes"] is None
+
+    @pytest.mark.asyncio
+    async def test_status_5_tv_show_single_season_format(self, client: TestClient) -> None:
+        """Status 5 TV show with single season should format correctly."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details2@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3002,
+                tmdb_id=33002,
+                media_type="tv",
+                status=5,
+                title="Single Season Show",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 5,
+                                "episodeCount": 8,
+                            },
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["season_info"] == "Season 1"
+        assert item["episode_count"] == 8
+
+    @pytest.mark.asyncio
+    async def test_status_4_tv_show_returns_progress_info(self, client: TestClient) -> None:
+        """Status 4 TV shows should return current season progress."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details3@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 TV show with partial season 2
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3003,
+                tmdb_id=33003,
+                media_type="tv",
+                status=4,  # Partially Available
+                title="Ongoing Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": old_date,
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 5,
+                                "episodeCount": 10,
+                            },
+                            {
+                                "seasonNumber": 2,
+                                "status": 4,  # Partially available
+                                "episodeCount": 12,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
+                                    {"episodeNumber": 2, "name": "Ep2", "airDate": old_date},
+                                    {"episodeNumber": 3, "name": "Ep3", "airDate": old_date},
+                                    {"episodeNumber": 4, "name": "Ep4", "airDate": old_date},
+                                    {"episodeNumber": 5, "name": "Ep5", "airDate": recent_date},
+                                ],
+                            },
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["season_info"] == "Season 2 in progress"
+        assert item["available_episodes"] == 5
+        assert item["total_episodes"] == 12
+        # episode_count is None for status 4 (use available/total instead)
+        assert item["episode_count"] is None
+
+    @pytest.mark.asyncio
+    async def test_movie_returns_none_for_all_season_fields(self, client: TestClient) -> None:
+        """Movies should return None for all season/episode fields."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details4@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3004,
+                tmdb_id=33004,
+                media_type="movie",
+                status=5,
+                title="Test Movie",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["season_info"] is None
+        assert item["episode_count"] is None
+        assert item["available_episodes"] is None
+        assert item["total_episodes"] is None
+
+    @pytest.mark.asyncio
+    async def test_status_5_tv_show_non_contiguous_seasons(self, client: TestClient) -> None:
+        """Status 5 TV show with non-contiguous seasons (e.g., 1, 3, 4) formats correctly."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details5@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3005,
+                tmdb_id=33005,
+                media_type="tv",
+                status=5,
+                title="Gapped Seasons",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                        "seasons": [
+                            {"seasonNumber": 1, "status": 5, "episodeCount": 6},
+                            {"seasonNumber": 3, "status": 5, "episodeCount": 8},
+                            {"seasonNumber": 4, "status": 5, "episodeCount": 10},
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # Non-contiguous: list all season numbers
+        assert item["season_info"] == "Seasons 1, 3, 4"
+        assert item["episode_count"] == 24
+
+    @pytest.mark.asyncio
+    async def test_status_5_tv_show_with_specials_excluded(self, client: TestClient) -> None:
+        """Season 0 (specials) should be excluded from season_info."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details6@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3006,
+                tmdb_id=33006,
+                media_type="tv",
+                status=5,
+                title="Show With Specials",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                        "seasons": [
+                            {"seasonNumber": 0, "status": 5, "episodeCount": 3},  # Specials
+                            {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                            {"seasonNumber": 2, "status": 5, "episodeCount": 10},
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # Season 0 (specials) excluded from season_info
+        assert item["season_info"] == "Seasons 1-2"
+        # episode_count includes specials in total count (as they're part of the show)
+        assert item["episode_count"] == 23
+
+    @pytest.mark.asyncio
+    async def test_status_4_tv_show_multiple_partial_seasons(self, client: TestClient) -> None:
+        """Status 4 TV show with multiple partial seasons shows most recent in progress."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details7@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 TV show with multiple partial seasons
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3007,
+                tmdb_id=33007,
+                media_type="tv",
+                status=4,
+                title="Multi Partial Series",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": old_date,
+                        "seasons": [
+                            {
+                                "seasonNumber": 1,
+                                "status": 4,
+                                "episodeCount": 10,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
+                                ],
+                            },
+                            {
+                                "seasonNumber": 2,
+                                "status": 4,
+                                "episodeCount": 8,
+                                "episodes": [
+                                    {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
+                                    {"episodeNumber": 2, "name": "S2E2", "airDate": recent_date},
+                                ],
+                            },
+                        ],
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # Should show highest season number as "in progress"
+        assert item["season_info"] == "Season 2 in progress"
+        assert item["available_episodes"] == 2
+        assert item["total_episodes"] == 8
+
+    @pytest.mark.asyncio
+    async def test_tv_show_without_seasons_data_returns_none(self, client: TestClient) -> None:
+        """TV shows with missing seasons data should return None for fields."""
+        from datetime import UTC, datetime, timedelta
+
+        token = self._get_auth_token(client, "season-details8@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3008,
+                tmdb_id=33008,
+                media_type="tv",
+                status=5,
+                title="No Seasons Data",
+                raw_data={
+                    "media": {
+                        "mediaAddedAt": recent_date,
+                        # No seasons key
+                    }
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["season_info"] is None
+        assert item["episode_count"] is None
+        assert item["available_episodes"] is None
+        assert item["total_episodes"] is None

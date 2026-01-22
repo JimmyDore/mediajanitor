@@ -138,4 +138,15 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `app/services/content.py`, `tests/test_content.py`
 - 13 new unit tests added (647 total tests pass), mypy passes, verified in Docker with integration tests
 
+**US-51.3: API Response with Season/Episode Details**
+- Added optional fields to `RecentlyAvailableItem` model: `season_info`, `episode_count`, `available_episodes`, `total_episodes`
+- Added `_get_season_episode_details(request)` helper function to extract season/episode info from raw_data
+- Added `_format_season_info(season_numbers)` helper to format season list ("Seasons 1-3", "Seasons 1, 3, 4", etc.)
+- Status 5 TV shows: `season_info` = "Season X" or "Seasons X-Y", `episode_count` = total episodes
+- Status 4 TV shows: `season_info` = "Season X in progress", `available_episodes`/`total_episodes` for progress
+- Movies: all fields return `None`
+- Specials (season 0) excluded from season_info display but included in episode count
+- Files changed: `app/models/content.py`, `app/services/content.py`, `tests/test_content.py`
+- 8 new unit tests added (655 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---

@@ -167,8 +167,8 @@
       ],
       "context": "Epic 51: Recently Available API enhancement. Add fields to RecentlyAvailableItem model: season_info (e.g., 'Seasons 1-3' or 'Season 4 in progress'), episode_count (total for status 5), available_episodes/total_episodes (for status 4 progress). Status 5 = fully available, Status 4 = partially available. Calculate from raw_data.media.seasons. Movies return None. NON-GOALS: No episode-level details like titles.",
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added season_info, episode_count, available_episodes, total_episodes to RecentlyAvailableItem model. Added _get_season_episode_details() and _format_season_info() helpers to populate fields for TV shows. Status 5 shows get 'Seasons X-Y' format with total episode count. Status 4 shows get 'Season X in progress' with available/total episode counts. Movies return None for all fields. 8 new unit tests added."
     },
     {
       "id": "US-48.2",

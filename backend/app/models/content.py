@@ -103,6 +103,11 @@ class RecentlyAvailableItem(BaseModel):
     availability_date: str
     requested_by: str | None = None
     display_name: str | None = None  # Resolved from nickname mapping, or same as requested_by
+    # US-51.3: Season/episode details for TV shows
+    season_info: str | None = None  # e.g., "Seasons 1-3" or "Season 4 in progress"
+    episode_count: int | None = None  # Total episodes (for status 5 TV shows)
+    available_episodes: int | None = None  # Available episodes (for status 4)
+    total_episodes: int | None = None  # Total episodes in current season (for status 4)
 
 
 class RecentlyAvailableResponse(BaseModel):

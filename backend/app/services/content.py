@@ -1095,6 +1095,164 @@ def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
     return parse_jellyfin_datetime(date_str)
 
 
+class SeasonEpisodeDetails(TypedDict, total=False):
+    """Type for season/episode details returned by _get_season_episode_details."""
+
+    season_info: str | None
+    episode_count: int | None
+    available_episodes: int | None
+    total_episodes: int | None
+
+
+def _get_season_episode_details(
+    request: CachedJellyseerrRequest,
+) -> SeasonEpisodeDetails:
+    """Extract season and episode details from cached Jellyseerr request data.
+
+    For status 5 (Fully Available) TV shows:
+        - season_info: "Season 1" or "Seasons 1-3" or "Seasons 1, 3, 4" (non-contiguous)
+        - episode_count: Total episodes across all seasons
+        - available_episodes/total_episodes: None
+
+    For status 4 (Partially Available) TV shows:
+        - season_info: "Season X in progress" (highest partial season)
+        - episode_count: None
+        - available_episodes: Episodes with data in highest partial season
+        - total_episodes: episodeCount of highest partial season
+
+    For movies:
+        - All fields are None
+
+    Args:
+        request: CachedJellyseerrRequest with raw_data containing season info
+
+    Returns:
+        Dict with season_info, episode_count, available_episodes, total_episodes
+    """
+    # Movies return all None
+    if request.media_type == "movie":
+        return {
+            "season_info": None,
+            "episode_count": None,
+            "available_episodes": None,
+            "total_episodes": None,
+        }
+
+    raw_data = request.raw_data or {}
+    media = raw_data.get("media", {})
+    seasons = media.get("seasons", [])
+
+    if not seasons:
+        return {
+            "season_info": None,
+            "episode_count": None,
+            "available_episodes": None,
+            "total_episodes": None,
+        }
+
+    # Filter out season 0 (specials) for season_info display
+    regular_seasons = [s for s in seasons if s.get("seasonNumber", 0) > 0]
+
+    if not regular_seasons:
+        # Only specials exist - count episodes but no season_info
+        total_eps = sum(s.get("episodeCount", 0) for s in seasons)
+        return {
+            "season_info": None,
+            "episode_count": total_eps if total_eps > 0 else None,
+            "available_episodes": None,
+            "total_episodes": None,
+        }
+
+    # Sort seasons by season number
+    sorted_seasons = sorted(regular_seasons, key=lambda s: s.get("seasonNumber", 0))
+    season_numbers = [s.get("seasonNumber", 0) for s in sorted_seasons]
+
+    # Calculate total episode count (including specials)
+    total_episode_count = sum(s.get("episodeCount", 0) for s in seasons)
+
+    # Status 5: Fully Available
+    if request.status == 5:
+        season_info = _format_season_info(season_numbers)
+        return {
+            "season_info": season_info,
+            "episode_count": total_episode_count if total_episode_count > 0 else None,
+            "available_episodes": None,
+            "total_episodes": None,
+        }
+
+    # Status 4: Partially Available
+    if request.status == 4:
+        # Find the highest partial season (status 4)
+        partial_seasons = [s for s in sorted_seasons if s.get("status") == 4]
+
+        if partial_seasons:
+            # Get the highest season number that is partial
+            highest_partial = max(partial_seasons, key=lambda s: s.get("seasonNumber", 0))
+            season_num = highest_partial.get("seasonNumber", 0)
+            total_eps = highest_partial.get("episodeCount", 0)
+
+            # Count available episodes from episode data
+            episodes = highest_partial.get("episodes", [])
+            available_eps = len(episodes) if episodes else None
+
+            return {
+                "season_info": f"Season {season_num} in progress",
+                "episode_count": None,
+                "available_episodes": available_eps,
+                "total_episodes": total_eps if total_eps > 0 else None,
+            }
+
+        # No partial seasons found but status is 4 - use all season info
+        season_info = _format_season_info(season_numbers)
+        return {
+            "season_info": season_info,
+            "episode_count": total_episode_count if total_episode_count > 0 else None,
+            "available_episodes": None,
+            "total_episodes": None,
+        }
+
+    # Other statuses - return None for all
+    return {
+        "season_info": None,
+        "episode_count": None,
+        "available_episodes": None,
+        "total_episodes": None,
+    }
+
+
+def _format_season_info(season_numbers: list[int]) -> str:
+    """Format season numbers into a human-readable string.
+
+    Examples:
+        [1] -> "Season 1"
+        [1, 2, 3] -> "Seasons 1-3"
+        [1, 3, 4] -> "Seasons 1, 3, 4"
+        [1, 2, 4, 5, 6] -> "Seasons 1, 2, 4-6" (contiguous groups)
+
+    Args:
+        season_numbers: Sorted list of season numbers (must not be empty)
+
+    Returns:
+        Formatted season info string
+    """
+    if not season_numbers:
+        return ""
+
+    if len(season_numbers) == 1:
+        return f"Season {season_numbers[0]}"
+
+    # Check if all seasons are contiguous
+    is_contiguous = all(
+        season_numbers[i + 1] == season_numbers[i] + 1 for i in range(len(season_numbers) - 1)
+    )
+
+    if is_contiguous:
+        return f"Seasons {season_numbers[0]}-{season_numbers[-1]}"
+
+    # Non-contiguous: list all numbers
+    return f"Seasons {', '.join(str(n) for n in season_numbers)}"
+
+
 def _get_recent_episodes_from_cached_data(
     request: CachedJellyseerrRequest,
     days_back: int,
@@ -1258,18 +1416,26 @@ async def get_recently_available(
     recent_items.sort(key=lambda x: x[0], reverse=True)
 
     # Convert to response models
-    response_items = [
-        RecentlyAvailableItem(
-            jellyseerr_id=request.jellyseerr_id,
-            title=request.title or "Unknown",
-            title_fr=request.title_fr,
-            media_type=request.media_type,
-            availability_date=availability_date.isoformat(),
-            requested_by=request.requested_by,
-            display_name=resolve_display_name(request.requested_by, nickname_map),
+    response_items: list[RecentlyAvailableItem] = []
+    for availability_date, request in recent_items:
+        # Get season/episode details for TV shows
+        season_details = _get_season_episode_details(request)
+
+        response_items.append(
+            RecentlyAvailableItem(
+                jellyseerr_id=request.jellyseerr_id,
+                title=request.title or "Unknown",
+                title_fr=request.title_fr,
+                media_type=request.media_type,
+                availability_date=availability_date.isoformat(),
+                requested_by=request.requested_by,
+                display_name=resolve_display_name(request.requested_by, nickname_map),
+                season_info=season_details.get("season_info"),
+                episode_count=season_details.get("episode_count"),
+                available_episodes=season_details.get("available_episodes"),
+                total_episodes=season_details.get("total_episodes"),
+            )
         )
-        for availability_date, request in recent_items
-    ]
 
     return RecentlyAvailableResponse(
         items=response_items,
