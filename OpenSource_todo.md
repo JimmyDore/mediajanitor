@@ -110,13 +110,16 @@
 
 ### Reddit Post
 - [ ] Draft post for r/selfhosted
-- [ ] Draft post for r/PleX
+- [ ] Draft post for r/jellyfin
 - [ ] Include:
   - What the project does
   - Link to demo video
   - GitHub repo link
   - Screenshots
   - Note that it's new/looking for feedback
+  - Be humble, explain that it's solving my main use cases that some maybe don't have (language issues, for example, I have french friends on it and I make sure as much as possible to have the original versions and the french versions)
+  - Also explain that I'll try improving it based on feedbacks if there are, but I may not be the fastest man alive to solve issues, lots of stuff on the side.
+  - Hosted it myself on a VPS but closed sign ups for now, runnning on a very cheap VPS that won't be able to handle a lot of users. And anyway, I think you may not want to share your jellyfin/jellyseer/radarr/sonarr API keys with everyone (but it's obviously encrypted in the database). I encourage everone to self host, really easy set up with docker compose.
 
 ---
 
