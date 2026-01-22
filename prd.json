@@ -96,8 +96,8 @@
       ],
       "context": "Epic 49: Fix deletion cache persistence. Same pattern as US-49.1 but for series. Endpoint: DELETE /api/content/series/{tmdb_id}. Match CachedMediaItem by TMDB ID in raw_data JSON (key: ProviderIds.Tmdb). Delete from cache ONLY after successful Sonarr deletion. Also delete matching CachedJellyseerrRequest by TMDB ID. NON-GOALS: No undo/restore, no change to sync behavior.",
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added cache deletion to delete_series endpoint using existing _delete_cached_media_by_tmdb_id() and _delete_cached_jellyseerr_request_by_tmdb_id() helpers. Cache deletion happens AFTER successful Sonarr deletion but before response."
     },
     {
       "id": "US-49.3",

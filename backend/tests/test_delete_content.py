@@ -1360,3 +1360,330 @@ class TestDeleteMovieCachePersistence:
             assert (
                 request_result.scalar_one_or_none() is None
             ), "CachedJellyseerrRequest should be deleted"
+
+
+class TestDeleteSeriesCachePersistence:
+    """Tests for US-49.2: Delete series from cache after deletion."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "series_cache@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def _get_user_id(self, client: TestClient, token: str) -> int:
+        """Helper to get user ID from token."""
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return response.json()["id"]
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_delete_series_removes_cached_media_item(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that successful Sonarr deletion removes CachedMediaItem from DB."""
+        from app.database import CachedMediaItem
+
+        mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
+        mock_validate_sonarr.return_value = True
+
+        token = self._get_auth_token(client, "series_cache_delete@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create a cached media item with TMDB ID in raw_data (TV series)
+        async with TestingAsyncSessionLocal() as session:
+            cached_item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="jellyfin-series-123",
+                name="Test Series",
+                media_type="Series",
+                production_year=2023,
+                size_bytes=50000000000,
+                raw_data={"ProviderIds": {"Tmdb": "55555", "Tvdb": "12345"}},
+            )
+            session.add(cached_item)
+            await session.commit()
+
+        # Verify item exists before deletion
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedMediaItem).where(
+                    CachedMediaItem.user_id == user_id,
+                    CachedMediaItem.jellyfin_id == "jellyfin-series-123",
+                )
+            )
+            assert result.scalar_one_or_none() is not None
+
+        # Delete series via API
+        response = client.delete(
+            "/api/content/series/55555",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is True
+
+        # Verify cached item was removed from database
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedMediaItem).where(
+                    CachedMediaItem.user_id == user_id,
+                    CachedMediaItem.jellyfin_id == "jellyfin-series-123",
+                )
+            )
+            assert result.scalar_one_or_none() is None, "CachedMediaItem should be deleted"
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_delete_series_removes_cached_jellyseerr_request(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that successful Sonarr deletion also removes CachedJellyseerrRequest."""
+        from app.database import CachedJellyseerrRequest, CachedMediaItem
+
+        mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
+        mock_validate_sonarr.return_value = True
+
+        token = self._get_auth_token(client, "series_cache_both@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create cached media item and jellyseerr request with same TMDB ID
+        async with TestingAsyncSessionLocal() as session:
+            cached_item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="jellyfin-series-456",
+                name="Test Series 2",
+                media_type="Series",
+                raw_data={"ProviderIds": {"Tmdb": "66666"}},
+            )
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=888,
+                jellyseerr_media_id=444,
+                tmdb_id=66666,
+                media_type="tv",
+                status=1,
+                title="Test Series 2",
+            )
+            session.add(cached_item)
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete series via API
+        response = client.delete(
+            "/api/content/series/66666",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["arr_deleted"] is True
+
+        # Verify both cached items were removed
+        async with TestingAsyncSessionLocal() as session:
+            media_result = await session.execute(
+                select(CachedMediaItem).where(
+                    CachedMediaItem.user_id == user_id,
+                    CachedMediaItem.jellyfin_id == "jellyfin-series-456",
+                )
+            )
+            assert media_result.scalar_one_or_none() is None, "CachedMediaItem should be deleted"
+
+            request_result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user_id,
+                    CachedJellyseerrRequest.tmdb_id == 66666,
+                )
+            )
+            assert (
+                request_result.scalar_one_or_none() is None
+            ), "CachedJellyseerrRequest should be deleted"
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_delete_series_keeps_cache_on_sonarr_failure(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that failed Sonarr deletion does NOT remove cached items."""
+        from app.database import CachedMediaItem
+
+        mock_delete_series.return_value = (False, "Series not found in Sonarr")
+        mock_validate_sonarr.return_value = True
+
+        token = self._get_auth_token(client, "series_cache_keep@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create cached media item
+        async with TestingAsyncSessionLocal() as session:
+            cached_item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="jellyfin-series-789",
+                name="Test Series 3",
+                media_type="Series",
+                raw_data={"ProviderIds": {"Tmdb": "77777"}},
+            )
+            session.add(cached_item)
+            await session.commit()
+
+        # Attempt delete (Sonarr fails)
+        response = client.delete(
+            "/api/content/series/77777",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["arr_deleted"] is False
+
+        # Verify cached item was NOT removed (Sonarr deletion failed)
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedMediaItem).where(
+                    CachedMediaItem.user_id == user_id,
+                    CachedMediaItem.jellyfin_id == "jellyfin-series-789",
+                )
+            )
+            assert result.scalar_one_or_none() is not None, "CachedMediaItem should NOT be deleted"
+
+    @pytest.mark.asyncio
+    @patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock)
+    @patch("app.routers.settings.validate_jellyseerr_connection", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyseerr_media", new_callable=AsyncMock)
+    async def test_delete_series_removes_cache_even_if_jellyseerr_fails(
+        self,
+        mock_delete_media: AsyncMock,
+        mock_delete_series: AsyncMock,
+        mock_validate_jellyseerr: AsyncMock,
+        mock_validate_sonarr: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Test that cache is deleted if Sonarr succeeds, even if Jellyseerr fails."""
+        from app.database import CachedJellyseerrRequest, CachedMediaItem
+
+        mock_delete_series.return_value = (True, "Series deleted successfully from Sonarr")
+        mock_delete_media.return_value = (False, "Jellyseerr API error")
+        mock_validate_sonarr.return_value = True
+        mock_validate_jellyseerr.return_value = True
+
+        token = self._get_auth_token(client, "series_cache_jelly_fail@example.com")
+        user_id = self._get_user_id(client, token)
+
+        # Setup Sonarr and Jellyseerr
+        client.post(
+            "/api/settings/sonarr",
+            json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        client.post(
+            "/api/settings/jellyseerr",
+            json={"server_url": "https://jellyseerr.example.com", "api_key": "jellyseerr-api-key"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Create cached items
+        async with TestingAsyncSessionLocal() as session:
+            cached_item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="jellyfin-series-999",
+                name="Test Series 4",
+                media_type="Series",
+                raw_data={"ProviderIds": {"Tmdb": "88888"}},
+            )
+            cached_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=777,
+                jellyseerr_media_id=666,
+                tmdb_id=88888,
+                media_type="tv",
+                status=1,
+                title="Test Series 4",
+            )
+            session.add(cached_item)
+            session.add(cached_request)
+            await session.commit()
+
+        # Delete series via API
+        response = client.request(
+            "DELETE",
+            "/api/content/series/88888",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "tmdb_id": 88888,
+                "delete_from_arr": True,
+                "delete_from_jellyseerr": True,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["arr_deleted"] is True
+        assert data["jellyseerr_deleted"] is False
+
+        # Both cache items should still be deleted (Sonarr succeeded)
+        async with TestingAsyncSessionLocal() as session:
+            media_result = await session.execute(
+                select(CachedMediaItem).where(
+                    CachedMediaItem.user_id == user_id,
+                    CachedMediaItem.jellyfin_id == "jellyfin-series-999",
+                )
+            )
+            assert media_result.scalar_one_or_none() is None, "CachedMediaItem should be deleted"
+
+            request_result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user_id,
+                    CachedJellyseerrRequest.tmdb_id == 88888,
+                )
+            )
+            assert (
+                request_result.scalar_one_or_none() is None
+            ), "CachedJellyseerrRequest should be deleted"
