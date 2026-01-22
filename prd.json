@@ -77,8 +77,8 @@
       ],
       "context": "Epic 49: Fix deletion cache persistence. Problem: Items reappear after page refresh because cache isn't updated. Endpoint: DELETE /api/content/movie/{tmdb_id}. Match CachedMediaItem by TMDB ID in raw_data JSON (key: ProviderIds.Tmdb). Delete from cache ONLY after successful Radarr deletion. Also delete matching CachedJellyseerrRequest by TMDB ID. NON-GOALS: No undo/restore, no change to sync behavior, keep optimistic UI pattern.",
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added _delete_cached_media_by_tmdb_id() and _delete_cached_jellyseerr_request_by_tmdb_id() helper functions to content.py router. Cache deletion happens after successful Radarr deletion but before response."
     },
     {
       "id": "US-49.2",
