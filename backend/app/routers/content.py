@@ -260,6 +260,24 @@ async def _delete_cached_jellyseerr_request_by_tmdb_id(
     logger.debug(f"Deleted CachedJellyseerrRequest(s) for TMDB ID {tmdb_id}")
 
 
+async def _delete_cached_jellyseerr_request_by_id(
+    db: AsyncSession, user_id: int, jellyseerr_id: int
+) -> None:
+    """Delete CachedJellyseerrRequest by Jellyseerr ID.
+
+    Args:
+        db: Database session
+        user_id: User ID to filter by
+        jellyseerr_id: Jellyseerr request ID to match
+    """
+    await db.execute(
+        delete(CachedJellyseerrRequest)
+        .where(CachedJellyseerrRequest.user_id == user_id)
+        .where(CachedJellyseerrRequest.jellyseerr_id == jellyseerr_id)
+    )
+    logger.debug(f"Deleted CachedJellyseerrRequest for Jellyseerr ID {jellyseerr_id}")
+
+
 @router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
 async def delete_movie(
     tmdb_id: int,
@@ -510,5 +528,8 @@ async def delete_request_endpoint(
 
     if not success:
         raise HTTPException(status_code=400, detail=message)
+
+    # Delete from cache after successful Jellyseerr deletion
+    await _delete_cached_jellyseerr_request_by_id(db, current_user.id, jellyseerr_id)
 
     return DeleteRequestResponse(success=True, message=message)
