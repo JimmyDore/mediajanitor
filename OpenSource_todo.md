@@ -53,52 +53,37 @@
 
 ## Phase 3: Sanitize Documentation
 
+> **Solution:** Created `.claude/local.md` (gitignored) for personal values. Public docs use generic placeholders.
+
 ### CLAUDE.md
-- [ ] Replace `ssh vpsjim` with `ssh your-server`
-- [ ] Replace `/home/jimmydore/mediajanitor` with `~/mediajanitor` or `<install-path>`
-- [ ] Replace `jimmydore.eclipse.usbx.me` URLs with `your-server.example.com`
+- [X] Replace `ssh vpsjim` with `ssh your-server`
+- [X] Replace `/home/jimmydore/mediajanitor` with `~/mediajanitor` or `<install-path>`
+- ~~Replace `jimmydore.eclipse.usbx.me` URLs~~ (not present in CLAUDE.md)
 
 ### .claude/skills/qa-infra/SKILL.md
-- [ ] Replace SSH commands with generic examples
+- [X] Replace SSH commands with generic examples
 
 ### .claude/skills/original-script/SKILL.md
-- [ ] Replace `/Users/jimmydore/Projets/Plex/plex-dashboard` with `<project-root>`
-
-### original_script.py
-- [ ] Replace `SERVER_URL = 'https://jimmydore.eclipse.usbx.me/jellyfin'` with env var or placeholder
+- ~~Replace paths~~ (file doesn't exist)
 
 ### .github/workflows/deploy.yml
-- [ ] Replace `cd ~/mediajanitor` with configurable path or document as example
+- [X] Already uses `~/mediajanitor` which is generic
 
 ---
 
 ## Phase 4: Production Prep
 
 ### Shutdown Signups
-- [ ] Add feature flag or config to disable new user registration
-- [ ] Keep existing users working
-- [ ] Add "Signups closed" message on registration page
-
-### Package Metadata
-- [ ] Add repository URL to `backend/pyproject.toml`
-- [ ] Update `frontend/package.json`:
-  - Set `"private": false`
-  - Add `description`
-  - Add `license`: "MIT"
-  - Add `repository` URL
+- [X] Add feature flag or config to disable new user registration
+- [X] Keep existing users working
+- [X] Add "Signups closed" message on registration page
 
 ---
 
 ## Phase 5: Nice to Have (Post-Launch)
 
-### Community Files
-- [ ] Create `CONTRIBUTING.md`
-- [ ] Create `CODE_OF_CONDUCT.md` (Contributor Covenant)
-- [ ] Create `SECURITY.md` (vulnerability reporting)
-- [ ] Add `.github/ISSUE_TEMPLATE/` templates
-- [ ] Add `.github/PULL_REQUEST_TEMPLATE.md`
-
 ### Documentation
+- [ ] Video of the app with zoom
 - [ ] Architecture overview doc
 - [ ] API documentation
 - [ ] Database schema doc
@@ -131,8 +116,7 @@
 | `.env.example:7-8` | Test credentials | ✅ Placeholders (AI testing only, can remove) |
 | `backend/tests/test_integration.py` | Hardcoded credentials | ✅ Placeholders |
 | `backend/tests/test_large_movies_validation.py` | Hardcoded credentials | ✅ Placeholders |
-| `original_script.py:461` | Personal server URL | ⏳ Phase 3 |
-| `CLAUDE.md` | SSH commands, production paths | ⏳ Phase 3 |
-| `.claude/skills/qa-infra/SKILL.md` | SSH commands | ⏳ Phase 3 |
-| `.claude/skills/original-script/SKILL.md` | Absolute local paths | ⏳ Phase 3 |
-| `.github/workflows/deploy.yml:22-23` | Hardcoded production path | ⏳ Phase 3 |
+| `CLAUDE.md` | SSH commands, production paths | ✅ Generic placeholders (personal in local.md) |
+| `.claude/skills/qa-infra/SKILL.md` | SSH commands | ✅ Generic placeholders |
+| `.github/workflows/deploy.yml` | Production path | ✅ Already generic (`~/mediajanitor`) |
+| `.claude/local.md` | Personal SSH/paths | ✅ gitignored |
