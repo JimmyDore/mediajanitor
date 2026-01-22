@@ -108,4 +108,11 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `routers/content.py`, `tests/test_delete_content.py`
 - 4 new unit tests added (615 total tests pass), mypy passes, verified in Docker with integration tests
 
+**US-49.3: Delete Requests from Cache After Deletion**
+- Added `_delete_cached_jellyseerr_request_by_id()` helper function to delete CachedJellyseerrRequest by Jellyseerr ID
+- Integrated cache deletion into `delete_request_endpoint` after successful Jellyseerr media deletion
+- If Jellyseerr deletion fails, cache is NOT deleted (request stays in list)
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 2 new unit tests added (617 total tests pass), mypy passes, verified in Docker with integration tests
+
 ---
