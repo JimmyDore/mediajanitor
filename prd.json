@@ -249,8 +249,8 @@
       ],
       "context": "Epic 51: Recently Available UI enhancement. Depends on US-51.3 for API data. Add 'Details' column to frontend/src/routes/recent/+page.svelte. Use season_info, episode_count, available_episodes, total_episodes from API. Format: fully available shows 'Seasons 1-3 (30 eps)', partial shows 'S4: 5/12 episodes', movies show '—'. Update copy feature to include details. Hide column on mobile (follow Requested By pattern). NON-GOALS: No episode titles/descriptions.",
       "priority": 54,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Details column to Recently Available table between Title and Type. getDetails() helper formats: fully available TV as 'Seasons 1-3 (30 eps)', partially available as 'S4: 5/12 episodes', movies as '—'. Copy feature includes episode details in brackets for TV shows. Details column hidden on mobile (follows Requested By pattern). 15 new unit tests added."
     },
     {
       "id": "US-52.1",

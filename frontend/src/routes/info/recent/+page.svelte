@@ -11,6 +11,11 @@
 		availability_date: string;
 		requested_by: string | null;
 		display_name: string | null;
+		// US-51.4: Season/episode details for TV shows
+		season_info: string | null;
+		episode_count: number | null;
+		available_episodes: number | null;
+		total_episodes: number | null;
 	}
 
 	interface RecentlyAvailableResponse {
@@ -49,6 +54,39 @@
 			return item.title_fr;
 		}
 		return item.title;
+	}
+
+	/**
+	 * Get the formatted details for display.
+	 * - Fully available TV (status 5): "Seasons 1-3 (30 eps)"
+	 * - Partially available TV (status 4): "S4: 5/12 episodes"
+	 * - Movies: "—"
+	 */
+	function getDetails(item: RecentlyAvailableItem): string {
+		if (item.media_type !== 'tv') {
+			return '—';
+		}
+
+		// Status 4 (partially available): has available_episodes and total_episodes
+		if (item.available_episodes !== null && item.total_episodes !== null && item.season_info) {
+			// Extract season number from "Season X in progress"
+			const match = item.season_info.match(/Season (\d+)/);
+			if (match) {
+				return `S${match[1]}: ${item.available_episodes}/${item.total_episodes} episodes`;
+			}
+		}
+
+		// Status 5 (fully available): has season_info and episode_count
+		if (item.season_info && item.episode_count !== null) {
+			return `${item.season_info} (${item.episode_count} eps)`;
+		}
+
+		// Fallback: season_info without episode count
+		if (item.season_info) {
+			return item.season_info;
+		}
+
+		return '—';
 	}
 
 	function formatDateShort(isoString: string): string {
@@ -166,7 +204,13 @@
 				const type = item.media_type === 'tv' ? 'TV' : 'Movie';
 				const availableDate = formatDateForCopy(item.availability_date);
 				const displayTitle = getDisplayTitle(item);
-				lines.push(`  - ${displayTitle} (${type}) - available since ${availableDate}`);
+				const details = getDetails(item);
+				// Include episode details for TV shows
+				if (item.media_type === 'tv' && details !== '—') {
+					lines.push(`  - ${displayTitle} (${type}) [${details}] - available since ${availableDate}`);
+				} else {
+					lines.push(`  - ${displayTitle} (${type}) - available since ${availableDate}`);
+				}
 			}
 			lines.push('');
 		}
@@ -259,6 +303,7 @@
 						<tr>
 							<th class="col-date">Date</th>
 							<th class="col-title">Title</th>
+							<th class="col-details">Details</th>
 							<th class="col-type">Type</th>
 							<th class="col-requester">Requested by</th>
 						</tr>
@@ -274,6 +319,9 @@
 									{/if}
 									<td class="col-title">
 										<span class="item-title">{getDisplayTitle(item)}</span>
+									</td>
+									<td class="col-details">
+										{getDetails(item)}
 									</td>
 									<td class="col-type">
 										<span class="type-badge type-{item.media_type}">
@@ -440,7 +488,13 @@
 	}
 
 	.col-title {
-		width: 45%;
+		width: 35%;
+	}
+
+	.col-details {
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		white-space: nowrap;
 	}
 
 	.item-title {
@@ -482,6 +536,7 @@
 			padding: var(--space-4);
 		}
 
+		.col-details,
 		.col-requester {
 			display: none;
 		}
