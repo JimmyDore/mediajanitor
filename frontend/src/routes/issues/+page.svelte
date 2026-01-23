@@ -2299,11 +2299,11 @@
 	}
 
 	/* ==========================================================================
-	   Mobile Responsive Styles
+	   Mobile/Tablet Responsive Styles
 	   ========================================================================== */
 
-	/* Tablet and below (≤768px) */
-	@media (max-width: 768px) {
+	/* Tablet and smaller laptops (≤1352px) - use card layout */
+	@media (max-width: 1352px) {
 		.issues-page {
 			padding: var(--space-4);
 		}
