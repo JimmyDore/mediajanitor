@@ -7,6 +7,14 @@
 	import SearchInput from '$lib/components/SearchInput.svelte';
 	import ServiceBadge from '$lib/components/ServiceBadge.svelte';
 
+	interface ProblematicEpisode {
+		identifier: string;  // e.g., "S01E05"
+		name: string;  // Episode title
+		season: number;
+		episode: number;
+		missing_languages: string[];  // e.g., ["missing_en_audio", "missing_fr_audio"]
+	}
+
 	interface ContentIssueItem {
 		jellyfin_id: string;
 		name: string;
@@ -32,6 +40,8 @@
 		request_date: string | null;
 		missing_seasons: number[] | null;
 		release_date: string | null;  // Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
+		// US-52.2: Episodes with language issues (for TV series only)
+		problematic_episodes: ProblematicEpisode[] | null;
 	}
 
 	interface ServiceUrls {
@@ -81,6 +91,17 @@
 	let deletingIds = $state<Set<string>>(new Set());
 	let activeFilter = $state<FilterType>('all');
 	let largeSubFilter = $state<LargeSubFilter>('all');
+	// US-52.4: Expanded rows for series with problematic episodes
+	let expandedRows = $state<Set<string>>(new Set());
+	// US-52.4: Episode whitelisting state (key: jellyfin_id-season-episode)
+	let whitelistingEpisodeIds = $state<Set<string>>(new Set());
+	// US-52.4: Episode duration picker state
+	let showEpisodeDurationPicker = $state(false);
+	let selectedEpisode = $state<{ item: ContentIssueItem; episode: ProblematicEpisode } | null>(null);
+	let episodeDuration = $state<DurationOption>('permanent');
+	let episodeCustomDate = $state('');
+	let episodeDurationPickerModal = $state<HTMLElement | null>(null);
+	let episodeDurationPickerTrigger = $state<HTMLElement | null>(null);
 	let sortField = $state<SortField>('size');
 	let sortOrder = $state<SortOrder>('desc');
 
@@ -275,7 +296,9 @@
 	function handleKeydown(event: KeyboardEvent) {
 		// Handle Escape key to close modals
 		if (event.key === 'Escape') {
-			if (showDurationPicker) {
+			if (showEpisodeDurationPicker) {
+				closeEpisodeDurationPicker();
+			} else if (showDurationPicker) {
 				closeDurationPicker();
 			} else if (showDeleteModal) {
 				closeDeleteModal();
@@ -285,7 +308,8 @@
 
 		// Handle Tab/Shift+Tab for focus trapping within modals
 		if (event.key === 'Tab') {
-			const activeModal = showDurationPicker ? durationPickerModal : (showDeleteModal ? deleteModalElement : null);
+			const activeModal = showEpisodeDurationPicker ? episodeDurationPickerModal :
+				(showDurationPicker ? durationPickerModal : (showDeleteModal ? deleteModalElement : null));
 			if (!activeModal) return;
 
 			const focusableElements = getFocusableElements(activeModal);
@@ -482,6 +506,129 @@
 			await addToLargeWhitelistWithExpiration(item, expiresAt);
 		} else if (type === 'request') {
 			await hideRequestWithExpiration(item, expiresAt);
+		}
+	}
+
+	// US-52.4: Toggle row expansion for series with problematic episodes
+	function toggleRowExpansion(jellyfinId: string) {
+		const newSet = new Set(expandedRows);
+		if (newSet.has(jellyfinId)) {
+			newSet.delete(jellyfinId);
+		} else {
+			newSet.add(jellyfinId);
+		}
+		expandedRows = newSet;
+	}
+
+	// US-52.4: Check if a row has expandable episodes
+	function hasExpandableEpisodes(item: ContentIssueItem): boolean {
+		return item.problematic_episodes !== null && item.problematic_episodes.length > 0;
+	}
+
+	// US-52.4: Open episode duration picker
+	function openEpisodeDurationPicker(item: ContentIssueItem, episode: ProblematicEpisode) {
+		episodeDurationPickerTrigger = document.activeElement as HTMLElement | null;
+		selectedEpisode = { item, episode };
+		episodeDuration = 'permanent';
+		episodeCustomDate = '';
+		showEpisodeDurationPicker = true;
+	}
+
+	// US-52.4: Close episode duration picker
+	function closeEpisodeDurationPicker() {
+		showEpisodeDurationPicker = false;
+		selectedEpisode = null;
+		if (episodeDurationPickerTrigger) {
+			episodeDurationPickerTrigger.focus();
+			episodeDurationPickerTrigger = null;
+		}
+	}
+
+	// US-52.4: Confirm episode whitelist
+	async function confirmEpisodeWhitelist() {
+		if (!selectedEpisode) return;
+
+		const { item, episode } = selectedEpisode;
+		const expiresAt = getExpirationDate(episodeDuration, episodeCustomDate);
+
+		closeEpisodeDurationPicker();
+		await whitelistEpisode(item, episode, expiresAt);
+	}
+
+	// US-52.4: Whitelist an episode
+	async function whitelistEpisode(item: ContentIssueItem, episode: ProblematicEpisode, expiresAt: string | null) {
+		const episodeKey = `${item.jellyfin_id}-${episode.season}-${episode.episode}`;
+		whitelistingEpisodeIds = new Set([...whitelistingEpisodeIds, episodeKey]);
+
+		try {
+			const response = await authenticatedFetch('/api/whitelist/episode-exempt', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jellyfin_id: item.jellyfin_id,
+					series_name: item.name,
+					season_number: episode.season,
+					episode_number: episode.episode,
+					episode_name: episode.name,
+					expires_at: expiresAt
+				})
+			});
+
+			if (response.status === 401) { showToast('Session expired', 'error'); return; }
+			if (response.status === 409) { showToast('Episode already exempt', 'error'); return; }
+			if (!response.ok) { showToast('Failed to whitelist episode', 'error'); return; }
+
+			// Optimistic update: remove episode from the item's problematic_episodes list
+			if (data) {
+				data = {
+					...data,
+					items: data.items.map(i => {
+						if (i.jellyfin_id !== item.jellyfin_id) return i;
+						const updatedEpisodes = i.problematic_episodes?.filter(
+							ep => !(ep.season === episode.season && ep.episode === episode.episode)
+						) ?? null;
+						// If no more problematic episodes, remove language issue from item
+						// and potentially remove item from list if it was the only issue
+						const shouldRemoveLanguageIssue = !updatedEpisodes || updatedEpisodes.length === 0;
+						const updatedIssues = shouldRemoveLanguageIssue
+							? i.issues.filter(issue => issue !== 'language')
+							: i.issues;
+						return {
+							...i,
+							problematic_episodes: updatedEpisodes && updatedEpisodes.length > 0 ? updatedEpisodes : null,
+							issues: updatedIssues
+						};
+					}).filter(i => {
+						// Remove items with no remaining issues
+						return i.issues.length > 0;
+					})
+				};
+				// Update total count
+				const newCount = data.items.length;
+				const newSize = data.items.reduce((sum, i) => sum + (i.size_bytes || 0), 0);
+				data = {
+					...data,
+					total_count: newCount,
+					total_size_bytes: newSize,
+					total_size_formatted: formatSize(newSize)
+				};
+			}
+			showToast('Episode whitelisted', 'success');
+		} catch { showToast('Failed to whitelist episode', 'error'); }
+		finally {
+			const newSet = new Set(whitelistingEpisodeIds);
+			newSet.delete(episodeKey);
+			whitelistingEpisodeIds = newSet;
+		}
+	}
+
+	// US-52.4: Format missing language badge text
+	function formatLanguageBadge(lang: string): string {
+		switch (lang) {
+			case 'missing_en_audio': return 'EN';
+			case 'missing_fr_audio': return 'FR';
+			case 'missing_fr_subs': return 'FR Sub';
+			default: return lang;
 		}
 	}
 
@@ -971,6 +1118,16 @@
 		}
 	});
 
+	// US-52.4: Auto-focus when episode duration picker modal opens
+	$effect(() => {
+		if (showEpisodeDurationPicker && episodeDurationPickerModal) {
+			const focusable = getFocusableElements(episodeDurationPickerModal);
+			if (focusable.length > 0) {
+				focusable[0].focus();
+			}
+		}
+	});
+
 	onMount(() => {
 		fetchIssues(activeFilter);
 		fetchConfigStatus();
@@ -1120,14 +1277,51 @@
 					</thead>
 					<tbody>
 						{#each getSortedItems(getFilteredItems(data.items)) as item}
-							<tr>
+							<tr
+								class:expandable={hasExpandableEpisodes(item)}
+								class:expanded={expandedRows.has(item.jellyfin_id)}
+								onclick={(e) => {
+									// Only toggle if clicking on the row itself (not buttons/links)
+									const target = e.target as HTMLElement;
+									if (hasExpandableEpisodes(item) && !target.closest('button, a, .badge-action')) {
+										toggleRowExpansion(item.jellyfin_id);
+									}
+								}}
+								role={hasExpandableEpisodes(item) ? 'button' : undefined}
+								tabindex={hasExpandableEpisodes(item) ? 0 : undefined}
+								aria-expanded={hasExpandableEpisodes(item) ? expandedRows.has(item.jellyfin_id) : undefined}
+								onkeydown={(e) => {
+									if (hasExpandableEpisodes(item) && (e.key === 'Enter' || e.key === ' ')) {
+										e.preventDefault();
+										toggleRowExpansion(item.jellyfin_id);
+									}
+								}}
+							>
 								<td class="col-name">
 									<div class="name-cell">
+										{#if hasExpandableEpisodes(item)}
+											<span class="expand-icon" aria-hidden="true">
+												{#if expandedRows.has(item.jellyfin_id)}
+													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+														<polyline points="6 9 12 15 18 9"/>
+													</svg>
+												{:else}
+													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+														<polyline points="9 18 15 12 9 6"/>
+													</svg>
+												{/if}
+											</span>
+										{/if}
 										<span class="item-name" title={item.name}>{item.name}</span>
 										<span class="item-year">{item.production_year ?? '—'}</span>
 										{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
 											<span class="missing-seasons" title="Missing seasons">
 												S{item.missing_seasons.join(', S')}
+											</span>
+										{/if}
+										{#if hasExpandableEpisodes(item)}
+											<span class="episode-count" title="Episodes with language issues">
+												{item.problematic_episodes?.length} {item.problematic_episodes?.length === 1 ? 'episode' : 'episodes'}
 											</span>
 										{/if}
 										<span class="external-links">
@@ -1344,6 +1538,44 @@
 									{/if}
 								</td>
 							</tr>
+							<!-- US-52.4: Expanded episode list -->
+							{#if hasExpandableEpisodes(item) && expandedRows.has(item.jellyfin_id)}
+								<tr class="episode-row">
+									<td colspan={activeFilter === 'requests' ? 7 : 6}>
+										<div class="episode-list">
+											{#each item.problematic_episodes ?? [] as episode}
+												{@const episodeKey = `${item.jellyfin_id}-${episode.season}-${episode.episode}`}
+												<div class="episode-item">
+													<span class="episode-identifier">{episode.identifier}</span>
+													<span class="episode-name" title={episode.name}>{episode.name}</span>
+													<div class="episode-badges">
+														{#each episode.missing_languages as lang}
+															<span class="episode-badge badge-missing-{lang.replace('missing_', '').replace('_', '-')}">
+																{formatLanguageBadge(lang)}
+															</span>
+														{/each}
+													</div>
+													<button
+														class="btn-whitelist-episode"
+														onclick={(e) => {
+															e.stopPropagation();
+															openEpisodeDurationPicker(item, episode);
+														}}
+														disabled={whitelistingEpisodeIds.has(episodeKey)}
+														title="Whitelist this episode"
+													>
+														{#if whitelistingEpisodeIds.has(episodeKey)}
+															<span class="btn-spinner"></span>
+														{:else}
+															Whitelist
+														{/if}
+													</button>
+												</div>
+											{/each}
+										</div>
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>
@@ -1455,6 +1687,57 @@
 					disabled={!deleteFromArr && !deleteFromJellyseerr}
 				>
 					Delete
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- US-52.4: Episode Duration Picker Modal -->
+{#if showEpisodeDurationPicker && selectedEpisode}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div class="modal-overlay" onclick={closeEpisodeDurationPicker} onkeydown={handleKeydown} role="presentation" tabindex="-1">
+		<div class="modal" bind:this={episodeDurationPickerModal} onclick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="episode-modal-title" tabindex="0">
+			<h3 id="episode-modal-title">Whitelist Episode</h3>
+			<p class="modal-desc">
+				Choose how long <strong>{selectedEpisode.episode.identifier}</strong> of <strong>{selectedEpisode.item.name}</strong> should be exempt from language checks.
+			</p>
+
+			<div class="duration-options">
+				{#each durationOptions as option}
+					<label class="duration-option" class:selected={episodeDuration === option.value}>
+						<input
+							type="radio"
+							name="episode-duration"
+							value={option.value}
+							checked={episodeDuration === option.value}
+							onchange={() => episodeDuration = option.value}
+						/>
+						<span class="option-label">{option.label}</span>
+					</label>
+				{/each}
+			</div>
+
+			{#if episodeDuration === 'custom'}
+				<div class="custom-date-input">
+					<label for="episode-custom-date">Expiration Date</label>
+					<input
+						id="episode-custom-date"
+						type="date"
+						bind:value={episodeCustomDate}
+						min={new Date().toISOString().split('T')[0]}
+					/>
+				</div>
+			{/if}
+
+			<div class="modal-actions">
+				<button class="btn-secondary" onclick={closeEpisodeDurationPicker}>Cancel</button>
+				<button
+					class="btn-primary"
+					onclick={confirmEpisodeWhitelist}
+					disabled={episodeDuration === 'custom' && !episodeCustomDate}
+				>
+					Whitelist
 				</button>
 			</div>
 		</div>
@@ -2349,5 +2632,166 @@
 	.btn-danger:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* US-52.4: Expandable rows for series with problematic episodes */
+	tr.expandable {
+		cursor: pointer;
+	}
+
+	tr.expandable:hover {
+		background: var(--bg-hover);
+	}
+
+	tr.expanded {
+		background: var(--bg-secondary);
+	}
+
+	.expand-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		margin-right: var(--space-1);
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+
+	.episode-count {
+		font-size: var(--font-size-xs);
+		color: var(--info);
+		font-weight: var(--font-weight-medium);
+		padding: 1px 6px;
+		background: var(--info-light);
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+	}
+
+	/* US-52.4: Episode list styles */
+	tr.episode-row {
+		background: var(--bg-secondary);
+	}
+
+	tr.episode-row:hover {
+		background: var(--bg-secondary);
+	}
+
+	tr.episode-row td {
+		padding: 0;
+	}
+
+	.episode-list {
+		padding: var(--space-3) var(--space-4);
+		padding-left: calc(var(--space-4) + 24px);
+		border-top: 1px solid var(--border);
+	}
+
+	.episode-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-2) var(--space-3);
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		margin-bottom: var(--space-2);
+	}
+
+	.episode-item:last-child {
+		margin-bottom: 0;
+	}
+
+	.episode-identifier {
+		font-family: var(--font-mono);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-primary);
+		min-width: 60px;
+	}
+
+	.episode-name {
+		flex: 1;
+		font-size: var(--font-size-sm);
+		color: var(--text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+
+	.episode-badges {
+		display: flex;
+		gap: var(--space-1);
+		flex-shrink: 0;
+	}
+
+	.episode-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 1px 6px;
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		border-radius: var(--radius-sm);
+	}
+
+	.badge-missing-en-audio {
+		background: var(--danger-light);
+		color: var(--danger);
+	}
+
+	.badge-missing-fr-audio {
+		background: var(--warning-light);
+		color: var(--warning);
+	}
+
+	.badge-missing-fr-subs {
+		background: var(--info-light);
+		color: var(--info);
+	}
+
+	.btn-whitelist-episode {
+		padding: var(--space-1) var(--space-3);
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		flex-shrink: 0;
+		min-width: 75px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-whitelist-episode:hover:not(:disabled) {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: var(--accent-light);
+	}
+
+	.btn-whitelist-episode:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	/* Responsive: hide episode list details on mobile */
+	@media (max-width: 768px) {
+		.episode-list {
+			padding-left: var(--space-4);
+		}
+
+		.episode-name {
+			max-width: 100px;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.episode-badges {
+			display: none;
+		}
 	}
 </style>
