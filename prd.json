@@ -269,8 +269,8 @@
       ],
       "context": "Epic 52: TV Series Language Detection. ROOT CAUSE: check_audio_languages() in content.py reads MediaSources from Series-level raw_data, but Series metadata doesn't contain episode audio tracks - only individual episodes do. FIX: During sync, fetch all episodes (reuse existing calculate_season_sizes loop) and check each episode's MediaSources for EN/FR audio. Store results in new JSON fields on CachedMediaItem: language_check_result (aggregated series result), problematic_episodes (list of episodes with issues). For movies, check raw_data.MediaSources directly during cache_media_items(). Reference: original_script.py:2124-2250 check_all_episodes_audio_languages(). Language codes: EN = {eng, en, english}, FR = {fre, fr, french, fra}. NON-GOALS: No subtitle-only exemption at episode level.",
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added language_check_result and problematic_episodes JSON fields to CachedMediaItem. Created migration 6443d327371b. Added check_episode_audio_languages() and check_series_episodes_languages() helpers in sync.py. Language checking integrated into calculate_season_sizes() loop for series. Movie language checking in cache_media_items(). Language codes: ENGLISH_CODES = {eng, en, english}, FRENCH_CODES = {fre, fr, french, fra}. 13 new unit tests added."
     },
     {
       "id": "US-52.2",

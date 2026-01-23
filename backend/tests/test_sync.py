@@ -3035,3 +3035,606 @@ class TestFetchJellyseerrRequestsWithEpisodes:
         assert len(season_calls) == 1
         assert "/season/1" in season_calls[0]
         assert "/season/0" not in str(season_calls)
+
+
+class TestCheckEpisodeAudioLanguages:
+    """Test episode audio language checking (US-52.1)."""
+
+    def test_check_episode_with_english_and_french_audio(self) -> None:
+        """Episode with both EN and FR audio should return both languages present."""
+        from app.services.sync import check_episode_audio_languages
+
+        episode = {
+            "Id": "episode-123",
+            "Name": "Test Episode",
+            "MediaSources": [
+                {
+                    "MediaStreams": [
+                        {"Type": "Audio", "Language": "eng"},
+                        {"Type": "Audio", "Language": "fre"},
+                        {"Type": "Subtitle", "Language": "fre"},
+                    ]
+                }
+            ],
+        }
+
+        result = check_episode_audio_languages(episode)
+
+        assert result["has_english"] is True
+        assert result["has_french"] is True
+        assert result["has_french_subs"] is True
+        assert result["missing_languages"] == []
+
+    def test_check_episode_missing_english_audio(self) -> None:
+        """Episode missing EN audio should report missing_en_audio."""
+        from app.services.sync import check_episode_audio_languages
+
+        episode = {
+            "Id": "episode-123",
+            "Name": "French Only Episode",
+            "MediaSources": [
+                {
+                    "MediaStreams": [
+                        {"Type": "Audio", "Language": "fre"},
+                    ]
+                }
+            ],
+        }
+
+        result = check_episode_audio_languages(episode)
+
+        assert result["has_english"] is False
+        assert result["has_french"] is True
+        assert "missing_en_audio" in result["missing_languages"]
+
+    def test_check_episode_missing_french_audio(self) -> None:
+        """Episode missing FR audio should report missing_fr_audio."""
+        from app.services.sync import check_episode_audio_languages
+
+        episode = {
+            "Id": "episode-123",
+            "Name": "English Only Episode",
+            "MediaSources": [
+                {
+                    "MediaStreams": [
+                        {"Type": "Audio", "Language": "eng"},
+                    ]
+                }
+            ],
+        }
+
+        result = check_episode_audio_languages(episode)
+
+        assert result["has_english"] is True
+        assert result["has_french"] is False
+        assert "missing_fr_audio" in result["missing_languages"]
+
+    def test_check_episode_no_media_sources_returns_empty_result(self) -> None:
+        """Episode without MediaSources should return empty result (no issues flagged)."""
+        from app.services.sync import check_episode_audio_languages
+
+        episode = {
+            "Id": "episode-123",
+            "Name": "No Sources Episode",
+        }
+
+        result = check_episode_audio_languages(episode)
+
+        # When we can't check, assume no issues
+        assert result["has_english"] is True
+        assert result["has_french"] is True
+        assert result["missing_languages"] == []
+
+    def test_check_episode_handles_language_code_variants(self) -> None:
+        """Should recognize language code variants (fra, en, fr, english, french)."""
+        from app.services.sync import check_episode_audio_languages
+
+        episode = {
+            "Id": "episode-123",
+            "Name": "Variant Codes Episode",
+            "MediaSources": [
+                {
+                    "MediaStreams": [
+                        {"Type": "Audio", "Language": "english"},  # Full word
+                        {"Type": "Audio", "Language": "fra"},  # Alternate French code
+                    ]
+                }
+            ],
+        }
+
+        result = check_episode_audio_languages(episode)
+
+        assert result["has_english"] is True
+        assert result["has_french"] is True
+
+
+class TestCheckSeriesEpisodesLanguages:
+    """Test series episodes language checking (US-52.1)."""
+
+    @pytest.mark.asyncio
+    async def test_check_series_episodes_returns_aggregated_result(self) -> None:
+        """Should aggregate language check results across all episodes."""
+        import httpx
+
+        from app.services.sync import check_series_episodes_languages
+
+        # Mock episode responses - some with issues, some without
+        mock_seasons_response = {"Items": [{"Id": "season1"}]}
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep1",
+                    "IndexNumber": 1,
+                    "ParentIndexNumber": 1,
+                    "Name": "Episode 1",
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                {"Type": "Audio", "Language": "fre"},
+                            ]
+                        }
+                    ],
+                },
+                {
+                    "Id": "ep2",
+                    "IndexNumber": 2,
+                    "ParentIndexNumber": 1,
+                    "Name": "Episode 2",
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French audio
+                            ]
+                        }
+                    ],
+                },
+            ]
+        }
+
+        async def mock_get(url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "test-api-key",
+                    series_id="series-123",
+                    series_name="Test Series",
+                )
+
+        # Aggregated result: EN in all, but FR missing in at least one
+        assert result["language_check_result"]["has_english"] is True
+        assert result["language_check_result"]["has_french"] is False
+        assert result["problematic_episodes"] is not None
+        assert len(result["problematic_episodes"]) == 1
+        assert result["problematic_episodes"][0]["episode"] == 2
+
+    @pytest.mark.asyncio
+    async def test_check_series_all_episodes_have_both_languages(self) -> None:
+        """Series with all episodes having both languages should have empty problematic_episodes."""
+        import httpx
+
+        from app.services.sync import check_series_episodes_languages
+
+        mock_seasons_response = {"Items": [{"Id": "season1"}]}
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep1",
+                    "IndexNumber": 1,
+                    "ParentIndexNumber": 1,
+                    "Name": "Episode 1",
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                {"Type": "Audio", "Language": "fre"},
+                            ]
+                        }
+                    ],
+                },
+            ]
+        }
+
+        async def mock_get(url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "test-api-key",
+                    series_id="series-123",
+                    series_name="Test Series",
+                )
+
+        assert result["language_check_result"]["has_english"] is True
+        assert result["language_check_result"]["has_french"] is True
+        assert result["problematic_episodes"] == []
+
+    @pytest.mark.asyncio
+    async def test_check_series_no_seasons_returns_empty_result(self) -> None:
+        """Series with no seasons should return empty result."""
+        import httpx
+
+        from app.services.sync import check_series_episodes_languages
+
+        async def mock_get(url, **kwargs):
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "test-api-key",
+                    series_id="series-123",
+                    series_name="Test Series",
+                )
+
+        assert result["language_check_result"]["has_english"] is True
+        assert result["language_check_result"]["has_french"] is True
+        assert result["problematic_episodes"] == []
+
+    @pytest.mark.asyncio
+    async def test_problematic_episodes_include_correct_metadata(self) -> None:
+        """Problematic episodes should include identifier, name, season, episode."""
+        import httpx
+
+        from app.services.sync import check_series_episodes_languages
+
+        mock_seasons_response = {"Items": [{"Id": "season2"}]}
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep5",
+                    "IndexNumber": 5,
+                    "ParentIndexNumber": 2,
+                    "Name": "The Big Reveal",
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "fre"},  # Missing English
+                            ]
+                        }
+                    ],
+                },
+            ]
+        }
+
+        async def mock_get(url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        async with httpx.AsyncClient() as client:
+            with patch.object(client, "get", side_effect=mock_get):
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "test-api-key",
+                    series_id="series-123",
+                    series_name="Test Series",
+                )
+
+        assert len(result["problematic_episodes"]) == 1
+        ep = result["problematic_episodes"][0]
+        assert ep["identifier"] == "S02E05"
+        assert ep["name"] == "The Big Reveal"
+        assert ep["season"] == 2
+        assert ep["episode"] == 5
+        assert "missing_en_audio" in ep["missing_languages"]
+
+
+class TestCacheMediaItemLanguageFields:
+    """Test caching language check results in CachedMediaItem (US-52.1)."""
+
+    @pytest.mark.asyncio
+    async def test_movie_language_check_stored_in_cache(self) -> None:
+        """Movies should have language_check_result populated from raw_data.MediaSources."""
+        from app.services.sync import cache_media_items
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create user
+            user = User(email="movielang@example.com", hashed_password="fakehash")
+            session.add(user)
+            await session.flush()
+
+            # Movie with MediaSources (will be checked during cache)
+            movie_item = {
+                "Id": "movie-123",
+                "Name": "Test Movie",
+                "Type": "Movie",
+                "UserData": {"Played": False, "PlayCount": 0},
+                "MediaSources": [
+                    {
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "eng"},
+                            {"Type": "Audio", "Language": "fre"},
+                            {"Type": "Subtitle", "Language": "fre"},
+                        ]
+                    }
+                ],
+            }
+
+            await cache_media_items(session, user.id, [movie_item])
+
+            # Verify cached item has language_check_result
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            cached = result.scalar_one()
+
+            assert cached.language_check_result is not None
+            assert cached.language_check_result["has_english"] is True
+            assert cached.language_check_result["has_french"] is True
+            assert cached.language_check_result["has_french_subs"] is True
+
+    @pytest.mark.asyncio
+    async def test_movie_missing_audio_stored_in_language_check_result(self) -> None:
+        """Movies missing audio tracks should have issues recorded."""
+        from app.services.sync import cache_media_items
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(email="movielang2@example.com", hashed_password="fakehash")
+            session.add(user)
+            await session.flush()
+
+            # Movie missing French audio
+            movie_item = {
+                "Id": "movie-456",
+                "Name": "English Only Movie",
+                "Type": "Movie",
+                "UserData": {"Played": False, "PlayCount": 0},
+                "MediaSources": [
+                    {
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "eng"},
+                        ]
+                    }
+                ],
+            }
+
+            await cache_media_items(session, user.id, [movie_item])
+
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            cached = result.scalar_one()
+
+            assert cached.language_check_result is not None
+            assert cached.language_check_result["has_english"] is True
+            assert cached.language_check_result["has_french"] is False
+            assert "missing_fr_audio" in cached.language_check_result["missing_languages"]
+
+    @pytest.mark.asyncio
+    async def test_series_language_check_stored_after_season_calculation(self) -> None:
+        """Series should have language_check_result populated after calculate_season_sizes."""
+        from app.services.sync import cache_media_items, calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(email="serieslang@example.com", hashed_password="fakehash")
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+
+            # Series item (language check happens during calculate_season_sizes)
+            series_item = {
+                "Id": "series-123",
+                "Name": "Test Series",
+                "Type": "Series",
+                "UserData": {"Played": False, "PlayCount": 0},
+            }
+
+            await cache_media_items(session, user.id, [series_item])
+
+            # Mock API calls for season/episode data
+            import httpx
+
+            mock_seasons_response = {"Items": [{"Id": "season1"}]}
+            mock_episodes_response = {
+                "Items": [
+                    {
+                        "Id": "ep1",
+                        "IndexNumber": 1,
+                        "ParentIndexNumber": 1,
+                        "Name": "Episode 1",
+                        "MediaSources": [
+                            {
+                                "Size": 1_000_000_000,
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "eng"},
+                                    {"Type": "Audio", "Language": "fre"},
+                                ],
+                            }
+                        ],
+                        "UserData": {},
+                    },
+                ]
+            }
+
+            async def mock_get(self, url, **kwargs):
+                params = kwargs.get("params", {})
+                include_types = params.get("IncludeItemTypes", "")
+
+                if "Season" in include_types:
+                    return httpx.Response(
+                        200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                    )
+                elif "Episode" in include_types:
+                    return httpx.Response(
+                        200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                    )
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            mock_jellyfin_users = [{"Id": "user1", "Name": "Test User"}]
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                with patch(
+                    "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                ):
+                    await calculate_season_sizes(
+                        session, user.id, "http://jellyfin.local", "decrypted-key"
+                    )
+
+            # Verify cached series has language_check_result
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            cached = result.scalar_one()
+
+            assert cached.language_check_result is not None
+            assert cached.language_check_result["has_english"] is True
+            assert cached.language_check_result["has_french"] is True
+            assert cached.problematic_episodes == []
+
+    @pytest.mark.asyncio
+    async def test_series_with_problematic_episodes_stored(self) -> None:
+        """Series with episodes missing audio should have problematic_episodes populated."""
+        from app.services.sync import cache_media_items, calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(email="serieslang2@example.com", hashed_password="fakehash")
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+
+            series_item = {
+                "Id": "series-456",
+                "Name": "Partially French Series",
+                "Type": "Series",
+                "UserData": {"Played": False, "PlayCount": 0},
+            }
+
+            await cache_media_items(session, user.id, [series_item])
+
+            import httpx
+
+            mock_seasons_response = {"Items": [{"Id": "season1"}]}
+            mock_episodes_response = {
+                "Items": [
+                    {
+                        "Id": "ep1",
+                        "IndexNumber": 1,
+                        "ParentIndexNumber": 1,
+                        "Name": "Good Episode",
+                        "MediaSources": [
+                            {
+                                "Size": 1_000_000_000,
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "eng"},
+                                    {"Type": "Audio", "Language": "fre"},
+                                ],
+                            }
+                        ],
+                        "UserData": {},
+                    },
+                    {
+                        "Id": "ep2",
+                        "IndexNumber": 2,
+                        "ParentIndexNumber": 1,
+                        "Name": "Bad Episode",
+                        "MediaSources": [
+                            {
+                                "Size": 1_000_000_000,
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "eng"},
+                                    # Missing French
+                                ],
+                            }
+                        ],
+                        "UserData": {},
+                    },
+                ]
+            }
+
+            async def mock_get(self, url, **kwargs):
+                params = kwargs.get("params", {})
+                include_types = params.get("IncludeItemTypes", "")
+
+                if "Season" in include_types:
+                    return httpx.Response(
+                        200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                    )
+                elif "Episode" in include_types:
+                    return httpx.Response(
+                        200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                    )
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            mock_jellyfin_users = [{"Id": "user1", "Name": "Test User"}]
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                with patch(
+                    "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                ):
+                    await calculate_season_sizes(
+                        session, user.id, "http://jellyfin.local", "decrypted-key"
+                    )
+
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedMediaItem).where(CachedMediaItem.user_id == user.id)
+            )
+            cached = result.scalar_one()
+
+            assert cached.language_check_result is not None
+            assert cached.language_check_result["has_french"] is False
+            assert len(cached.problematic_episodes) == 1
+            assert cached.problematic_episodes[0]["identifier"] == "S01E02"
+            assert cached.problematic_episodes[0]["name"] == "Bad Episode"

@@ -125,6 +125,12 @@ class CachedMediaItem(Base):
     )  # For series only
     raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Language check results (populated during sync)
+    # Structure: {has_english, has_french, has_french_subs, checked_at, missing_languages}
+    language_check_result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # List of episodes with language issues (for series only)
+    # Structure: [{identifier, name, season, episode, missing_languages}]
+    problematic_episodes: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
 
 
 class CachedJellyseerrRequest(Base):

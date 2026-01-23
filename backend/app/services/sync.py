@@ -797,6 +797,186 @@ def extract_size_from_item(item: dict[str, Any]) -> int | None:
     return total_size if total_size > 0 else None
 
 
+# Language code variants recognized by the system
+ENGLISH_CODES = {"eng", "en", "english"}
+FRENCH_CODES = {"fre", "fr", "french", "fra"}
+
+
+class LanguageCheckResult(TypedDict):
+    """Result of language check for a media item or episode."""
+
+    has_english: bool
+    has_french: bool
+    has_french_subs: bool
+    missing_languages: list[str]
+
+
+class ProblematicEpisode(TypedDict):
+    """Episode with language issues."""
+
+    identifier: str  # e.g., "S01E05"
+    name: str
+    season: int
+    episode: int
+    missing_languages: list[str]
+
+
+class SeriesLanguageCheckResult(TypedDict):
+    """Result of language check for an entire series."""
+
+    language_check_result: LanguageCheckResult
+    problematic_episodes: list[ProblematicEpisode]
+
+
+def check_episode_audio_languages(episode: dict[str, Any]) -> LanguageCheckResult:
+    """
+    Check if an episode has English and French audio tracks.
+
+    Args:
+        episode: Episode dict with MediaSources containing MediaStreams
+
+    Returns:
+        LanguageCheckResult with has_english, has_french, has_french_subs, missing_languages
+    """
+    result: LanguageCheckResult = {
+        "has_english": False,
+        "has_french": False,
+        "has_french_subs": False,
+        "missing_languages": [],
+    }
+
+    media_sources = episode.get("MediaSources", [])
+    if not media_sources:
+        # No media sources - can't check, assume OK
+        result["has_english"] = True
+        result["has_french"] = True
+        return result
+
+    # Get the first media source
+    media_source = media_sources[0]
+    media_streams = media_source.get("MediaStreams", [])
+
+    for stream in media_streams:
+        stream_type = stream.get("Type", "").lower()
+        language = stream.get("Language", "unknown").lower()
+
+        if stream_type == "audio":
+            if language in ENGLISH_CODES:
+                result["has_english"] = True
+            if language in FRENCH_CODES:
+                result["has_french"] = True
+
+        elif stream_type == "subtitle":
+            if language in FRENCH_CODES:
+                result["has_french_subs"] = True
+
+    # Determine what's missing
+    if not result["has_english"]:
+        result["missing_languages"].append("missing_en_audio")
+    if not result["has_french"]:
+        result["missing_languages"].append("missing_fr_audio")
+
+    return result
+
+
+async def check_series_episodes_languages(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    series_id: str,
+    series_name: str,
+) -> SeriesLanguageCheckResult:
+    """
+    Check language tracks for all episodes in a series.
+
+    Args:
+        client: httpx client for API calls
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+        series_id: Jellyfin series ID
+        series_name: Series name for logging
+
+    Returns:
+        SeriesLanguageCheckResult with aggregated language_check_result
+        and problematic_episodes list
+    """
+    # Default result: assume OK if we can't check
+    result: SeriesLanguageCheckResult = {
+        "language_check_result": {
+            "has_english": True,
+            "has_french": True,
+            "has_french_subs": False,
+            "missing_languages": [],
+        },
+        "problematic_episodes": [],
+    }
+
+    # Fetch seasons for this series
+    seasons = await fetch_series_seasons(client, server_url, api_key, series_id)
+
+    if not seasons:
+        logger.debug(f"No seasons found for series '{series_name}'")
+        return result
+
+    # Track aggregated state across all episodes
+    all_have_english = True
+    all_have_french = True
+    any_have_french_subs = False
+    problematic_episodes: list[ProblematicEpisode] = []
+
+    for season in seasons:
+        season_id = season.get("Id")
+        if not season_id:
+            continue
+
+        # Fetch episodes for this season (with MediaStreams for language info)
+        episodes = await fetch_season_episodes(client, server_url, api_key, season_id)
+
+        for episode in episodes:
+            lang_result = check_episode_audio_languages(episode)
+
+            # Update aggregated state
+            if not lang_result["has_english"]:
+                all_have_english = False
+            if not lang_result["has_french"]:
+                all_have_french = False
+            if lang_result["has_french_subs"]:
+                any_have_french_subs = True
+
+            # Track problematic episodes
+            if lang_result["missing_languages"]:
+                season_num = episode.get("ParentIndexNumber", 0)
+                episode_num = episode.get("IndexNumber", 0)
+                identifier = f"S{season_num:02d}E{episode_num:02d}"
+
+                problematic_episodes.append(
+                    {
+                        "identifier": identifier,
+                        "name": episode.get("Name", "Unknown"),
+                        "season": season_num,
+                        "episode": episode_num,
+                        "missing_languages": lang_result["missing_languages"],
+                    }
+                )
+
+    # Build aggregated result
+    aggregated_missing: list[str] = []
+    if not all_have_english:
+        aggregated_missing.append("missing_en_audio")
+    if not all_have_french:
+        aggregated_missing.append("missing_fr_audio")
+
+    result["language_check_result"] = {
+        "has_english": all_have_english,
+        "has_french": all_have_french,
+        "has_french_subs": any_have_french_subs,
+        "missing_languages": aggregated_missing,
+    }
+    result["problematic_episodes"] = problematic_episodes
+
+    return result
+
+
 async def fetch_series_seasons(
     client: httpx.AsyncClient,
     server_url: str,
@@ -1015,6 +1195,22 @@ async def calculate_season_sizes(
                     series.last_played_date = series_last_played
                     logger.debug(f"Series '{series.name}': last_played_date = {series_last_played}")
 
+                # Check language tracks for all episodes (US-52.1)
+                lang_result = await check_series_episodes_languages(
+                    client, server_url, api_key, series.jellyfin_id, series.name
+                )
+                # Cast TypedDict to dict for SQLAlchemy column assignment
+                series.language_check_result = dict(lang_result["language_check_result"])
+                series.problematic_episodes = [
+                    dict(ep) for ep in lang_result["problematic_episodes"]
+                ]
+
+                if lang_result["problematic_episodes"]:
+                    logger.debug(
+                        f"Series '{series.name}': {len(lang_result['problematic_episodes'])} "
+                        f"episodes with language issues"
+                    )
+
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 logger.warning(f"Failed to calculate season sizes for series '{series.name}': {e}")
                 # Continue to next series on error
@@ -1024,10 +1220,25 @@ async def calculate_season_sizes(
     await db.commit()
 
 
+def check_movie_audio_languages(item: dict[str, Any]) -> LanguageCheckResult:
+    """
+    Check if a movie has English and French audio tracks from raw_data.
+
+    Args:
+        item: Media item dict with MediaSources containing MediaStreams
+
+    Returns:
+        LanguageCheckResult with has_english, has_french, has_french_subs, missing_languages
+    """
+    # Reuse the episode check function since structure is identical
+    return check_episode_audio_languages(item)
+
+
 async def cache_media_items(db: AsyncSession, user_id: int, items: list[dict[str, Any]]) -> int:
     """Cache media items in database, replacing old data.
 
     Commits immediately after caching to release database locks.
+    For movies, also checks and stores language_check_result from raw_data.MediaSources.
     """
     # Delete existing cached items for this user
     await db.execute(delete(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
@@ -1036,11 +1247,18 @@ async def cache_media_items(db: AsyncSession, user_id: int, items: list[dict[str
     cached_count = 0
     for item in items:
         user_data = item.get("UserData", {})
+        media_type = item.get("Type", "Unknown")
+
+        # For movies, check language tracks from raw_data.MediaSources
+        language_check_result = None
+        if media_type == "Movie":
+            language_check_result = check_movie_audio_languages(item)
+
         cached_item = CachedMediaItem(
             user_id=user_id,
             jellyfin_id=item.get("Id", ""),
             name=item.get("Name", "Unknown"),
-            media_type=item.get("Type", "Unknown"),
+            media_type=media_type,
             production_year=item.get("ProductionYear"),
             date_created=item.get("DateCreated"),
             path=item.get("Path"),
@@ -1049,6 +1267,7 @@ async def cache_media_items(db: AsyncSession, user_id: int, items: list[dict[str
             play_count=user_data.get("PlayCount", 0),
             last_played_date=user_data.get("LastPlayedDate"),
             raw_data=item,
+            language_check_result=language_check_result,  # Store movie language check
         )
         db.add(cached_item)
         cached_count += 1
