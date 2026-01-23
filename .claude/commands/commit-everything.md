@@ -19,6 +19,6 @@ Commit all changes in the working directory. If changes span multiple unrelated 
 
 ## Examples of topic separation
 
-- `prompt.md` + `afk-ralph.sh` changes about Ralph workflow = one commit
+- `prompt.md` + `ralph.py` changes about Ralph workflow = one commit
 - `frontend/src/routes/+page.svelte` UI change + `backend/app/routers/auth.py` auth fix = two commits
 - Multiple files for one feature (model + router + test) = one commit

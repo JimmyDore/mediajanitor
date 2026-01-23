@@ -281,7 +281,7 @@ After running this skill:
 
 1. Review the generated `prd.json`
 2. Verify priorities make sense
-3. Run `./ralph-once.sh` or `./afk-ralph.sh` to start autonomous execution
+3. Run `task ralph:once` or `task ralph:run -- N` to start autonomous execution
 
 Query status anytime:
 ```bash

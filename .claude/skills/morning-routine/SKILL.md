@@ -77,6 +77,6 @@ git commit -m "chore: morning routine sync and cleanup"
 ```
 
 Then either:
-- `./ralph-once.sh` - Human-in-the-loop
-- `./afk-ralph.sh N` - Autonomous N iterations
+- `task ralph:once` - Human-in-the-loop
+- `task ralph:run -- N` - Autonomous N iterations
 - Manual work on specific stories

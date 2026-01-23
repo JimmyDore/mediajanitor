@@ -98,10 +98,11 @@ Priority guide:
 ## What NOT to Do
 
 - Do NOT implement fixes (observation only)
-- Do NOT duplicate items already in SUGGESTIONS.md
+- Do NOT duplicate items already in SUGGESTIONS.md (check both active AND struck-through `~~items~~`)
 - Do NOT check non-UX concerns (security, performance, etc.)
 - Do NOT modify any code
 - Do NOT use this skill to redesign - use `/ux-expert` for that
+- Do NOT add positive observations (e.g., "good implementation", "works correctly", "no issues found") - SUGGESTIONS.md tracks only items that need improvement
 
 ## Example Findings
 
