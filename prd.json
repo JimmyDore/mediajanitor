@@ -208,8 +208,8 @@
       ],
       "context": "Epic 48: Ultra.cc dashboard display. Depends on US-48.1/48.3/48.4 for backend data. Add 'Seedbox Status' card to Dashboard (frontend/src/routes/dashboard/+page.svelte) above issues section. Display free_storage_gb, traffic_available_percent, last_synced_at from GET /api/settings. Warning colors: yellow when below threshold, red when below 50% of threshold. Hide card entirely when ultra_api_configured=false. NON-GOALS: No Slack/email notifications.",
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added free_storage_gb, traffic_available_percent, last_synced_at, storage_warning_gb, traffic_warning_percent to UltraSettingsResponse model. Updated GET /api/settings/ultra endpoint to return cached stats and thresholds. Added Seedbox Status card to Dashboard with warning color logic (yellow below threshold, red below 50% of threshold). Card hidden when Ultra not configured or no stats available."
     },
     {
       "id": "US-50.1",

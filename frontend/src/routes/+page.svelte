@@ -60,6 +60,16 @@
 		api_key_configured: boolean;
 	}
 
+	interface UltraSettings {
+		server_url: string | null;
+		api_key_configured: boolean;
+		free_storage_gb: number | null;
+		traffic_available_percent: number | null;
+		last_synced_at: string | null;
+		storage_warning_gb: number | null;
+		traffic_warning_percent: number | null;
+	}
+
 	const ENHANCE_SETUP_DISMISSED_KEY = 'mediajanitor_enhance_setup_dismissed';
 
 	let syncStatus = $state<SyncStatus | null>(null);
@@ -73,6 +83,7 @@
 	let jellyseerrSettings = $state<ServiceSettings | null>(null);
 	let radarrSettings = $state<ServiceSettings | null>(null);
 	let sonarrSettings = $state<ServiceSettings | null>(null);
+	let ultraSettings = $state<UltraSettings | null>(null);
 	let enhanceSetupDismissed = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let autoSyncTriggered = $state(false);  // Track if we've already triggered auto-sync
@@ -195,6 +206,8 @@
 					waitingForAsyncCompletion = false;
 					syncLoading = false;
 					await fetchContentSummary();
+					// Refresh Ultra settings to get updated stats after sync
+					await fetchUltraSettings();
 					if (syncStatus.status === 'success') {
 						showToast(
 							`Synced ${syncStatus.media_items_count ?? 0} media items and ${syncStatus.requests_count ?? 0} requests`,
@@ -282,6 +295,17 @@
 			jellyseerrSettings = { api_key_configured: false };
 			radarrSettings = { api_key_configured: false };
 			sonarrSettings = { api_key_configured: false };
+		}
+	}
+
+	async function fetchUltraSettings() {
+		try {
+			const response = await authenticatedFetch('/api/settings/ultra');
+			if (response.ok) {
+				ultraSettings = await response.json();
+			}
+		} catch {
+			// Ignore errors - will show as not configured
 		}
 	}
 
@@ -373,6 +397,41 @@
 		goto(`/info/${type}`);
 	}
 
+	// Computed: Show seedbox status card when Ultra is configured with stats
+	const showSeedboxStatus = $derived(
+		ultraSettings !== null &&
+			ultraSettings.api_key_configured === true &&
+			ultraSettings.free_storage_gb !== null
+	);
+
+	// Helper to determine warning level for storage
+	function getStorageWarningLevel(
+		freeGb: number | null,
+		warningGb: number | null
+	): 'normal' | 'warning' | 'danger' {
+		if (freeGb === null || warningGb === null) return 'normal';
+		if (freeGb < warningGb * 0.5) return 'danger'; // Below 50% of threshold
+		if (freeGb < warningGb) return 'warning'; // Below threshold
+		return 'normal';
+	}
+
+	// Helper to determine warning level for traffic
+	function getTrafficWarningLevel(
+		trafficPercent: number | null,
+		warningPercent: number | null
+	): 'normal' | 'warning' | 'danger' {
+		if (trafficPercent === null || warningPercent === null) return 'normal';
+		if (trafficPercent < warningPercent * 0.5) return 'danger'; // Below 50% of threshold
+		if (trafficPercent < warningPercent) return 'warning'; // Below threshold
+		return 'normal';
+	}
+
+	// Format Ultra last synced time
+	function formatUltraLastSynced(isoString: string | null): string {
+		if (!isoString) return 'Never';
+		return formatDate(isoString);
+	}
+
 	onMount(async () => {
 		// Load localStorage state synchronously first
 		loadEnhanceSetupDismissed();
@@ -382,7 +441,8 @@
 				fetchSyncStatus(),
 				fetchContentSummary(),
 				fetchJellyfinSettings(),
-				fetchOptionalServicesSettings()
+				fetchOptionalServicesSettings(),
+				fetchUltraSettings()
 			]);
 			// If sync is already in progress (e.g., page refresh during sync), start polling
 			if (syncStatus?.is_syncing) {
@@ -551,6 +611,40 @@
 			<p>Error: {error}</p>
 		</div>
 	{:else}
+		<!-- Seedbox Status -->
+		{#if showSeedboxStatus && ultraSettings}
+			<section class="seedbox-section">
+				<h2 class="section-label">Seedbox Status</h2>
+				<div class="seedbox-card">
+					<div class="seedbox-stats">
+						<div class="seedbox-stat">
+							<span class="seedbox-label">Free Storage</span>
+							<span
+								class="seedbox-value"
+								class:warning={getStorageWarningLevel(ultraSettings.free_storage_gb, ultraSettings.storage_warning_gb) === 'warning'}
+								class:danger={getStorageWarningLevel(ultraSettings.free_storage_gb, ultraSettings.storage_warning_gb) === 'danger'}
+							>
+								{ultraSettings.free_storage_gb?.toFixed(1) ?? '—'} GB
+							</span>
+						</div>
+						<div class="seedbox-stat">
+							<span class="seedbox-label">Traffic Available</span>
+							<span
+								class="seedbox-value"
+								class:warning={getTrafficWarningLevel(ultraSettings.traffic_available_percent, ultraSettings.traffic_warning_percent) === 'warning'}
+								class:danger={getTrafficWarningLevel(ultraSettings.traffic_available_percent, ultraSettings.traffic_warning_percent) === 'danger'}
+							>
+								{ultraSettings.traffic_available_percent?.toFixed(1) ?? '—'}%
+							</span>
+						</div>
+					</div>
+					<span class="seedbox-sync-time">
+						Updated {formatUltraLastSynced(ultraSettings.last_synced_at)}
+					</span>
+				</div>
+			</section>
+		{/if}
+
 		<!-- Issue Stats -->
 		<section class="stats-section">
 			<h2 class="section-label">Issues</h2>
@@ -943,6 +1037,60 @@
 		color: var(--danger);
 	}
 
+	/* Seedbox Status Section */
+	.seedbox-section {
+		margin-bottom: var(--space-8);
+	}
+
+	.seedbox-card {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+	}
+
+	.seedbox-stats {
+		display: flex;
+		gap: var(--space-6);
+	}
+
+	.seedbox-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.seedbox-label {
+		font-size: var(--font-size-xs);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.seedbox-value {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-semibold);
+		font-family: var(--font-mono);
+		color: var(--text-primary);
+	}
+
+	.seedbox-value.warning {
+		color: var(--warning, #f59e0b);
+	}
+
+	.seedbox-value.danger {
+		color: var(--danger, #ef4444);
+	}
+
+	.seedbox-sync-time {
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+	}
+
 	/* Stats Section */
 	.stats-section {
 		margin-bottom: var(--space-8);
@@ -1071,6 +1219,16 @@
 
 		.info-links {
 			flex-wrap: wrap;
+		}
+
+		.seedbox-card {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.seedbox-stats {
+			width: 100%;
+			justify-content: space-between;
 		}
 	}
 </style>

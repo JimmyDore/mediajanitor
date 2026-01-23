@@ -308,13 +308,31 @@ async def get_ultra_config(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UltraSettingsResponse:
-    """Get current Ultra.cc connection settings for the user."""
+    """Get current Ultra.cc connection settings for the user.
+
+    Includes cached stats and warning thresholds for dashboard display.
+    """
     settings = await get_user_ultra_settings(db, current_user.id)
 
     if settings and settings.ultra_api_url:
         return UltraSettingsResponse(
             server_url=settings.ultra_api_url,
             api_key_configured=settings.ultra_api_key_encrypted is not None,
+            free_storage_gb=settings.ultra_free_storage_gb,
+            traffic_available_percent=settings.ultra_traffic_available_percent,
+            last_synced_at=(
+                settings.ultra_last_synced_at.isoformat() if settings.ultra_last_synced_at else None
+            ),
+            storage_warning_gb=(
+                settings.ultra_storage_warning_gb
+                if settings.ultra_storage_warning_gb is not None
+                else DEFAULT_ULTRA_STORAGE_WARNING_GB
+            ),
+            traffic_warning_percent=(
+                settings.ultra_traffic_warning_percent
+                if settings.ultra_traffic_warning_percent is not None
+                else DEFAULT_ULTRA_TRAFFIC_WARNING_PERCENT
+            ),
         )
 
     return UltraSettingsResponse(

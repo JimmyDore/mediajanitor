@@ -2123,3 +2123,116 @@ class TestUltraThresholds:
         )
         assert response.json()["storage_warning_gb"] == 1000
         assert response.json()["traffic_warning_percent"] == 100
+
+
+class TestUltraStatsInSettingsResponse:
+    """Tests for Ultra stats being returned in GET /api/settings/ultra (US-48.5)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "ultra_stats@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": email,
+                "password": "SecurePassword123!",
+            },
+        )
+        return login_response.json()["access_token"]
+
+    def test_ultra_response_includes_stats_fields_when_configured(self, client: TestClient) -> None:
+        """Test that Ultra settings response includes stats fields when Ultra is configured."""
+        token = self._get_auth_token(client, "ultra_stats1@example.com")
+
+        # Configure Ultra settings
+        client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Get settings
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Stats fields should exist (can be null if not synced yet)
+        assert "free_storage_gb" in data
+        assert "traffic_available_percent" in data
+        assert "last_synced_at" in data
+
+        # Thresholds should be included with defaults
+        assert "storage_warning_gb" in data
+        assert "traffic_warning_percent" in data
+        assert data["storage_warning_gb"] == 100  # Default
+        assert data["traffic_warning_percent"] == 20  # Default
+
+    def test_ultra_response_shows_null_stats_when_not_configured(self, client: TestClient) -> None:
+        """Test that Ultra settings response shows null stats when not configured."""
+        token = self._get_auth_token(client, "ultra_stats2@example.com")
+
+        # Get settings without configuring Ultra
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["server_url"] is None
+        assert data["api_key_configured"] is False
+        # Stats fields should be null or not present when not configured
+        assert data.get("free_storage_gb") is None
+        assert data.get("traffic_available_percent") is None
+        assert data.get("last_synced_at") is None
+
+    def test_ultra_response_includes_custom_thresholds(self, client: TestClient) -> None:
+        """Test that Ultra settings response includes custom thresholds when set."""
+        token = self._get_auth_token(client, "ultra_stats3@example.com")
+
+        # Configure Ultra settings
+        client.post(
+            "/api/settings/ultra",
+            json={
+                "server_url": "https://ultra.cc",
+                "api_key": "test-api-key",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Set custom thresholds
+        client.post(
+            "/api/settings/ultra/thresholds",
+            json={
+                "storage_warning_gb": 50,
+                "traffic_warning_percent": 30,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        # Get settings
+        response = client.get(
+            "/api/settings/ultra",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Custom thresholds should be returned
+        assert data["storage_warning_gb"] == 50
+        assert data["traffic_warning_percent"] == 30

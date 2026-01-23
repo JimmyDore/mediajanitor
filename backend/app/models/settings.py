@@ -79,6 +79,13 @@ class UltraSettingsResponse(BaseModel):
 
     server_url: str | None
     api_key_configured: bool
+    # Cached stats from last sync
+    free_storage_gb: float | None = None
+    traffic_available_percent: float | None = None
+    last_synced_at: str | None = None  # ISO format datetime
+    # Warning thresholds (for dashboard display)
+    storage_warning_gb: int | None = None
+    traffic_warning_percent: int | None = None
 
 
 class UltraThresholdsCreate(BaseModel):

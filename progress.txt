@@ -149,4 +149,24 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - Files changed: `app/models/content.py`, `app/services/content.py`, `tests/test_content.py`
 - 8 new unit tests added (655 total tests pass), mypy passes, verified in Docker with integration tests
 
+**US-48.2: Ultra API Settings - Frontend**
+- Added `frontend/tests/settings-ultra.test.ts` with 12 API integration tests
+- Tests cover GET/POST /api/settings/ultra endpoints for authentication, validation, and UI behavior
+- UI implementation was already completed in US-48.3 (Seedbox Monitoring section)
+- Verified in browser: Connected badge, masked token placeholder, form fields all working
+- Files changed: `frontend/tests/settings-ultra.test.ts`
+- 12 new unit tests added (701 total frontend tests pass), typecheck passes
+
+**US-48.5: Display Ultra Stats on Dashboard**
+- Updated `UltraSettingsResponse` model to include: `free_storage_gb`, `traffic_available_percent`, `last_synced_at`, `storage_warning_gb`, `traffic_warning_percent`
+- Updated GET `/api/settings/ultra` endpoint to return cached stats and warning thresholds
+- Added `Seedbox Status` card to Dashboard above Issues section with:
+  - Free Storage (GB) and Traffic Available (%) display
+  - Last synced timestamp
+  - Warning colors: yellow when below threshold, red when below 50% of threshold
+- Card hidden when Ultra not configured or no stats available (free_storage_gb is null)
+- Files changed: `backend/app/models/settings.py`, `backend/app/routers/settings.py`, `frontend/src/routes/+page.svelte`, `backend/tests/test_settings.py`, `frontend/tests/dashboard-seedbox.test.ts`
+- 3 new backend unit tests (661 total pass), 17 new frontend tests (718 total pass), mypy passes, typecheck passes
+- Verified in Docker: API returns stats fields, card properly hidden when no stats, warning colors implemented
+
 ---
