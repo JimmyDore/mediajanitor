@@ -350,8 +350,8 @@
       ],
       "context": "Epic 52: Frontend whitelist management. Depends on US-52.3. Update frontend/src/routes/whitelist/+page.svelte. Add 'Episode Exempt' tab to TabType (between 'exempt' and 'large'). Fetch from GET /api/whitelist/episode-exempt. Display: series_name, episode identifier (S{season}E{episode} format), episode_name, expiration status (Permanent or date). Remove button calls DELETE /api/whitelist/episode-exempt/{id}. Follow existing whitelist tab patterns for consistency. Empty state: 'No episode exemptions yet'.",
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added 'Episode Exempt' tab between 'Language Exempt' and 'Large Content'. Tab fetches from GET /api/whitelist/episode-exempt. List displays: series_name, identifier (S01E05), episode_name, expiration status (Permanent or date). Remove button calls DELETE /api/whitelist/episode-exempt/{id}. Empty state shows 'No items in this list' with hint to use Whitelist on Issues page. 14 new unit tests added."
     }
   ]
 }

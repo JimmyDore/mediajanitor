@@ -31,7 +31,24 @@
 		total_count: number;
 	}
 
-	type TabType = 'protected' | 'french' | 'exempt' | 'large' | 'requests';
+	interface EpisodeExemptItem {
+		id: number;
+		jellyfin_id: string;
+		series_name: string;
+		season_number: number;
+		episode_number: number;
+		episode_name: string;
+		identifier: string;
+		created_at: string;
+		expires_at: string | null;
+	}
+
+	interface EpisodeExemptResponse {
+		items: EpisodeExemptItem[];
+		total_count: number;
+	}
+
+	type TabType = 'protected' | 'french' | 'exempt' | 'episode' | 'large' | 'requests';
 
 	let loading = $state(true);
 	let activeTab = $state<TabType>('protected');
@@ -39,6 +56,7 @@
 	let frenchOnlyData = $state<WhitelistResponse | null>(null);
 	let languageExemptData = $state<WhitelistResponse | null>(null);
 	let largeContentData = $state<WhitelistResponse | null>(null);
+	let episodeExemptData = $state<EpisodeExemptResponse | null>(null);
 	let requestsData = $state<RequestWhitelistResponse | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,6 +66,7 @@
 		protected: { label: 'Protected', desc: 'Won\'t appear in old/unwatched list' },
 		french: { label: 'French-Only', desc: 'Won\'t flag missing English audio' },
 		exempt: { label: 'Language Exempt', desc: 'Won\'t flag any language issues' },
+		episode: { label: 'Episode Exempt', desc: 'Individual episodes exempt from language checks' },
 		large: { label: 'Large Content', desc: 'Won\'t appear in large files list' },
 		requests: { label: 'Hidden Requests', desc: 'Requests hidden from the Issues view' }
 	};
@@ -74,15 +93,21 @@
 		} catch { return false; }
 	}
 
-	function isRequestItem(item: WhitelistItem | RequestWhitelistItem): item is RequestWhitelistItem {
+	function isRequestItem(item: WhitelistItem | RequestWhitelistItem | EpisodeExemptItem): item is RequestWhitelistItem {
 		return 'title' in item && 'jellyseerr_id' in item;
 	}
 
-	function getItemName(item: WhitelistItem | RequestWhitelistItem): string {
+	function isEpisodeExemptItem(item: WhitelistItem | RequestWhitelistItem | EpisodeExemptItem): item is EpisodeExemptItem {
+		return 'series_name' in item && 'episode_name' in item;
+	}
+
+	function getItemName(item: WhitelistItem | RequestWhitelistItem | EpisodeExemptItem): string {
+		if (isEpisodeExemptItem(item)) return item.series_name;
 		return isRequestItem(item) ? item.title : item.name;
 	}
 
-	function getMediaTypeDisplay(item: WhitelistItem | RequestWhitelistItem): string {
+	function getMediaTypeDisplay(item: WhitelistItem | RequestWhitelistItem | EpisodeExemptItem): string {
+		if (isEpisodeExemptItem(item)) return item.identifier;
 		if (isRequestItem(item)) {
 			return item.media_type === 'movie' ? 'Movie' : 'TV Show';
 		}
@@ -108,11 +133,12 @@
 		toast = null;
 	}
 
-	function getCurrentData(): WhitelistResponse | RequestWhitelistResponse | null {
+	function getCurrentData(): WhitelistResponse | RequestWhitelistResponse | EpisodeExemptResponse | null {
 		switch (activeTab) {
 			case 'protected': return protectedData;
 			case 'french': return frenchOnlyData;
 			case 'exempt': return languageExemptData;
+			case 'episode': return episodeExemptData;
 			case 'large': return largeContentData;
 			case 'requests': return requestsData;
 		}
@@ -123,12 +149,13 @@
 			case 'protected': return '/api/whitelist/content';
 			case 'french': return '/api/whitelist/french-only';
 			case 'exempt': return '/api/whitelist/language-exempt';
+			case 'episode': return '/api/whitelist/episode-exempt';
 			case 'large': return '/api/whitelist/large';
 			case 'requests': return '/api/whitelist/requests';
 		}
 	}
 
-	async function removeItem(item: WhitelistItem | RequestWhitelistItem) {
+	async function removeItem(item: WhitelistItem | RequestWhitelistItem | EpisodeExemptItem) {
 		removingIds = new Set([...removingIds, item.id]);
 
 		try {
@@ -152,6 +179,7 @@
 				case 'protected': protectedData = updateData(protectedData); break;
 				case 'french': frenchOnlyData = updateData(frenchOnlyData); break;
 				case 'exempt': languageExemptData = updateData(languageExemptData); break;
+				case 'episode': episodeExemptData = updateData(episodeExemptData); break;
 				case 'large': largeContentData = updateData(largeContentData); break;
 				case 'requests': requestsData = updateData(requestsData); break;
 			}
@@ -167,10 +195,11 @@
 
 	async function fetchAll() {
 		try {
-			const [p, f, e, l, r] = await Promise.all([
+			const [p, f, e, ep, l, r] = await Promise.all([
 				authenticatedFetch('/api/whitelist/content'),
 				authenticatedFetch('/api/whitelist/french-only'),
 				authenticatedFetch('/api/whitelist/language-exempt'),
+				authenticatedFetch('/api/whitelist/episode-exempt'),
 				authenticatedFetch('/api/whitelist/large'),
 				authenticatedFetch('/api/whitelist/requests')
 			]);
@@ -178,6 +207,7 @@
 			if (p.ok) protectedData = await p.json();
 			if (f.ok) frenchOnlyData = await f.json();
 			if (e.ok) languageExemptData = await e.json();
+			if (ep.ok) episodeExemptData = await ep.json();
 			if (l.ok) largeContentData = await l.json();
 			if (r.ok) requestsData = await r.json();
 		} catch {}
@@ -203,7 +233,7 @@
 	<!-- Tabs -->
 	<nav class="tabs">
 		{#each Object.entries(tabLabels) as [tab, { label }]}
-			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : tab === 'exempt' ? languageExemptData?.total_count : tab === 'large' ? largeContentData?.total_count : requestsData?.total_count}
+			{@const count = tab === 'protected' ? protectedData?.total_count : tab === 'french' ? frenchOnlyData?.total_count : tab === 'exempt' ? languageExemptData?.total_count : tab === 'episode' ? episodeExemptData?.total_count : tab === 'large' ? largeContentData?.total_count : requestsData?.total_count}
 			<button
 				class="tab"
 				class:active={activeTab === tab}
@@ -233,6 +263,8 @@
 						Use "FR" on the <a href="/issues?filter=language">Issues</a> page
 					{:else if activeTab === 'exempt'}
 						Use the checkmark on the <a href="/issues?filter=language">Issues</a> page
+					{:else if activeTab === 'episode'}
+						Use "Whitelist" on episodes in the <a href="/issues?filter=language">Issues</a> page
 					{:else if activeTab === 'large'}
 						Use the shield icon on the <a href="/issues?filter=large">Issues</a> page
 					{:else}
@@ -252,7 +284,11 @@
 								{/if}
 							</span>
 							<span class="item-meta">
-								{getMediaTypeDisplay(item)} · Added {formatDate(item.created_at)}
+								{#if isEpisodeExemptItem(item)}
+									{item.identifier} · {item.episode_name} · Added {formatDate(item.created_at)}
+								{:else}
+									{getMediaTypeDisplay(item)} · Added {formatDate(item.created_at)}
+								{/if}
 							</span>
 							<span class="item-expiration" class:permanent={!item.expires_at}>
 								{#if item.expires_at}
