@@ -2298,70 +2298,158 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* Responsive */
+	/* ==========================================================================
+	   Mobile Responsive Styles
+	   ========================================================================== */
+
+	/* Tablet and below (≤768px) */
 	@media (max-width: 768px) {
 		.issues-page {
 			padding: var(--space-4);
 		}
 
+		/* Hide low-priority columns */
 		.col-watched,
-		.col-added {
+		.col-added,
+		.col-size {
 			display: none;
 		}
 
-		.issues-table th,
-		.issues-table td {
-			padding: var(--space-2) var(--space-3);
+		/* Hide table header on mobile - use card layout */
+		.issues-table thead {
+			display: none;
 		}
 
-		/* Give Name column more room on tablet */
-		.col-name {
-			width: 45%;
-			min-width: 140px;
+		/* Convert table to block layout */
+		.issues-table,
+		.issues-table tbody,
+		.issues-table tr {
+			display: block;
 		}
 
-		/* Stack name cell vertically on mobile */
+		/* Each row becomes a card */
+		.issues-table tr {
+			padding: var(--space-3);
+			border-bottom: 1px solid var(--border);
+			display: grid;
+			grid-template-columns: 1fr auto;
+			grid-template-rows: auto auto;
+			gap: var(--space-2);
+			align-items: start;
+		}
+
+		/* Name cell spans left column */
+		.issues-table td.col-name {
+			grid-column: 1;
+			grid-row: 1;
+			width: 100%;
+			padding: 0;
+		}
+
+		/* Issues cell below name */
+		.issues-table td.col-issues {
+			grid-column: 1;
+			grid-row: 2;
+			width: 100%;
+			padding: 0;
+		}
+
+		/* Actions stay on right, vertically centered */
+		.issues-table td.col-actions {
+			grid-column: 2;
+			grid-row: 1 / 3;
+			display: flex;
+			align-items: center;
+			padding: 0;
+			padding-left: var(--space-3);
+		}
+
+		/* Name cell internal layout - stack vertically */
 		.name-cell {
 			flex-direction: column;
 			align-items: flex-start;
-			gap: var(--space-1);
+			gap: var(--space-2);
 		}
 
-		/* Title row wraps on mobile */
+		/* Title row: wrap naturally */
 		.title-row {
 			flex-wrap: wrap;
 			gap: var(--space-1) var(--space-2);
+			width: 100%;
+			align-items: baseline;
 		}
 
-		/* Hide external links on mobile to save space */
+		/* Let name wrap to multiple lines */
+		.item-name {
+			white-space: normal;
+			word-break: break-word;
+			flex: 1 1 auto;
+			min-width: 0;
+			max-width: none;
+			line-height: 1.3;
+		}
+
+		/* Year inline with name */
+		.item-year {
+			flex-shrink: 0;
+		}
+
+		/* Hide episode count on mobile - chevron is enough indicator */
+		.episode-count {
+			display: none;
+		}
+
+		/* Hide external links on mobile */
 		.external-links {
 			display: none;
 		}
 
-		/* Compact badges on mobile */
-		.col-issues {
-			width: auto;
-			min-width: 100px;
+		/* Badges row - horizontal wrap */
+		.badge-groups {
+			flex-direction: row;
+			flex-wrap: wrap;
+			gap: var(--space-2);
 		}
 
-		.badge-groups {
-			flex-direction: column;
-			align-items: flex-start;
+		/* Hide requester column on mobile */
+		.col-requester {
+			display: none;
+		}
+
+		/* Hide release column on mobile */
+		.col-release {
+			display: none;
+		}
+
+		/* Episode expansion row on mobile */
+		.issues-table tr.episode-row {
+			display: block;
+			padding: 0;
+			grid-template-columns: none;
+		}
+
+		.issues-table tr.episode-row td {
+			display: block;
+			width: 100%;
+		}
+
+		.episode-list {
+			padding: var(--space-3);
+			padding-left: var(--space-4);
 		}
 	}
 
+	/* Phone (≤480px) */
 	@media (max-width: 480px) {
-		/* Even more space for Name on small phones */
-		.col-name {
-			width: 55%;
-			min-width: 120px;
+		.issues-page {
+			padding: var(--space-3);
 		}
 
-		.col-issues {
-			min-width: 80px;
+		.issues-table tr {
+			padding: var(--space-3);
 		}
 
-		/* Smaller text on phone */
+		/* Readable text size */
 		.item-name {
 			font-size: var(--font-size-sm);
 		}
@@ -2371,18 +2459,39 @@
 		}
 
 		.episode-count {
+			font-size: 11px;
+			padding: 1px 6px;
+		}
+
+		/* Slightly smaller badges but still readable */
+		.badge {
+			padding: 2px 5px;
 			font-size: 10px;
-			padding: 0 4px;
+		}
+
+		.badge-action {
+			min-width: 18px;
+			height: 18px;
+			font-size: 8px;
+		}
+	}
+
+	/* Small phone (≤380px) - ultra compact */
+	@media (max-width: 380px) {
+		.filter-nav {
+			gap: 0;
+		}
+
+		.filter-tab {
+			padding: var(--space-2) var(--space-2);
+			font-size: var(--font-size-xs);
 		}
 	}
 
 	@media (max-width: 640px) {
 		.filter-nav {
 			overflow-x: auto;
-		}
-
-		.col-size {
-			display: none;
+			-webkit-overflow-scrolling: touch;
 		}
 	}
 
