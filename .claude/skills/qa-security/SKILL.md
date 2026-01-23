@@ -18,6 +18,21 @@ This skill focuses on **security concerns only**:
 
 ## Workflow
 
+### Step 0: Review Existing Findings
+
+**Before starting any review, read `SUGGESTIONS.md`** to understand what has already been discovered:
+
+```bash
+# Read the Security section of SUGGESTIONS.md
+```
+
+Focus on:
+- **Active items** - Don't duplicate these
+- **Struck-through items (`~~item~~`)** - Already fixed, don't re-report
+- **Gaps** - What security concerns HAVEN'T been checked yet?
+
+This prevents wasting time re-discovering known issues and helps you focus on finding NEW problems.
+
 ### Step 1: Review Authentication & Authorization
 
 Check these areas:

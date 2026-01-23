@@ -18,6 +18,21 @@ This skill focuses on **infrastructure concerns only**:
 
 ## Workflow
 
+### Step 0: Review Existing Findings
+
+**Before starting any review, read `SUGGESTIONS.md`** to understand what has already been discovered:
+
+```bash
+# Read the Infrastructure section of SUGGESTIONS.md
+```
+
+Focus on:
+- **Active items** - Don't duplicate these
+- **Struck-through items (`~~item~~`)** - Already fixed, don't re-report
+- **Gaps** - What infrastructure concerns HAVEN'T been checked yet?
+
+This prevents wasting time re-discovering known issues and helps you focus on finding NEW problems.
+
 > **Note:** Before running VPS commands, check `.claude/local.md` for the actual SSH command and paths. The examples below use `ssh your-server` and `~/mediajanitor` as placeholders.
 
 ### Step 1: Database Backup Review
