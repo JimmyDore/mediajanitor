@@ -6127,24 +6127,24 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 3,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 3,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6186,14 +6186,14 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 8,
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 8,
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6233,26 +6233,26 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": old_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 4,  # Partially available
-                                "episodeCount": 12,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
-                                    {"episodeNumber": 2, "name": "Ep2", "airDate": old_date},
-                                    {"episodeNumber": 3, "name": "Ep3", "airDate": old_date},
-                                    {"episodeNumber": 4, "name": "Ep4", "airDate": old_date},
-                                    {"episodeNumber": 5, "name": "Ep5", "airDate": recent_date},
-                                ],
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,  # Partially available
+                            "episodeCount": 12,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
+                                {"episodeNumber": 2, "name": "Ep2", "airDate": old_date},
+                                {"episodeNumber": 3, "name": "Ep3", "airDate": old_date},
+                                {"episodeNumber": 4, "name": "Ep4", "airDate": old_date},
+                                {"episodeNumber": 5, "name": "Ep5", "airDate": recent_date},
+                            ],
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6334,12 +6334,12 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {"seasonNumber": 1, "status": 5, "episodeCount": 6},
-                            {"seasonNumber": 3, "status": 5, "episodeCount": 8},
-                            {"seasonNumber": 4, "status": 5, "episodeCount": 10},
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 6},
+                        {"seasonNumber": 3, "status": 5, "episodeCount": 8},
+                        {"seasonNumber": 4, "status": 5, "episodeCount": 10},
+                    ],
                 },
             )
             session.add(request)
@@ -6378,12 +6378,12 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {"seasonNumber": 0, "status": 5, "episodeCount": 3},  # Specials
-                            {"seasonNumber": 1, "status": 5, "episodeCount": 10},
-                            {"seasonNumber": 2, "status": 5, "episodeCount": 10},
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {"seasonNumber": 0, "status": 5, "episodeCount": 3},  # Specials
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                        {"seasonNumber": 2, "status": 5, "episodeCount": 10},
+                    ],
                 },
             )
             session.add(request)
@@ -6425,26 +6425,26 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": old_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 4,
-                                "episodeCount": 10,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
-                                ],
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 4,
-                                "episodeCount": 8,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
-                                    {"episodeNumber": 2, "name": "S2E2", "airDate": recent_date},
-                                ],
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodeCount": 10,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
+                            ],
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodeCount": 8,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
+                                {"episodeNumber": 2, "name": "S2E2", "airDate": recent_date},
+                            ],
+                        },
+                    ],
                 },
             )
             session.add(request)
