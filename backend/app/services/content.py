@@ -1310,8 +1310,8 @@ def _get_season_episode_details(
         }
 
     raw_data = request.raw_data or {}
-    media = raw_data.get("media", {})
-    seasons = media.get("seasons", [])
+    # Seasons are at root level in Jellyseerr request data, not inside media
+    seasons = raw_data.get("seasons", [])
 
     if not seasons:
         return {
