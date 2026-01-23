@@ -229,8 +229,8 @@
       ],
       "context": "Epic 50: Update whitelist duration options. Frontend-only change in frontend/src/routes/issues/+page.svelte. Update durationOptions array to: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date. Remove 1 Year. Update DurationOption type: add '1week', '1month', remove '1year'. Update getExpirationDate(): 1week adds 7 days, 1month adds 1 month. No backend changes needed (expires_at is already flexible datetime). NON-GOALS: No additional duration options beyond this set.",
       "priority": 53,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated DurationOption type to add '1week' and '1month', removed '1year'. Updated durationOptions array with new order: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date. Updated getExpirationDate() to handle 1week (adds 7 days) and 1month (adds 1 month). Added 16 new unit tests in whitelist-duration.test.ts. Verified in browser."
     },
     {
       "id": "US-51.4",

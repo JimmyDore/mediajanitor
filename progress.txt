@@ -169,4 +169,13 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - 3 new backend unit tests (661 total pass), 17 new frontend tests (718 total pass), mypy passes, typecheck passes
 - Verified in Docker: API returns stats fields, card properly hidden when no stats, warning colors implemented
 
+**US-50.1: Update Whitelist Duration Options**
+- Updated `DurationOption` type to add `'1week'` and `'1month'`, removed `'1year'`
+- Updated `durationOptions` array with new order: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date
+- Updated `getExpirationDate()` function to handle `1week` (adds 7 days) and `1month` (adds 1 month)
+- Added 16 new unit tests in `frontend/tests/whitelist-duration.test.ts`
+- Files changed: `frontend/src/routes/issues/+page.svelte`, `frontend/tests/whitelist-duration.test.ts`
+- 734 total frontend tests pass, typecheck passes
+- Verified in browser: duration picker shows new options in correct order, 1 Week selection works
+
 ---

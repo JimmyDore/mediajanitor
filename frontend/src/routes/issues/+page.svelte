@@ -59,7 +59,7 @@
 	type LargeSubFilter = 'all' | 'movies' | 'series';
 	type SortField = 'name' | 'size' | 'date' | 'issues' | 'added' | 'requester' | 'release' | 'watched';
 	type SortOrder = 'asc' | 'desc';
-	type DurationOption = 'permanent' | '3months' | '6months' | '1year' | 'custom';
+	type DurationOption = 'permanent' | '1week' | '1month' | '3months' | '6months' | 'custom';
 	type WhitelistType = 'content' | 'french-only' | 'language-exempt' | 'large' | 'request';
 
 	// Tooltip text for informational badges
@@ -119,9 +119,10 @@
 
 	const durationOptions: { value: DurationOption; label: string }[] = [
 		{ value: 'permanent', label: 'Permanent' },
+		{ value: '1week', label: '1 Week' },
+		{ value: '1month', label: '1 Month' },
 		{ value: '3months', label: '3 Months' },
 		{ value: '6months', label: '6 Months' },
-		{ value: '1year', label: '1 Year' },
 		{ value: 'custom', label: 'Custom Date' }
 	];
 
@@ -208,14 +209,17 @@
 
 		const now = new Date();
 		switch (duration) {
+			case '1week':
+				now.setDate(now.getDate() + 7);
+				break;
+			case '1month':
+				now.setMonth(now.getMonth() + 1);
+				break;
 			case '3months':
 				now.setMonth(now.getMonth() + 3);
 				break;
 			case '6months':
 				now.setMonth(now.getMonth() + 6);
-				break;
-			case '1year':
-				now.setFullYear(now.getFullYear() + 1);
 				break;
 		}
 		return now.toISOString();
