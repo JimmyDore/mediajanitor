@@ -23,6 +23,7 @@ from app.models.content import (
     LibraryResponse,
     OldUnwatchedItem,
     OldUnwatchedResponse,
+    ProblematicEpisode,
     RecentlyAvailableItem,
     RecentlyAvailableResponse,
     RequestWhitelistItem,
@@ -788,12 +789,32 @@ def check_audio_languages(item: CachedMediaItem) -> LanguageCheckResult:
 
     Based on original_script.py:check_audio_languages
 
+    For TV series: Uses cached language_check_result from sync (which aggregates
+    all episode audio tracks). This is essential because series-level metadata
+    doesn't contain episode audio tracks.
+
+    For movies: Uses cached language_check_result if available, otherwise falls
+    back to parsing raw_data.MediaSources for backwards compatibility.
+
     Returns dict with:
     - has_english: bool
     - has_french: bool
     - has_french_subs: bool
     - missing_languages: list[str] - specific issues found
     """
+    # US-52.2: Use cached language_check_result when available
+    # This is essential for TV series where episode-level audio tracks are
+    # not available in series metadata - we must use data from sync
+    if item.language_check_result:
+        cached = item.language_check_result
+        return {
+            "has_english": cached.get("has_english", True),
+            "has_french": cached.get("has_french", True),
+            "has_french_subs": cached.get("has_french_subs", True),
+            "missing_languages": cached.get("missing_languages", []),
+        }
+
+    # Fallback: Parse raw_data for movies without cached data (backwards compatibility)
     result: LanguageCheckResult = {
         "has_english": False,
         "has_french": False,
@@ -1527,6 +1548,42 @@ def get_item_issues(
     return issues, language_issues_detail
 
 
+def _get_problematic_episodes(
+    item: CachedMediaItem, issues: list[str]
+) -> list[ProblematicEpisode] | None:
+    """Get list of problematic episodes for a series with language issues.
+
+    Args:
+        item: The media item to check
+        issues: List of issue types for this item
+
+    Returns:
+        List of ProblematicEpisode objects if series has language issues, None otherwise.
+    """
+    # Only for Series items with language issues
+    if item.media_type != "Series" or "language" not in issues:
+        return None
+
+    # Check if we have cached problematic episodes data
+    if not item.problematic_episodes:
+        return None
+
+    # Convert cached data to ProblematicEpisode models
+    episodes = []
+    for ep_data in item.problematic_episodes:
+        episodes.append(
+            ProblematicEpisode(
+                identifier=ep_data.get("identifier", ""),
+                name=ep_data.get("name", ""),
+                season=ep_data.get("season", 0),
+                episode=ep_data.get("episode", 0),
+                missing_languages=ep_data.get("missing_languages", []),
+            )
+        )
+
+    return episodes if episodes else None
+
+
 async def get_content_issues(
     db: AsyncSession,
     user_id: int,
@@ -1684,6 +1741,8 @@ async def get_content_issues(
                 jellyseerr_request_id=jellyseerr_request_id,
                 largest_season_size_bytes=largest_season_size_bytes,
                 largest_season_size_formatted=largest_season_size_formatted,
+                # US-52.2: Include problematic episodes for series with language issues
+                problematic_episodes=_get_problematic_episodes(item, issues),
             )
         )
 

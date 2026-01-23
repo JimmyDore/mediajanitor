@@ -6500,3 +6500,353 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
         assert item["episode_count"] is None
         assert item["available_episodes"] is None
         assert item["total_episodes"] is None
+
+
+class TestCachedLanguageData:
+    """Test US-52.2: Use cached language data in content service."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "lang-cache@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_series_uses_cached_language_check_result(self, client: TestClient) -> None:
+        """Series should use cached language_check_result for language detection."""
+        token = self._get_auth_token(client, "cached-lang-series@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Series with cached language check result indicating missing French audio
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-cached-lang",
+                name="Series With Cached Lang",
+                media_type="Series",
+                size_bytes=10_000_000_000,
+                raw_data={},  # No MediaSources at series level
+                language_check_result={
+                    "has_english": True,
+                    "has_french": False,
+                    "has_french_subs": True,
+                    "missing_languages": ["missing_fr_audio"],
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "series-cached-lang"
+        assert "language" in data["items"][0]["issues"]
+        assert data["items"][0]["language_issues"] == ["missing_fr_audio"]
+
+    @pytest.mark.asyncio
+    async def test_movie_uses_cached_language_check_result(self, client: TestClient) -> None:
+        """Movie should use cached language_check_result when available."""
+        token = self._get_auth_token(client, "cached-lang-movie@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Movie with cached language check result
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-cached-lang",
+                name="Movie With Cached Lang",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data={},  # No MediaSources
+                language_check_result={
+                    "has_english": False,
+                    "has_french": True,
+                    "has_french_subs": True,
+                    "missing_languages": ["missing_en_audio"],
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-cached-lang"
+        assert "language" in data["items"][0]["issues"]
+        assert data["items"][0]["language_issues"] == ["missing_en_audio"]
+
+    @pytest.mark.asyncio
+    async def test_movie_fallback_to_raw_data_when_no_cached_result(
+        self, client: TestClient
+    ) -> None:
+        """Movie should fallback to raw_data parsing when no cached result."""
+        token = self._get_auth_token(client, "movie-fallback@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            # Movie with MediaSources but no cached result
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-no-cache",
+                name="Movie No Cache",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data={
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French audio
+                            ]
+                        }
+                    ]
+                },
+                language_check_result=None,  # No cached result
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "movie-no-cache"
+        assert "language" in data["items"][0]["issues"]
+        assert "missing_fr_audio" in data["items"][0]["language_issues"]
+
+    @pytest.mark.asyncio
+    async def test_cached_result_no_issues_excludes_from_language_filter(
+        self, client: TestClient
+    ) -> None:
+        """Item with cached result showing no issues should not appear in language filter."""
+        token = self._get_auth_token(client, "cached-no-issues@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-no-issues",
+                name="Series No Issues",
+                media_type="Series",
+                size_bytes=10_000_000_000,
+                raw_data={},
+                language_check_result={
+                    "has_english": True,
+                    "has_french": True,
+                    "has_french_subs": True,
+                    "missing_languages": [],
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_series_includes_problematic_episodes(self, client: TestClient) -> None:
+        """Series with language issues should include problematic_episodes in response."""
+        token = self._get_auth_token(client, "problematic-eps@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-with-eps",
+                name="Series With Episodes",
+                media_type="Series",
+                size_bytes=10_000_000_000,
+                raw_data={},
+                language_check_result={
+                    "has_english": True,
+                    "has_french": False,
+                    "has_french_subs": True,
+                    "missing_languages": ["missing_fr_audio"],
+                },
+                problematic_episodes=[
+                    {
+                        "identifier": "S01E03",
+                        "name": "Episode 3",
+                        "season": 1,
+                        "episode": 3,
+                        "missing_languages": ["missing_fr_audio"],
+                    },
+                    {
+                        "identifier": "S01E05",
+                        "name": "Episode 5",
+                        "season": 1,
+                        "episode": 5,
+                        "missing_languages": ["missing_fr_audio", "missing_en_audio"],
+                    },
+                ],
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item_response = data["items"][0]
+        assert item_response["jellyfin_id"] == "series-with-eps"
+        assert item_response["problematic_episodes"] is not None
+        assert len(item_response["problematic_episodes"]) == 2
+
+        ep1 = item_response["problematic_episodes"][0]
+        assert ep1["identifier"] == "S01E03"
+        assert ep1["name"] == "Episode 3"
+        assert ep1["season"] == 1
+        assert ep1["episode"] == 3
+        assert ep1["missing_languages"] == ["missing_fr_audio"]
+
+        ep2 = item_response["problematic_episodes"][1]
+        assert ep2["identifier"] == "S01E05"
+        assert ep2["season"] == 1
+        assert ep2["episode"] == 5
+        assert "missing_fr_audio" in ep2["missing_languages"]
+        assert "missing_en_audio" in ep2["missing_languages"]
+
+    @pytest.mark.asyncio
+    async def test_movie_has_no_problematic_episodes(self, client: TestClient) -> None:
+        """Movie with language issues should have null problematic_episodes."""
+        token = self._get_auth_token(client, "movie-no-eps@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="movie-lang-issue",
+                name="Movie Lang Issue",
+                media_type="Movie",
+                size_bytes=5_000_000_000,
+                raw_data={},
+                language_check_result={
+                    "has_english": True,
+                    "has_french": False,
+                    "has_french_subs": True,
+                    "missing_languages": ["missing_fr_audio"],
+                },
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["problematic_episodes"] is None
+
+    @pytest.mark.asyncio
+    async def test_series_without_language_issue_has_no_problematic_episodes(
+        self, client: TestClient
+    ) -> None:
+        """Series without language issue should have null problematic_episodes."""
+        token = self._get_auth_token(client, "series-old-only@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        old_date = (datetime.now(UTC) - timedelta(days=200)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Series with old issue but no language issue
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-old-only",
+                name="Series Old Only",
+                media_type="Series",
+                size_bytes=10_000_000_000,
+                raw_data={},
+                last_played_date=old_date,
+                date_created=(datetime.now(UTC) - timedelta(days=200)).isoformat(),
+                language_check_result={
+                    "has_english": True,
+                    "has_french": True,
+                    "has_french_subs": True,
+                    "missing_languages": [],
+                },
+                problematic_episodes=[],  # Empty list
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=old", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "series-old-only"
+        assert "language" not in data["items"][0]["issues"]
+        assert data["items"][0]["problematic_episodes"] is None
+
+    @pytest.mark.asyncio
+    async def test_series_with_empty_problematic_episodes_returns_none(
+        self, client: TestClient
+    ) -> None:
+        """Series with language issue but empty problematic_episodes returns None."""
+        token = self._get_auth_token(client, "series-empty-eps@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            item = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-empty-eps",
+                name="Series Empty Eps",
+                media_type="Series",
+                size_bytes=10_000_000_000,
+                raw_data={},
+                language_check_result={
+                    "has_english": True,
+                    "has_french": False,
+                    "has_french_subs": True,
+                    "missing_languages": ["missing_fr_audio"],
+                },
+                problematic_episodes=[],  # Empty list
+            )
+            session.add(item)
+            await session.commit()
+
+        response = client.get("/api/content/issues?filter=language", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["problematic_episodes"] is None

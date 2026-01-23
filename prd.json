@@ -287,8 +287,8 @@
       ],
       "context": "Epic 52: TV Series Language Detection. Depends on US-52.1. Update check_audio_languages() in content.py (lines 780-836) to use cached language_check_result field if available, fallback to raw_data parsing for backwards compatibility. Add problematic_episodes field to ContentIssueItem model in models/content.py. In get_content_issues() (content.py:1264-1418), include problematic_episodes in response for series with language issues. This makes TV series with missing audio tracks visible in the Issues page Language tab.",
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Modified check_audio_languages() to use cached language_check_result when available with fallback to raw_data parsing. Added ProblematicEpisode model and problematic_episodes field to ContentIssueItem. Added _get_problematic_episodes() helper to include episode data in issues response for series with language issues. Movies return null, series without language issues return null. 8 new unit tests added."
     },
     {
       "id": "US-52.3",

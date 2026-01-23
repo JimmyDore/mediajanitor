@@ -129,6 +129,16 @@ class ServiceUrls(BaseModel):
     sonarr_url: str | None = None
 
 
+class ProblematicEpisode(BaseModel):
+    """Model for an episode with language issues."""
+
+    identifier: str  # e.g., "S01E05"
+    name: str  # Episode title
+    season: int
+    episode: int
+    missing_languages: list[str]  # e.g., ["missing_en_audio", "missing_fr_audio"]
+
+
 class ContentIssueItem(BaseModel):
     """Response model for a single content item with issues."""
 
@@ -158,6 +168,8 @@ class ContentIssueItem(BaseModel):
     request_date: str | None = None  # When it was requested
     missing_seasons: list[int] | None = None  # For TV shows only - which seasons are missing
     release_date: str | None = None  # Movie releaseDate or TV firstAirDate (YYYY-MM-DD)
+    # US-52.2: Episodes with language issues (for TV series only)
+    problematic_episodes: list[ProblematicEpisode] | None = None
 
 
 class ContentIssuesResponse(BaseModel):
