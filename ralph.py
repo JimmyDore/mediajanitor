@@ -220,7 +220,11 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
                     if data.get("type") == "assistant" and data.get("message", {}).get("content"):
                         for content in data["message"]["content"]:
                             if content.get("type") == "text" and content.get("text"):
-                                console.print(content["text"], end="")
+                                text = content["text"]
+                                console.print(text, end="")
+                                # Add newline after sentences for readability
+                                if text.rstrip().endswith((".", "!", "?", ":")):
+                                    console.print()
                 except json.JSONDecodeError:
                     pass
             else:
@@ -271,7 +275,7 @@ def run_with_retry(prompt: str, streaming: bool = False, log_file: str | None = 
 def run_qa_skill(skill: str, log_file: str | None = None) -> None:
     """Run a single QA skill."""
     section_header(f"QA: {skill}")
-    run_with_retry(f"Use /{skill} skill to review the application", streaming=False, log_file=log_file)
+    run_with_retry(f"Use /{skill} skill to review the application", streaming=True, log_file=log_file)
 
 
 def validate_qa_skills(skills: list[str]) -> list[str]:

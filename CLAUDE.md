@@ -98,8 +98,7 @@ plex-dashboard/
 ├── SUGGESTIONS.md         # Observations with [P1]/[P2]/[P3] priorities
 ├── CLAUDE.md              # This file - project context
 ├── prompt.md              # Ralph execution loop prompt
-├── ralph-once.sh          # Single iteration Ralph script
-├── afk-ralph.sh           # Autonomous loop Ralph script
+├── ralph.py               # Ralph CLI (task ralph:once, task ralph:run)
 ├── .claude/
 │   └── skills/
 │       ├── prd/SKILL.md           # /prd skill - PRD creation
@@ -184,7 +183,7 @@ Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
 
 ### Ralph Loop (Autonomous execution)
 
-Run `./ralph-once.sh` (human-in-the-loop) or `./afk-ralph.sh N` (autonomous N iterations)
+Run `task ralph:once` (human-in-the-loop) or `task ralph:run -- N` (autonomous N iterations)
 
 Prompt location: `prompt.md`
 

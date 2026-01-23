@@ -20,10 +20,10 @@ vim PRD.md
 /ralph-init
 
 # 3. Run one iteration (human-in-the-loop)
-./ralph-once.sh
+task ralph:once
 
 # 4. Or run autonomously overnight
-./afk-ralph.sh 10
+task ralph:run -- 10
 ```
 
 **Key files:**
@@ -99,7 +99,7 @@ Bad PRD = AI spinning in circles. Good PRD = overnight productivity.
 │   ────────             ─────                ───────       ───   │
 │                                                                 │
 │   Start Ralph    →    AI executes    →    Human reviews  →  ↵  │
-│   ./afk-ralph.sh      autonomously        /morning-routine      │
+│   task ralph:run      autonomously        /morning-routine      │
 │                       (10+ stories)                             │
 │                                                                 │
 │   ←─────────────────── repeat daily ────────────────────────────│
@@ -181,7 +181,7 @@ git commit -m "chore: morning routine sync and cleanup"
 
 ## What Ralph Does at Night
 
-Once you run `./afk-ralph.sh N`, Claude autonomously executes this loop:
+Once you run `task ralph:run -- N`, Claude autonomously executes this loop:
 
 1. **Picks the next story** where `passes: false` in prd.json
 2. **Implements with TDD** - writes failing test first, then code
