@@ -2224,3 +2224,220 @@ Added manual dismiss button to all toast notifications with keyboard accessibili
 - API proxy configured in vite.config.ts for dev environment
 - Production: https://mediajanitor.com with HTTPS via Let's Encrypt
 - CI/CD: Push to main triggers auto-deploy to VPS
+
+---
+
+### 2026-01-22
+
+**US-48.1: Ultra API Settings - Backend**
+- Added `ultra_api_url` and `ultra_api_key_encrypted` columns to UserSettings model
+- Created Alembic migration `30dd116f11f8_add_ultra_api_settings_to_user_settings`
+- Created `app/services/ultra.py` with save/get functions (following Radarr/Sonarr pattern)
+- Added Pydantic models: `UltraSettingsCreate`, `UltraSettingsResponse`
+- Added POST/GET `/api/settings/ultra` endpoints
+- Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `services/ultra.py`, migration file
+- 8 unit tests added (all pass), verified in Docker
+
+**US-48.3: Ultra Warning Thresholds - Settings**
+- Added `ultra_storage_warning_gb` and `ultra_traffic_warning_percent` columns to UserSettings model
+- Created Alembic migration `26a3b23ff8ca_add_ultra_warning_thresholds_to_user_settings`
+- Added Pydantic models: `UltraThresholdsCreate`, `UltraThresholdsResponse`
+- Added POST/GET `/api/settings/ultra/thresholds` endpoints with defaults (100 GB, 20%)
+- Added Seedbox Monitoring section to Settings/Connections page with Ultra.cc connection and Warning Thresholds
+- Files changed: `database.py`, `models/settings.py`, `routers/settings.py`, `connections/+page.svelte`, migration file
+- 12 backend tests + 14 frontend tests added (all pass), verified in Docker and browser
+
+**US-48.4: Fetch Ultra Stats During Sync**
+- Added `fetch_ultra_stats(url, api_key)` function to `services/ultra.py` with Bearer token auth
+- Added `ultra_free_storage_gb`, `ultra_traffic_available_percent`, `ultra_last_synced_at` columns to UserSettings
+- Created Alembic migration `54b0e03433c5_add_ultra_stats_columns_to_user_settings`
+- Integrated Ultra API call into `run_user_sync()` as non-blocking call after Jellyseerr sync
+- Sync succeeds even if Ultra API fails (logs warning and continues)
+- Files changed: `database.py`, `services/sync.py`, `services/ultra.py`, migration file, `tests/test_ultra_service.py`
+- 9 unit tests added for fetch_ultra_stats (all pass), 607 total tests pass, verified in Docker
+
+**US-49.1: Delete Movies from Cache After Deletion**
+- Added `_delete_cached_media_by_tmdb_id()` helper function to delete CachedMediaItem by TMDB ID in raw_data.ProviderIds.Tmdb
+- Added `_delete_cached_jellyseerr_request_by_tmdb_id()` helper function to delete matching CachedJellyseerrRequest by TMDB ID
+- Integrated cache deletion into `delete_movie` endpoint after successful Radarr deletion
+- Cache deletion happens AFTER Jellyseerr API lookup but before response (order matters)
+- If Radarr deletion fails, cache is NOT deleted (items stay in list)
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 4 new unit tests added (611 total tests pass), mypy passes, verified in Docker with integration tests
+
+**US-49.2: Delete Series from Cache After Deletion**
+- Reused existing `_delete_cached_media_by_tmdb_id()` and `_delete_cached_jellyseerr_request_by_tmdb_id()` helper functions
+- Integrated cache deletion into `delete_series` endpoint after successful Sonarr deletion
+- Cache deletion happens AFTER Jellyseerr API lookup but before response (same pattern as US-49.1)
+- If Sonarr deletion fails, cache is NOT deleted (items stay in list)
+- If Sonarr succeeds but Jellyseerr fails, cache is still deleted
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 4 new unit tests added (615 total tests pass), mypy passes, verified in Docker with integration tests
+
+**US-49.3: Delete Requests from Cache After Deletion**
+- Added `_delete_cached_jellyseerr_request_by_id()` helper function to delete CachedJellyseerrRequest by Jellyseerr ID
+- Integrated cache deletion into `delete_request_endpoint` after successful Jellyseerr media deletion
+- If Jellyseerr deletion fails, cache is NOT deleted (request stays in list)
+- Files changed: `routers/content.py`, `tests/test_delete_content.py`
+- 2 new unit tests added (617 total tests pass), mypy passes, verified in Docker with integration tests
+
+### 2026-01-23
+
+**US-51.1: Fetch Episode Details During Sync**
+- Added `fetch_jellyseerr_season_episodes(client, server_url, api_key, tmdb_id, season_number)` function to `sync.py`
+- Function calls Jellyseerr `GET /api/v1/tv/{tmdb_id}/season/{season_number}` endpoint with X-Api-Key auth
+- Returns list of `{episodeNumber, name, airDate}` dicts, empty list on error (graceful failure)
+- Integrated into `fetch_jellyseerr_requests()` for status 4 TV shows
+- Skips specials (season 0) when fetching episodes
+- Episodes stored in `raw_data.media.seasons[].episodes` array
+- Files changed: `app/services/sync.py`, `tests/test_sync.py`
+- 13 new unit tests added (634 total tests pass), mypy passes, verified in Docker with integration tests
+
+**US-51.2: Include Ongoing Series in Recently Available**
+- Added `_get_recent_episodes_from_cached_data(request, days_back)` helper function in `content.py`
+- Function checks `raw_data.media.seasons[].episodes[].airDate` for episodes within `days_back` window
+- Returns `{season_num: [episode_nums]}` dict if recent episodes found, None otherwise
+- Modified `get_recently_available()` to check for recent episodes on status 4 TV shows
+- Modified `get_recently_available_count()` with same logic for dashboard summary consistency
+- If recent episodes found, uses today's date as `availability_date` to force inclusion
+- Series appears once (not per episode) in the list
+- Files changed: `app/services/content.py`, `tests/test_content.py`
+- 13 new unit tests added (647 total tests pass), mypy passes, verified in Docker with integration tests
+
+**US-51.3: API Response with Season/Episode Details**
+- Added optional fields to `RecentlyAvailableItem` model: `season_info`, `episode_count`, `available_episodes`, `total_episodes`
+- Added `_get_season_episode_details(request)` helper function to extract season/episode info from raw_data
+- Added `_format_season_info(season_numbers)` helper to format season list ("Seasons 1-3", "Seasons 1, 3, 4", etc.)
+- Status 5 TV shows: `season_info` = "Season X" or "Seasons X-Y", `episode_count` = total episodes
+- Status 4 TV shows: `season_info` = "Season X in progress", `available_episodes`/`total_episodes` for progress
+- Movies: all fields return `None`
+- Specials (season 0) excluded from season_info display but included in episode count
+- Files changed: `app/models/content.py`, `app/services/content.py`, `tests/test_content.py`
+- 8 new unit tests added (655 total tests pass), mypy passes, verified in Docker with integration tests
+
+**US-48.2: Ultra API Settings - Frontend**
+- Added `frontend/tests/settings-ultra.test.ts` with 12 API integration tests
+- Tests cover GET/POST /api/settings/ultra endpoints for authentication, validation, and UI behavior
+- UI implementation was already completed in US-48.3 (Seedbox Monitoring section)
+- Verified in browser: Connected badge, masked token placeholder, form fields all working
+- Files changed: `frontend/tests/settings-ultra.test.ts`
+- 12 new unit tests added (701 total frontend tests pass), typecheck passes
+
+**US-48.5: Display Ultra Stats on Dashboard**
+- Updated `UltraSettingsResponse` model to include: `free_storage_gb`, `traffic_available_percent`, `last_synced_at`, `storage_warning_gb`, `traffic_warning_percent`
+- Updated GET `/api/settings/ultra` endpoint to return cached stats and warning thresholds
+- Added `Seedbox Status` card to Dashboard above Issues section with:
+  - Free Storage (GB) and Traffic Available (%) display
+  - Last synced timestamp
+  - Warning colors: yellow when below threshold, red when below 50% of threshold
+- Card hidden when Ultra not configured or no stats available (free_storage_gb is null)
+- Files changed: `backend/app/models/settings.py`, `backend/app/routers/settings.py`, `frontend/src/routes/+page.svelte`, `backend/tests/test_settings.py`, `frontend/tests/dashboard-seedbox.test.ts`
+- 3 new backend unit tests (661 total pass), 17 new frontend tests (718 total pass), mypy passes, typecheck passes
+- Verified in Docker: API returns stats fields, card properly hidden when no stats, warning colors implemented
+
+**US-50.1: Update Whitelist Duration Options**
+- Updated `DurationOption` type to add `'1week'` and `'1month'`, removed `'1year'`
+- Updated `durationOptions` array with new order: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date
+- Updated `getExpirationDate()` function to handle `1week` (adds 7 days) and `1month` (adds 1 month)
+- Added 16 new unit tests in `frontend/tests/whitelist-duration.test.ts`
+- Files changed: `frontend/src/routes/issues/+page.svelte`, `frontend/tests/whitelist-duration.test.ts`
+- 734 total frontend tests pass, typecheck passes
+- Verified in browser: duration picker shows new options in correct order, 1 Week selection works
+
+**US-51.4: Display Episode Details in UI**
+- Added `getDetails()` helper function to format episode info based on availability status
+- Fully available TV shows: formats as "Seasons 1-3 (30 eps)"
+- Partially available TV shows: formats as "S4: 5/12 episodes"
+- Movies: displays "—"
+- Added Details column to table between Title and Type
+- Updated Copy feature to include episode details in brackets for TV shows
+- Details column hidden on mobile (follows Requested By pattern)
+- Files changed: `frontend/src/routes/info/recent/+page.svelte`, `frontend/tests/recent-episode-details.test.ts`, `prd.json`
+- 15 new unit tests added (749 total frontend tests pass), typecheck passes
+- Verified in browser: page loads correctly, empty state displays when no data
+
+**US-52.1: Cache Episode Language Data During Sync**
+- Added `language_check_result` JSON field to CachedMediaItem (structure: `{has_english, has_french, has_french_subs, missing_languages}`)
+- Added `problematic_episodes` JSON field to CachedMediaItem (structure: `[{identifier, name, season, episode, missing_languages}]`)
+- Created Alembic migration `6443d327371b_add_language_check_fields_to_cached_media_items`
+- Added `check_episode_audio_languages(episode)` helper function in sync.py
+- Added `check_series_episodes_languages(client, server_url, api_key, series_id, series_name)` function
+- Integrated language checking into `calculate_season_sizes()` loop after size calculation
+- Added `check_movie_audio_languages()` for movie language checking in `cache_media_items()`
+- Language codes: ENGLISH_CODES = {eng, en, english}, FRENCH_CODES = {fre, fr, french, fra}
+- Files changed: `app/database.py`, `app/services/sync.py`, `tests/test_sync.py`, migration file
+- 13 new unit tests added (671 total backend tests pass), mypy passes
+- Verified in Docker: backend starts successfully, integration tests pass
+
+**US-52.2: Use Cached Language Data in Content Service**
+- Modified `check_audio_languages()` to use cached `language_check_result` when available
+- Added fallback to raw_data parsing for backwards compatibility (movies without cached data)
+- Added `ProblematicEpisode` model with identifier, name, season, episode, missing_languages fields
+- Added `problematic_episodes` field to `ContentIssueItem` response model
+- Added `_get_problematic_episodes()` helper to include episode data in issues response for series
+- Series with language issues now include problematic_episodes in API response
+- Movies and series without language issues return null for problematic_episodes
+- Files changed: `app/models/content.py`, `app/services/content.py`, `tests/test_content.py`
+- 8 new unit tests added (679 total backend tests pass), mypy passes
+- Verified in Docker: API returns problematic_episodes field, integration tests pass
+
+**US-52.3: Per-Episode Language Whitelist - Backend**
+- Created `EpisodeLanguageExempt` model with unique constraint on (user_id, jellyfin_id, season_number, episode_number)
+- Created migration `6033f4a29b44_add_episode_language_exempt_table.py` for new table
+- Added Pydantic models: `EpisodeExemptAddRequest`, `EpisodeExemptItem`, `EpisodeExemptListResponse`
+- Added CRUD service functions in `content.py`:
+  - `add_episode_language_exempt()` - add episode to exempt list with optional expiration
+  - `get_episode_language_exempt()` - list all exemptions for user (sorted by series/season/episode)
+  - `remove_episode_language_exempt()` - remove exemption by ID
+  - `get_episode_exempt_set()` - returns set of (jellyfin_id, season, episode) tuples for O(1) lookup
+- Added API endpoints in `whitelist.py`:
+  - GET `/api/whitelist/episode-exempt` - list all episode exemptions
+  - POST `/api/whitelist/episode-exempt` - add episode to exempt list
+  - DELETE `/api/whitelist/episode-exempt/{id}` - remove exemption
+- Integrated exemption checking into `check_series_episodes_languages()` in `sync.py`
+  - Accepts optional `exempt_episodes` parameter
+  - Skips exempt episodes during language checking
+- Fetches exempt episodes set at start of `calculate_season_sizes()` and passes to language check
+- Files changed: `app/database.py`, `app/models/content.py`, `app/services/content.py`, `app/services/sync.py`, `app/routers/whitelist.py`, `tests/test_content.py`, `tests/test_sync.py`, migration file
+- 15 new unit tests added (709 total backend tests pass), mypy passes
+- Verified in Docker: all CRUD operations work correctly via curl, 37 integration tests pass
+
+**US-52.4: Display Problematic Episodes with Whitelist Actions**
+- Added `ProblematicEpisode` interface to Issues page TypeScript for episode data structure
+- Added `problematic_episodes` field to `ContentIssueItem` interface
+- Implemented expandable row functionality:
+  - Series with `problematic_episodes` show expand/collapse icon
+  - Click on row to toggle episode list visibility
+  - Keyboard accessible (Enter/Space to toggle, proper ARIA attributes)
+- Added episode list UI:
+  - Episode identifier (S01E05 format)
+  - Episode name with truncation
+  - Missing language badges (EN, FR, FR Sub) with color coding
+- Added episode whitelist functionality:
+  - Whitelist button on each episode row
+  - Duration picker modal (reused existing pattern)
+  - API call to POST /api/whitelist/episode-exempt
+  - Optimistic update removes episode from list on success
+  - Loading state on button during API call
+  - Toast notifications for success/error
+- Updated keyboard handling to include episode duration picker modal
+- Added auto-focus effect for episode duration picker
+- Added comprehensive CSS styles for expandable rows and episode list
+- Files changed: `frontend/src/routes/issues/+page.svelte`, `frontend/tests/issues-episode-whitelist.test.ts`, `prd.json`
+- 25 new unit tests added (774 total frontend tests pass), typecheck passes
+- Verified in Docker: page renders correctly, no JavaScript errors (no test data with problematic_episodes available)
+
+**US-52.5: Episode Exemptions Tab in Whitelist Page**
+- Added 'Episode Exempt' tab to Whitelist page between 'Language Exempt' and 'Large Content'
+- Added `EpisodeExemptItem` and `EpisodeExemptResponse` TypeScript interfaces
+- Updated `TabType` to include `'episode'` option
+- Added `episodeExemptData` state for Episode Exempt tab data
+- Added `isEpisodeExemptItem()` type guard to distinguish episode items
+- Updated `getCurrentData()` and `getApiPath()` to handle episode exempt tab
+- Tab fetches from `GET /api/whitelist/episode-exempt`
+- List displays: series_name, identifier (S01E05), episode_name, expiration status (Permanent or date)
+- Remove button calls `DELETE /api/whitelist/episode-exempt/{id}`
+- Empty state shows "No items in this list" with hint to use "Whitelist" on Issues page
+- Files changed: `frontend/src/routes/whitelist/+page.svelte`, `frontend/tests/whitelist-episode-exempt.test.ts`, `prd.json`
+- 14 new unit tests added (788 total frontend tests pass), typecheck passes
+- Verified in browser: Episode Exempt tab displays correctly with proper empty state

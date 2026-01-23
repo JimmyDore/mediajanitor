@@ -70,511 +70,528 @@ Content items can have **multiple issues** (e.g., both Old AND Large), shown as 
 
 All user stories have been implemented and archived.
 
-See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for the complete list of **191 completed user stories** across **47 epics**.
+See [ARCHIVED_PRD.md](./ARCHIVED_PRD.md) for the complete list of **209 completed user stories** across **52 epics**.
 
 ---
 
 ## Pending Stories
 
----
+### Epic 53: Route Fixes
 
-## Epic 48: Ultra.cc Storage & Traffic Monitoring
+#### US-53.1: Add /dashboard route alias
+**As a** user sharing or bookmarking URLs
+**I want** `/dashboard` to work as a route
+**So that** shared links and bookmarks don't break
 
-### Overview
+**Background:**
+The sidebar links to `/` for the dashboard, but users may expect `/dashboard` to work. The landing page mockup shows `mediajanitor.com/dashboard` in the browser URL bar, setting this expectation.
 
-Integrate Ultra.cc API to monitor seedbox storage and traffic usage. Display stats on the dashboard above issues, with configurable warning thresholds. This helps users proactively manage their seedbox resources before running out of storage or traffic.
+**Acceptance Criteria:**
+- [ ] Navigating to `/dashboard` shows the dashboard content (same as `/`)
+- [ ] Can be implemented as a redirect or a route alias
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: `/dashboard` loads the dashboard
 
-### Goals
+#### US-53.2: Redirect authenticated users from login/register pages
+**As an** authenticated user
+**I want** to be redirected to the dashboard if I visit `/login` or `/register`
+**So that** I don't see confusing login forms when already logged in
 
-- Allow users to configure Ultra.cc API credentials in settings
-- Fetch storage/traffic stats during the existing sync process
-- Display stats prominently on dashboard with visual warning indicators
-- Let users set their own warning thresholds
+**Background:**
+Currently, authenticated users can access `/login` and `/register` pages - the sidebar is visible showing they're authenticated, but the login form is still displayed.
 
-### Non-Goals
+**Acceptance Criteria:**
+- [ ] Visiting `/login` while authenticated redirects to `/` (dashboard)
+- [ ] Visiting `/register` while authenticated redirects to `/` (dashboard)
+- [ ] Unauthenticated users can still access these pages normally
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: log in, then manually navigate to `/login` - should redirect
 
-- Slack/email notifications (future enhancement)
-- Automatic actions when thresholds are exceeded
-- Historical tracking of storage/traffic over time
+### Epic 54: Mobile UX Improvements
 
-### Technical Considerations
+#### US-54.1: Mobile-friendly issues table
+**As a** mobile user
+**I want** to see content titles on the Issues page
+**So that** I can identify items without needing a desktop
 
-- Ultra API endpoint: `{base_url}/total-stats` with Bearer token auth
-- Response includes: `service_stats_info.free_storage_gb` and `service_stats_info.traffic_available_percentage`
-- Store encrypted auth token like existing Jellyfin/Jellyseerr keys
-- Stats should be cached in database (fetched during sync, not on every page load)
+**Background:**
+On mobile (375px), the Issues table hides movie/series titles - only the year is visible in the first column. A card layout or responsive table design would improve usability.
 
----
+**Acceptance Criteria:**
+- [ ] At mobile breakpoints (< 640px), issues display in a card layout or responsive format
+- [ ] Title, type, size, and issue badges are visible on mobile
+- [ ] Actions (whitelist, delete) remain accessible
+- [ ] Desktop table layout unchanged
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: resize to mobile width, issues should be readable
 
-### US-48.1: Ultra API Settings - Backend
+### Epic 55: Settings UX Improvements
 
+#### US-55.1: Standardize settings auto-save behavior
+**As a** user changing settings
+**I want** consistent save behavior across all settings
+**So that** I know when my changes are saved
+
+**Background:**
+Currently inconsistent: Connections need explicit Save button, Theme auto-saves on click, Recent Days auto-saves on blur, Toggles auto-save. Users can't predict behavior.
+
+**Acceptance Criteria:**
+- [ ] All settings auto-save on change (no explicit Save button needed)
+- [ ] Toast notification confirms each successful save
+- [ ] Error toast if save fails
+- [ ] Loading indicator while saving (if > 200ms)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: change settings, see confirmation toasts
+
+### Epic 56: Accessibility Improvements
+
+#### US-56.1: Improve placeholder text contrast
+**As a** user with vision impairments
+**I want** placeholder text to have sufficient contrast
+**So that** I can read input placeholders
+
+**Background:**
+Placeholder text uses `--text-muted` (gray-400: #94a3b8 in light mode) on white background - contrast ratio is approximately 3.1:1, below WCAG AA 4.5:1 requirement for normal text.
+
+**Acceptance Criteria:**
+- [ ] Placeholder text meets WCAG AA contrast ratio (4.5:1)
+- [ ] Update `--text-muted` or use a separate placeholder color variable
+- [ ] Both light and dark mode meet contrast requirements
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+#### US-56.2: Use semantic HTML on landing page
+**As a** screen reader user
+**I want** the landing page to use semantic elements
+**So that** I can navigate by landmarks
+
+**Background:**
+Landing page (Landing.svelte) uses generic `<div class="feature-card">` instead of semantic `<article>` elements - impacts screen reader navigation.
+
+**Acceptance Criteria:**
+- [ ] Feature cards use `<article>` elements
+- [ ] Main sections use appropriate landmarks (`<main>`, `<section>`, `<nav>`)
+- [ ] Headings follow proper hierarchy (h1 → h2 → h3)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Epic 57: Backend Architecture Refactoring
+
+#### US-57.1: Split content.py into focused modules
+**As a** developer
+**I want** smaller, focused service modules
+**So that** the codebase is easier to maintain and test
+
+**Background:**
+`services/content.py` is 2474 lines containing 5+ whitelist types, content analysis, issue detection, and library queries. Split into focused modules.
+
+**Acceptance Criteria:**
+- [ ] Create `services/whitelist.py` - All whitelist CRUD operations
+- [ ] Create `services/content_analysis.py` - is_old_or_unwatched, is_large_movie, has_language_issues
+- [ ] Create `services/content_queries.py` - get_content_summary, get_content_issues, get_library
+- [ ] `services/content.py` remains as thin facade with imports
+- [ ] All existing tests pass
+- [ ] No changes to API contracts
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+#### US-57.2: Extract generic whitelist service
+**As a** developer
+**I want** a reusable whitelist service pattern
+**So that** whitelist CRUD isn't duplicated 5 times
+
+**Background:**
+5 nearly identical implementations for add/get/remove/get_ids across ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist, LargeContentWhitelist, JellyseerrRequestWhitelist.
+
+**Acceptance Criteria:**
+- [ ] Create `BaseWhitelistService` generic class with whitelist model as type parameter
+- [ ] Refactor existing whitelist services to use base class
+- [ ] All existing tests pass
+- [ ] No changes to API contracts
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+#### US-57.3: Consolidate whitelist router endpoints
+**As a** developer
+**I want** DRY whitelist endpoints
+**So that** adding new whitelist types is simple
+
+**Background:**
+`routers/whitelist.py` has identical GET/POST/DELETE patterns repeated for 6 whitelist types.
+
+**Acceptance Criteria:**
+- [ ] Use endpoint factory pattern OR path parameter `/api/whitelist/{type}`
+- [ ] All 6 whitelist types work identically to before
+- [ ] All existing tests pass
+- [ ] OpenAPI schema documents all endpoints
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+#### US-57.4: Move business logic from content router to services
+**As a** developer
+**I want** routers to only handle HTTP concerns
+**So that** business logic is testable in isolation
+
+**Background:**
+`routers/content.py` contains `_delete_cached_media_by_tmdb_id()`, `_lookup_jellyseerr_media_by_tmdb()`, and service URL construction.
+
+**Acceptance Criteria:**
+- [ ] Move `_delete_cached_media_by_tmdb_id()` to content service
+- [ ] Move `_lookup_jellyseerr_media_by_tmdb()` to content service
+- [ ] Move service URL construction to appropriate service
+- [ ] Router only contains HTTP handling code
+- [ ] All existing tests pass
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Epic 58: Frontend Architecture Refactoring
+
+#### US-58.1: Extract Issues page components
+**As a** developer
+**I want** smaller, reusable components
+**So that** the Issues page is maintainable
+
+**Background:**
+`issues/+page.svelte` is 2797 lines combining data fetching, filtering, sorting, search, 3 modals, row expansion, and whitelist actions.
+
+**Acceptance Criteria:**
+- [ ] Extract `DurationPickerModal.svelte` - reusable duration selection
+- [ ] Extract `DeleteConfirmModal.svelte` - delete confirmation with checkboxes
+- [ ] Extract `IssueRow.svelte` - single issue item with expand/collapse
+- [ ] Extract `IssueFilters.svelte` - filter tabs, search, sub-filters
+- [ ] Issues page uses extracted components
+- [ ] All existing functionality preserved
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: all issue page features work
+
+### Epic 59: Performance Optimizations
+
+#### US-59.1: Parallelize content summary queries
 **As a** user
-**I want** to configure my Ultra.cc API credentials
-**So that** the app can fetch my storage and traffic stats
+**I want** the dashboard to load faster
+**So that** I can quickly see my content summary
+
+**Background:**
+`get_content_summary()` makes 4 separate sequential whitelist queries. These are independent and can run in parallel.
 
 **Acceptance Criteria:**
-
-- [ ] Add `ultra_api_url` (String, nullable) and `ultra_api_key_encrypted` (String, nullable) columns to UserSettings model
-- [ ] Create Alembic migration for new columns
-- [ ] PATCH `/api/settings` accepts `ultra_api_url` and `ultra_api_key` fields
-- [ ] Ultra API key is encrypted before storage (like Jellyfin/Jellyseerr keys)
-- [ ] GET `/api/settings` returns `ultra_api_configured: bool` (not the actual key)
+- [ ] Use `asyncio.gather()` to parallelize whitelist queries
+- [ ] Dashboard summary loads faster (measure before/after)
+- [ ] All existing tests pass
 - [ ] Typecheck passes
 - [ ] Unit tests pass
 
----
-
-### US-48.2: Ultra API Settings - Frontend
-
+#### US-59.2: Parallelize content issues queries
 **As a** user
-**I want** to enter my Ultra.cc API URL and token in the settings page
-**So that** I can connect my seedbox monitoring
+**I want** the Issues page to load faster
+**So that** I can quickly see content issues
+
+**Background:**
+`get_content_issues()` makes 4 separate whitelist queries plus a Sonarr API call sequentially.
 
 **Acceptance Criteria:**
-
-- [ ] Settings page has a new "Seedbox Monitoring" section with Ultra API URL and API Token fields
-- [ ] Fields are optional (form submits without them)
-- [ ] Shows "Connected" badge when `ultra_api_configured` is true
-- [ ] Shows masked "••••••••" for token field when already configured
+- [ ] Use `asyncio.gather()` to parallelize independent queries
+- [ ] Issues page loads faster (measure before/after)
+- [ ] All existing tests pass
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
 
----
+#### US-59.3: Add server-side pagination to library endpoint
+**As a** user with large libraries
+**I want** the Library page to load efficiently
+**So that** it doesn't freeze with 1000+ items
 
-### US-48.3: Ultra Warning Thresholds - Settings
+**Background:**
+`get_library()` fetches ALL items then filters in Python. Should push filtering to SQL and add pagination.
 
+**Acceptance Criteria:**
+- [ ] Library endpoint uses SQL WHERE clauses for filtering
+- [ ] Add LIMIT/OFFSET pagination (default 50 items per page)
+- [ ] Frontend handles pagination UI
+- [ ] All existing tests pass
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+- [ ] Verify in browser: Library page loads efficiently with pagination
+
+#### US-59.4: Optimize sync season size calculation
+**As a** user running sync
+**I want** faster sync times
+**So that** I don't wait so long for data refresh
+
+**Background:**
+`calculate_season_sizes()` fetches episodes multiple times - once for size, then again per user for watch data. With 15 users and 100 series, this is ~8000 API calls.
+
+**Acceptance Criteria:**
+- [ ] Fetch episode data once and reuse for size + watch calculations
+- [ ] Sync time reduced significantly (measure before/after)
+- [ ] All existing tests pass
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+### Epic 60: Test Coverage Improvements
+
+#### US-60.1: Add content router tests
+**As a** developer
+**I want** comprehensive tests for content router
+**So that** filter handling and delete operations are verified
+
+**Background:**
+`app/routers/content.py` has 26% coverage. Missing tests for filter parameter handling, Sonarr slug map building, delete helper functions.
+
+**Acceptance Criteria:**
+- [ ] Tests for `/api/content/issues` with each filter type (old, large, language, requests)
+- [ ] Tests for Sonarr slug map building
+- [ ] Tests for `_delete_cached_media_by_tmdb_id()` helper
+- [ ] Tests for `_lookup_jellyseerr_media_by_tmdb()` helper
+- [ ] Coverage for content.py reaches 70%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.2: Add auth router tests
+**As a** developer
+**I want** comprehensive tests for auth router
+**So that** notifications, IP parsing, and password flows are verified
+
+**Background:**
+`app/routers/auth.py` has 56% coverage. Missing tests for Slack notifications, IP parsing, signup disabled flow, password change.
+
+**Acceptance Criteria:**
+- [ ] Tests for `send_signup_notification()` (mocked Slack)
+- [ ] Tests for `send_blocked_signup_notification()` (mocked Slack)
+- [ ] Tests for `_get_client_ip()` X-Forwarded-For parsing
+- [ ] Tests for signup disabled flow (403 response)
+- [ ] Tests for password change endpoint
+- [ ] Coverage for auth.py reaches 75%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.3: Add jellyfin service tests
+**As a** developer
+**I want** comprehensive tests for jellyfin service
+**So that** connection validation and settings are verified
+
+**Background:**
+`app/services/jellyfin.py` has 42% coverage. Missing tests for validate_connection, save_settings, decrypt_api_key.
+
+**Acceptance Criteria:**
+- [ ] Tests for `validate_jellyfin_connection()` success path
+- [ ] Tests for `validate_jellyfin_connection()` failure path (timeout, invalid response)
+- [ ] Tests for `save_jellyfin_settings()` create new settings
+- [ ] Tests for `save_jellyfin_settings()` update existing settings
+- [ ] Tests for `get_decrypted_jellyfin_api_key()` null handling
+- [ ] Coverage for jellyfin.py reaches 75%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.4: Add nicknames service tests
+**As a** developer
+**I want** comprehensive tests for nicknames service
+**So that** CRUD operations are verified
+
+**Background:**
+`app/services/nicknames.py` has 36% coverage. Missing tests for all CRUD operations.
+
+**Acceptance Criteria:**
+- [ ] Tests for `create_nickname()` success and duplicate detection
+- [ ] Tests for `get_nicknames()` ordering
+- [ ] Tests for `update_nickname()` success and not found case
+- [ ] Tests for `delete_nickname()` success and not found case
+- [ ] Coverage for nicknames.py reaches 80%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.5: Add sonarr service tests
+**As a** developer
+**I want** comprehensive tests for sonarr service
+**So that** connection and API handling are verified
+
+**Background:**
+`app/services/sonarr.py` has 43% coverage. Missing tests for validate_connection, save_settings, API error handling.
+
+**Acceptance Criteria:**
+- [ ] Tests for `validate_sonarr_connection()` timeout handling
+- [ ] Tests for `save_sonarr_settings()` create vs update paths
+- [ ] Tests for `get_sonarr_series_by_tmdb_id()` API error handling
+- [ ] Tests for `get_sonarr_tmdb_to_slug_map()` empty response handling
+- [ ] Coverage for sonarr.py reaches 70%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.6: Add radarr service tests
+**As a** developer
+**I want** comprehensive tests for radarr service
+**So that** connection and settings are verified
+
+**Background:**
+`app/services/radarr.py` has 54% coverage. Missing tests for validate_connection, save_settings update path.
+
+**Acceptance Criteria:**
+- [ ] Tests for `validate_radarr_connection()` network errors
+- [ ] Tests for `save_radarr_settings()` update existing settings
+- [ ] Coverage for radarr.py reaches 75%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+#### US-60.7: Add tasks module tests
+**As a** developer
+**I want** comprehensive tests for background tasks
+**So that** sync and notification handling are verified
+
+**Background:**
+`app/tasks.py` has 58% coverage. Missing tests for get_configured_user_ids, sync_failure_notification, exception handling.
+
+**Acceptance Criteria:**
+- [ ] Tests for `get_configured_user_ids()` database query
+- [ ] Tests for `send_sync_failure_notification_for_celery()` error handling path
+- [ ] Tests for `sync_user()` exception handling and notification
+- [ ] Coverage for tasks.py reaches 75%+
+- [ ] Typecheck passes
+- [ ] All tests pass
+
+### Epic 61: Documentation Updates
+
+#### US-61.1: Fix CLAUDE.md port documentation
+**As a** developer setting up the project
+**I want** consistent port documentation
+**So that** I can access the backend correctly
+
+**Background:**
+Backend port documented as `localhost:8000` in "Running the Project" section, but docker-compose maps to `8080:8000`. Curl examples correctly use `8080`.
+
+**Acceptance Criteria:**
+- [ ] Update "Running the Project" section to show `localhost:8080` for Docker
+- [ ] Clarify that `localhost:8000` is for running backend directly (without Docker)
+- [ ] All port references are consistent
+
+#### US-61.2: Update CLAUDE.md skills list
+**As a** developer using skills
+**I want** accurate skills documentation
+**So that** I can find available skills
+
+**Background:**
+Skills list is incomplete (missing 15 skills) and references non-existent `/original-script`. Project structure tree shows only 5 skills but there are 20.
+
+**Acceptance Criteria:**
+- [ ] List all 20 skills in the "Skills" section
+- [ ] Remove reference to `/original-script`
+- [ ] Update project structure tree to reflect actual skill count
+- [ ] Group skills by category (QA, PRD management, etc.)
+
+#### US-61.3: Fix README.md git clone URLs
+**As a** developer cloning the repo
+**I want** consistent git URLs
+**So that** I can clone the repository
+
+**Background:**
+Quick Start has `jimmmydore/media-janitor` but Installation has `jimmy/media-janitor` - inconsistent usernames.
+
+**Acceptance Criteria:**
+- [ ] Both URLs use the correct GitHub username
+- [ ] URLs are consistent across the README
+
+### Epic 62: Infrastructure Improvements
+
+#### US-62.1: Add Celery container health checks
+**As an** operator
+**I want** health checks on Celery containers
+**So that** I know when background tasks are failing
+
+**Background:**
+Only backend and redis have health checks. Celery worker and celery-beat could silently fail without detection.
+
+**Acceptance Criteria:**
+- [ ] Add health check to celery-worker in docker-compose.yml
+- [ ] Add health check to celery-beat in docker-compose.yml
+- [ ] Health checks verify Celery is processing tasks
+- [ ] Container restarts if health check fails
+
+#### US-62.2: Add container resource limits
+**As an** operator
+**I want** memory limits on containers
+**So that** a runaway process doesn't crash the VPS
+
+**Background:**
+No `deploy.resources.limits.memory` configured. A memory leak could consume all VPS memory.
+
+**Acceptance Criteria:**
+- [ ] Add memory limits to all containers in docker-compose.yml
+- [ ] Backend: 512MB limit
+- [ ] Celery worker: 512MB limit
+- [ ] Frontend: 256MB limit
+- [ ] Redis: 256MB limit
+- [ ] Document recommended limits in CLAUDE.md
+
+#### US-62.3: Configure log rotation
+**As an** operator
+**I want** automatic log rotation
+**So that** logs don't fill the disk
+
+**Background:**
+No `logging.driver` options configured. Logs could grow indefinitely and fill disk.
+
+**Acceptance Criteria:**
+- [ ] Add logging config to docker-compose.yml for all containers
+- [ ] Use json-file driver with max-size (10MB) and max-file (3)
+- [ ] Verify logs rotate correctly
+
+#### US-62.4: Add deployment rollback mechanism
+**As an** operator
+**I want** automatic rollback on failed deploys
+**So that** failed builds don't leave the app down
+
+**Background:**
+deploy.yml does `docker-compose down` then `build --no-cache` and `up -d`. If build fails, no automatic rollback.
+
+**Acceptance Criteria:**
+- [ ] Tag current images before building new ones
+- [ ] If new build fails, restore previous images
+- [ ] Add health check after deployment
+- [ ] If health check fails, rollback to previous version
+
+#### US-62.5: Use proper health endpoint in deploy
+**As an** operator
+**I want** deploy to use the /health endpoint
+**So that** health checks are meaningful
+
+**Background:**
+deploy.yml uses `/api/hello` but backend has proper `/health` endpoint.
+
+**Acceptance Criteria:**
+- [ ] Update deploy.yml to use `/health` endpoint
+- [ ] Verify health check works during deployment
+
+#### US-62.6: Implement rolling deployment
 **As a** user
-**I want** to set my own warning thresholds for storage and traffic
-**So that** I get alerts relevant to my usage patterns
+**I want** zero-downtime deployments
+**So that** I can use the app during updates
+
+**Background:**
+`docker-compose down` takes all services offline before rebuild. Users experience downtime.
 
 **Acceptance Criteria:**
+- [ ] Use `docker-compose up -d --no-deps --build <service>` pattern
+- [ ] Rebuild services one at a time
+- [ ] Backend starts new container before stopping old
+- [ ] Frontend starts new container before stopping old
+- [ ] Document rolling deployment process
 
-- [ ] Add `ultra_storage_warning_gb` (Integer, default 100) and `ultra_traffic_warning_percent` (Integer, default 20) columns to UserSettings
-- [ ] Create Alembic migration for new columns
-- [ ] PATCH `/api/settings` accepts threshold values
-- [ ] GET `/api/settings` returns current threshold values
-- [ ] Settings page has number inputs for both thresholds in the "Seedbox Monitoring" section
-- [ ] Inputs show defaults (100 GB, 20%) when not set
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
+#### US-62.7: Enhance health endpoint with dependency checks
+**As an** operator
+**I want** the health endpoint to verify dependencies
+**So that** I know all services are working
 
----
-
-### US-48.4: Fetch Ultra Stats During Sync
-
-**As a** user
-**I want** my seedbox stats fetched when I sync
-**So that** I always see current storage and traffic info
+**Background:**
+`/health` only returns `{"status": "healthy"}` without checking DB or Redis connectivity.
 
 **Acceptance Criteria:**
-
-- [ ] Create `ultra_service.py` with `fetch_ultra_stats(url, api_key)` function
-- [ ] Function calls `{url}/total-stats` with Bearer token authentication
-- [ ] Returns dict with `free_storage_gb` (float) and `traffic_available_percentage` (float), or None if API fails
-- [ ] Add `ultra_free_storage_gb` (Float, nullable), `ultra_traffic_available_percent` (Float, nullable), `ultra_last_synced_at` (DateTime, nullable) columns to UserSettings
-- [ ] Create Alembic migration for new columns
-- [ ] Sync process (`/api/sync`) calls Ultra API if credentials are configured
-- [ ] Stats are stored in UserSettings after successful fetch
-- [ ] Sync succeeds even if Ultra API call fails (non-blocking)
+- [ ] `/health` checks database connectivity
+- [ ] `/health` checks Redis connectivity (if configured)
+- [ ] Returns detailed status for each dependency
+- [ ] Returns 503 if any dependency is down
 - [ ] Typecheck passes
 - [ ] Unit tests pass
-
----
-
-## Epic 49: Fix Deletion Cache Persistence
-
-### Overview
-
-When users delete content from Radarr/Sonarr/Jellyseerr via the Issues page, the item disappears due to optimistic UI updates but reappears after a page refresh. This happens because the internal cache (`CachedMediaItem`, `CachedJellyseerrRequest` tables) is not updated after deletion - items only disappear after a full sync. This creates a confusing user experience.
-
-### Goals
-
-- Delete items from internal cache immediately after successful external API deletion
-- Prevent deleted items from reappearing on page refresh
-- Handle partial deletion failures gracefully (delete from cache if primary deletion succeeds)
-
-### Non-Goals
-
-- Changing the sync behavior (sync will still replace entire cache)
-- Adding undo/restore functionality for deleted items
-- Changing the optimistic UI update pattern (it works well)
-
-### Technical Considerations
-
-- Three delete endpoints need modification: `DELETE /api/content/movie/{tmdb_id}`, `DELETE /api/content/series/{tmdb_id}`, `DELETE /api/content/request/{jellyseerr_id}`
-- For movies/series: delete from `CachedMediaItem` by TMDB ID (need to match via `raw_data` JSON field)
-- For requests: delete from `CachedJellyseerrRequest` by Jellyseerr ID
-- Cache deletion should happen after successful external API deletion
-- If Radarr/Sonarr deletion succeeds but Jellyseerr fails, still delete from cache
-
----
-
-### US-49.1: Delete Movies from Cache After Deletion
-
-**As a** user
-**I want** deleted movies to stay deleted after page refresh
-**So that** I don't see ghost items that are already removed from my library
-
-**Acceptance Criteria:**
-
-- [ ] After successful Radarr deletion, delete matching `CachedMediaItem` from database
-- [ ] Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)
-- [ ] If Radarr deletion succeeds but Jellyseerr fails, still delete from cache
-- [ ] If Radarr deletion fails, do NOT delete from cache
-- [ ] Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in Docker: delete a movie, refresh page, item stays deleted
-
----
-
-### US-49.2: Delete Series from Cache After Deletion
-
-**As a** user
-**I want** deleted TV series to stay deleted after page refresh
-**So that** I don't see ghost items that are already removed from my library
-
-**Acceptance Criteria:**
-
-- [ ] After successful Sonarr deletion, delete matching `CachedMediaItem` from database
-- [ ] Match by TMDB ID stored in `raw_data` JSON field (key: `ProviderIds.Tmdb`)
-- [ ] If Sonarr deletion succeeds but Jellyseerr fails, still delete from cache
-- [ ] If Sonarr deletion fails, do NOT delete from cache
-- [ ] Also delete matching `CachedJellyseerrRequest` if it exists (by TMDB ID)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in Docker: delete a series, refresh page, item stays deleted
-
----
-
-### US-49.3: Delete Requests from Cache After Deletion
-
-**As a** user
-**I want** deleted Jellyseerr requests to stay deleted after page refresh
-**So that** I don't see ghost requests in the Unavailable Requests tab
-
-**Acceptance Criteria:**
-
-- [ ] After successful Jellyseerr media deletion, delete matching `CachedJellyseerrRequest` from database
-- [ ] Match by Jellyseerr ID (existing lookup already works)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in Docker: delete a request, refresh page, request stays deleted
-
----
-
-### US-48.5: Display Ultra Stats on Dashboard
-
-**As a** user
-**I want** to see my seedbox storage and traffic stats on the dashboard
-**So that** I can monitor my resources at a glance
-
-**Acceptance Criteria:**
-
-- [ ] GET `/api/settings` returns `ultra_free_storage_gb`, `ultra_traffic_available_percent`, `ultra_last_synced_at` (if configured)
-- [ ] Dashboard shows "Seedbox Status" card above issues section (only when Ultra is configured)
-- [ ] Card displays: free storage (GB), traffic available (%)
-- [ ] Card shows last synced timestamp
-- [ ] Storage value turns yellow/warning when below `ultra_storage_warning_gb` threshold
-- [ ] Storage value turns red/danger when below 50% of threshold
-- [ ] Traffic value turns yellow/warning when below `ultra_traffic_warning_percent` threshold
-- [ ] Traffic value turns red/danger when below 50% of threshold
-- [ ] Card is hidden entirely when Ultra API is not configured
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
-
----
-
-## Epic 50: Update Whitelist Duration Options
-
-### Overview
-
-Update the whitelist duration picker to offer more granular short-term options. Currently the options are: Permanent, 3 Months, 6 Months, 1 Year, Custom Date. Users want shorter durations like 1 Week and 1 Month for temporary whitelisting, and the 1 Year option is rarely used.
-
-### Goals
-
-- Replace current duration options with: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date
-- Apply to all whitelist types (content, french-only, language-exempt, large, requests)
-- No backend changes needed (expires_at is already a flexible datetime)
-
-### Non-Goals
-
-- Adding more duration options beyond the specified set
-- Changing how expiration is stored or processed in the backend
-
-### Technical Considerations
-
-- Frontend-only change in `frontend/src/routes/issues/+page.svelte`
-- The `getExpirationDate()` function needs new cases for `1week` and `1month`
-- The `durationOptions` array needs to be updated
-- The `DurationOption` type needs to be updated
-
----
-
-### US-50.1: Update Whitelist Duration Options
-
-**As a** user
-**I want** shorter whitelist duration options (1 Week, 1 Month)
-**So that** I can temporarily whitelist content without long commitments
-
-**Acceptance Criteria:**
-
-- [ ] Duration options are: Permanent, 1 Week, 1 Month, 3 Months, 6 Months, Custom Date (in that order)
-- [ ] 1 Year option is removed
-- [ ] `DurationOption` type updated to include `1week` and `1month`, remove `1year`
-- [ ] `getExpirationDate()` function handles `1week` (adds 7 days) and `1month` (adds 1 month)
-- [ ] Duration picker displays correctly on Issues page
-- [ ] Duration picker displays correctly on Unavailable page
-- [ ] Existing frontend unit tests updated to reflect new options
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: whitelist an item with 1 Week duration, confirm expiration date is 7 days from now
-
----
-
-## Epic 51: Recently Available - Show New Episodes from Ongoing Series
-
-### Overview
-
-The "Recently Available" page currently doesn't show new episodes from ongoing TV series. When a series is partially available (status 4 in Jellyseerr) and new episodes air, they don't appear because the app only checks `mediaAddedAt` date, which doesn't update when new episodes are added.
-
-Additionally, the page only shows the title without any season/episode context. Users want to see:
-- For fully available content: Which seasons are available (e.g., "Seasons 1-3 (30 eps)")
-- For partially available series: Which episodes recently aired (e.g., "S4: 5/12 episodes")
-
-### Goals
-
-- Include ongoing series with recently aired episodes in the "Recently Available" list
-- Display season and episode counts for all TV content
-- Fetch and cache episode air dates during sync
-- No additional API calls at page load time
-
-### Non-Goals
-
-- Showing individual episode entries (one entry per series)
-- Episode-level details like episode titles or descriptions
-- Push notifications for new episodes
-
-### Technical Considerations
-
-- During sync, fetch episode details from Jellyseerr API for status 4 TV shows: `GET /api/v1/tv/{tmdb_id}/season/{season_number}`
-- Store episode list in `raw_data.media.seasons[].episodes` (already a JSON field)
-- Episode data includes `episodeNumber`, `name`, `airDate`
-- For display, calculate episode counts from cached data
-- Reference implementation: `original_script.py` lines 714-792 (`fetch_season_episodes`, `get_recent_episodes_for_season`)
-
----
-
-### US-51.1: Fetch Episode Details During Sync
-
-**As a** user
-**I want** episode air dates to be cached during sync
-**So that** the Recently Available page can detect new episodes without API calls
-
-**Acceptance Criteria:**
-
-- [ ] Add `fetch_jellyseerr_season_episodes(client, server_url, api_key, tmdb_id, season_number)` function to `sync.py`
-- [ ] Function calls `GET /api/v1/tv/{tmdb_id}/season/{season_number}` endpoint
-- [ ] Returns list of `{episodeNumber, name, airDate}` dicts
-- [ ] Graceful failure: returns empty list on API error (logged as warning)
-- [ ] In `fetch_jellyseerr_requests()`, for status 4 TV shows, fetch episodes for each partially available season
-- [ ] Store episode data in `raw_data.media.seasons[].episodes` array
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-
----
-
-### US-51.2: Include Ongoing Series in Recently Available
-
-**As a** user
-**I want** to see ongoing series with new episodes in the Recently Available list
-**So that** I know when new episodes of my shows become available
-
-**Acceptance Criteria:**
-
-- [ ] Add `_get_recent_episodes_from_cached_data(request, days_back)` helper function in `content.py`
-- [ ] Function checks `raw_data.media.seasons[].episodes[].airDate` for episodes within `days_back` window
-- [ ] Returns `{season_num: [episode_nums]}` dict if recent episodes found, None otherwise
-- [ ] Modify `get_recently_available()` to check for recent episodes on status 4 TV shows
-- [ ] If recent episodes found, use today's date as `availability_date` to force inclusion
-- [ ] Series appears once (not per episode) in the list
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-
----
-
-### US-51.3: API Response with Season/Episode Details
-
-**As a** frontend developer
-**I want** the Recently Available API to return season and episode information
-**So that** the UI can display episode counts
-
-**Acceptance Criteria:**
-
-- [ ] Add optional fields to `RecentlyAvailableItem` model:
-  - `season_info: str | None` - e.g., "Seasons 1-3" or "Season 4 in progress"
-  - `episode_count: int | None` - total episodes for fully available
-  - `available_episodes: int | None` - episodes available so far (for partial)
-  - `total_episodes: int | None` - total episodes in current season (for partial)
-- [ ] For status 5 TV shows: populate with total seasons and episode count from `raw_data`
-- [ ] For status 4 TV shows: populate with current season progress
-- [ ] Movies return `None` for all these fields
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-
----
-
-### US-51.4: Display Episode Details in UI
-
-**As a** user
-**I want** to see season and episode information on the Recently Available page
-**So that** I understand what content is actually new
-
-**Acceptance Criteria:**
-
-- [ ] Add "Details" column to the table (between Title and Type)
-- [ ] For fully available TV: display "Seasons 1-3 (30 eps)" format
-- [ ] For partially available TV: display "S4: 5/12 episodes" format
-- [ ] For movies: display "—" or leave empty
-- [ ] Update the "Copy" feature to include episode details in the copied text
-- [ ] Responsive: hide Details column on mobile (like Requested By)
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser using browser tools
-
----
-
-## Epic 52: TV Series Language Detection & Per-Episode Whitelisting
-
-### Overview
-
-Language detection currently only flags movies, never TV series episodes. The root cause is that `check_audio_languages()` reads `MediaSources` from Series-level `raw_data`, which doesn't contain individual episode audio tracks. Additionally, users need the ability to whitelist specific episodes (not entire series) from language checks - matching the original script's `LANGUAGE_CHECK_EPISODE_ALLOWLIST` behavior.
-
-### Goals
-
-- Detect language issues (missing EN/FR audio) at the episode level for TV series
-- Cache episode language check results during sync to keep UI responses fast
-- Allow users to whitelist individual episodes from language checks
-- Display which specific episodes have language issues in the Issues page
-
-### Non-Goals
-
-- Changing how movie language detection works (already working)
-- Adding subtitles-only exemption at episode level (only audio for now)
-- Automatic detection of intentionally monolingual content
-
-### Technical Considerations
-
-- Reuse existing `calculate_season_sizes()` loop which already fetches all episodes
-- Store language check results in new JSON fields on `CachedMediaItem`
-- Create new `EpisodeLanguageExempt` table for per-episode whitelisting
-- Episode exemptions checked during sync, not at display time
-
----
-
-### US-52.1: Cache Episode Language Data During Sync
-
-**As a** user with a Jellyfin server configured
-**I want** the sync process to check language tracks for all TV series episodes
-**So that** series with missing audio tracks are correctly flagged in the Issues page
-
-**Acceptance Criteria:**
-
-- [ ] Add `language_check_result` JSON field to `CachedMediaItem` model (structure: `{has_english, has_french, has_french_subs, checked_at}`)
-- [ ] Add `problematic_episodes` JSON field to `CachedMediaItem` model (structure: `[{identifier, name, season, episode, missing_languages}]`)
-- [ ] Create Alembic migration for new fields
-- [ ] Add `check_episode_audio_languages(episode)` helper in `sync.py`
-- [ ] Add `check_series_episodes_languages(client, server_url, api_key, series_id, series_name)` function
-- [ ] Call language checking in `calculate_season_sizes()` loop after size calculation
-- [ ] Add movie language checking in `cache_media_items()` from raw_data MediaSources
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-
----
-
-### US-52.2: Use Cached Language Data in Content Service
-
-**As a** user viewing the Issues page
-**I want** TV series with language issues to appear in the Language tab
-**So that** I can identify and fix series with missing audio tracks
-
-**Acceptance Criteria:**
-
-- [ ] Modify `check_audio_languages()` to use cached `language_check_result` field when available
-- [ ] Keep fallback to raw_data parsing for backwards compatibility (movies without cached data)
-- [ ] Add `problematic_episodes` field to `ContentIssueItem` response model
-- [ ] Include problematic episodes data in `/api/content/issues` response for series with language issues
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in Docker: sync, then check `/api/content/issues` returns series with language issues
-
----
-
-### US-52.3: Per-Episode Language Whitelist - Backend
-
-**As a** user with specific episodes that have intentional language differences
-**I want** to whitelist individual episodes from language checks
-**So that** I don't see false positives for episodes that are meant to have limited audio tracks
-
-**Acceptance Criteria:**
-
-- [ ] Create `EpisodeLanguageExempt` model with: `id`, `user_id`, `jellyfin_id` (series ID), `series_name`, `season_number`, `episode_number`, `episode_name`, `created_at`, `expires_at`
-- [ ] Add unique constraint on `(user_id, jellyfin_id, season_number, episode_number)`
-- [ ] Create Alembic migration for new table
-- [ ] Add `add_episode_language_exempt()` service function
-- [ ] Add `get_episode_language_exempt()` service function (list all for user)
-- [ ] Add `remove_episode_language_exempt()` service function
-- [ ] Add `get_episode_exempt_set(db, user_id)` returning set of `(jellyfin_id, season, episode)` tuples
-- [ ] Add API endpoints:
-  - `GET /api/whitelist/episode-exempt` - List all exemptions
-  - `POST /api/whitelist/episode-exempt` - Add exemption (body: `{jellyfin_id, series_name, season_number, episode_number, episode_name, expires_at?}`)
-  - `DELETE /api/whitelist/episode-exempt/{id}` - Remove exemption
-- [ ] Integrate exemption checking into `check_series_episodes_languages()` - skip exempt episodes
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-
----
-
-### US-52.4: Display Problematic Episodes with Whitelist Actions
-
-**As a** user viewing a TV series with language issues
-**I want** to see which specific episodes have problems and whitelist them individually
-**So that** I can manage language issues at the episode level
-
-**Acceptance Criteria:**
-
-- [ ] Update Issues page to show expandable episode list when a series has `problematic_episodes`
-- [ ] Click on series row to expand/collapse episode list
-- [ ] Each episode row shows: identifier (S01E05), name, missing languages (badges)
-- [ ] Each episode row has a "Whitelist" button with duration picker
-- [ ] Whitelisting calls `POST /api/whitelist/episode-exempt` with episode details
-- [ ] After successful whitelist, remove episode from displayed list (optimistic update)
-- [ ] Show loading state on whitelist button during API call
-- [ ] Show toast notification on success/error
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: expand series, whitelist an episode, episode disappears from list
-
----
-
-### US-52.5: Episode Exemptions Tab in Whitelist Page
-
-**As a** user managing my whitelists
-**I want** to see and manage episode-level language exemptions
-**So that** I can review and remove exemptions I no longer need
-
-**Acceptance Criteria:**
-
-- [ ] Add "Episode Exempt" tab to Whitelist page (between "Language Exempt" and "Large Content")
-- [ ] Tab displays list of exempted episodes with: series name, episode identifier (S01E05), episode name, expiration status
-- [ ] Each item has a remove button (trash icon)
-- [ ] Remove calls `DELETE /api/whitelist/episode-exempt/{id}`
-- [ ] Show empty state when no exemptions exist
-- [ ] Typecheck passes
-- [ ] Unit tests pass
-- [ ] Verify in browser: view exemptions, remove one, list updates
-
----
