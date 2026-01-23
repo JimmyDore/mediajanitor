@@ -293,3 +293,38 @@ class LibraryResponse(BaseModel):
     total_size_bytes: int
     total_size_formatted: str
     service_urls: ServiceUrls | None = None
+
+
+# US-52.3: Episode Language Exempt models
+
+
+class EpisodeExemptAddRequest(BaseModel):
+    """Request model for adding an episode to language exempt whitelist."""
+
+    jellyfin_id: str  # Series ID
+    series_name: str
+    season_number: int
+    episode_number: int
+    episode_name: str
+    expires_at: datetime | None = None  # NULL = permanent (never expires)
+
+
+class EpisodeExemptItem(BaseModel):
+    """Response model for a single episode exempt item."""
+
+    id: int
+    jellyfin_id: str  # Series ID
+    series_name: str
+    season_number: int
+    episode_number: int
+    episode_name: str
+    identifier: str  # e.g., "S01E05"
+    created_at: str
+    expires_at: str | None = None  # ISO format datetime or null for permanent
+
+
+class EpisodeExemptListResponse(BaseModel):
+    """Response model for episode exempt list."""
+
+    items: list[EpisodeExemptItem]
+    total_count: int

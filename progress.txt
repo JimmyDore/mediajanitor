@@ -178,4 +178,62 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-19.
 - 734 total frontend tests pass, typecheck passes
 - Verified in browser: duration picker shows new options in correct order, 1 Week selection works
 
+**US-51.4: Display Episode Details in UI**
+- Added `getDetails()` helper function to format episode info based on availability status
+- Fully available TV shows: formats as "Seasons 1-3 (30 eps)"
+- Partially available TV shows: formats as "S4: 5/12 episodes"
+- Movies: displays "—"
+- Added Details column to table between Title and Type
+- Updated Copy feature to include episode details in brackets for TV shows
+- Details column hidden on mobile (follows Requested By pattern)
+- Files changed: `frontend/src/routes/info/recent/+page.svelte`, `frontend/tests/recent-episode-details.test.ts`, `prd.json`
+- 15 new unit tests added (749 total frontend tests pass), typecheck passes
+- Verified in browser: page loads correctly, empty state displays when no data
+
+**US-52.1: Cache Episode Language Data During Sync**
+- Added `language_check_result` JSON field to CachedMediaItem (structure: `{has_english, has_french, has_french_subs, missing_languages}`)
+- Added `problematic_episodes` JSON field to CachedMediaItem (structure: `[{identifier, name, season, episode, missing_languages}]`)
+- Created Alembic migration `6443d327371b_add_language_check_fields_to_cached_media_items`
+- Added `check_episode_audio_languages(episode)` helper function in sync.py
+- Added `check_series_episodes_languages(client, server_url, api_key, series_id, series_name)` function
+- Integrated language checking into `calculate_season_sizes()` loop after size calculation
+- Added `check_movie_audio_languages()` for movie language checking in `cache_media_items()`
+- Language codes: ENGLISH_CODES = {eng, en, english}, FRENCH_CODES = {fre, fr, french, fra}
+- Files changed: `app/database.py`, `app/services/sync.py`, `tests/test_sync.py`, migration file
+- 13 new unit tests added (671 total backend tests pass), mypy passes
+- Verified in Docker: backend starts successfully, integration tests pass
+
+**US-52.2: Use Cached Language Data in Content Service**
+- Modified `check_audio_languages()` to use cached `language_check_result` when available
+- Added fallback to raw_data parsing for backwards compatibility (movies without cached data)
+- Added `ProblematicEpisode` model with identifier, name, season, episode, missing_languages fields
+- Added `problematic_episodes` field to `ContentIssueItem` response model
+- Added `_get_problematic_episodes()` helper to include episode data in issues response for series
+- Series with language issues now include problematic_episodes in API response
+- Movies and series without language issues return null for problematic_episodes
+- Files changed: `app/models/content.py`, `app/services/content.py`, `tests/test_content.py`
+- 8 new unit tests added (679 total backend tests pass), mypy passes
+- Verified in Docker: API returns problematic_episodes field, integration tests pass
+
+**US-52.3: Per-Episode Language Whitelist - Backend** (2026-01-23)
+- Created `EpisodeLanguageExempt` model with unique constraint on (user_id, jellyfin_id, season_number, episode_number)
+- Created migration `6033f4a29b44_add_episode_language_exempt_table.py` for new table
+- Added Pydantic models: `EpisodeExemptAddRequest`, `EpisodeExemptItem`, `EpisodeExemptListResponse`
+- Added CRUD service functions in `content.py`:
+  - `add_episode_language_exempt()` - add episode to exempt list with optional expiration
+  - `get_episode_language_exempt()` - list all exemptions for user (sorted by series/season/episode)
+  - `remove_episode_language_exempt()` - remove exemption by ID
+  - `get_episode_exempt_set()` - returns set of (jellyfin_id, season, episode) tuples for O(1) lookup
+- Added API endpoints in `whitelist.py`:
+  - GET `/api/whitelist/episode-exempt` - list all episode exemptions
+  - POST `/api/whitelist/episode-exempt` - add episode to exempt list
+  - DELETE `/api/whitelist/episode-exempt/{id}` - remove exemption
+- Integrated exemption checking into `check_series_episodes_languages()` in `sync.py`
+  - Accepts optional `exempt_episodes` parameter
+  - Skips exempt episodes during language checking
+- Fetches exempt episodes set at start of `calculate_season_sizes()` and passes to language check
+- Files changed: `app/database.py`, `app/models/content.py`, `app/services/content.py`, `app/services/sync.py`, `app/routers/whitelist.py`, `tests/test_content.py`, `tests/test_sync.py`, migration file
+- 15 new unit tests added (709 total backend tests pass), mypy passes
+- Verified in Docker: all CRUD operations work correctly via curl, 37 integration tests pass
+
 ---

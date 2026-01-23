@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -3638,3 +3639,247 @@ class TestCacheMediaItemLanguageFields:
             assert len(cached.problematic_episodes) == 1
             assert cached.problematic_episodes[0]["identifier"] == "S01E02"
             assert cached.problematic_episodes[0]["name"] == "Bad Episode"
+
+
+class TestCheckSeriesEpisodesLanguagesWithExemptions:
+    """Tests for check_series_episodes_languages with exempt episodes (US-52.3)."""
+
+    @pytest.mark.asyncio
+    async def test_exempt_episodes_are_skipped(self) -> None:
+        """Episodes in exempt set should be skipped from language checking."""
+        from app.services.sync import check_series_episodes_languages
+
+        mock_seasons_response = {
+            "Items": [
+                {"Id": "season-1", "IndexNumber": 1},
+            ]
+        }
+
+        # Two episodes - one with missing French (S01E05), one OK (S01E01)
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep-1",
+                    "Name": "Good Episode",
+                    "IndexNumber": 1,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                {"Type": "Audio", "Language": "fre"},
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+                {
+                    "Id": "ep-5",
+                    "Name": "Bad Episode",
+                    "IndexNumber": 5,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French!
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+            ]
+        }
+
+        async def mock_get(self, url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        # Without exemption - episode should appear as problematic
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            async with httpx.AsyncClient() as client:
+                result = await check_series_episodes_languages(
+                    client, "http://jellyfin.local", "api-key", "series-123", "Test Series"
+                )
+                # Without exemption, S01E05 should be problematic
+                assert len(result["problematic_episodes"]) == 1
+                assert result["problematic_episodes"][0]["identifier"] == "S01E05"
+                assert result["language_check_result"]["has_french"] is False
+
+        # With exemption for S01E05 - episode should be skipped
+        exempt_episodes = {("series-123", 1, 5)}
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            async with httpx.AsyncClient() as client:
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "api-key",
+                    "series-123",
+                    "Test Series",
+                    exempt_episodes=exempt_episodes,
+                )
+                # With exemption, S01E05 should be skipped - no problematic episodes
+                assert len(result["problematic_episodes"]) == 0
+                # The series should show as having all languages (since only the good ep is checked)
+                assert result["language_check_result"]["has_french"] is True
+                assert result["language_check_result"]["has_english"] is True
+
+    @pytest.mark.asyncio
+    async def test_exempt_only_affects_specified_episode(self) -> None:
+        """Exemption for one episode should not affect other episodes."""
+        from app.services.sync import check_series_episodes_languages
+
+        mock_seasons_response = {
+            "Items": [
+                {"Id": "season-1", "IndexNumber": 1},
+            ]
+        }
+
+        # Three episodes - two with missing French (S01E02, S01E03), one OK (S01E01)
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep-1",
+                    "Name": "Good Episode",
+                    "IndexNumber": 1,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                {"Type": "Audio", "Language": "fre"},
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+                {
+                    "Id": "ep-2",
+                    "Name": "Bad Episode 2",
+                    "IndexNumber": 2,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French!
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+                {
+                    "Id": "ep-3",
+                    "Name": "Bad Episode 3",
+                    "IndexNumber": 3,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French!
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+            ]
+        }
+
+        async def mock_get(self, url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        # Exempt only S01E02
+        exempt_episodes = {("series-456", 1, 2)}
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            async with httpx.AsyncClient() as client:
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "api-key",
+                    "series-456",
+                    "Test Series",
+                    exempt_episodes=exempt_episodes,
+                )
+                # S01E02 exempted, S01E03 should still be problematic
+                assert len(result["problematic_episodes"]) == 1
+                assert result["problematic_episodes"][0]["identifier"] == "S01E03"
+                # Series still has French issues (from S01E03)
+                assert result["language_check_result"]["has_french"] is False
+
+    @pytest.mark.asyncio
+    async def test_exempt_different_series_id_does_not_affect(self) -> None:
+        """Exemption for a different series ID should not affect this series."""
+        from app.services.sync import check_series_episodes_languages
+
+        mock_seasons_response = {"Items": [{"Id": "season-1", "IndexNumber": 1}]}
+        mock_episodes_response = {
+            "Items": [
+                {
+                    "Id": "ep-1",
+                    "Name": "Bad Episode",
+                    "IndexNumber": 1,
+                    "ParentIndexNumber": 1,
+                    "MediaSources": [
+                        {
+                            "MediaStreams": [
+                                {"Type": "Audio", "Language": "eng"},
+                                # Missing French!
+                            ]
+                        }
+                    ],
+                    "UserData": {},
+                },
+            ]
+        }
+
+        async def mock_get(self, url, **kwargs):
+            params = kwargs.get("params", {})
+            include_types = params.get("IncludeItemTypes", "")
+
+            if "Season" in include_types:
+                return httpx.Response(
+                    200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                )
+            elif "Episode" in include_types:
+                return httpx.Response(
+                    200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                )
+            return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+        # Exempt S01E01 but for a DIFFERENT series
+        exempt_episodes = {("different-series", 1, 1)}
+        with patch("httpx.AsyncClient.get", new=mock_get):
+            async with httpx.AsyncClient() as client:
+                result = await check_series_episodes_languages(
+                    client,
+                    "http://jellyfin.local",
+                    "api-key",
+                    "series-789",
+                    "Test Series",
+                    exempt_episodes=exempt_episodes,
+                )
+                # Exemption is for different series, so S01E01 should still be problematic
+                assert len(result["problematic_episodes"]) == 1
+                assert result["problematic_episodes"][0]["identifier"] == "S01E01"

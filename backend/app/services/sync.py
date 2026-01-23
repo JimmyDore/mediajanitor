@@ -885,6 +885,7 @@ async def check_series_episodes_languages(
     api_key: str,
     series_id: str,
     series_name: str,
+    exempt_episodes: set[tuple[str, int, int]] | None = None,
 ) -> SeriesLanguageCheckResult:
     """
     Check language tracks for all episodes in a series.
@@ -895,6 +896,8 @@ async def check_series_episodes_languages(
         api_key: Jellyfin API key
         series_id: Jellyfin series ID
         series_name: Series name for logging
+        exempt_episodes: Optional set of (jellyfin_id, season, episode) tuples
+                        to skip from language checks
 
     Returns:
         SeriesLanguageCheckResult with aggregated language_check_result
@@ -933,6 +936,16 @@ async def check_series_episodes_languages(
         episodes = await fetch_season_episodes(client, server_url, api_key, season_id)
 
         for episode in episodes:
+            season_num = episode.get("ParentIndexNumber", 0)
+            episode_num = episode.get("IndexNumber", 0)
+
+            # Skip exempt episodes
+            if exempt_episodes and (series_id, season_num, episode_num) in exempt_episodes:
+                logger.debug(
+                    f"Skipping exempt episode {series_name} S{season_num:02d}E{episode_num:02d}"
+                )
+                continue
+
             lang_result = check_episode_audio_languages(episode)
 
             # Update aggregated state
@@ -945,8 +958,6 @@ async def check_series_episodes_languages(
 
             # Track problematic episodes
             if lang_result["missing_languages"]:
-                season_num = episode.get("ParentIndexNumber", 0)
-                episode_num = episode.get("IndexNumber", 0)
                 identifier = f"S{season_num:02d}E{episode_num:02d}"
 
                 problematic_episodes.append(
@@ -1126,6 +1137,13 @@ async def calculate_season_sizes(
         logger.info("No series found for user, skipping season size calculation")
         return
 
+    # Fetch exempt episodes for language checks (US-52.3)
+    from app.services.content import get_episode_exempt_set
+
+    exempt_episodes = await get_episode_exempt_set(db, user_id)
+    if exempt_episodes:
+        logger.debug(f"Found {len(exempt_episodes)} exempt episodes for user {user_id}")
+
     # Fetch Jellyfin users to aggregate watch data
     jellyfin_users = await fetch_jellyfin_users(server_url, api_key)
     if not jellyfin_users:
@@ -1195,9 +1213,14 @@ async def calculate_season_sizes(
                     series.last_played_date = series_last_played
                     logger.debug(f"Series '{series.name}': last_played_date = {series_last_played}")
 
-                # Check language tracks for all episodes (US-52.1)
+                # Check language tracks for all episodes (US-52.1, US-52.3)
                 lang_result = await check_series_episodes_languages(
-                    client, server_url, api_key, series.jellyfin_id, series.name
+                    client,
+                    server_url,
+                    api_key,
+                    series.jellyfin_id,
+                    series.name,
+                    exempt_episodes=exempt_episodes if exempt_episodes else None,
                 )
                 # Cast TypedDict to dict for SQLAlchemy column assignment
                 series.language_check_result = dict(lang_result["language_check_result"])

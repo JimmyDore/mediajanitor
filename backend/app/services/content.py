@@ -17,6 +17,8 @@ from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
     ContentSummaryResponse,
+    EpisodeExemptItem,
+    EpisodeExemptListResponse,
     InfoCategorySummary,
     IssueCategorySummary,
     LibraryItem,
@@ -600,6 +602,154 @@ async def get_language_exempt_ids(db: AsyncSession, user_id: int) -> set[str]:
         )
     )
     return set(result.scalars().all())
+
+
+# Episode Language Exempt functions (US-52.3)
+
+
+async def add_episode_language_exempt(
+    db: AsyncSession,
+    user_id: int,
+    jellyfin_id: str,
+    series_name: str,
+    season_number: int,
+    episode_number: int,
+    episode_name: str,
+    expires_at: datetime | None = None,
+) -> None:
+    """Add an episode to the user's episode language exempt list.
+
+    Exempts a specific episode from language checks during sync.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        jellyfin_id: Jellyfin series ID
+        series_name: Name of the series
+        season_number: Season number
+        episode_number: Episode number
+        episode_name: Name of the episode
+        expires_at: Optional expiration datetime (None = permanent)
+
+    Raises ValueError if episode already exempted.
+    """
+    from app.database import EpisodeLanguageExempt
+
+    # Check if already exempted
+    result = await db.execute(
+        select(EpisodeLanguageExempt).where(
+            EpisodeLanguageExempt.user_id == user_id,
+            EpisodeLanguageExempt.jellyfin_id == jellyfin_id,
+            EpisodeLanguageExempt.season_number == season_number,
+            EpisodeLanguageExempt.episode_number == episode_number,
+        )
+    )
+    if result.scalar_one_or_none():
+        raise ValueError("Episode already exempted from language checks")
+
+    entry = EpisodeLanguageExempt(
+        user_id=user_id,
+        jellyfin_id=jellyfin_id,
+        series_name=series_name,
+        season_number=season_number,
+        episode_number=episode_number,
+        episode_name=episode_name,
+        expires_at=expires_at,
+    )
+    db.add(entry)
+
+
+async def get_episode_language_exempt(
+    db: AsyncSession,
+    user_id: int,
+) -> EpisodeExemptListResponse:
+    """Get all items in the user's episode language exempt list."""
+    from app.database import EpisodeLanguageExempt
+
+    result = await db.execute(
+        select(EpisodeLanguageExempt)
+        .where(EpisodeLanguageExempt.user_id == user_id)
+        .order_by(
+            EpisodeLanguageExempt.series_name,
+            EpisodeLanguageExempt.season_number,
+            EpisodeLanguageExempt.episode_number,
+        )
+    )
+    entries = result.scalars().all()
+
+    items = [
+        EpisodeExemptItem(
+            id=entry.id,
+            jellyfin_id=entry.jellyfin_id,
+            series_name=entry.series_name,
+            season_number=entry.season_number,
+            episode_number=entry.episode_number,
+            episode_name=entry.episode_name,
+            identifier=f"S{entry.season_number:02d}E{entry.episode_number:02d}",
+            created_at=entry.created_at.isoformat() if entry.created_at else "",
+            expires_at=entry.expires_at.isoformat() if entry.expires_at else None,
+        )
+        for entry in entries
+    ]
+
+    return EpisodeExemptListResponse(
+        items=items,
+        total_count=len(items),
+    )
+
+
+async def remove_episode_language_exempt(
+    db: AsyncSession,
+    user_id: int,
+    exempt_id: int,
+) -> bool:
+    """Remove an episode from the user's episode language exempt list.
+
+    Returns True if episode was found and deleted, False otherwise.
+    """
+    from app.database import EpisodeLanguageExempt
+
+    result = await db.execute(
+        select(EpisodeLanguageExempt).where(
+            EpisodeLanguageExempt.id == exempt_id,
+            EpisodeLanguageExempt.user_id == user_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        return False
+
+    await db.delete(entry)
+    return True
+
+
+async def get_episode_exempt_set(db: AsyncSession, user_id: int) -> set[tuple[str, int, int]]:
+    """Get set of exempt episodes as (jellyfin_id, season, episode) tuples.
+
+    Only returns non-expired entries for O(1) lookup during sync.
+    """
+    from sqlalchemy import or_
+
+    from app.database import EpisodeLanguageExempt
+
+    now = datetime.now(UTC)
+    result = await db.execute(
+        select(
+            EpisodeLanguageExempt.jellyfin_id,
+            EpisodeLanguageExempt.season_number,
+            EpisodeLanguageExempt.episode_number,
+        ).where(
+            EpisodeLanguageExempt.user_id == user_id,
+            # Only include non-expired entries (NULL = permanent, or expires_at > now)
+            or_(
+                EpisodeLanguageExempt.expires_at.is_(None),
+                EpisodeLanguageExempt.expires_at > now,
+            ),
+        )
+    )
+    # Convert Row objects to tuples for set membership checking
+    return {(row[0], row[1], row[2]) for row in result.fetchall()}
 
 
 # Large Content Whitelist functions

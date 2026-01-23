@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import CachedJellyseerrRequest, User, get_db
 from app.models.content import (
+    EpisodeExemptAddRequest,
+    EpisodeExemptListResponse,
     RequestWhitelistAddRequest,
     RequestWhitelistListResponse,
     WhitelistAddRequest,
@@ -17,16 +19,19 @@ from app.models.content import (
 )
 from app.services.auth import get_current_user
 from app.services.content import (
+    add_episode_language_exempt,
     add_to_french_only_whitelist,
     add_to_language_exempt_whitelist,
     add_to_large_whitelist,
     add_to_request_whitelist,
     add_to_whitelist,
+    get_episode_language_exempt,
     get_french_only_whitelist,
     get_language_exempt_whitelist,
     get_large_whitelist,
     get_request_whitelist,
     get_whitelist,
+    remove_episode_language_exempt,
     remove_from_french_only_whitelist,
     remove_from_language_exempt_whitelist,
     remove_from_large_whitelist,
@@ -430,3 +435,81 @@ async def remove_from_requests(
         )
 
     return WhitelistRemoveResponse(message="Removed from request whitelist")
+
+
+# Episode Language Exempt endpoints (US-52.3)
+
+
+@router.get("/episode-exempt", response_model=EpisodeExemptListResponse)
+async def list_episode_exempt(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EpisodeExemptListResponse:
+    """Get all episodes in the user's episode language exempt list.
+
+    Episodes in this list are exempt from language checks during sync.
+    """
+    return await get_episode_language_exempt(db=db, user_id=current_user.id)
+
+
+@router.post(
+    "/episode-exempt", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED
+)
+async def add_episode_to_exempt(
+    request: EpisodeExemptAddRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistAddResponse:
+    """Add an episode to the user's episode language exempt list.
+
+    Episodes in this list are exempt from language checks during sync.
+    Use this for episodes that intentionally have limited audio tracks.
+    """
+    try:
+        await add_episode_language_exempt(
+            db=db,
+            user_id=current_user.id,
+            jellyfin_id=request.jellyfin_id,
+            series_name=request.series_name,
+            season_number=request.season_number,
+            episode_number=request.episode_number,
+            episode_name=request.episode_name,
+            expires_at=request.expires_at,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    identifier = f"S{request.season_number:02d}E{request.episode_number:02d}"
+    return WhitelistAddResponse(
+        message="Added to episode language exempt list",
+        jellyfin_id=request.jellyfin_id,
+        name=f"{request.series_name} - {identifier}",
+    )
+
+
+@router.delete("/episode-exempt/{exempt_id}", response_model=WhitelistRemoveResponse)
+async def remove_episode_from_exempt(
+    exempt_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WhitelistRemoveResponse:
+    """Remove an episode from the user's episode language exempt list.
+
+    After removal, the episode may reappear in language issues if it has language problems.
+    """
+    removed = await remove_episode_language_exempt(
+        db=db,
+        user_id=current_user.id,
+        exempt_id=exempt_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Episode exempt entry not found",
+        )
+
+    return WhitelistRemoveResponse(message="Removed from episode language exempt list")

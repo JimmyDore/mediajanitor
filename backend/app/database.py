@@ -242,6 +242,30 @@ class JellyseerrRequestWhitelist(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
 
 
+class EpisodeLanguageExempt(Base):
+    """User's whitelist for individual episodes exempt from language checks."""
+
+    __tablename__ = "episode_language_exempt"
+    __table_args__ = (
+        # Unique constraint: each episode can only be exempted once per user
+        UniqueConstraint(
+            "user_id", "jellyfin_id", "season_number", "episode_number", name="uq_episode_exempt"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    jellyfin_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)  # Series ID
+    series_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    season_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    episode_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    episode_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = permanent
+
+
 class SyncStatus(Base):
     """Track sync status per user."""
 

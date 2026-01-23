@@ -6850,3 +6850,384 @@ class TestCachedLanguageData:
 
         assert data["total_count"] == 1
         assert data["items"][0]["problematic_episodes"] is None
+
+
+class TestEpisodeLanguageExempt:
+    """Tests for Episode Language Exempt whitelist endpoints (US-52.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str, password: str = "Test123!") -> str:
+        """Helper to register and login a user."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        return login_response.json()["access_token"]
+
+    def test_add_episode_exempt_requires_auth(self, client: TestClient) -> None:
+        """POST /api/whitelist/episode-exempt should require authentication."""
+        response = client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-123",
+                "series_name": "Test Series",
+                "season_number": 1,
+                "episode_number": 5,
+                "episode_name": "Test Episode",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_add_episode_exempt(self, client: TestClient) -> None:
+        """POST /api/whitelist/episode-exempt should add episode to exempt list."""
+        token = self._get_auth_token(client, "epexempt-add@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-abc",
+                "series_name": "Breaking Bad",
+                "season_number": 3,
+                "episode_number": 7,
+                "episode_name": "One Minute",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["message"] == "Added to episode language exempt list"
+        assert "S03E07" in data["name"]
+        assert "Breaking Bad" in data["name"]
+
+    def test_add_duplicate_episode_exempt(self, client: TestClient) -> None:
+        """POST /api/whitelist/episode-exempt should return 409 for duplicates."""
+        token = self._get_auth_token(client, "epexempt-dup@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add first time
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-dup",
+                "series_name": "The Wire",
+                "season_number": 4,
+                "episode_number": 13,
+                "episode_name": "Final Grades",
+            },
+            headers=headers,
+        )
+
+        # Try to add again
+        response = client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-dup",
+                "series_name": "The Wire",
+                "season_number": 4,
+                "episode_number": 13,
+                "episode_name": "Final Grades",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert "already exempted" in response.json()["detail"]
+
+    def test_get_episode_exempt_list(self, client: TestClient) -> None:
+        """GET /api/whitelist/episode-exempt should return list of exempt episodes."""
+        token = self._get_auth_token(client, "epexempt-get@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add some episodes
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-list",
+                "series_name": "Game of Thrones",
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Winter Is Coming",
+            },
+            headers=headers,
+        )
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-list",
+                "series_name": "Game of Thrones",
+                "season_number": 1,
+                "episode_number": 2,
+                "episode_name": "The Kingsroad",
+            },
+            headers=headers,
+        )
+
+        response = client.get("/api/whitelist/episode-exempt", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["items"]) == 2
+
+        # Check fields are present
+        item = data["items"][0]
+        assert "id" in item
+        assert "jellyfin_id" in item
+        assert "series_name" in item
+        assert "season_number" in item
+        assert "episode_number" in item
+        assert "episode_name" in item
+        assert "identifier" in item
+        assert "S01E" in item["identifier"]
+        assert "created_at" in item
+        assert "expires_at" in item
+
+    def test_get_episode_exempt_list_empty(self, client: TestClient) -> None:
+        """GET /api/whitelist/episode-exempt should return empty list when none exist."""
+        token = self._get_auth_token(client, "epexempt-empty@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/whitelist/episode-exempt", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 0
+        assert data["items"] == []
+
+    def test_delete_episode_exempt(self, client: TestClient) -> None:
+        """DELETE /api/whitelist/episode-exempt/{id} should remove from list."""
+        token = self._get_auth_token(client, "epexempt-del@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Add an episode
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-del",
+                "series_name": "Stranger Things",
+                "season_number": 2,
+                "episode_number": 9,
+                "episode_name": "The Gate",
+            },
+            headers=headers,
+        )
+
+        # Get the list to find the ID
+        list_response = client.get("/api/whitelist/episode-exempt", headers=headers)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # Delete it
+        response = client.delete(f"/api/whitelist/episode-exempt/{item_id}", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["message"] == "Removed from episode language exempt list"
+
+        # Verify it's gone
+        list_response = client.get("/api/whitelist/episode-exempt", headers=headers)
+        assert list_response.json()["total_count"] == 0
+
+    def test_delete_nonexistent_episode_exempt(self, client: TestClient) -> None:
+        """DELETE /api/whitelist/episode-exempt/{id} should return 404 for non-existent."""
+        token = self._get_auth_token(client, "epexempt-404@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.delete("/api/whitelist/episode-exempt/99999", headers=headers)
+        assert response.status_code == 404
+
+    def test_add_episode_exempt_with_expiration(self, client: TestClient) -> None:
+        """POST /api/whitelist/episode-exempt should accept expires_at."""
+        token = self._get_auth_token(client, "epexempt-exp@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expires_at = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+        response = client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-exp",
+                "series_name": "The Mandalorian",
+                "season_number": 3,
+                "episode_number": 1,
+                "episode_name": "Chapter 17",
+                "expires_at": expires_at,
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 201
+
+        # Verify expiration is stored
+        list_response = client.get("/api/whitelist/episode-exempt", headers=headers)
+        item = list_response.json()["items"][0]
+        assert item["expires_at"] is not None
+
+    def test_user_only_sees_their_own_episode_exempts(self, client: TestClient) -> None:
+        """Users should only see their own episode exemptions."""
+        token1 = self._get_auth_token(client, "epexempt-user1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+
+        token2 = self._get_auth_token(client, "epexempt-user2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        # User 1 adds an episode
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-user1",
+                "series_name": "User1 Series",
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Episode 1",
+            },
+            headers=headers1,
+        )
+
+        # User 2 adds a different episode
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-user2",
+                "series_name": "User2 Series",
+                "season_number": 2,
+                "episode_number": 2,
+                "episode_name": "Episode 2",
+            },
+            headers=headers2,
+        )
+
+        # User 1 should only see their own
+        response1 = client.get("/api/whitelist/episode-exempt", headers=headers1)
+        assert response1.json()["total_count"] == 1
+        assert response1.json()["items"][0]["series_name"] == "User1 Series"
+
+        # User 2 should only see their own
+        response2 = client.get("/api/whitelist/episode-exempt", headers=headers2)
+        assert response2.json()["total_count"] == 1
+        assert response2.json()["items"][0]["series_name"] == "User2 Series"
+
+    def test_cannot_delete_other_users_episode_exempt(self, client: TestClient) -> None:
+        """Users should not be able to delete other users' episode exemptions."""
+        token1 = self._get_auth_token(client, "epexempt-cant-del1@example.com")
+        headers1 = {"Authorization": f"Bearer {token1}"}
+
+        token2 = self._get_auth_token(client, "epexempt-cant-del2@example.com")
+        headers2 = {"Authorization": f"Bearer {token2}"}
+
+        # User 1 adds an episode
+        client.post(
+            "/api/whitelist/episode-exempt",
+            json={
+                "jellyfin_id": "series-no-del",
+                "series_name": "Protected Series",
+                "season_number": 1,
+                "episode_number": 1,
+                "episode_name": "Protected Episode",
+            },
+            headers=headers1,
+        )
+
+        # Get the item ID
+        list_response = client.get("/api/whitelist/episode-exempt", headers=headers1)
+        item_id = list_response.json()["items"][0]["id"]
+
+        # User 2 tries to delete it - should get 404
+        response = client.delete(f"/api/whitelist/episode-exempt/{item_id}", headers=headers2)
+        assert response.status_code == 404
+
+        # Verify it's still there for user 1
+        list_response = client.get("/api/whitelist/episode-exempt", headers=headers1)
+        assert list_response.json()["total_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_episode_exempt_set(self, client: TestClient) -> None:
+        """get_episode_exempt_set should return set of (jellyfin_id, season, episode) tuples."""
+        from app.database import EpisodeLanguageExempt
+        from app.services.content import get_episode_exempt_set
+
+        token = self._get_auth_token(client, "epexempt-set@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Add episodes directly to DB
+        async with TestingAsyncSessionLocal() as session:
+            exempt1 = EpisodeLanguageExempt(
+                user_id=user_id,
+                jellyfin_id="series-set-test",
+                series_name="Set Test Series",
+                season_number=1,
+                episode_number=5,
+                episode_name="Episode 5",
+            )
+            exempt2 = EpisodeLanguageExempt(
+                user_id=user_id,
+                jellyfin_id="series-set-test",
+                series_name="Set Test Series",
+                season_number=2,
+                episode_number=3,
+                episode_name="Episode 3",
+            )
+            session.add_all([exempt1, exempt2])
+            await session.commit()
+
+        # Test the function
+        async with TestingAsyncSessionLocal() as session:
+            exempt_set = await get_episode_exempt_set(session, user_id)
+            assert len(exempt_set) == 2
+            assert ("series-set-test", 1, 5) in exempt_set
+            assert ("series-set-test", 2, 3) in exempt_set
+
+    @pytest.mark.asyncio
+    async def test_expired_episode_exempt_not_in_set(self, client: TestClient) -> None:
+        """Expired episode exemptions should not appear in exempt set."""
+        from app.database import EpisodeLanguageExempt
+        from app.services.content import get_episode_exempt_set
+
+        token = self._get_auth_token(client, "epexempt-expired@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Add episodes directly to DB - one expired, one not
+        async with TestingAsyncSessionLocal() as session:
+            expired = EpisodeLanguageExempt(
+                user_id=user_id,
+                jellyfin_id="series-exp-test",
+                series_name="Expired Test Series",
+                season_number=1,
+                episode_number=1,
+                episode_name="Expired Episode",
+                expires_at=datetime.now(UTC) - timedelta(days=1),  # Expired
+            )
+            not_expired = EpisodeLanguageExempt(
+                user_id=user_id,
+                jellyfin_id="series-exp-test",
+                series_name="Expired Test Series",
+                season_number=1,
+                episode_number=2,
+                episode_name="Valid Episode",
+                expires_at=datetime.now(UTC) + timedelta(days=30),  # Not expired
+            )
+            permanent = EpisodeLanguageExempt(
+                user_id=user_id,
+                jellyfin_id="series-exp-test",
+                series_name="Expired Test Series",
+                season_number=1,
+                episode_number=3,
+                episode_name="Permanent Episode",
+                expires_at=None,  # Permanent
+            )
+            session.add_all([expired, not_expired, permanent])
+            await session.commit()
+
+        # Test the function
+        async with TestingAsyncSessionLocal() as session:
+            exempt_set = await get_episode_exempt_set(session, user_id)
+            # Should only include not_expired and permanent
+            assert len(exempt_set) == 2
+            assert ("series-exp-test", 1, 1) not in exempt_set  # Expired
+            assert ("series-exp-test", 1, 2) in exempt_set  # Not expired
+            assert ("series-exp-test", 1, 3) in exempt_set  # Permanent

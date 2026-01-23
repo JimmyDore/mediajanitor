@@ -309,8 +309,8 @@
       ],
       "context": "Epic 52: Per-Episode Whitelisting. Depends on US-52.1. Matches original script's LANGUAGE_CHECK_EPISODE_ALLOWLIST behavior. Create EpisodeLanguageExempt table in database.py following existing whitelist pattern (ContentWhitelist, FrenchOnlyWhitelist, etc.). CRUD functions in content.py: add_episode_language_exempt(), get_episode_language_exempt(), remove_episode_language_exempt(). Helper get_episode_exempt_set() returns set of (jellyfin_id, season, episode) tuples for O(1) lookup during sync. API endpoints in whitelist.py following existing /api/whitelist/{type} pattern. POST body: {jellyfin_id, series_name, season_number, episode_number, episode_name, expires_at?}. Integrate into check_series_episodes_languages() to skip exempt episodes during sync.",
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created EpisodeLanguageExempt model with unique constraint on (user_id, jellyfin_id, season_number, episode_number). Created migration 6033f4a29b44. Added CRUD service functions (add_episode_language_exempt, get_episode_language_exempt, remove_episode_language_exempt, get_episode_exempt_set) in content.py. Added API endpoints (GET, POST, DELETE) in whitelist.py under /episode-exempt path. Integrated exemption checking into check_series_episodes_languages() to skip exempt episodes during sync. 12 new API tests and 3 new sync tests added."
     },
     {
       "id": "US-52.4",
