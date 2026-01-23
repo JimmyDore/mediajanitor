@@ -1299,31 +1299,33 @@
 							>
 								<td class="col-name">
 									<div class="name-cell">
-										{#if hasExpandableEpisodes(item)}
-											<span class="expand-icon" aria-hidden="true">
-												{#if expandedRows.has(item.jellyfin_id)}
-													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-														<polyline points="6 9 12 15 18 9"/>
-													</svg>
-												{:else}
-													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-														<polyline points="9 18 15 12 9 6"/>
-													</svg>
-												{/if}
-											</span>
-										{/if}
-										<span class="item-name" title={item.name}>{item.name}</span>
-										<span class="item-year">{item.production_year ?? '—'}</span>
-										{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
-											<span class="missing-seasons" title="Missing seasons">
-												S{item.missing_seasons.join(', S')}
-											</span>
-										{/if}
-										{#if hasExpandableEpisodes(item)}
-											<span class="episode-count" title="Episodes with language issues">
-												{item.problematic_episodes?.length} {item.problematic_episodes?.length === 1 ? 'episode' : 'episodes'}
-											</span>
-										{/if}
+										<div class="title-row">
+											{#if hasExpandableEpisodes(item)}
+												<span class="expand-icon" aria-hidden="true">
+													{#if expandedRows.has(item.jellyfin_id)}
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+															<polyline points="6 9 12 15 18 9"/>
+														</svg>
+													{:else}
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+															<polyline points="9 18 15 12 9 6"/>
+														</svg>
+													{/if}
+												</span>
+											{/if}
+											<span class="item-name" title={item.name}>{item.name}</span>
+											<span class="item-year">{item.production_year ?? '—'}</span>
+											{#if hasExpandableEpisodes(item)}
+												<span class="episode-count" title="Episodes with language issues">
+													{item.problematic_episodes?.length} {item.problematic_episodes?.length === 1 ? 'episode' : 'episodes'}
+												</span>
+											{/if}
+											{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
+												<span class="missing-seasons" title="Missing seasons">
+													S{item.missing_seasons.join(', S')}
+												</span>
+											{/if}
+										</div>
 										<span class="external-links">
 											{#if getJellyfinUrl(item)}
 												<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
@@ -1959,10 +1961,18 @@
 	}
 
 	.name-cell {
-		display: grid;
-		grid-template-columns: 1fr auto auto auto;
-		align-items: baseline;
+		display: flex;
+		align-items: center;
 		gap: var(--space-2);
+		min-width: 0;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+		flex: 1;
 	}
 
 	.item-name {
@@ -1971,7 +1981,8 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		min-width: 0;
+		min-width: 60px;
+		flex: 1 1 auto;
 	}
 
 	.item-year {
@@ -1979,8 +1990,7 @@
 		font-family: var(--font-mono);
 		color: var(--text-muted);
 		white-space: nowrap;
-		min-width: 40px;
-		text-align: right;
+		flex-shrink: 0;
 	}
 
 	.col-requester {
@@ -2017,10 +2027,10 @@
 	}
 
 	.external-links {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		gap: var(--space-1);
-		margin-left: var(--space-1);
+		flex-shrink: 0;
 	}
 
 	.external-link {
@@ -2302,6 +2312,67 @@
 		.issues-table th,
 		.issues-table td {
 			padding: var(--space-2) var(--space-3);
+		}
+
+		/* Give Name column more room on tablet */
+		.col-name {
+			width: 45%;
+			min-width: 140px;
+		}
+
+		/* Stack name cell vertically on mobile */
+		.name-cell {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-1);
+		}
+
+		/* Title row wraps on mobile */
+		.title-row {
+			flex-wrap: wrap;
+			gap: var(--space-1) var(--space-2);
+		}
+
+		/* Hide external links on mobile to save space */
+		.external-links {
+			display: none;
+		}
+
+		/* Compact badges on mobile */
+		.col-issues {
+			width: auto;
+			min-width: 100px;
+		}
+
+		.badge-groups {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+	}
+
+	@media (max-width: 480px) {
+		/* Even more space for Name on small phones */
+		.col-name {
+			width: 55%;
+			min-width: 120px;
+		}
+
+		.col-issues {
+			min-width: 80px;
+		}
+
+		/* Smaller text on phone */
+		.item-name {
+			font-size: var(--font-size-sm);
+		}
+
+		.item-year {
+			font-size: var(--font-size-xs);
+		}
+
+		.episode-count {
+			font-size: 10px;
+			padding: 0 4px;
 		}
 	}
 
