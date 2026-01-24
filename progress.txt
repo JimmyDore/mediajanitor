@@ -97,4 +97,30 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - OpenAPI schema documents all 18 endpoints properly
 - All 694 tests pass, mypy clean, Docker verified
 
+**US-57.4: Move business logic from content router to services**
+- Created `backend/app/services/content_cache.py` (~140 lines)
+  - get_user_settings: Get user settings from database
+  - lookup_jellyseerr_media_by_tmdb: Look up Jellyseerr media ID by TMDB ID
+  - lookup_jellyseerr_media_by_request_id: Look up media ID by request ID
+  - delete_cached_media_by_tmdb_id: Delete cached media by TMDB ID
+  - delete_cached_jellyseerr_request_by_tmdb_id: Delete cached request by TMDB
+  - delete_cached_jellyseerr_request_by_id: Delete cached request by ID
+- Updated `backend/app/services/content.py` to re-export cache functions
+- Refactored `backend/app/routers/content.py` (from 528 to 403 lines, ~24% reduction)
+  - Router now only handles HTTP concerns
+  - All business logic moved to services
+- All 694 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
+**US-59.1: Parallelize content summary queries**
+- Updated `backend/app/services/content_queries.py` `get_content_summary()` function
+  - Used `asyncio.gather()` to parallelize 5 independent whitelist queries:
+    - `get_large_whitelist_ids(db, user_id)`
+    - `get_french_only_ids(db, user_id)`
+    - `get_language_exempt_ids(db, user_id)`
+    - `get_unavailable_requests_count(db, user_id)`
+    - `get_recently_available_count(db, user_id)`
+  - These queries were previously called sequentially, now run in parallel
+- Added tests in `TestContentSummaryParallelization` class to verify whitelist handling
+- All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
 ---

@@ -209,7 +209,11 @@ async def get_content_summary(
     - large_movies: Movies larger than threshold
     - language_issues: Content with language issues
     - unavailable_requests: Unavailable Jellyseerr requests
+
+    Uses asyncio.gather() to parallelize independent whitelist queries (US-59.1).
     """
+    import asyncio
+
     # Get user's thresholds
     thresholds = await get_user_thresholds(db, user_id)
 
@@ -230,6 +234,21 @@ async def get_content_summary(
     )
     whitelisted_ids = set(whitelist_result.scalars().all())
 
+    # Parallelize independent whitelist queries (US-59.1)
+    (
+        large_whitelist_ids,
+        french_only_ids,
+        language_exempt_ids,
+        unavailable_requests_count,
+        recently_available_count,
+    ) = await asyncio.gather(
+        get_large_whitelist_ids(db, user_id),
+        get_french_only_ids(db, user_id),
+        get_language_exempt_ids(db, user_id),
+        get_unavailable_requests_count(db, user_id),
+        get_recently_available_count(db, user_id),
+    )
+
     # Calculate old content (excluding whitelisted)
     old_content_items: list[CachedMediaItem] = []
     for item in all_items:
@@ -244,9 +263,6 @@ async def get_content_summary(
 
     old_content_size = sum(item.size_bytes or 0 for item in old_content_items)
 
-    # Get large content whitelist
-    large_whitelist_ids = await get_large_whitelist_ids(db, user_id)
-
     # Calculate large content (movies + series), excluding whitelisted
     large_content_items: list[CachedMediaItem] = []
     for item in all_items:
@@ -259,12 +275,6 @@ async def get_content_summary(
 
     large_content_size = sum(item.size_bytes or 0 for item in large_content_items)
 
-    # Get french-only whitelist for language checks
-    french_only_ids = await get_french_only_ids(db, user_id)
-
-    # Get language-exempt whitelist
-    language_exempt_ids = await get_language_exempt_ids(db, user_id)
-
     # Calculate language issues (respecting french-only and language-exempt whitelists)
     language_issues_items: list[CachedMediaItem] = []
     for item in all_items:
@@ -276,9 +286,6 @@ async def get_content_summary(
             language_issues_items.append(item)
 
     language_issues_size = sum(item.size_bytes or 0 for item in language_issues_items)
-
-    # Unavailable requests count (US-6.1)
-    unavailable_requests_count = await get_unavailable_requests_count(db, user_id)
 
     return ContentSummaryResponse(
         old_content=IssueCategorySummary(
@@ -307,7 +314,7 @@ async def get_content_summary(
         ),
         # Info categories
         recently_available=InfoCategorySummary(
-            count=await get_recently_available_count(db, user_id),
+            count=recently_available_count,
         ),
     )
 
