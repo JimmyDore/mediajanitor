@@ -4,10 +4,9 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import CachedJellyseerrRequest, CachedMediaItem, User, UserSettings, get_db
+from app.database import User, get_db
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
@@ -24,6 +23,14 @@ from app.services.content import (
     get_content_summary,
     get_old_unwatched_content,
     get_unavailable_requests,
+)
+from app.services.content_cache import (
+    delete_cached_jellyseerr_request_by_id,
+    delete_cached_jellyseerr_request_by_tmdb_id,
+    delete_cached_media_by_tmdb_id,
+    get_user_settings,
+    lookup_jellyseerr_media_by_request_id,
+    lookup_jellyseerr_media_by_tmdb,
 )
 from app.services.jellyseerr import (
     delete_jellyseerr_media,
@@ -98,7 +105,7 @@ async def get_issues(
     Results are sorted by size (largest first) for content, by request date for requests.
     """
     # Get user settings for service URLs
-    settings = await _get_user_settings(db, current_user.id)
+    settings = await get_user_settings(db, current_user.id)
     service_urls = ServiceUrls(
         jellyfin_url=settings.jellyfin_server_url if settings else None,
         jellyseerr_url=settings.jellyseerr_server_url if settings else None,
@@ -164,116 +171,6 @@ async def get_issues(
 # US-15.4, US-15.5, US-15.6: Delete content endpoints
 
 
-async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
-    """Get user settings from database."""
-    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
-    return result.scalar_one_or_none()
-
-
-async def _lookup_jellyseerr_media_by_tmdb(
-    db: AsyncSession, user_id: int, tmdb_id: int, media_type: str
-) -> int | None:
-    """Look up Jellyseerr media ID by TMDB ID and media type.
-
-    Args:
-        db: Database session
-        user_id: User ID to filter by
-        tmdb_id: TMDB ID to search for
-        media_type: "movie" or "tv" (lowercase)
-
-    Returns:
-        Jellyseerr media ID if found, None otherwise.
-        Note: This returns media.id (for deletion), NOT request.id.
-    """
-    result = await db.execute(
-        select(CachedJellyseerrRequest.jellyseerr_media_id)
-        .where(CachedJellyseerrRequest.user_id == user_id)
-        .where(CachedJellyseerrRequest.tmdb_id == tmdb_id)
-        .where(CachedJellyseerrRequest.media_type == media_type)
-        .distinct()
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    return row
-
-
-async def _delete_cached_media_by_tmdb_id(db: AsyncSession, user_id: int, tmdb_id: int) -> int:
-    """Delete CachedMediaItem by TMDB ID stored in raw_data.ProviderIds.Tmdb.
-
-    Args:
-        db: Database session
-        user_id: User ID to filter by
-        tmdb_id: TMDB ID to match in raw_data.ProviderIds.Tmdb
-
-    Returns:
-        Number of items deleted
-    """
-    # First, find all matching media items (TMDB ID is stored as string in JSON)
-    tmdb_id_str = str(tmdb_id)
-    result = await db.execute(
-        select(CachedMediaItem)
-        .where(CachedMediaItem.user_id == user_id)
-        .where(CachedMediaItem.raw_data.isnot(None))
-    )
-    items = result.scalars().all()
-
-    # Filter items by TMDB ID in raw_data
-    items_to_delete = []
-    for item in items:
-        raw_data = item.raw_data or {}
-        provider_ids = raw_data.get("ProviderIds", {})
-        if provider_ids.get("Tmdb") == tmdb_id_str:
-            items_to_delete.append(item.id)
-
-    if not items_to_delete:
-        logger.debug(f"No CachedMediaItem found for TMDB ID {tmdb_id}")
-        return 0
-
-    # Delete the matching items
-    await db.execute(delete(CachedMediaItem).where(CachedMediaItem.id.in_(items_to_delete)))
-
-    logger.info(f"Deleted {len(items_to_delete)} CachedMediaItem(s) for TMDB ID {tmdb_id}")
-    return len(items_to_delete)
-
-
-async def _delete_cached_jellyseerr_request_by_tmdb_id(
-    db: AsyncSession, user_id: int, tmdb_id: int, media_type: str
-) -> None:
-    """Delete CachedJellyseerrRequest by TMDB ID.
-
-    Args:
-        db: Database session
-        user_id: User ID to filter by
-        tmdb_id: TMDB ID to match
-        media_type: "movie" or "tv" (lowercase)
-    """
-    await db.execute(
-        delete(CachedJellyseerrRequest)
-        .where(CachedJellyseerrRequest.user_id == user_id)
-        .where(CachedJellyseerrRequest.tmdb_id == tmdb_id)
-        .where(CachedJellyseerrRequest.media_type == media_type)
-    )
-    logger.debug(f"Deleted CachedJellyseerrRequest(s) for TMDB ID {tmdb_id}")
-
-
-async def _delete_cached_jellyseerr_request_by_id(
-    db: AsyncSession, user_id: int, jellyseerr_id: int
-) -> None:
-    """Delete CachedJellyseerrRequest by Jellyseerr ID.
-
-    Args:
-        db: Database session
-        user_id: User ID to filter by
-        jellyseerr_id: Jellyseerr request ID to match
-    """
-    await db.execute(
-        delete(CachedJellyseerrRequest)
-        .where(CachedJellyseerrRequest.user_id == user_id)
-        .where(CachedJellyseerrRequest.jellyseerr_id == jellyseerr_id)
-    )
-    logger.debug(f"Deleted CachedJellyseerrRequest for Jellyseerr ID {jellyseerr_id}")
-
-
 @router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
 async def delete_movie(
     tmdb_id: int,
@@ -285,7 +182,7 @@ async def delete_movie(
 
     Optionally also deletes the associated Jellyseerr request.
     """
-    settings = await _get_user_settings(db, current_user.id)
+    settings = await get_user_settings(db, current_user.id)
 
     if not settings or not settings.radarr_server_url or not settings.radarr_api_key_encrypted:
         raise HTTPException(
@@ -319,7 +216,7 @@ async def delete_movie(
 
     if delete_from_jellyseerr:
         # Look up media ID by TMDB ID (media.id is different from request.id)
-        jellyseerr_media_id = await _lookup_jellyseerr_media_by_tmdb(
+        jellyseerr_media_id = await lookup_jellyseerr_media_by_tmdb(
             db, current_user.id, tmdb_id, "movie"
         )
 
@@ -338,8 +235,8 @@ async def delete_movie(
     # US-49.1: Delete from cache if Radarr deletion succeeded
     # (must be after Jellyseerr lookup but before response)
     if arr_deleted:
-        await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
-        await _delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "movie")
+        await delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
+        await delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "movie")
 
     # Compose response message
     messages = []
@@ -376,7 +273,7 @@ async def delete_series(
 
     Optionally also deletes the associated Jellyseerr request.
     """
-    settings = await _get_user_settings(db, current_user.id)
+    settings = await get_user_settings(db, current_user.id)
 
     if not settings or not settings.sonarr_server_url or not settings.sonarr_api_key_encrypted:
         raise HTTPException(
@@ -410,7 +307,7 @@ async def delete_series(
 
     if delete_from_jellyseerr:
         # Look up media ID by TMDB ID (media.id is different from request.id)
-        jellyseerr_media_id = await _lookup_jellyseerr_media_by_tmdb(
+        jellyseerr_media_id = await lookup_jellyseerr_media_by_tmdb(
             db, current_user.id, tmdb_id, "tv"
         )
 
@@ -429,8 +326,8 @@ async def delete_series(
     # US-49.2: Delete from cache if Sonarr deletion succeeded
     # (must be after Jellyseerr lookup but before response)
     if arr_deleted:
-        await _delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
-        await _delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "tv")
+        await delete_cached_media_by_tmdb_id(db, current_user.id, tmdb_id)
+        await delete_cached_jellyseerr_request_by_tmdb_id(db, current_user.id, tmdb_id, "tv")
 
     # Compose response message
     messages = []
@@ -456,28 +353,6 @@ async def delete_series(
     )
 
 
-async def _lookup_jellyseerr_media_by_request_id(
-    db: AsyncSession, user_id: int, jellyseerr_id: int
-) -> int | None:
-    """Look up Jellyseerr media ID by request ID.
-
-    Args:
-        db: Database session
-        user_id: User ID to filter by
-        jellyseerr_id: Jellyseerr request ID
-
-    Returns:
-        Jellyseerr media ID if found, None otherwise.
-    """
-    result = await db.execute(
-        select(CachedJellyseerrRequest.jellyseerr_media_id)
-        .where(CachedJellyseerrRequest.user_id == user_id)
-        .where(CachedJellyseerrRequest.jellyseerr_id == jellyseerr_id)
-    )
-    row = result.scalar_one_or_none()
-    return row
-
-
 @router.delete("/request/{jellyseerr_id}", response_model=DeleteRequestResponse)
 async def delete_request_endpoint(
     jellyseerr_id: int,
@@ -490,7 +365,7 @@ async def delete_request_endpoint(
     the media entry (not the request), which properly removes the item
     from Jellyseerr's tracking.
     """
-    settings = await _get_user_settings(db, current_user.id)
+    settings = await get_user_settings(db, current_user.id)
 
     if (
         not settings
@@ -507,7 +382,7 @@ async def delete_request_endpoint(
         raise HTTPException(status_code=400, detail="Jellyseerr API key not configured")
 
     # Look up the media ID from the cached request
-    media_id = await _lookup_jellyseerr_media_by_request_id(db, current_user.id, jellyseerr_id)
+    media_id = await lookup_jellyseerr_media_by_request_id(db, current_user.id, jellyseerr_id)
     if not media_id:
         raise HTTPException(
             status_code=404,
@@ -522,6 +397,6 @@ async def delete_request_endpoint(
         raise HTTPException(status_code=400, detail=message)
 
     # Delete from cache after successful Jellyseerr deletion
-    await _delete_cached_jellyseerr_request_by_id(db, current_user.id, jellyseerr_id)
+    await delete_cached_jellyseerr_request_by_id(db, current_user.id, jellyseerr_id)
 
     return DeleteRequestResponse(success=True, message=message)
