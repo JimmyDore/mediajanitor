@@ -295,8 +295,8 @@
       ],
       "context": "Test coverage improvements. app/services/jellyfin.py has 42% coverage. Test: 1) validate_jellyfin_connection() - mock httpx for success (returns system info), timeout, invalid response, 2) save_jellyfin_settings() - create new UserSettings vs update existing, 3) get_decrypted_jellyfin_api_key() - when None, when encrypted. Create tests/test_jellyfin_service.py.",
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_jellyfin_service.py with 24 tests: TestValidateJellyfinConnection (11 tests: success, endpoint validation, API key header, trailing slash, 401/403/404/500 responses, timeout, connection error, DNS error), TestGetUserJellyfinSettings (3 tests), TestSaveJellyfinSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedJellyfinApiKey (5 tests: None key, decryption, empty string, special chars, unicode). Coverage: 100% for jellyfin.py. All 754 tests pass, mypy clean."
     },
     {
       "id": "US-60.4",

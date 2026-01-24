@@ -179,4 +179,24 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Existing tests already cover: send_signup_notification (5 tests), send_blocked_signup_notification (2 tests), signup disabled flow (4 tests)
 - All 730 tests pass (728 unit + 2 integration skipped without Docker), mypy clean
 
+**US-60.3: Add jellyfin service tests**
+- Created `backend/tests/test_jellyfin_service.py` with 24 tests covering all 4 functions:
+  - `TestValidateJellyfinConnection` (11 tests):
+    - test_returns_true_on_200_success: Success path verification
+    - test_uses_system_info_endpoint: Correct /System/Info endpoint called
+    - test_sends_api_key_header: X-Emby-Token header sent correctly
+    - test_normalizes_trailing_slash: URL normalization (no double slashes)
+    - test_returns_false_on_401_unauthorized: Invalid API key handling
+    - test_returns_false_on_403_forbidden: Access denied handling
+    - test_returns_false_on_404_not_found: Wrong URL handling
+    - test_returns_false_on_500_server_error: Server error handling
+    - test_returns_false_on_timeout: Timeout exception handling
+    - test_returns_false_on_connection_error: Connection refused handling
+    - test_returns_false_on_dns_error: DNS failure handling
+  - `TestGetUserJellyfinSettings` (3 tests): None when no settings, returns settings, user isolation
+  - `TestSaveJellyfinSettings` (5 tests): Create new, update existing, trailing slash, encryption, user isolation
+  - `TestGetDecryptedJellyfinApiKey` (5 tests): None key, decryption, empty string, special chars, unicode
+- Coverage: jellyfin.py 100% (31/31 statements)
+- All 754 tests pass, mypy clean
+
 ---
