@@ -239,8 +239,8 @@
       ],
       "context": "Performance optimization. calculate_season_sizes() in services/sync.py:1099-1243 fetches episodes multiple times - once for size calculation, then again for each Jellyfin user for watch data. With 15 users and 100 series with 5 seasons each = 100 x 5 x 16 = 8000 API calls. Refactor to fetch episode data once, store in dict by series_id, then iterate users to check watch status without re-fetching. Single pass approach.",
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Optimized calculate_season_sizes() to: 1) Fetch seasons once (reused for size + language check), 2) Fetch episodes once per season (reused for size + language), 3) Batch user watch data fetches at series level (1 call per user per series instead of 1 call per user per season). Added fetch_series_episodes() for batched episode fetching and check_episodes_languages() for inline language checking. Reduces API calls from (2 + 2N + NU) to (1 + N + U) per series. All 697 tests pass, mypy clean, 37 integration tests pass."
     },
     {
       "id": "US-60.1",

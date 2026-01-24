@@ -135,4 +135,17 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Added `_get_user_settings()` helper function for async user settings retrieval
 - All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
 
+**US-59.4: Optimize sync season size calculation**
+- Optimized `backend/app/services/sync.py` `calculate_season_sizes()` function
+  - Added `fetch_series_episodes()`: Fetches all episodes for a series in one call (vs per-season)
+  - Added `check_episodes_languages()`: Inline language check on already-fetched episodes (vs separate API calls)
+  - Refactored `calculate_season_sizes()`:
+    - Fetch seasons ONCE per series (reused for size + language check)
+    - Fetch episodes ONCE per season (reused for size + language + watch data base)
+    - Batch user watch data at series level: 1 call per user per series (not per season)
+  - API call reduction: From (2 + 2N + N×U) to (1 + N + U) per series
+    - Example with 5 seasons, 15 users: 87 calls → 21 calls (76% reduction)
+- Added test `test_calculate_season_sizes_optimized_api_calls` to verify optimization
+- All 697 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
 ---

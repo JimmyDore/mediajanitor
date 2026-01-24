@@ -1063,6 +1063,55 @@ async def fetch_season_episodes(
     return await retry_with_backoff(_fetch, "Jellyfin")
 
 
+async def fetch_series_episodes(
+    client: httpx.AsyncClient,
+    server_url: str,
+    api_key: str,
+    series_id: str,
+    jellyfin_user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Fetch ALL episodes for a series from Jellyfin API with retry on transient failures.
+
+    This fetches all episodes across all seasons in a single API call, which is more
+    efficient than calling fetch_season_episodes() for each season individually when
+    aggregating watch data across users.
+
+    Args:
+        client: httpx client
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+        series_id: Jellyfin series ID
+        jellyfin_user_id: Optional Jellyfin user ID for user-specific UserData
+
+    Returns list of episode dicts with MediaSources for size calculation
+    and UserData for watch status aggregation.
+    """
+    params: dict[str, str] = {
+        "ParentId": series_id,
+        "IncludeItemTypes": "Episode",
+        "Fields": "MediaSources,UserData",
+        "Recursive": "true",
+    }
+
+    # Add user ID to get user-specific watch data
+    if jellyfin_user_id:
+        params["UserId"] = jellyfin_user_id
+
+    async def _fetch() -> list[dict[str, Any]]:
+        response = await client.get(
+            f"{server_url}/Items",
+            headers={"X-Emby-Token": api_key},
+            params=params,
+        )
+        response.raise_for_status()
+        data = response.json()
+        episodes: list[dict[str, Any]] = data.get("Items", [])
+        return episodes
+
+    return await retry_with_backoff(_fetch, "Jellyfin")
+
+
 def calculate_season_total_size(episodes: list[dict[str, Any]]) -> int:
     """Calculate total size of all episodes in a season."""
     total_size = 0
@@ -1096,6 +1145,97 @@ def get_most_recent_episode_played_date(episodes: list[dict[str, Any]]) -> str |
     return most_recent
 
 
+def check_episodes_languages(
+    episodes: list[dict[str, Any]],
+    series_id: str,
+    exempt_episodes: set[tuple[str, int, int]] | None = None,
+) -> SeriesLanguageCheckResult:
+    """
+    Check language tracks for a list of episodes.
+
+    This is an inline version of check_series_episodes_languages() that works
+    on already-fetched episode data, avoiding duplicate API calls.
+
+    Args:
+        episodes: List of episode dicts with MediaSources/MediaStreams
+        series_id: Jellyfin series ID (for exempt episode matching)
+        exempt_episodes: Optional set of (jellyfin_id, season, episode) tuples
+                        to skip from language checks
+
+    Returns:
+        SeriesLanguageCheckResult with aggregated language_check_result
+        and problematic_episodes list
+    """
+    # Default result: assume OK if no episodes
+    result: SeriesLanguageCheckResult = {
+        "language_check_result": {
+            "has_english": True,
+            "has_french": True,
+            "has_french_subs": False,
+            "missing_languages": [],
+        },
+        "problematic_episodes": [],
+    }
+
+    if not episodes:
+        return result
+
+    # Track aggregated state across all episodes
+    all_have_english = True
+    all_have_french = True
+    any_have_french_subs = False
+    problematic_episodes: list[ProblematicEpisode] = []
+
+    for episode in episodes:
+        season_num = episode.get("ParentIndexNumber", 0)
+        episode_num = episode.get("IndexNumber", 0)
+
+        # Skip exempt episodes
+        if exempt_episodes and (series_id, season_num, episode_num) in exempt_episodes:
+            continue
+
+        lang_result = check_episode_audio_languages(episode)
+
+        # Update aggregated state
+        if not lang_result["has_english"]:
+            all_have_english = False
+        if not lang_result["has_french"]:
+            all_have_french = False
+        if lang_result["has_french_subs"]:
+            any_have_french_subs = True
+
+        # Track problematic episodes
+        if lang_result["missing_languages"]:
+            identifier = f"S{season_num:02d}E{episode_num:02d}"
+
+            problematic_episodes.append(
+                {
+                    "identifier": identifier,
+                    "name": episode.get("Name", "Unknown"),
+                    "season": season_num,
+                    "episode": episode_num,
+                    "missing_languages": lang_result["missing_languages"],
+                }
+            )
+
+    # Build aggregated result
+    aggregated_missing: list[str] = []
+    if not all_have_english:
+        aggregated_missing.append("missing_en_audio")
+    if not all_have_french:
+        aggregated_missing.append("missing_fr_audio")
+
+    result["language_check_result"] = {
+        "has_english": all_have_english,
+        "has_french": all_have_french,
+        "has_french_subs": any_have_french_subs,
+        "missing_languages": aggregated_missing,
+    }
+    result["problematic_episodes"] = problematic_episodes
+
+    return result
+
+
 async def calculate_season_sizes(
     db: AsyncSession,
     user_id: int,
@@ -1103,18 +1243,23 @@ async def calculate_season_sizes(
     api_key: str,
 ) -> None:
     """
-    Calculate and store season sizes, total series size, and last_played_date
-    for all series in user's cache.
+    Calculate and store season sizes, total series size, last_played_date,
+    and language check results for all series in user's cache.
+
+    Optimized (US-59.4): Fetches episode data once and reuses for:
+    - Size calculation
+    - Language check
+    - Watch data aggregation (one batch call per user per series)
 
     This function:
     1. Fetches all series from cached_media_items for the user
     2. Fetches all Jellyfin users (to aggregate watch data across users)
-    3. For each series, fetches seasons from Jellyfin API
-    4. For each season, fetches episodes and calculates total size
-    5. For episode watch data, queries each Jellyfin user to aggregate last_played_date
-    6. Stores the largest season size in largest_season_size_bytes
-    7. Stores the total series size (sum of all seasons) in size_bytes
-    8. Aggregates last_played_date from all users' episode data
+    3. For each series:
+       a. Fetches seasons once (reused for size + language)
+       b. Fetches episodes once per season (reused for size + language)
+       c. Fetches episodes once per user (batched at series level)
+    4. Stores largest_season_size_bytes, size_bytes, last_played_date,
+       language_check_result, problematic_episodes
 
     Args:
         db: Database session
@@ -1154,7 +1299,7 @@ async def calculate_season_sizes(
     async with httpx.AsyncClient(timeout=60.0) as client:
         for series in series_items:
             try:
-                # Fetch seasons for this series
+                # Fetch seasons for this series (ONCE - reused for size + language)
                 seasons = await fetch_series_seasons(
                     client, server_url, api_key, series.jellyfin_id
                 )
@@ -1163,40 +1308,59 @@ async def calculate_season_sizes(
                     logger.debug(f"No seasons found for series '{series.name}'")
                     continue
 
-                # Calculate size for each season, track largest and total
-                # Also collect all episodes to aggregate last_played_date
+                # Collect all episodes per season (ONCE - reused for size + language)
                 largest_season_size = 0
                 total_series_size = 0
-                all_episodes_watch_data: list[dict[str, Any]] = []
+                all_episodes: list[dict[str, Any]] = []
 
                 for season in seasons:
                     season_id = season.get("Id")
                     if not season_id:
                         continue
 
-                    # Fetch episodes without user context for size calculation
+                    # Fetch episodes ONCE per season (reused for size AND language)
                     episodes = await fetch_season_episodes(client, server_url, api_key, season_id)
-                    season_size = calculate_season_total_size(episodes)
+                    all_episodes.extend(episodes)
 
-                    # Accumulate total series size
+                    # Calculate season size from fetched data
+                    season_size = calculate_season_total_size(episodes)
                     total_series_size += season_size
 
                     if season_size > largest_season_size:
                         largest_season_size = season_size
 
-                    # Fetch episode watch data from each Jellyfin user
-                    for jf_user in jellyfin_users:
-                        jf_user_id = jf_user.get("Id")
-                        if not jf_user_id:
-                            continue
+                # Check language tracks using already-fetched episode data (no extra API calls)
+                lang_result = check_episodes_languages(
+                    all_episodes,
+                    series.jellyfin_id,
+                    exempt_episodes=exempt_episodes if exempt_episodes else None,
+                )
+                series.language_check_result = dict(lang_result["language_check_result"])
+                series.problematic_episodes = [
+                    dict(ep) for ep in lang_result["problematic_episodes"]
+                ]
 
-                        user_episodes = await fetch_season_episodes(
-                            client, server_url, api_key, season_id, jf_user_id
-                        )
-                        # Extract just the UserData from each episode
-                        all_episodes_watch_data.extend(user_episodes)
+                if lang_result["problematic_episodes"]:
+                    logger.debug(
+                        f"Series '{series.name}': {len(lang_result['problematic_episodes'])} "
+                        f"episodes with language issues"
+                    )
 
-                # Update the series with largest season size and total size
+                # Fetch episode watch data from each Jellyfin user
+                # OPTIMIZED: One call per user per series (not per season per user)
+                all_episodes_watch_data: list[dict[str, Any]] = []
+                for jf_user in jellyfin_users:
+                    jf_user_id = jf_user.get("Id")
+                    if not jf_user_id:
+                        continue
+
+                    # Fetch ALL episodes for this user at series level (1 call instead of N)
+                    user_episodes = await fetch_series_episodes(
+                        client, server_url, api_key, series.jellyfin_id, jf_user_id
+                    )
+                    all_episodes_watch_data.extend(user_episodes)
+
+                # Update the series with sizes
                 if largest_season_size > 0:
                     series.largest_season_size_bytes = largest_season_size
                 if total_series_size > 0:
@@ -1212,27 +1376,6 @@ async def calculate_season_sizes(
                 if series_last_played:
                     series.last_played_date = series_last_played
                     logger.debug(f"Series '{series.name}': last_played_date = {series_last_played}")
-
-                # Check language tracks for all episodes (US-52.1, US-52.3)
-                lang_result = await check_series_episodes_languages(
-                    client,
-                    server_url,
-                    api_key,
-                    series.jellyfin_id,
-                    series.name,
-                    exempt_episodes=exempt_episodes if exempt_episodes else None,
-                )
-                # Cast TypedDict to dict for SQLAlchemy column assignment
-                series.language_check_result = dict(lang_result["language_check_result"])
-                series.problematic_episodes = [
-                    dict(ep) for ep in lang_result["problematic_episodes"]
-                ]
-
-                if lang_result["problematic_episodes"]:
-                    logger.debug(
-                        f"Series '{series.name}': {len(lang_result['problematic_episodes'])} "
-                        f"episodes with language issues"
-                    )
 
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 logger.warning(f"Failed to calculate season sizes for series '{series.name}': {e}")
