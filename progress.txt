@@ -199,4 +199,30 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Coverage: jellyfin.py 100% (31/31 statements)
 - All 754 tests pass, mypy clean
 
+**US-60.4: Add nicknames service tests**
+- Created `backend/tests/test_nicknames_service.py` with 17 tests covering all 4 functions:
+  - `TestCreateNickname` (4 tests):
+    - test_creates_nickname_successfully: Success path verification
+    - test_raises_valueerror_on_duplicate: Duplicate detection raises ValueError
+    - test_allows_same_username_for_different_users: User isolation verification
+    - test_nickname_created_at_is_set: Timestamp automatically set
+  - `TestGetNicknames` (5 tests):
+    - test_returns_empty_list_for_user_with_no_nicknames: Empty list handling
+    - test_returns_nicknames_ordered_alphabetically: Ordering by jellyseerr_username
+    - test_returns_only_user_specific_nicknames: User isolation verification
+    - test_returns_nickname_item_with_all_fields: All NicknameItem fields present
+    - test_created_at_is_formatted_as_iso_string: ISO format datetime string
+  - `TestUpdateNickname` (4 tests):
+    - test_updates_nickname_successfully: Success path returns True
+    - test_returns_false_when_nickname_not_found: Non-existent ID returns False
+    - test_returns_false_when_nickname_belongs_to_other_user: User isolation
+    - test_preserves_other_fields_when_updating: Only display_name changes
+  - `TestDeleteNickname` (4 tests):
+    - test_deletes_nickname_successfully: Success path returns True
+    - test_returns_false_when_nickname_not_found: Non-existent ID returns False
+    - test_returns_false_when_nickname_belongs_to_other_user: User isolation
+    - test_does_not_affect_other_users_nicknames: Only deletes specified item
+- Coverage: nicknames.py 100% (all service functions tested)
+- All 771 tests pass, mypy clean
+
 ---
