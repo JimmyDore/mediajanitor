@@ -276,8 +276,8 @@
       ],
       "context": "Test coverage improvements. app/routers/auth.py has 56% coverage. Missing tests for: 1) send_signup_notification() and send_blocked_signup_notification() (lines 121-203) - mock httpx calls to Slack webhook, 2) _get_client_ip() X-Forwarded-For parsing (lines 78-90), 3) Signup disabled flow returning 403 (lines 214-221), 4) Password change endpoint (lines 565-596). Add to tests/test_auth.py.",
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added TestGetClientIp class (6 tests) for _get_client_ip() X-Forwarded-For parsing: single IP, multiple IPs (picks first), whitespace handling, client.host fallback, unknown when client is None, precedence over client.host. Added TestChangePassword class (6 tests) for password change endpoint: success flow, wrong current password (400), requires authentication (401), weak new password (422), missing current_password (422), missing new_password (422). Existing tests already covered: send_signup_notification, send_blocked_signup_notification, signup disabled flow. All 86 auth tests pass, mypy clean."
     },
     {
       "id": "US-60.3",

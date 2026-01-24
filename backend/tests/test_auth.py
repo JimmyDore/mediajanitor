@@ -689,6 +689,243 @@ class TestDisabledSignups:
             assert response.json()["detail"] == "Sign ups are closed for now"
 
 
+class TestGetClientIp:
+    """Tests for _get_client_ip() function - X-Forwarded-For parsing."""
+
+    def test_get_client_ip_from_x_forwarded_for_single_ip(self, client: TestClient) -> None:
+        """Test extracting client IP from X-Forwarded-For header with single IP."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        mock_request.headers = {"X-Forwarded-For": "192.168.1.100"}
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        result = _get_client_ip(mock_request)
+        assert result == "192.168.1.100"
+
+    def test_get_client_ip_from_x_forwarded_for_multiple_ips(self, client: TestClient) -> None:
+        """Test extracting first IP from X-Forwarded-For header with multiple IPs."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        # Format: client, proxy1, proxy2
+        mock_request.headers = {"X-Forwarded-For": "192.168.1.100, 10.0.0.1, 172.16.0.1"}
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        result = _get_client_ip(mock_request)
+        assert result == "192.168.1.100"
+
+    def test_get_client_ip_from_x_forwarded_for_with_whitespace(self, client: TestClient) -> None:
+        """Test that whitespace is stripped from X-Forwarded-For IP."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        mock_request.headers = {"X-Forwarded-For": "  192.168.1.100  , 10.0.0.1"}
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        result = _get_client_ip(mock_request)
+        assert result == "192.168.1.100"
+
+    def test_get_client_ip_fallback_to_client_host(self, client: TestClient) -> None:
+        """Test fallback to request.client.host when X-Forwarded-For is missing."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        mock_request.headers = {}  # No X-Forwarded-For
+        mock_request.client = MagicMock()
+        mock_request.client.host = "192.168.1.50"
+
+        result = _get_client_ip(mock_request)
+        assert result == "192.168.1.50"
+
+    def test_get_client_ip_unknown_when_no_client(self, client: TestClient) -> None:
+        """Test returns 'unknown' when request.client is None."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        mock_request.headers = {}
+        mock_request.client = None
+
+        result = _get_client_ip(mock_request)
+        assert result == "unknown"
+
+    def test_get_client_ip_x_forwarded_for_takes_precedence(self, client: TestClient) -> None:
+        """Test that X-Forwarded-For takes precedence over client.host."""
+        from unittest.mock import MagicMock
+
+        from app.routers.auth import _get_client_ip
+
+        mock_request = MagicMock()
+        mock_request.headers = {"X-Forwarded-For": "203.0.113.50"}
+        mock_request.client = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        result = _get_client_ip(mock_request)
+        assert result == "203.0.113.50"
+
+
+class TestChangePassword:
+    """Tests for POST /api/auth/change-password endpoint."""
+
+    def test_change_password_success(self, client: TestClient) -> None:
+        """Test successful password change with valid current password."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "changepass@example.com", "password": "OldPassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "changepass@example.com", "password": "OldPassword123!"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Change password
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewPassword456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["message"] == "Password has been changed successfully."
+
+        # Verify old password no longer works
+        old_login = client.post(
+            "/api/auth/login",
+            json={"email": "changepass@example.com", "password": "OldPassword123!"},
+        )
+        assert old_login.status_code == 401
+
+        # Verify new password works
+        new_login = client.post(
+            "/api/auth/login",
+            json={"email": "changepass@example.com", "password": "NewPassword456!"},
+        )
+        assert new_login.status_code == 200
+
+    def test_change_password_wrong_current_password(self, client: TestClient) -> None:
+        """Test password change fails with incorrect current password."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "wrongcurrent@example.com", "password": "CorrectPassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "wrongcurrent@example.com", "password": "CorrectPassword123!"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to change password with wrong current password
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "WrongPassword123!",
+                "new_password": "NewPassword456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 400
+        assert "current password is incorrect" in response.json()["detail"].lower()
+
+    def test_change_password_requires_authentication(self, client: TestClient) -> None:
+        """Test that password change endpoint requires valid JWT token."""
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "OldPassword123!",
+                "new_password": "NewPassword456!",
+            },
+        )
+        assert response.status_code == 401
+
+    def test_change_password_weak_new_password(self, client: TestClient) -> None:
+        """Test password change fails with weak new password."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "weaknew@example.com", "password": "StrongPassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "weaknew@example.com", "password": "StrongPassword123!"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to change to a weak password
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "StrongPassword123!",
+                "new_password": "weak",  # Too short
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422  # Validation error
+
+    def test_change_password_missing_current_password(self, client: TestClient) -> None:
+        """Test password change fails when current_password is missing."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "missingcurrent@example.com", "password": "Password123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "missingcurrent@example.com", "password": "Password123!"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to change password without current_password field
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "new_password": "NewPassword456!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_change_password_missing_new_password(self, client: TestClient) -> None:
+        """Test password change fails when new_password is missing."""
+        # Register and login
+        client.post(
+            "/api/auth/register",
+            json={"email": "missingnew@example.com", "password": "Password123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "missingnew@example.com", "password": "Password123!"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to change password without new_password field
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "Password123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+
 class TestDatabaseConcurrency:
     """Tests for database concurrency (regression test for WAL mode)."""
 
