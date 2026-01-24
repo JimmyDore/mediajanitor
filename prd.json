@@ -347,8 +347,8 @@
       ],
       "context": "Test coverage improvements. app/services/radarr.py has 54% coverage. Test: 1) validate_radarr_connection() - network errors (timeout, connection refused, DNS failure), 2) save_radarr_settings() - update existing settings path (not just create). Create or extend tests/test_radarr_service.py.",
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_radarr_service.py with 46 tests covering all 7 functions: TestValidateRadarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserRadarrSettings (3 tests), TestSaveRadarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedRadarrApiKey (5 tests), TestGetRadarrMovieByTmdbId (9 tests: match, empty, non-200, timeout, connection error, endpoint, trailing slash, None id, multiple matches), TestDeleteRadarrMovie (8 tests), TestDeleteMovieByTmdbId (5 tests). All 834 tests pass, mypy clean."
     },
     {
       "id": "US-60.7",
