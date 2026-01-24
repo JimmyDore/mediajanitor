@@ -148,4 +148,17 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Added test `test_calculate_season_sizes_optimized_api_calls` to verify optimization
 - All 697 tests pass, mypy clean, 37 integration tests pass, Docker verified
 
+**US-60.1: Add content router tests**
+- Created `backend/tests/test_content_cache_service.py` with 21 tests covering:
+  - `TestGetUserSettings`: 3 tests for get_user_settings() function
+  - `TestLookupJellyseerrMediaByTmdb`: 4 tests for lookup by TMDB ID and media type
+  - `TestLookupJellyseerrMediaByRequestId`: 3 tests for lookup by Jellyseerr request ID
+  - `TestDeleteCachedMediaByTmdbId`: 5 tests for delete with TMDB ID filtering
+  - `TestDeleteCachedJellyseerrRequestByTmdbId`: 3 tests for delete requests by TMDB
+  - `TestDeleteCachedJellyseerrRequestById`: 3 tests for delete requests by ID
+- All tests verify user isolation (user_id filtering) and edge cases
+- Coverage: content.py (facade) 100%, content_cache.py 100%
+- Note: Functions were moved from router to service in US-57.4
+- All 718 tests pass, mypy clean
+
 ---
