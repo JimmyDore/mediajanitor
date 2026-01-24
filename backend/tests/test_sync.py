@@ -1687,6 +1687,139 @@ class TestCalculateSeasonSizes:
             assert item.id is not None
             assert item.largest_season_size_bytes == 15_000_000_000
 
+    @pytest.mark.asyncio
+    async def test_calculate_season_sizes_optimized_api_calls(self, client: TestClient) -> None:
+        """Optimization (US-59.4): Episode data should be fetched once and reused.
+
+        The current unoptimized approach with 3 users and 2 seasons makes:
+        - 1 season fetch (for size calc)
+        - 2 episode fetches per season for size
+        - 2 seasons * 3 users = 6 episode fetches for watch data
+        - 1 season fetch (for language check)
+        - 2 episode fetches for language check
+        Total old: 1 + 2 + 6 + 1 + 2 = 12 calls
+
+        The optimized approach should make:
+        - 1 season fetch (reused for size + language)
+        - 2 episode fetches (reused for size + language + watch aggregation)
+        - 3 batched user episode fetches (1 per user, using series parent ID)
+        Total new: 1 + 2 + 3 = 6 calls
+
+        This test verifies we don't fetch episodes more than once per season
+        for size/language, and that user watch data is batched per user.
+        """
+        from app.services.sync import calculate_season_sizes
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(
+                email="api_calls_test@example.com",
+                hashed_password="fakehash",
+            )
+            session.add(user)
+            await session.flush()
+
+            settings = UserSettings(
+                user_id=user.id,
+                jellyfin_server_url="http://jellyfin.local",
+                jellyfin_api_key_encrypted="encrypted-key",
+            )
+            session.add(settings)
+
+            series = CachedMediaItem(
+                user_id=user.id,
+                jellyfin_id="series-opt-test",
+                name="Test Series Optimized",
+                media_type="Series",
+            )
+            session.add(series)
+            await session.commit()
+
+            # Track API calls
+            api_calls: list[str] = []
+
+            mock_seasons_response = {
+                "Items": [
+                    {"Id": "season1", "Name": "Season 1"},
+                    {"Id": "season2", "Name": "Season 2"},
+                ]
+            }
+            # Episodes with MediaSources for size and MediaStreams for language check
+            mock_episodes_response = {
+                "Items": [
+                    {
+                        "Id": "ep1",
+                        "ParentIndexNumber": 1,
+                        "IndexNumber": 1,
+                        "MediaSources": [
+                            {
+                                "Size": 1_000_000_000,
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "eng"},
+                                    {"Type": "Audio", "Language": "fre"},
+                                ],
+                            }
+                        ],
+                        "UserData": {"LastPlayedDate": "2024-01-15T10:00:00Z"},
+                    },
+                ]
+            }
+
+            async def mock_get(self, url, **kwargs):
+                params = kwargs.get("params", {})
+                parent_id = params.get("ParentId", "")
+                include_types = params.get("IncludeItemTypes", "")
+                user_id = params.get("UserId", "none")
+                api_calls.append(f"{include_types}|{parent_id}|{user_id}")
+
+                if include_types == "Season":
+                    return httpx.Response(
+                        200, json=mock_seasons_response, request=httpx.Request("GET", url)
+                    )
+                if include_types == "Episode":
+                    return httpx.Response(
+                        200, json=mock_episodes_response, request=httpx.Request("GET", url)
+                    )
+                return httpx.Response(200, json={"Items": []}, request=httpx.Request("GET", url))
+
+            # 3 Jellyfin users to test batched episode fetch
+            mock_jellyfin_users = [
+                {"Id": "jf_user1", "Name": "User 1"},
+                {"Id": "jf_user2", "Name": "User 2"},
+                {"Id": "jf_user3", "Name": "User 3"},
+            ]
+
+            with patch("httpx.AsyncClient.get", new=mock_get):
+                with patch(
+                    "app.services.sync.fetch_jellyfin_users", return_value=mock_jellyfin_users
+                ):
+                    await calculate_season_sizes(
+                        session, user.id, "http://jellyfin.local", "decrypted-key"
+                    )
+
+            # Count different types of calls
+            season_calls = [c for c in api_calls if "Season" in c]
+            episode_calls_for_size = [c for c in api_calls if "Episode" in c and "|none" in c]
+            episode_calls_for_users = [c for c in api_calls if "Episode" in c and "jf_user" in c]
+
+            # Should have exactly 1 season fetch (not 2 - reused for language check)
+            assert len(season_calls) == 1, (
+                f"Expected 1 season fetch (reused for language), got {len(season_calls)}: "
+                f"{season_calls}"
+            )
+
+            # Should have exactly 2 episode fetches for size/language (one per season)
+            assert len(episode_calls_for_size) == 2, (
+                f"Expected 2 episode fetches for size/language, got {len(episode_calls_for_size)}: "
+                f"{episode_calls_for_size}"
+            )
+
+            # With optimization: 3 batched fetches (one per user for ALL episodes)
+            # not 6 (2 seasons * 3 users)
+            assert len(episode_calls_for_users) == 3, (
+                f"Expected 3 batched user episode fetches (1 per user), got "
+                f"{len(episode_calls_for_users)}: {episode_calls_for_users}"
+            )
+
 
 class TestSyncCalculatingSizesState:
     """Test calculating_sizes sync state (US-20.2)."""
