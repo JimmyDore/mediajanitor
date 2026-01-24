@@ -331,8 +331,8 @@
       ],
       "context": "Test coverage improvements. app/services/sonarr.py has 43% coverage. Test: 1) validate_sonarr_connection() - success, timeout, invalid API key response, 2) save_sonarr_settings() - create new vs update existing, 3) get_sonarr_series_by_tmdb_id() - success, API error, not found, 4) get_sonarr_tmdb_to_slug_map() - success, empty response. Create tests/test_sonarr_service.py.",
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_sonarr_service.py with 54 tests covering all 8 functions: TestValidateSonarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserSonarrSettings (3 tests), TestSaveSonarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedSonarrApiKey (5 tests), TestGetSonarrSeriesByTmdbId (10 tests: match, not found, empty, non-200, timeout, connection error, endpoint, trailing slash, missing tmdbId, None id), TestGetSonarrTmdbToSlugMap (9 tests: success, empty, non-200, timeout, connection error, missing fields, empty slug, trailing slash), TestDeleteSonarrSeries (7 tests: success, URL, delete_files params, non-200, timeout, connection error), TestDeleteSeriesByTmdbId (4 tests: success, not found, delete fails, delete_files param). All 788 tests pass, mypy clean."
     },
     {
       "id": "US-60.6",
