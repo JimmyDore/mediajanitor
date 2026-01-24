@@ -123,4 +123,16 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Added tests in `TestContentSummaryParallelization` class to verify whitelist handling
 - All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
 
+**US-59.2: Parallelize content issues queries**
+- Updated `backend/app/services/content_queries.py` `get_content_issues()` function
+  - Used `asyncio.gather()` to parallelize 5 independent queries:
+    - `get_user_thresholds(db, user_id)`
+    - `_get_user_settings(db, user_id)` (new helper function)
+    - `get_french_only_ids(db, user_id)`
+    - `get_language_exempt_ids(db, user_id)`
+    - `get_large_whitelist_ids(db, user_id)`
+  - Sonarr slug map fetch runs after (depends on user_settings result)
+- Added `_get_user_settings()` helper function for async user settings retrieval
+- All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
 ---

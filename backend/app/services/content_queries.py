@@ -58,6 +58,15 @@ DEFAULT_RECENTLY_AVAILABLE_DAYS = 7  # Content available in past 7 days
 # ============================================================================
 
 
+async def _get_user_settings(db: AsyncSession, user_id: int) -> UserSettings | None:
+    """Get user settings from database.
+
+    Returns None if no settings exist for this user.
+    """
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
 async def get_user_recently_available_days(db: AsyncSession, user_id: int) -> int:
     """Get user's recently_available_days setting, falling back to default."""
     result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
@@ -337,16 +346,30 @@ async def get_content_issues(
         filter_type: Optional filter - "old", "large", "language", "requests"
 
     Returns items sorted by size (largest first).
+    Uses asyncio.gather() to parallelize independent queries (US-59.2).
     """
-    # Get user's thresholds
-    thresholds = await get_user_thresholds(db, user_id)
+    import asyncio
 
-    # Build Sonarr TMDB -> titleSlug map for enriching series items
     from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_tmdb_to_slug_map
 
+    # Parallelize independent queries (US-59.2)
+    (
+        thresholds,
+        user_settings,
+        french_only_ids,
+        language_exempt_ids,
+        large_whitelist_ids,
+    ) = await asyncio.gather(
+        get_user_thresholds(db, user_id),
+        _get_user_settings(db, user_id),
+        get_french_only_ids(db, user_id),
+        get_language_exempt_ids(db, user_id),
+        get_large_whitelist_ids(db, user_id),
+    )
+
+    # Build Sonarr TMDB -> titleSlug map for enriching series items
+    # This depends on user_settings, so it runs after the first gather
     sonarr_slug_map: dict[int, str] = {}
-    settings_result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
-    user_settings = settings_result.scalar_one_or_none()
     if user_settings and user_settings.sonarr_server_url and user_settings.sonarr_api_key_encrypted:
         sonarr_api_key = get_decrypted_sonarr_api_key(user_settings)
         if sonarr_api_key:
@@ -370,15 +393,6 @@ async def get_content_issues(
         )
     )
     whitelisted_ids = set(whitelist_result.scalars().all())
-
-    # Get user's french-only whitelist
-    french_only_ids = await get_french_only_ids(db, user_id)
-
-    # Get user's language-exempt whitelist
-    language_exempt_ids = await get_language_exempt_ids(db, user_id)
-
-    # Get user's large content whitelist
-    large_whitelist_ids = await get_large_whitelist_ids(db, user_id)
 
     # Build list of items with issues
     # Store tuple of (item, issues_list, language_issues_detail)
