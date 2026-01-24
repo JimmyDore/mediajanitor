@@ -4,6 +4,7 @@ This module re-exports all public functions from the refactored modules:
 - whitelist.py: All whitelist CRUD operations
 - content_analysis.py: Content analysis functions (is_old_or_unwatched, is_large_movie, etc.)
 - content_queries.py: Query functions (get_content_summary, get_content_issues, get_library, etc.)
+- content_cache.py: Cache management functions (delete/lookup cached items)
 
 Import from this module for backwards compatibility, or import directly from
 the specific modules for more explicit dependencies.
@@ -40,6 +41,16 @@ from app.services.content_analysis import (
     is_old_or_unwatched,
     is_unavailable_request,
     parse_jellyfin_datetime,
+)
+
+# Re-export cache management functions
+from app.services.content_cache import (
+    delete_cached_jellyseerr_request_by_id,
+    delete_cached_jellyseerr_request_by_tmdb_id,
+    delete_cached_media_by_tmdb_id,
+    get_user_settings,
+    lookup_jellyseerr_media_by_request_id,
+    lookup_jellyseerr_media_by_tmdb,
 )
 
 # Re-export query functions
@@ -110,6 +121,13 @@ __all__ = [
     "LanguageCheckResult",
     "UserThresholds",
     "SeasonEpisodeDetails",
+    # Cache management
+    "get_user_settings",
+    "lookup_jellyseerr_media_by_tmdb",
+    "lookup_jellyseerr_media_by_request_id",
+    "delete_cached_media_by_tmdb_id",
+    "delete_cached_jellyseerr_request_by_tmdb_id",
+    "delete_cached_jellyseerr_request_by_id",
     # Constants
     "OLD_CONTENT_MONTHS_CUTOFF",
     "MIN_AGE_MONTHS",

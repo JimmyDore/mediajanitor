@@ -153,8 +153,8 @@
       ],
       "context": "Backend architecture refactoring. routers/content.py contains business logic: _delete_cached_media_by_tmdb_id() (lines 200-236) iterates items and filters by TMDB ID, _lookup_jellyseerr_media_by_tmdb() (lines 173-197) does DB lookup, service URL construction (lines 102-107). Move these to content service layer. Router should only parse request, call service, return response.",
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created content_cache.py with 6 functions: get_user_settings, lookup_jellyseerr_media_by_tmdb, lookup_jellyseerr_media_by_request_id, delete_cached_media_by_tmdb_id, delete_cached_jellyseerr_request_by_tmdb_id, delete_cached_jellyseerr_request_by_id. Router reduced from 528 to 403 lines (~24% reduction). All 694 tests pass, mypy clean, integration tests pass."
     },
     {
       "id": "US-58.1",
