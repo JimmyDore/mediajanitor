@@ -61,4 +61,40 @@ Reusable patterns discovered during development. Update this section when you fi
 
 Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 
+### 2026-01-24
+
+**US-57.1: Split content.py into focused modules**
+- Created `backend/app/services/whitelist.py` (558 lines)
+  - All whitelist CRUD operations for 6 whitelist types
+- Created `backend/app/services/content_analysis.py` (423 lines)
+  - Analysis functions: is_old_or_unwatched, is_large_movie, has_language_issues, etc.
+  - Constants, types, and utility functions
+- Created `backend/app/services/content_queries.py` (880 lines)
+  - Query functions: get_content_summary, get_content_issues, get_library
+  - Recently available, unavailable requests, season/episode helpers
+- Updated `backend/app/services/content.py` (197 lines)
+  - Now a thin facade that re-exports all functions for backwards compatibility
+- All 694 tests pass, mypy clean, no API changes
+
+**US-57.2: Extract generic whitelist service base class**
+- Created `backend/app/services/whitelist_base.py` (~260 lines)
+  - BaseJellyfinIdWhitelistService for ContentWhitelist, FrenchOnly, LanguageExempt, Large
+  - BaseJellyseerrIdWhitelistService for JellyseerrRequest
+  - Generic CRUD: add(), get_list(), remove(), get_ids()
+- Refactored `backend/app/services/whitelist.py` (from 748 to ~330 lines)
+  - Service classes delegate to base classes
+  - EpisodeLanguageExempt kept as-is (different field structure)
+- Fixed test imports for _get_recent_episodes_from_cached_data
+- All 657 tests pass, mypy clean, no API changes
+
+**US-57.3: Consolidate whitelist router endpoints**
+- Refactored `backend/app/routers/whitelist.py` (from 516 to 435 lines, ~16% reduction)
+  - Created `create_jellyfin_whitelist_routes()` endpoint factory function
+  - Generates GET/POST/DELETE for 4 jellyfin-id-based whitelists (content, french-only, language-exempt, large)
+  - Requests endpoint kept separate (has special TMDB title lookup logic)
+  - Episode-exempt endpoint kept separate (different field structure)
+- All 6 whitelist types maintain exact same API contracts (URLs, request/response models)
+- OpenAPI schema documents all 18 endpoints properly
+- All 694 tests pass, mypy clean, Docker verified
+
 ---

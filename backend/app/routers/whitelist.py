@@ -1,6 +1,14 @@
-"""Whitelist API endpoints."""
+"""Whitelist API endpoints.
 
-from typing import Annotated
+Uses endpoint factory pattern to eliminate duplication for 6 whitelist types.
+The 4 jellyfin-id-based whitelists share identical patterns and are generated
+via create_jellyfin_whitelist_routes(). Requests and episode-exempt have
+custom logic and remain as separate endpoints.
+"""
+
+from collections.abc import Awaitable, Callable
+from datetime import datetime
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -18,7 +26,7 @@ from app.models.content import (
     WhitelistRemoveResponse,
 )
 from app.services.auth import get_current_user
-from app.services.content import (
+from app.services.whitelist import (
     add_episode_language_exempt,
     add_to_french_only_whitelist,
     add_to_language_exempt_whitelist,
@@ -42,296 +50,203 @@ from app.services.content import (
 router = APIRouter(prefix="/api/whitelist", tags=["whitelist"])
 
 
-@router.get("/content", response_model=WhitelistListResponse)
-async def list_content_whitelist(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistListResponse:
-    """Get all items in the user's content whitelist."""
-    return await get_whitelist(db=db, user_id=current_user.id)
+# ============================================================================
+# Type aliases for service functions
+# ============================================================================
+
+# Use Any for return type since add functions may return None or the model
+AddJellyfinFunc = Callable[
+    [AsyncSession, int, str, str, str, datetime | None],
+    Awaitable[Any],
+]
+GetListFunc = Callable[..., Awaitable[WhitelistListResponse]]
+RemoveFunc = Callable[[AsyncSession, int, int], Awaitable[bool]]
 
 
-@router.post("/content", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
-async def add_content_to_whitelist(
-    request: WhitelistAddRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistAddResponse:
-    """Add content to the user's whitelist.
+# ============================================================================
+# Jellyfin-ID Whitelist Endpoint Factory
+# ============================================================================
 
-    This protects the content from appearing in the old/unwatched content list.
+
+def create_jellyfin_whitelist_routes(
+    path: str,
+    add_func: AddJellyfinFunc,
+    get_func: GetListFunc,
+    remove_func: RemoveFunc,
+    whitelist_name: str,
+    list_description: str,
+    add_description: str,
+    remove_description: str,
+) -> None:
+    """Create GET, POST, DELETE endpoints for a jellyfin-id-based whitelist.
+
+    Args:
+        path: URL path segment (e.g., "french-only")
+        add_func: Service function to add item
+        get_func: Service function to get list
+        remove_func: Service function to remove item
+        whitelist_name: Human-readable name for messages (e.g., "french-only whitelist")
+        list_description: OpenAPI description for GET endpoint
+        add_description: OpenAPI description for POST endpoint
+        remove_description: OpenAPI description for DELETE endpoint
     """
-    try:
-        await add_to_whitelist(
-            db=db,
-            user_id=current_user.id,
+
+    @router.get(
+        f"/{path}",
+        response_model=WhitelistListResponse,
+        name=f"list_{path.replace('-', '_')}_whitelist",
+    )
+    async def list_whitelist(
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ) -> WhitelistListResponse:
+        return await get_func(db=db, user_id=current_user.id)
+
+    # Update docstring for OpenAPI
+    list_whitelist.__doc__ = list_description
+
+    @router.post(
+        f"/{path}",
+        response_model=WhitelistAddResponse,
+        status_code=status.HTTP_201_CREATED,
+        name=f"add_to_{path.replace('-', '_')}",
+    )
+    async def add_to_whitelist_endpoint(
+        request: WhitelistAddRequest,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ) -> WhitelistAddResponse:
+        try:
+            await add_func(
+                db,
+                current_user.id,
+                request.jellyfin_id,
+                request.name,
+                request.media_type,
+                request.expires_at,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(e),
+            )
+
+        return WhitelistAddResponse(
+            message=f"Added to {whitelist_name}",
             jellyfin_id=request.jellyfin_id,
             name=request.name,
-            media_type=request.media_type,
-            expires_at=request.expires_at,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
         )
 
-    return WhitelistAddResponse(
-        message="Added to whitelist",
-        jellyfin_id=request.jellyfin_id,
-        name=request.name,
+    add_to_whitelist_endpoint.__doc__ = add_description
+
+    @router.delete(
+        f"/{path}/{{whitelist_id}}",
+        response_model=WhitelistRemoveResponse,
+        name=f"remove_from_{path.replace('-', '_')}",
     )
-
-
-@router.delete("/content/{whitelist_id}", response_model=WhitelistRemoveResponse)
-async def remove_content_from_whitelist(
-    whitelist_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistRemoveResponse:
-    """Remove an item from the user's content whitelist.
-
-    After removal, the content may reappear in the old/unwatched content list.
-    """
-    removed = await remove_from_whitelist(
-        db=db,
-        user_id=current_user.id,
-        whitelist_id=whitelist_id,
-    )
-
-    if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Whitelist entry not found",
+    async def remove_from_whitelist_endpoint(
+        whitelist_id: int,
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ) -> WhitelistRemoveResponse:
+        removed = await remove_func(
+            db,
+            current_user.id,
+            whitelist_id,
         )
 
-    return WhitelistRemoveResponse(message="Removed from whitelist")
+        if not removed:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Whitelist entry not found",
+            )
+
+        return WhitelistRemoveResponse(message=f"Removed from {whitelist_name}")
+
+    remove_from_whitelist_endpoint.__doc__ = remove_description
 
 
-# French-Only Whitelist endpoints (US-5.2)
+# ============================================================================
+# Generate routes for 4 jellyfin-id-based whitelists
+# ============================================================================
 
+# Content Whitelist (old/unwatched content protection)
+create_jellyfin_whitelist_routes(
+    path="content",
+    add_func=add_to_whitelist,
+    get_func=get_whitelist,
+    remove_func=remove_from_whitelist,
+    whitelist_name="whitelist",
+    list_description="Get all items in the user's content whitelist.",
+    add_description="""Add content to the user's whitelist.
 
-@router.get("/french-only", response_model=WhitelistListResponse)
-async def list_french_only_whitelist(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistListResponse:
-    """Get all items in the user's french-only whitelist.
+This protects the content from appearing in the old/unwatched content list.""",
+    remove_description="""Remove an item from the user's content whitelist.
 
-    Items in this whitelist are exempt from missing English audio checks.
-    """
-    return await get_french_only_whitelist(db=db, user_id=current_user.id)
-
-
-@router.post(
-    "/french-only", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED
+After removal, the content may reappear in the old/unwatched content list.""",
 )
-async def add_to_french_only(
-    request: WhitelistAddRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistAddResponse:
-    """Add content to the user's french-only whitelist.
 
-    Items in this whitelist are exempt from missing English audio checks.
-    Use this for French-language films that don't need English audio.
-    """
-    try:
-        await add_to_french_only_whitelist(
-            db=db,
-            user_id=current_user.id,
-            jellyfin_id=request.jellyfin_id,
-            name=request.name,
-            media_type=request.media_type,
-            expires_at=request.expires_at,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
+# French-Only Whitelist (exempt from missing English audio checks)
+create_jellyfin_whitelist_routes(
+    path="french-only",
+    add_func=add_to_french_only_whitelist,
+    get_func=get_french_only_whitelist,
+    remove_func=remove_from_french_only_whitelist,
+    whitelist_name="french-only whitelist",
+    list_description="""Get all items in the user's french-only whitelist.
 
-    return WhitelistAddResponse(
-        message="Added to french-only whitelist",
-        jellyfin_id=request.jellyfin_id,
-        name=request.name,
-    )
+Items in this whitelist are exempt from missing English audio checks.""",
+    add_description="""Add content to the user's french-only whitelist.
 
+Items in this whitelist are exempt from missing English audio checks.
+Use this for French-language films that don't need English audio.""",
+    remove_description="""Remove an item from the user's french-only whitelist.
 
-@router.delete("/french-only/{whitelist_id}", response_model=WhitelistRemoveResponse)
-async def remove_from_french_only(
-    whitelist_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistRemoveResponse:
-    """Remove an item from the user's french-only whitelist.
-
-    After removal, the content may reappear in language issues if it's missing English audio.
-    """
-    removed = await remove_from_french_only_whitelist(
-        db=db,
-        user_id=current_user.id,
-        whitelist_id=whitelist_id,
-    )
-
-    if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Whitelist entry not found",
-        )
-
-    return WhitelistRemoveResponse(message="Removed from french-only whitelist")
-
-
-# Language-Exempt Whitelist endpoints (US-5.3)
-
-
-@router.get("/language-exempt", response_model=WhitelistListResponse)
-async def list_language_exempt_whitelist(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistListResponse:
-    """Get all items in the user's language-exempt whitelist.
-
-    Items in this whitelist are exempt from ALL language checks.
-    """
-    return await get_language_exempt_whitelist(db=db, user_id=current_user.id)
-
-
-@router.post(
-    "/language-exempt", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED
+After removal, the content may reappear in language issues if it's missing English audio.""",
 )
-async def add_to_language_exempt(
-    request: WhitelistAddRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistAddResponse:
-    """Add content to the user's language-exempt whitelist.
 
-    Items in this whitelist are exempt from ALL language checks.
-    Use this for content that should never flag language issues.
-    """
-    try:
-        await add_to_language_exempt_whitelist(
-            db=db,
-            user_id=current_user.id,
-            jellyfin_id=request.jellyfin_id,
-            name=request.name,
-            media_type=request.media_type,
-            expires_at=request.expires_at,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
+# Language-Exempt Whitelist (exempt from ALL language checks)
+create_jellyfin_whitelist_routes(
+    path="language-exempt",
+    add_func=add_to_language_exempt_whitelist,
+    get_func=get_language_exempt_whitelist,
+    remove_func=remove_from_language_exempt_whitelist,
+    whitelist_name="language-exempt whitelist",
+    list_description="""Get all items in the user's language-exempt whitelist.
 
-    return WhitelistAddResponse(
-        message="Added to language-exempt whitelist",
-        jellyfin_id=request.jellyfin_id,
-        name=request.name,
-    )
+Items in this whitelist are exempt from ALL language checks.""",
+    add_description="""Add content to the user's language-exempt whitelist.
 
+Items in this whitelist are exempt from ALL language checks.
+Use this for content that should never flag language issues.""",
+    remove_description="""Remove an item from the user's language-exempt whitelist.
 
-@router.delete("/language-exempt/{whitelist_id}", response_model=WhitelistRemoveResponse)
-async def remove_from_language_exempt(
-    whitelist_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistRemoveResponse:
-    """Remove an item from the user's language-exempt whitelist.
+After removal, the content may reappear in language issues if it has language problems.""",
+)
 
-    After removal, the content may reappear in language issues if it has language problems.
-    """
-    removed = await remove_from_language_exempt_whitelist(
-        db=db,
-        user_id=current_user.id,
-        whitelist_id=whitelist_id,
-    )
+# Large Content Whitelist (exempt from large content checks)
+create_jellyfin_whitelist_routes(
+    path="large",
+    add_func=add_to_large_whitelist,
+    get_func=get_large_whitelist,
+    remove_func=remove_from_large_whitelist,
+    whitelist_name="large content whitelist",
+    list_description="""Get all items in the user's large content whitelist.
 
-    if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Whitelist entry not found",
-        )
+Items in this whitelist are exempt from large content checks.""",
+    add_description="""Add content to the user's large content whitelist.
 
-    return WhitelistRemoveResponse(message="Removed from language-exempt whitelist")
+Items in this whitelist are exempt from large content checks.
+Use this for content you want to keep in high quality.""",
+    remove_description="""Remove an item from the user's large content whitelist.
+
+After removal, the content may reappear in the large content list.""",
+)
 
 
-# Large Content Whitelist endpoints
-
-
-@router.get("/large", response_model=WhitelistListResponse)
-async def list_large_whitelist(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistListResponse:
-    """Get all items in the user's large content whitelist.
-
-    Items in this whitelist are exempt from large content checks.
-    """
-    return await get_large_whitelist(db=db, user_id=current_user.id)
-
-
-@router.post("/large", response_model=WhitelistAddResponse, status_code=status.HTTP_201_CREATED)
-async def add_to_large(
-    request: WhitelistAddRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistAddResponse:
-    """Add content to the user's large content whitelist.
-
-    Items in this whitelist are exempt from large content checks.
-    Use this for content you want to keep in high quality.
-    """
-    try:
-        await add_to_large_whitelist(
-            db=db,
-            user_id=current_user.id,
-            jellyfin_id=request.jellyfin_id,
-            name=request.name,
-            media_type=request.media_type,
-            expires_at=request.expires_at,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
-
-    return WhitelistAddResponse(
-        message="Added to large content whitelist",
-        jellyfin_id=request.jellyfin_id,
-        name=request.name,
-    )
-
-
-@router.delete("/large/{whitelist_id}", response_model=WhitelistRemoveResponse)
-async def remove_from_large(
-    whitelist_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WhitelistRemoveResponse:
-    """Remove an item from the user's large content whitelist.
-
-    After removal, the content may reappear in the large content list.
-    """
-    removed = await remove_from_large_whitelist(
-        db=db,
-        user_id=current_user.id,
-        whitelist_id=whitelist_id,
-    )
-
-    if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Whitelist entry not found",
-        )
-
-    return WhitelistRemoveResponse(message="Removed from large content whitelist")
-
-
-# Request Whitelist endpoints (US-13.4)
+# ============================================================================
+# Request Whitelist - Has special title lookup logic, cannot be generalized
+# ============================================================================
 
 
 @router.get("/requests", response_model=RequestWhitelistListResponse)
@@ -368,27 +283,7 @@ async def add_to_requests(
         )
         cached_request = result.scalar_one_or_none()
         if cached_request:
-            # Try to get title from various sources
-            if cached_request.title and not cached_request.title.startswith("TMDB-"):
-                title = cached_request.title
-            elif cached_request.raw_data:
-                # Try to extract from raw_data
-                raw_data = cached_request.raw_data
-                media = raw_data.get("media", {})
-                # Try title/name from media object first
-                extracted_title = (
-                    media.get("title")
-                    or media.get("name")
-                    or media.get("originalTitle")
-                    or media.get("originalName")
-                )
-                # Fallback to slug (human-readable URL segment)
-                if not extracted_title and media.get("externalServiceSlug"):
-                    slug = media.get("externalServiceSlug", "")
-                    # Convert slug to title: "the-new-years" -> "The New Years"
-                    extracted_title = slug.replace("-", " ").title()
-                if extracted_title:
-                    title = extracted_title
+            title = _extract_title_from_cached_request(cached_request, title)
 
     try:
         await add_to_request_whitelist(
@@ -410,6 +305,35 @@ async def add_to_requests(
         jellyfin_id=str(request.jellyseerr_id),  # Reusing existing response model
         name=title,
     )
+
+
+def _extract_title_from_cached_request(
+    cached_request: CachedJellyseerrRequest, fallback: str
+) -> str:
+    """Extract title from cached request, trying multiple sources."""
+    # Try to get title from various sources
+    if cached_request.title and not cached_request.title.startswith("TMDB-"):
+        return cached_request.title
+
+    if cached_request.raw_data:
+        raw_data: dict[str, Any] = cached_request.raw_data
+        media: dict[str, Any] = raw_data.get("media", {})
+        # Try title/name from media object first
+        extracted_title: str | None = (
+            media.get("title")
+            or media.get("name")
+            or media.get("originalTitle")
+            or media.get("originalName")
+        )
+        # Fallback to slug (human-readable URL segment)
+        if not extracted_title and media.get("externalServiceSlug"):
+            slug: str = media.get("externalServiceSlug", "")
+            # Convert slug to title: "the-new-years" -> "The New Years"
+            extracted_title = slug.replace("-", " ").title()
+        if extracted_title:
+            return str(extracted_title)
+
+    return fallback
 
 
 @router.delete("/requests/{whitelist_id}", response_model=WhitelistRemoveResponse)
@@ -437,7 +361,9 @@ async def remove_from_requests(
     return WhitelistRemoveResponse(message="Removed from request whitelist")
 
 
-# Episode Language Exempt endpoints (US-52.3)
+# ============================================================================
+# Episode Language Exempt - Has completely different fields, cannot be generalized
+# ============================================================================
 
 
 @router.get("/episode-exempt", response_model=EpisodeExemptListResponse)
