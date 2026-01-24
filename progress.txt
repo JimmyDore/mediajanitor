@@ -161,4 +161,22 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Note: Functions were moved from router to service in US-57.4
 - All 718 tests pass, mypy clean
 
+**US-60.2: Add auth router tests**
+- Added `TestGetClientIp` class to `backend/tests/test_auth.py` with 6 tests:
+  - test_get_client_ip_from_x_forwarded_for_single_ip: Single IP extraction
+  - test_get_client_ip_from_x_forwarded_for_multiple_ips: Multiple IPs (picks first client IP)
+  - test_get_client_ip_from_x_forwarded_for_with_whitespace: Whitespace stripping
+  - test_get_client_ip_fallback_to_client_host: Fallback when X-Forwarded-For missing
+  - test_get_client_ip_unknown_when_no_client: Returns "unknown" when client is None
+  - test_get_client_ip_x_forwarded_for_takes_precedence: XFF takes precedence over client.host
+- Added `TestChangePassword` class with 6 tests:
+  - test_change_password_success: Full flow - change password, verify old fails, new works
+  - test_change_password_wrong_current_password: Returns 400 with error message
+  - test_change_password_requires_authentication: Returns 401 without token
+  - test_change_password_weak_new_password: Returns 422 for short password
+  - test_change_password_missing_current_password: Returns 422
+  - test_change_password_missing_new_password: Returns 422
+- Existing tests already cover: send_signup_notification (5 tests), send_blocked_signup_notification (2 tests), signup disabled flow (4 tests)
+- All 730 tests pass (728 unit + 2 integration skipped without Docker), mypy clean
+
 ---
