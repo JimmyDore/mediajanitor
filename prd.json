@@ -118,8 +118,8 @@
       ],
       "context": "Backend architecture refactoring. 5 nearly identical implementations for add/get/remove/get_ids across ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist, LargeContentWhitelist, JellyseerrRequestWhitelist. Each follows pattern: check exists -> raise ValueError if duplicate -> create entry with user_id, jellyfin_id, name, media_type, expires_at -> return WhitelistListResponse. Create generic BaseWhitelistService[T] class with model type parameter. Depends on US-57.1.",
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created whitelist_base.py with two generic base classes: BaseJellyfinIdWhitelistService (for ContentWhitelist, FrenchOnly, LanguageExempt, Large) and BaseJellyseerrIdWhitelistService (for JellyseerrRequest). Refactored whitelist.py to use these classes. EpisodeLanguageExempt not refactored due to different field structure. All 657 tests pass, mypy clean."
     },
     {
       "id": "US-57.3",

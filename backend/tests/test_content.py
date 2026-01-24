@@ -5550,7 +5550,7 @@ class TestRecentEpisodesFromCachedData:
 
     def test_returns_none_when_no_episodes(self) -> None:
         """Should return None when no episodes exist in raw_data."""
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Request with no episodes in seasons
         request = CachedJellyseerrRequest(
@@ -5575,7 +5575,7 @@ class TestRecentEpisodesFromCachedData:
 
     def test_returns_none_when_no_seasons(self) -> None:
         """Should return None when no seasons exist."""
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         request = CachedJellyseerrRequest(
             user_id=1,
@@ -5594,7 +5594,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return None when all episodes are outside the days_back window."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episodes from 30 days ago
         old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -5629,7 +5629,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return dict of {season_num: [episode_nums]} for recent episodes."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episodes from 2 days ago
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
@@ -5674,7 +5674,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return episodes from multiple seasons if both have recent episodes."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
 
@@ -5715,7 +5715,7 @@ class TestRecentEpisodesFromCachedData:
         """Should skip episodes with null airDate."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
 
@@ -5750,7 +5750,7 @@ class TestRecentEpisodesFromCachedData:
         """Should respect the days_back parameter."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episode from 10 days ago
         ten_days_ago = (datetime.now(UTC) - timedelta(days=10)).strftime("%Y-%m-%d")
