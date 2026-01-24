@@ -135,8 +135,8 @@
       ],
       "context": "Backend architecture refactoring. routers/whitelist.py (516 lines) has identical GET/POST/DELETE patterns for 6 whitelist types. Options: 1) Path parameter /api/whitelist/{type} with type validation, 2) Endpoint factory function that generates routes. Either way, maintain backwards compatibility with existing API contracts. OpenAPI docs should still show all endpoints. Depends on US-57.2.",
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Used endpoint factory pattern (create_jellyfin_whitelist_routes) for 4 jellyfin-id-based whitelists. Requests and episode-exempt kept separate due to special logic. Reduced from 516 to 435 lines (~16% reduction). All 694 tests pass, mypy clean, all endpoints verified in Docker."
     },
     {
       "id": "US-57.4",
