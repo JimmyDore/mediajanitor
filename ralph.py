@@ -29,6 +29,7 @@ Direct usage (alternative):
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -194,6 +195,12 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
 
     cmd.extend(["-p", prompt])
 
+    # Set up environment - add IS_SANDBOX=1 for skip_permissions to work as root
+    env = None
+    if skip_permissions:
+        env = os.environ.copy()
+        env["IS_SANDBOX"] = "1"
+
     # Use Popen for real-time streaming (like shell's tee)
     process = subprocess.Popen(
         cmd,
@@ -201,6 +208,7 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
         stderr=subprocess.STDOUT,  # Merge stderr into stdout
         text=True,
         bufsize=1,  # Line buffered
+        env=env,
     )
 
     stdout_lines: list[str] = []
@@ -312,8 +320,13 @@ def once(
     """
     run_preflight_checks()
     console.print("[cyan]Starting single Ralph iteration...[/cyan]")
+    
+    # Set up environment - add IS_SANDBOX=1 for skip_permissions to work as root
+    env = None
     if skip_permissions:
-        subprocess.run(["claude", "--dangerously-skip-permissions", RALPH_PROMPT])
+        env = os.environ.copy()
+        env["IS_SANDBOX"] = "1"
+        subprocess.run(["claude", "--dangerously-skip-permissions", RALPH_PROMPT], env=env)
     else:
         subprocess.run(["claude", "--permission-mode", "acceptEdits", RALPH_PROMPT])
 
