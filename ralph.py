@@ -177,12 +177,15 @@ def check_prd_completion() -> int:
         return 999
 
 
-def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None) -> subprocess.CompletedProcess:
+def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None, skip_permissions: bool = False) -> subprocess.CompletedProcess:
     """Run claude command and return result.
 
     Streams output in real-time (like shell's tee) while also writing to log file.
     """
-    cmd = ["claude", "--permission-mode", "acceptEdits"]
+    if skip_permissions:
+        cmd = ["claude", "--dangerously-skip-permissions"]
+    else:
+        cmd = ["claude", "--permission-mode", "acceptEdits"]
 
     if streaming:
         cmd.extend(["--output-format", "stream-json", "--verbose"])
@@ -245,10 +248,10 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
     )
 
 
-def run_with_retry(prompt: str, streaming: bool = False, log_file: str | None = None) -> None:
+def run_with_retry(prompt: str, streaming: bool = False, log_file: str | None = None, skip_permissions: bool = False) -> None:
     """Run claude command with retry logic for rate limits."""
     while True:
-        result = run_claude(prompt, streaming=streaming, log_file=log_file)
+        result = run_claude(prompt, streaming=streaming, log_file=log_file, skip_permissions=skip_permissions)
 
         if result.returncode == 0:
             break
@@ -299,7 +302,9 @@ def normalize_qa_skill(skill: str) -> str:
 
 
 @app.command()
-def once() -> None:
+def once(
+    skip_permissions: Annotated[bool, typer.Option("--skip-permissions", help="Use --dangerously-skip-permissions for Claude")] = False,
+) -> None:
     """Run a single Ralph iteration (human-in-the-loop mode).
 
     This is the simplest mode - it runs Claude once with the Ralph prompt
@@ -307,7 +312,10 @@ def once() -> None:
     """
     run_preflight_checks()
     console.print("[cyan]Starting single Ralph iteration...[/cyan]")
-    subprocess.run(["claude", "--permission-mode", "acceptEdits", RALPH_PROMPT])
+    if skip_permissions:
+        subprocess.run(["claude", "--dangerously-skip-permissions", RALPH_PROMPT])
+    else:
+        subprocess.run(["claude", "--permission-mode", "acceptEdits", RALPH_PROMPT])
 
 
 @app.command()
@@ -317,6 +325,7 @@ def run(
     qa: Annotated[str | None, typer.Option("--qa", help="Comma-separated QA skills to run, or 'none' to skip")] = None,
     log_file: Annotated[str, typer.Option("--log-file", "-l", help="Output log file path")] = DEFAULT_LOG_FILE,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be executed without running")] = False,
+    skip_permissions: Annotated[bool, typer.Option("--skip-permissions", help="Use --dangerously-skip-permissions for Claude (for sandboxed environments)")] = False,
 ) -> None:
     """Run Ralph autonomous loop for multiple iterations.
 
@@ -400,7 +409,7 @@ def run(
     # Main development loop
     for i in range(1, iterations + 1):
         section_header(f"Iteration {i} of {iterations}")
-        run_with_retry(RALPH_PROMPT, streaming=True, log_file=log_file)
+        run_with_retry(RALPH_PROMPT, streaming=True, log_file=log_file, skip_permissions=skip_permissions)
         summary.iterations_completed = i
 
         remaining = check_prd_completion()
