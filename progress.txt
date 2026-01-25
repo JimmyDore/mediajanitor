@@ -225,4 +225,51 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Coverage: nicknames.py 100% (all service functions tested)
 - All 771 tests pass, mypy clean
 
+**US-60.5: Add sonarr service tests**
+- Created `backend/tests/test_sonarr_service.py` with 54 tests covering all 8 functions:
+  - `TestValidateSonarrConnection` (11 tests):
+    - test_returns_true_on_200_success: Success path verification
+    - test_uses_system_status_endpoint: Correct /api/v3/system/status endpoint called
+    - test_sends_api_key_header: X-Api-Key header sent correctly
+    - test_normalizes_trailing_slash: URL normalization (no double slashes)
+    - test_returns_false_on_401_unauthorized: Invalid API key handling
+    - test_returns_false_on_403_forbidden: Access denied handling
+    - test_returns_false_on_404_not_found: Wrong URL handling
+    - test_returns_false_on_500_server_error: Server error handling
+    - test_returns_false_on_timeout: Timeout exception handling
+    - test_returns_false_on_connection_error: Connection refused handling
+    - test_returns_false_on_dns_error: DNS failure handling
+  - `TestGetUserSonarrSettings` (3 tests): None when no settings, returns settings, user isolation
+  - `TestSaveSonarrSettings` (5 tests): Create new, update existing, trailing slash, encryption, user isolation
+  - `TestGetDecryptedSonarrApiKey` (5 tests): None key, decryption, empty string, special chars, unicode
+  - `TestGetSonarrSeriesByTmdbId` (10 tests): Match, not found, empty, non-200, timeout, connection error, endpoint, trailing slash, missing tmdbId, None id
+  - `TestGetSonarrTmdbToSlugMap` (9 tests): Mapping, empty, non-200, timeout, connection error, missing fields, empty slug, trailing slash
+  - `TestDeleteSonarrSeries` (7 tests): Success, URL, delete_files params, non-200, timeout, connection error
+  - `TestDeleteSeriesByTmdbId` (4 tests): Lookup and delete flows, not found, delete fails, delete_files param
+- Coverage: sonarr.py 100% (all service functions tested)
+- All 788 tests pass, mypy clean
+
+**US-60.6: Add radarr service tests**
+- Created `backend/tests/test_radarr_service.py` with 46 tests covering all 7 functions:
+  - `TestValidateRadarrConnection` (11 tests):
+    - test_returns_true_on_200_success: Success path verification
+    - test_uses_system_status_endpoint: Correct /api/v3/system/status endpoint called
+    - test_sends_api_key_header: X-Api-Key header sent correctly
+    - test_normalizes_trailing_slash: URL normalization (no double slashes)
+    - test_returns_false_on_401_unauthorized: Invalid API key handling
+    - test_returns_false_on_403_forbidden: Access denied handling
+    - test_returns_false_on_404_not_found: Wrong URL handling
+    - test_returns_false_on_500_server_error: Server error handling
+    - test_returns_false_on_timeout: Timeout exception handling
+    - test_returns_false_on_connection_error: Connection refused handling
+    - test_returns_false_on_dns_error: DNS failure handling
+  - `TestGetUserRadarrSettings` (3 tests): None when no settings, returns settings, user isolation
+  - `TestSaveRadarrSettings` (5 tests): Create new, update existing, trailing slash, encryption, user isolation
+  - `TestGetDecryptedRadarrApiKey` (5 tests): None key, decryption, empty string, special chars, unicode
+  - `TestGetRadarrMovieByTmdbId` (9 tests): Match, empty, non-200, timeout, connection error, endpoint, trailing slash, None id, multiple matches
+  - `TestDeleteRadarrMovie` (8 tests): Success, URL, delete_files params, non-200, timeout, connection error, trailing slash
+  - `TestDeleteMovieByTmdbId` (5 tests): Lookup and delete flows, not found, delete fails, delete_files param, default param
+- Coverage: radarr.py 100% (all service functions tested)
+- All 834 tests pass, mypy clean
+
 ---
