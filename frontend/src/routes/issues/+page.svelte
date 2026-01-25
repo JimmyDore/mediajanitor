@@ -1299,31 +1299,33 @@
 							>
 								<td class="col-name">
 									<div class="name-cell">
-										{#if hasExpandableEpisodes(item)}
-											<span class="expand-icon" aria-hidden="true">
-												{#if expandedRows.has(item.jellyfin_id)}
-													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-														<polyline points="6 9 12 15 18 9"/>
-													</svg>
-												{:else}
-													<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-														<polyline points="9 18 15 12 9 6"/>
-													</svg>
-												{/if}
-											</span>
-										{/if}
-										<span class="item-name" title={item.name}>{item.name}</span>
-										<span class="item-year">{item.production_year ?? '—'}</span>
-										{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
-											<span class="missing-seasons" title="Missing seasons">
-												S{item.missing_seasons.join(', S')}
-											</span>
-										{/if}
-										{#if hasExpandableEpisodes(item)}
-											<span class="episode-count" title="Episodes with language issues">
-												{item.problematic_episodes?.length} {item.problematic_episodes?.length === 1 ? 'episode' : 'episodes'}
-											</span>
-										{/if}
+										<div class="title-row">
+											{#if hasExpandableEpisodes(item)}
+												<span class="expand-icon" aria-hidden="true">
+													{#if expandedRows.has(item.jellyfin_id)}
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+															<polyline points="6 9 12 15 18 9"/>
+														</svg>
+													{:else}
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+															<polyline points="9 18 15 12 9 6"/>
+														</svg>
+													{/if}
+												</span>
+											{/if}
+											<span class="item-name" title={item.name}>{item.name}</span>
+											<span class="item-year">{item.production_year ?? '—'}</span>
+											{#if hasExpandableEpisodes(item)}
+												<span class="episode-count" title="Episodes with language issues">
+													{item.problematic_episodes?.length} {item.problematic_episodes?.length === 1 ? 'episode' : 'episodes'}
+												</span>
+											{/if}
+											{#if isRequestItem(item) && item.missing_seasons && item.missing_seasons.length > 0}
+												<span class="missing-seasons" title="Missing seasons">
+													S{item.missing_seasons.join(', S')}
+												</span>
+											{/if}
+										</div>
 										<span class="external-links">
 											{#if getJellyfinUrl(item)}
 												<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
@@ -1959,10 +1961,18 @@
 	}
 
 	.name-cell {
-		display: grid;
-		grid-template-columns: 1fr auto auto auto;
-		align-items: baseline;
+		display: flex;
+		align-items: center;
 		gap: var(--space-2);
+		min-width: 0;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+		flex: 1;
 	}
 
 	.item-name {
@@ -1971,7 +1981,8 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		min-width: 0;
+		min-width: 60px;
+		flex: 1 1 auto;
 	}
 
 	.item-year {
@@ -1979,8 +1990,7 @@
 		font-family: var(--font-mono);
 		color: var(--text-muted);
 		white-space: nowrap;
-		min-width: 40px;
-		text-align: right;
+		flex-shrink: 0;
 	}
 
 	.col-requester {
@@ -2017,10 +2027,10 @@
 	}
 
 	.external-links {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		gap: var(--space-1);
-		margin-left: var(--space-1);
+		flex-shrink: 0;
 	}
 
 	.external-link {
@@ -2288,30 +2298,200 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* Responsive */
-	@media (max-width: 768px) {
+	/* ==========================================================================
+	   Mobile/Tablet Responsive Styles
+	   ========================================================================== */
+
+	/* Tablet and smaller laptops (≤1352px) - use card layout */
+	@media (max-width: 1352px) {
 		.issues-page {
 			padding: var(--space-4);
 		}
 
+		/* Hide low-priority columns */
 		.col-watched,
-		.col-added {
+		.col-added,
+		.col-size {
 			display: none;
 		}
 
-		.issues-table th,
-		.issues-table td {
-			padding: var(--space-2) var(--space-3);
+		/* Hide table header on mobile - use card layout */
+		.issues-table thead {
+			display: none;
+		}
+
+		/* Convert table to block layout */
+		.issues-table,
+		.issues-table tbody,
+		.issues-table tr {
+			display: block;
+		}
+
+		/* Each row becomes a card */
+		.issues-table tr {
+			padding: var(--space-3);
+			border-bottom: 1px solid var(--border);
+			display: grid;
+			grid-template-columns: 1fr auto;
+			grid-template-rows: auto auto;
+			gap: var(--space-2);
+			align-items: start;
+		}
+
+		/* Name cell spans left column */
+		.issues-table td.col-name {
+			grid-column: 1;
+			grid-row: 1;
+			width: 100%;
+			padding: 0;
+		}
+
+		/* Issues cell below name */
+		.issues-table td.col-issues {
+			grid-column: 1;
+			grid-row: 2;
+			width: 100%;
+			padding: 0;
+		}
+
+		/* Actions stay on right, vertically centered */
+		.issues-table td.col-actions {
+			grid-column: 2;
+			grid-row: 1 / 3;
+			display: flex;
+			align-items: center;
+			padding: 0;
+			padding-left: var(--space-3);
+		}
+
+		/* Name cell internal layout - stack vertically */
+		.name-cell {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-2);
+		}
+
+		/* Title row: wrap naturally */
+		.title-row {
+			flex-wrap: wrap;
+			gap: var(--space-1) var(--space-2);
+			width: 100%;
+			align-items: baseline;
+		}
+
+		/* Let name wrap to multiple lines */
+		.item-name {
+			white-space: normal;
+			word-break: break-word;
+			flex: 1 1 auto;
+			min-width: 0;
+			max-width: none;
+			line-height: 1.3;
+		}
+
+		/* Year inline with name */
+		.item-year {
+			flex-shrink: 0;
+		}
+
+		/* Hide episode count on mobile - chevron is enough indicator */
+		.episode-count {
+			display: none;
+		}
+
+		/* Hide external links on mobile */
+		.external-links {
+			display: none;
+		}
+
+		/* Badges row - horizontal wrap */
+		.badge-groups {
+			flex-direction: row;
+			flex-wrap: wrap;
+			gap: var(--space-2);
+		}
+
+		/* Hide requester column on mobile */
+		.col-requester {
+			display: none;
+		}
+
+		/* Hide release column on mobile */
+		.col-release {
+			display: none;
+		}
+
+		/* Episode expansion row on mobile */
+		.issues-table tr.episode-row {
+			display: block;
+			padding: 0;
+			grid-template-columns: none;
+		}
+
+		.issues-table tr.episode-row td {
+			display: block;
+			width: 100%;
+		}
+
+		.episode-list {
+			padding: var(--space-3);
+			padding-left: var(--space-4);
+		}
+	}
+
+	/* Phone (≤480px) */
+	@media (max-width: 480px) {
+		.issues-page {
+			padding: var(--space-3);
+		}
+
+		.issues-table tr {
+			padding: var(--space-3);
+		}
+
+		/* Readable text size */
+		.item-name {
+			font-size: var(--font-size-sm);
+		}
+
+		.item-year {
+			font-size: var(--font-size-xs);
+		}
+
+		.episode-count {
+			font-size: 11px;
+			padding: 1px 6px;
+		}
+
+		/* Slightly smaller badges but still readable */
+		.badge {
+			padding: 2px 5px;
+			font-size: 10px;
+		}
+
+		.badge-action {
+			min-width: 18px;
+			height: 18px;
+			font-size: 8px;
+		}
+	}
+
+	/* Small phone (≤380px) - ultra compact */
+	@media (max-width: 380px) {
+		.filter-nav {
+			gap: 0;
+		}
+
+		.filter-tab {
+			padding: var(--space-2) var(--space-2);
+			font-size: var(--font-size-xs);
 		}
 	}
 
 	@media (max-width: 640px) {
 		.filter-nav {
 			overflow-x: auto;
-		}
-
-		.col-size {
-			display: none;
+			-webkit-overflow-scrolling: touch;
 		}
 	}
 

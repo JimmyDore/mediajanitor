@@ -5550,7 +5550,7 @@ class TestRecentEpisodesFromCachedData:
 
     def test_returns_none_when_no_episodes(self) -> None:
         """Should return None when no episodes exist in raw_data."""
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Request with no episodes in seasons
         request = CachedJellyseerrRequest(
@@ -5575,7 +5575,7 @@ class TestRecentEpisodesFromCachedData:
 
     def test_returns_none_when_no_seasons(self) -> None:
         """Should return None when no seasons exist."""
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         request = CachedJellyseerrRequest(
             user_id=1,
@@ -5594,7 +5594,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return None when all episodes are outside the days_back window."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episodes from 30 days ago
         old_date = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -5629,7 +5629,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return dict of {season_num: [episode_nums]} for recent episodes."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episodes from 2 days ago
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
@@ -5674,7 +5674,7 @@ class TestRecentEpisodesFromCachedData:
         """Should return episodes from multiple seasons if both have recent episodes."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
 
@@ -5715,7 +5715,7 @@ class TestRecentEpisodesFromCachedData:
         """Should skip episodes with null airDate."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
 
@@ -5750,7 +5750,7 @@ class TestRecentEpisodesFromCachedData:
         """Should respect the days_back parameter."""
         from datetime import UTC, datetime, timedelta
 
-        from app.services.content import _get_recent_episodes_from_cached_data
+        from app.services.content_queries import _get_recent_episodes_from_cached_data
 
         # Episode from 10 days ago
         ten_days_ago = (datetime.now(UTC) - timedelta(days=10)).strftime("%Y-%m-%d")
@@ -6127,24 +6127,24 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 3,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 3,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6186,14 +6186,14 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 8,
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 8,
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6233,26 +6233,26 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": old_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 5,
-                                "episodeCount": 10,
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 4,  # Partially available
-                                "episodeCount": 12,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
-                                    {"episodeNumber": 2, "name": "Ep2", "airDate": old_date},
-                                    {"episodeNumber": 3, "name": "Ep3", "airDate": old_date},
-                                    {"episodeNumber": 4, "name": "Ep4", "airDate": old_date},
-                                    {"episodeNumber": 5, "name": "Ep5", "airDate": recent_date},
-                                ],
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 5,
+                            "episodeCount": 10,
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,  # Partially available
+                            "episodeCount": 12,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "Ep1", "airDate": old_date},
+                                {"episodeNumber": 2, "name": "Ep2", "airDate": old_date},
+                                {"episodeNumber": 3, "name": "Ep3", "airDate": old_date},
+                                {"episodeNumber": 4, "name": "Ep4", "airDate": old_date},
+                                {"episodeNumber": 5, "name": "Ep5", "airDate": recent_date},
+                            ],
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -6334,12 +6334,12 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {"seasonNumber": 1, "status": 5, "episodeCount": 6},
-                            {"seasonNumber": 3, "status": 5, "episodeCount": 8},
-                            {"seasonNumber": 4, "status": 5, "episodeCount": 10},
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 6},
+                        {"seasonNumber": 3, "status": 5, "episodeCount": 8},
+                        {"seasonNumber": 4, "status": 5, "episodeCount": 10},
+                    ],
                 },
             )
             session.add(request)
@@ -6378,12 +6378,12 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": recent_date,
-                        "seasons": [
-                            {"seasonNumber": 0, "status": 5, "episodeCount": 3},  # Specials
-                            {"seasonNumber": 1, "status": 5, "episodeCount": 10},
-                            {"seasonNumber": 2, "status": 5, "episodeCount": 10},
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {"seasonNumber": 0, "status": 5, "episodeCount": 3},  # Specials
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                        {"seasonNumber": 2, "status": 5, "episodeCount": 10},
+                    ],
                 },
             )
             session.add(request)
@@ -6425,26 +6425,26 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
                 raw_data={
                     "media": {
                         "mediaAddedAt": old_date,
-                        "seasons": [
-                            {
-                                "seasonNumber": 1,
-                                "status": 4,
-                                "episodeCount": 10,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
-                                ],
-                            },
-                            {
-                                "seasonNumber": 2,
-                                "status": 4,
-                                "episodeCount": 8,
-                                "episodes": [
-                                    {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
-                                    {"episodeNumber": 2, "name": "S2E2", "airDate": recent_date},
-                                ],
-                            },
-                        ],
-                    }
+                    },
+                    "seasons": [
+                        {
+                            "seasonNumber": 1,
+                            "status": 4,
+                            "episodeCount": 10,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S1E1", "airDate": old_date},
+                            ],
+                        },
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodeCount": 8,
+                            "episodes": [
+                                {"episodeNumber": 1, "name": "S2E1", "airDate": recent_date},
+                                {"episodeNumber": 2, "name": "S2E2", "airDate": recent_date},
+                            ],
+                        },
+                    ],
                 },
             )
             session.add(request)
@@ -7231,3 +7231,270 @@ class TestEpisodeLanguageExempt:
             assert ("series-exp-test", 1, 1) not in exempt_set  # Expired
             assert ("series-exp-test", 1, 2) in exempt_set  # Not expired
             assert ("series-exp-test", 1, 3) in exempt_set  # Permanent
+
+
+class TestContentSummaryParallelization:
+    """Test US-59.1: Parallelized whitelist queries in get_content_summary."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "parallel@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_get_content_summary_returns_correct_data_with_parallelization(
+        self, client: TestClient
+    ) -> None:
+        """get_content_summary should correctly aggregate data with parallelized queries.
+
+        This test verifies that all whitelist types are correctly fetched and applied
+        when using asyncio.gather() for parallel execution.
+        """
+        from app.database import (
+            CachedJellyseerrRequest,
+            FrenchOnlyWhitelist,
+            JellyseerrRequestWhitelist,
+            LanguageExemptWhitelist,
+            LargeContentWhitelist,
+        )
+
+        token = self._get_auth_token(client, "parallel-test@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get user ID from auth
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Setup test data with various whitelist types
+        async with TestingAsyncSessionLocal() as session:
+            now = datetime.now(UTC)
+            old_date = (now - timedelta(days=150)).isoformat()
+
+            # Create a large movie (should be counted unless whitelisted)
+            large_movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="large-movie-parallel",
+                name="Large Movie Parallel",
+                media_type="Movie",
+                production_year=2023,
+                date_created=old_date,
+                path="/media/movies/Large",
+                size_bytes=20_000_000_000,  # 20GB
+                played=True,
+                play_count=1,
+                last_played_date=old_date,
+            )
+
+            # Create an old movie (should be counted unless whitelisted)
+            old_movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="old-movie-parallel",
+                name="Old Movie Parallel",
+                media_type="Movie",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/movies/Old",
+                size_bytes=5_000_000_000,  # 5GB
+                played=True,
+                play_count=1,
+                last_played_date=old_date,
+            )
+
+            # Create a movie with language issues (no FR audio)
+            lang_issue_movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="lang-movie-parallel",
+                name="Language Issue Movie Parallel",
+                media_type="Movie",
+                production_year=2023,
+                date_created=now.isoformat(),
+                path="/media/movies/LangIssue",
+                size_bytes=5_000_000_000,  # 5GB
+                played=True,
+                play_count=1,
+                last_played_date=now.isoformat(),
+                language_check_result={
+                    "has_english": True,
+                    "has_french": False,  # Missing FR audio = language issue
+                    "has_french_subs": True,
+                },
+            )
+
+            # Create a movie to be french-only whitelisted
+            french_only_movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="french-only-parallel",
+                name="French Only Movie Parallel",
+                media_type="Movie",
+                production_year=2023,
+                date_created=now.isoformat(),
+                path="/media/movies/FrenchOnly",
+                size_bytes=5_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=now.isoformat(),
+                language_check_result={
+                    "has_english": False,  # No EN audio
+                    "has_french": True,
+                    "has_french_subs": True,
+                },
+            )
+
+            # Create unavailable request
+            unavailable_request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=9999,
+                title="Unavailable Movie Parallel",
+                media_type="movie",
+                status=1,  # Pending
+                requested_by="TestUser",
+                created_at_source=now.isoformat(),
+                tmdb_id=99999,
+            )
+
+            session.add_all(
+                [
+                    large_movie,
+                    old_movie,
+                    lang_issue_movie,
+                    french_only_movie,
+                    unavailable_request,
+                ]
+            )
+            await session.commit()
+
+        # First check: no whitelists applied
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify initial counts (before whitelisting)
+        assert data["large_movies"]["count"] >= 1  # At least the large movie
+        assert data["old_content"]["count"] >= 2  # old + large (old from no recent watch)
+        assert data["language_issues"]["count"] >= 1  # lang_issue + french_only (no EN)
+        assert data["unavailable_requests"]["count"] >= 1  # unavailable_request
+
+        # Now add whitelist entries for each type
+        async with TestingAsyncSessionLocal() as session:
+            # Whitelist the large movie (exclude from large count)
+            large_whitelist = LargeContentWhitelist(
+                user_id=user_id,
+                jellyfin_id="large-movie-parallel",
+                name="Large Movie Parallel",
+                media_type="Movie",
+                expires_at=None,
+            )
+
+            # Whitelist french-only movie (no longer needs EN audio)
+            french_only_whitelist = FrenchOnlyWhitelist(
+                user_id=user_id,
+                jellyfin_id="french-only-parallel",
+                name="French Only Movie Parallel",
+                media_type="Movie",
+                expires_at=None,
+            )
+
+            # Whitelist language issue movie (exempt from language check)
+            lang_exempt_whitelist = LanguageExemptWhitelist(
+                user_id=user_id,
+                jellyfin_id="lang-movie-parallel",
+                name="Language Issue Movie Parallel",
+                media_type="Movie",
+                expires_at=None,
+            )
+
+            # Whitelist the unavailable request
+            request_whitelist = JellyseerrRequestWhitelist(
+                user_id=user_id,
+                jellyseerr_id=9999,
+                title="Unavailable Movie Parallel",
+                media_type="movie",
+                expires_at=None,
+            )
+
+            session.add_all(
+                [
+                    large_whitelist,
+                    french_only_whitelist,
+                    lang_exempt_whitelist,
+                    request_whitelist,
+                ]
+            )
+            await session.commit()
+
+        # Check after whitelisting - counts should be reduced
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Large movie is now whitelisted, so count should be 0
+        # (unless there are other large items)
+        assert data["large_movies"]["count"] == 0
+
+        # Language issue movie is now exempt, french_only movie is in french-only whitelist
+        # Both should be excluded from language_issues count
+        assert data["language_issues"]["count"] == 0
+
+        # Unavailable request is now whitelisted
+        assert data["unavailable_requests"]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_content_summary_handles_empty_whitelists(self, client: TestClient) -> None:
+        """get_content_summary should work correctly when all whitelists are empty."""
+        token = self._get_auth_token(client, "empty-whitelist@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get user ID from auth
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create some test data without any whitelists
+        async with TestingAsyncSessionLocal() as session:
+            now = datetime.now(UTC)
+
+            # Create a simple movie (no issues)
+            movie = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="simple-movie",
+                name="Simple Movie",
+                media_type="Movie",
+                production_year=2023,
+                date_created=now.isoformat(),
+                path="/media/movies/Simple",
+                size_bytes=5_000_000_000,
+                played=True,
+                play_count=1,
+                last_played_date=now.isoformat(),
+                language_check_result={
+                    "has_english": True,
+                    "has_french": True,
+                    "has_french_subs": True,
+                },
+            )
+            session.add(movie)
+            await session.commit()
+
+        # Should return valid summary with zero counts (no issues)
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify all fields exist and have correct structure
+        assert "old_content" in data
+        assert "large_movies" in data
+        assert "language_issues" in data
+        assert "unavailable_requests" in data
+        assert "recently_available" in data
+
+        # Each category should have count and size fields
+        for category in ["old_content", "large_movies", "language_issues", "unavailable_requests"]:
+            assert "count" in data[category]
+            assert "total_size_bytes" in data[category]
+            assert "total_size_formatted" in data[category]

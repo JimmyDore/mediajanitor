@@ -18,6 +18,21 @@ This skill focuses on **architectural concerns only**:
 
 ## Workflow
 
+### Step 0: Review Existing Findings
+
+**Before starting any review, read `SUGGESTIONS.md`** to understand what has already been discovered:
+
+```bash
+# Read the Architecture section of SUGGESTIONS.md
+```
+
+Focus on:
+- **Active items** - Don't duplicate these
+- **Struck-through items (`~~item~~`)** - Already fixed, don't re-report
+- **Gaps** - What architectural concerns HAVEN'T been checked yet?
+
+This prevents wasting time re-discovering known issues and helps you focus on finding NEW problems.
+
 ### Step 1: Review Project Structure
 
 Check if code is organized consistently:

@@ -36,24 +36,6 @@
       "notes": ""
     },
     {
-      "id": "US-54.1",
-      "title": "Mobile-friendly issues table",
-      "story": "As a mobile user, I want to see content titles on the Issues page, so that I can identify items without needing a desktop",
-      "acceptanceCriteria": [
-        "At mobile breakpoints (< 640px), issues display in a card layout or responsive format",
-        "Title, type, size, and issue badges are visible on mobile",
-        "Actions (whitelist, delete) remain accessible",
-        "Desktop table layout unchanged",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: resize to mobile width, issues should be readable"
-      ],
-      "context": "Mobile UX improvements. On mobile (375px), Issues table hides movie/series titles - only year visible in first column. Implement card layout for mobile using CSS media query @media (max-width: 640px). Each card should show title prominently, with type/size/badges below, and action buttons accessible. Keep existing table for desktop (>640px).",
-      "priority": 53,
-      "passes": false,
-      "notes": ""
-    },
-    {
       "id": "US-55.1",
       "title": "Standardize settings auto-save behavior",
       "story": "As a user changing settings, I want consistent save behavior across all settings, so that I know when my changes are saved",
@@ -119,8 +101,8 @@
       ],
       "context": "Backend architecture refactoring. services/content.py is 2474 lines containing 5+ whitelist types, content analysis, issue detection, library queries. Split into: 1) whitelist.py - all add_to_*/get_*/remove_from_*/get_*_ids functions, 2) content_analysis.py - is_old_or_unwatched, is_large_movie, has_language_issues, get_item_issues, 3) content_queries.py - get_content_summary, get_content_issues, get_library, get_recently_available. Keep content.py as facade that imports and re-exports from these modules for backwards compatibility.",
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Split into 3 focused modules: whitelist.py (558 lines), content_analysis.py (423 lines), content_queries.py (880 lines). content.py is now a thin facade (197 lines) re-exporting from these modules for backwards compatibility."
     },
     {
       "id": "US-57.2",
@@ -136,8 +118,8 @@
       ],
       "context": "Backend architecture refactoring. 5 nearly identical implementations for add/get/remove/get_ids across ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist, LargeContentWhitelist, JellyseerrRequestWhitelist. Each follows pattern: check exists -> raise ValueError if duplicate -> create entry with user_id, jellyfin_id, name, media_type, expires_at -> return WhitelistListResponse. Create generic BaseWhitelistService[T] class with model type parameter. Depends on US-57.1.",
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created whitelist_base.py with two generic base classes: BaseJellyfinIdWhitelistService (for ContentWhitelist, FrenchOnly, LanguageExempt, Large) and BaseJellyseerrIdWhitelistService (for JellyseerrRequest). Refactored whitelist.py to use these classes. EpisodeLanguageExempt not refactored due to different field structure. All 657 tests pass, mypy clean."
     },
     {
       "id": "US-57.3",
@@ -153,8 +135,8 @@
       ],
       "context": "Backend architecture refactoring. routers/whitelist.py (516 lines) has identical GET/POST/DELETE patterns for 6 whitelist types. Options: 1) Path parameter /api/whitelist/{type} with type validation, 2) Endpoint factory function that generates routes. Either way, maintain backwards compatibility with existing API contracts. OpenAPI docs should still show all endpoints. Depends on US-57.2.",
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Used endpoint factory pattern (create_jellyfin_whitelist_routes) for 4 jellyfin-id-based whitelists. Requests and episode-exempt kept separate due to special logic. Reduced from 516 to 435 lines (~16% reduction). All 694 tests pass, mypy clean, all endpoints verified in Docker."
     },
     {
       "id": "US-57.4",
@@ -171,8 +153,8 @@
       ],
       "context": "Backend architecture refactoring. routers/content.py contains business logic: _delete_cached_media_by_tmdb_id() (lines 200-236) iterates items and filters by TMDB ID, _lookup_jellyseerr_media_by_tmdb() (lines 173-197) does DB lookup, service URL construction (lines 102-107). Move these to content service layer. Router should only parse request, call service, return response.",
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created content_cache.py with 6 functions: get_user_settings, lookup_jellyseerr_media_by_tmdb, lookup_jellyseerr_media_by_request_id, delete_cached_media_by_tmdb_id, delete_cached_jellyseerr_request_by_tmdb_id, delete_cached_jellyseerr_request_by_id. Router reduced from 528 to 403 lines (~24% reduction). All 694 tests pass, mypy clean, integration tests pass."
     },
     {
       "id": "US-58.1",
@@ -207,8 +189,8 @@
       ],
       "context": "Performance optimization. get_content_summary() in services/content.py:1061-1174 makes 4 separate sequential whitelist queries: get_french_only_ids, get_language_exempt_ids, get_large_whitelist_ids, get_request_whitelist_ids. These are independent and can run in parallel. Use asyncio.gather(*[query1, query2, query3, query4]) to parallelize. Measure response time before/after.",
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Parallelized 5 independent queries using asyncio.gather(): get_large_whitelist_ids, get_french_only_ids, get_language_exempt_ids, get_unavailable_requests_count, get_recently_available_count. All 696 tests pass, mypy clean, 37 integration tests pass."
     },
     {
       "id": "US-59.2",
@@ -223,8 +205,8 @@
       ],
       "context": "Performance optimization. get_content_issues() in services/content.py:1737-1904 makes 4 separate whitelist queries plus get_sonarr_tmdb_to_slug_map() API call sequentially. All independent - parallelize with asyncio.gather(). Similar pattern to US-59.1.",
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Parallelized 5 independent queries using asyncio.gather(): get_user_thresholds, _get_user_settings, get_french_only_ids, get_language_exempt_ids, get_large_whitelist_ids. Sonarr slug map fetch runs after (depends on user_settings). All 696 tests pass, mypy clean, 37 integration tests pass."
     },
     {
       "id": "US-59.3",
@@ -257,8 +239,8 @@
       ],
       "context": "Performance optimization. calculate_season_sizes() in services/sync.py:1099-1243 fetches episodes multiple times - once for size calculation, then again for each Jellyfin user for watch data. With 15 users and 100 series with 5 seasons each = 100 x 5 x 16 = 8000 API calls. Refactor to fetch episode data once, store in dict by series_id, then iterate users to check watch status without re-fetching. Single pass approach.",
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Optimized calculate_season_sizes() to: 1) Fetch seasons once (reused for size + language check), 2) Fetch episodes once per season (reused for size + language), 3) Batch user watch data fetches at series level (1 call per user per series instead of 1 call per user per season). Added fetch_series_episodes() for batched episode fetching and check_episodes_languages() for inline language checking. Reduces API calls from (2 + 2N + NU) to (1 + N + U) per series. All 697 tests pass, mypy clean, 37 integration tests pass."
     },
     {
       "id": "US-60.1",
@@ -275,8 +257,8 @@
       ],
       "context": "Test coverage improvements. app/routers/content.py has 26% coverage. Missing tests for: 1) /api/content/issues endpoint filter handling (filter=old|large|language|requests), 2) Sonarr slug map building for TV show requests, 3) _delete_cached_media_by_tmdb_id() helper (iterates items, filters by TMDB ID), 4) _lookup_jellyseerr_media_by_tmdb() helper (DB lookup). Add to tests/test_content.py.",
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_content_cache_service.py with 21 tests covering all content_cache.py functions: get_user_settings, lookup_jellyseerr_media_by_tmdb, lookup_jellyseerr_media_by_request_id, delete_cached_media_by_tmdb_id, delete_cached_jellyseerr_request_by_tmdb_id, delete_cached_jellyseerr_request_by_id. All 718 tests pass, mypy clean. content.py and content_cache.py have 100% coverage."
     },
     {
       "id": "US-60.2",
@@ -294,8 +276,8 @@
       ],
       "context": "Test coverage improvements. app/routers/auth.py has 56% coverage. Missing tests for: 1) send_signup_notification() and send_blocked_signup_notification() (lines 121-203) - mock httpx calls to Slack webhook, 2) _get_client_ip() X-Forwarded-For parsing (lines 78-90), 3) Signup disabled flow returning 403 (lines 214-221), 4) Password change endpoint (lines 565-596). Add to tests/test_auth.py.",
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added TestGetClientIp class (6 tests) for _get_client_ip() X-Forwarded-For parsing: single IP, multiple IPs (picks first), whitespace handling, client.host fallback, unknown when client is None, precedence over client.host. Added TestChangePassword class (6 tests) for password change endpoint: success flow, wrong current password (400), requires authentication (401), weak new password (422), missing current_password (422), missing new_password (422). Existing tests already covered: send_signup_notification, send_blocked_signup_notification, signup disabled flow. All 86 auth tests pass, mypy clean."
     },
     {
       "id": "US-60.3",
@@ -313,8 +295,8 @@
       ],
       "context": "Test coverage improvements. app/services/jellyfin.py has 42% coverage. Test: 1) validate_jellyfin_connection() - mock httpx for success (returns system info), timeout, invalid response, 2) save_jellyfin_settings() - create new UserSettings vs update existing, 3) get_decrypted_jellyfin_api_key() - when None, when encrypted. Create tests/test_jellyfin_service.py.",
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_jellyfin_service.py with 24 tests: TestValidateJellyfinConnection (11 tests: success, endpoint validation, API key header, trailing slash, 401/403/404/500 responses, timeout, connection error, DNS error), TestGetUserJellyfinSettings (3 tests), TestSaveJellyfinSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedJellyfinApiKey (5 tests: None key, decryption, empty string, special chars, unicode). Coverage: 100% for jellyfin.py. All 754 tests pass, mypy clean."
     },
     {
       "id": "US-60.4",
@@ -331,8 +313,8 @@
       ],
       "context": "Test coverage improvements. app/services/nicknames.py has 36% coverage. Test CRUD: 1) create_nickname() - success, duplicate detection (should raise or return error), 2) get_nicknames() - verify ordering (alphabetical or by created_at), 3) update_nickname() - success path, not found case, 4) delete_nickname() - success, not found. Create tests/test_nicknames_service.py.",
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_nicknames_service.py with 17 tests covering all 4 functions: TestCreateNickname (4 tests: success, duplicate detection, user isolation, created_at set), TestGetNicknames (5 tests: empty list, alphabetical ordering, user isolation, all fields, ISO format), TestUpdateNickname (4 tests: success, not found, user isolation, field preservation), TestDeleteNickname (4 tests: success, not found, user isolation, only affects specified item). All 771 tests pass, mypy clean."
     },
     {
       "id": "US-60.5",
@@ -349,8 +331,8 @@
       ],
       "context": "Test coverage improvements. app/services/sonarr.py has 43% coverage. Test: 1) validate_sonarr_connection() - success, timeout, invalid API key response, 2) save_sonarr_settings() - create new vs update existing, 3) get_sonarr_series_by_tmdb_id() - success, API error, not found, 4) get_sonarr_tmdb_to_slug_map() - success, empty response. Create tests/test_sonarr_service.py.",
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_sonarr_service.py with 54 tests covering all 8 functions: TestValidateSonarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserSonarrSettings (3 tests), TestSaveSonarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedSonarrApiKey (5 tests), TestGetSonarrSeriesByTmdbId (10 tests: match, not found, empty, non-200, timeout, connection error, endpoint, trailing slash, missing tmdbId, None id), TestGetSonarrTmdbToSlugMap (9 tests: success, empty, non-200, timeout, connection error, missing fields, empty slug, trailing slash), TestDeleteSonarrSeries (7 tests: success, URL, delete_files params, non-200, timeout, connection error), TestDeleteSeriesByTmdbId (4 tests: success, not found, delete fails, delete_files param). All 788 tests pass, mypy clean."
     },
     {
       "id": "US-60.6",
@@ -365,8 +347,8 @@
       ],
       "context": "Test coverage improvements. app/services/radarr.py has 54% coverage. Test: 1) validate_radarr_connection() - network errors (timeout, connection refused, DNS failure), 2) save_radarr_settings() - update existing settings path (not just create). Create or extend tests/test_radarr_service.py.",
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_radarr_service.py with 46 tests covering all 7 functions: TestValidateRadarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserRadarrSettings (3 tests), TestSaveRadarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedRadarrApiKey (5 tests), TestGetRadarrMovieByTmdbId (9 tests: match, empty, non-200, timeout, connection error, endpoint, trailing slash, None id, multiple matches), TestDeleteRadarrMovie (8 tests), TestDeleteMovieByTmdbId (5 tests). All 834 tests pass, mypy clean."
     },
     {
       "id": "US-60.7",
@@ -531,6 +513,86 @@
       ],
       "context": "Infrastructure improvements. /health at main.py:57 only returns {'status': 'healthy'} without checking DB or Redis. Enhance to: 1) Execute simple DB query (SELECT 1), 2) Ping Redis if REDIS_URL configured, 3) Return {'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}} on success, 4) Return 503 with {'status': 'unhealthy', 'dependencies': {'database': 'error: ...'}} on failure. Add unit tests mocking DB/Redis.",
       "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-63.1",
+      "title": "Fetch Sonarr history during sync",
+      "story": "As a user with Sonarr configured, I want my sync to fetch episode download history from Sonarr, so that I can see when specific episodes were added",
+      "acceptanceCriteria": [
+        "Add `get_sonarr_history_since()` to `services/sonarr.py`",
+        "Call Sonarr API: `GET /api/v3/history/since?date={cutoff}&eventType=downloadFolderImported&includeSeries=true&includeEpisode=true`",
+        "Build map: `{tmdb_id: [{season, episode, title, added_at}, ...]}`",
+        "During sync, if user has Sonarr configured, fetch history",
+        "Store in `CachedJellyseerrRequest.raw_data` as `sonarr_history` key",
+        "Gracefully skip if Sonarr not configured (no error)",
+        "Gracefully handle Sonarr API failures (log warning, continue sync)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "context": "Episode-level Recently Available via Sonarr History. Currently 'Recently Available' shows series-level info ('Seasons 1-3 added') because Jellyseerr only provides episode airDate (broadcast date), not download date. Sonarr's GET /api/v3/history/since returns download events with episode details and timestamps. Fetch during sync (not on-demand) to match existing pattern. Store in CachedJellyseerrRequest.raw_data.sonarr_history for later use. Match series by TMDB ID (common key between Jellyseerr and Sonarr). Use same cutoff as recently_available_days (default 7). NON-GOALS: No Radarr integration, no real-time API calls.",
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-63.2",
+      "title": "Smart episode grouping logic",
+      "story": "As a user viewing Recently Available, I want episodes grouped intelligently, so that full season drops show as 'Season 2' instead of listing every episode",
+      "acceptanceCriteria": [
+        "Add `group_episodes_for_display()` to content service",
+        "Input: list of episode additions for a series, total episodes per season",
+        "If all episodes of a season added same day → 'Season X'",
+        "If consecutive episodes same day → 'SXEY-EZ' format",
+        "If non-consecutive → comma-separated list",
+        "If single episode → 'SXEY' format",
+        "Returns structured data with: display_text, season, episode_numbers, is_full_season",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "context": "Episode-level Recently Available. Smart grouping improves readability when many episodes added at once. Grouping rules: all episodes of season = 'Season X', consecutive = 'S2E5-E8', non-consecutive = 'S2E3, S2E5, S2E7', single = 'S2E5'. Input is list of {season, episode, added_at} from Sonarr history. Need total_episodes_per_season from Jellyseerr/TMDB to know if full season. Return EpisodeAddition with display_text, season, episode_numbers list, is_full_season bool. Group by added_at date for same-day grouping.",
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-63.3",
+      "title": "Update Recently Available API response",
+      "story": "As a frontend developer, I want the /api/info/recent endpoint to return episode-level data, so that I can display it in the UI",
+      "acceptanceCriteria": [
+        "Add `EpisodeAddition` model: added_date, display_text, season, episode_numbers, is_full_season",
+        "Add `episode_additions: list[EpisodeAddition] | None` to `RecentlyAvailableItem`",
+        "In `get_recently_available()`, check for `sonarr_history` in cached request's raw_data",
+        "Apply smart grouping to generate `episode_additions` for TV shows",
+        "Status 5 (fully available) shows: keep current `season_info` display (no episode granularity)",
+        "Status 4 (partial) shows: include `episode_additions` if Sonarr data available",
+        "If no Sonarr data: `episode_additions` is null (frontend uses fallback)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "context": "Episode-level Recently Available API. Add EpisodeAddition model to models/content.py with fields: added_date (str ISO), display_text (str like 'S2E5-E8'), season (int), episode_numbers (list[int]), is_full_season (bool). Add optional episode_additions field to RecentlyAvailableItem. In get_recently_available() at services/content.py, check request.raw_data.get('sonarr_history'), call group_episodes_for_display() if present. Status 5 shows keep current season_info (full availability). Status 4 shows get episode granularity. No Sonarr data = null episode_additions (frontend fallback to season_info).",
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-63.4",
+      "title": "Display episode-level info in frontend",
+      "story": "As a user viewing Recently Available, I want to see which episodes were added when, so that I know what new content is available",
+      "acceptanceCriteria": [
+        "Add `EpisodeAddition` TypeScript interface",
+        "Update `getDetails()` to use `episode_additions` when available",
+        "Display format: 'S2E5-E8' or 'Season 2' (from display_text)",
+        "If multiple addition dates, show most recent first",
+        "One row per show (grouped), not per episode",
+        "Fallback to current `season_info` display when `episode_additions` is null",
+        "Typecheck passes",
+        "Unit tests pass",
+        "Verify in browser: TV shows with Sonarr data show episode-level details"
+      ],
+      "context": "Episode-level Recently Available frontend. Add EpisodeAddition interface to frontend types matching backend model. Update /info/recent page getDetails() function to prefer episode_additions when available, fallback to season_info. Display episode_additions[0].display_text (most recent) or join multiple dates. Keep one row per show - don't create separate rows per episode. Style similar to current season_info display. Test with Sonarr configured user to verify episode-level display, test without Sonarr to verify fallback works.",
+      "priority": 59,
       "passes": false,
       "notes": ""
     }
