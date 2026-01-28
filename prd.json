@@ -438,8 +438,8 @@
       ],
       "context": "Infrastructure improvements. No deploy.resources.limits.memory configured. Memory leak could consume all VPS memory. Add to docker-compose.yml under deploy: resources: limits: memory: Xm. Recommended: backend 512MB, celery-worker 512MB, celery-beat 128MB, frontend 256MB, redis 256MB. Document in CLAUDE.md Infrastructure section.",
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added deploy.resources.limits.memory to all 5 containers: backend (512M), celery-worker (512M), celery-beat (128M), frontend (256M), redis (256M). Total: ~1.7GB max. Documented in CLAUDE.md Infrastructure section with table of limits and rationale."
     },
     {
       "id": "US-62.3",
