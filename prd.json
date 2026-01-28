@@ -452,8 +452,8 @@
       ],
       "context": "Infrastructure improvements. No logging.driver options configured in docker-compose.yml. Logs could grow indefinitely and fill disk. Add to each service: logging: driver: json-file, options: max-size: '10m', max-file: '3'. This limits each container to 30MB total log storage (3 files x 10MB).",
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added logging configuration to all 5 containers (redis, backend, celery-worker, celery-beat, frontend) using json-file driver with max-size: 10m and max-file: 3. Each container limited to 30MB total log storage. Total across all containers: ~150MB max."
     },
     {
       "id": "US-62.4",
