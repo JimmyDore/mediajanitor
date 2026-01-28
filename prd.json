@@ -364,8 +364,8 @@
       ],
       "context": "Test coverage improvements. app/tasks.py has 58% coverage. Test: 1) get_configured_user_ids() (lines 22-32) - returns user IDs with Jellyfin configured, 2) send_sync_failure_notification_for_celery() error handling (lines 49-83) - mock Slack webhook, 3) sync_user() exception handling and notification (lines 142-149) - verify notification sent on failure. Create tests/test_tasks.py.",
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tests/test_tasks.py with 24 tests covering: TestGetConfiguredUserIds (4 tests: empty list, configured users, excludes users with only URL, excludes users with only API key), TestSendSyncFailureNotificationForCeleryLogic (6 tests: email lookup, fallback email, nonexistent user, logs warning on exception, sends with correct params, uses fallback email), TestSyncUserTaskLogic (6 tests: run_sync_for_user, success path, failure returns error dict, failure sends notification, failure logs error, logs info on success), TestGetUserEmail (2 tests), TestSyncAllUsersTask (3 tests), TestTestTask (3 tests). All 856 tests pass, mypy clean."
     },
     {
       "id": "US-61.1",
