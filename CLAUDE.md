@@ -585,3 +585,44 @@ Memory limits are configured in `docker-compose.yml` to prevent runaway processe
 **Total**: ~1.7GB maximum memory across all containers.
 
 To adjust limits, edit the `deploy.resources.limits.memory` value for each service in `docker-compose.yml`.
+
+### Rolling Deployment (Zero-Downtime)
+
+The deployment workflow uses rolling updates to minimize downtime. Instead of stopping all containers before starting new ones, services are updated one at a time.
+
+**Deployment order:**
+1. **redis** - Infrastructure first (usually just restart, no rebuild)
+2. **backend** - API server with health check verification
+3. **celery-worker** - Background tasks
+4. **celery-beat** - Scheduler
+5. **frontend** - Static assets last
+
+**How it works:**
+```bash
+# Each service is updated independently
+docker-compose up -d --no-deps --build backend  # Build and start new container
+# Wait for health check to pass
+docker-compose up -d --no-deps --build celery-worker
+# ... etc
+```
+
+**Key benefits:**
+- Backend remains available while frontend rebuilds (and vice versa)
+- Health checks verify each service before moving to the next
+- If a service fails to start, deployment stops (doesn't cascade failures)
+- Automatic rollback to `:previous` images if verification fails
+
+**Rollback mechanism:**
+- Before deployment, current images are tagged as `:previous`
+- If final health verification fails, all containers are stopped and restarted with previous images
+- Manual intervention required only if rollback also fails
+
+**Manual rollback:**
+```bash
+ssh your-server
+cd ~/mediajanitor
+docker-compose down
+docker tag mediajanitor-backend:previous mediajanitor-backend:latest
+docker tag mediajanitor-frontend:previous mediajanitor-frontend:latest
+docker-compose up -d
+```

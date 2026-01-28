@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to VPS
+      - name: Rolling deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -44,19 +44,85 @@ jobs:
             docker system prune -f
             docker image prune -f --filter "until=24h" --filter "label!=rollback"
 
-            # Rebuild images (don't bring down containers yet)
-            echo "Building new images..."
-            docker-compose build --no-cache
+            # ============================================
+            # ROLLING DEPLOYMENT - Zero-downtime updates
+            # ============================================
+            # Deploy services one at a time to minimize downtime
+            # Order: redis (infra) -> backend -> celery workers -> frontend
 
-            # Stop and restart containers with new images
-            docker-compose down
-            docker-compose up -d
+            echo ""
+            echo "=== Starting Rolling Deployment ==="
+            echo ""
 
-            # Show status
+            # Helper function to wait for a service to be healthy
+            wait_for_healthy() {
+              local service=$1
+              local max_attempts=${2:-30}
+              local attempt=1
+
+              echo "Waiting for $service to be healthy..."
+              while [ $attempt -le $max_attempts ]; do
+                local health=$(docker-compose ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
+                if [ "$health" = "healthy" ]; then
+                  echo "$service is healthy!"
+                  return 0
+                fi
+                echo "  Attempt $attempt/$max_attempts - status: $health"
+                sleep 5
+                attempt=$((attempt + 1))
+              done
+              echo "$service failed to become healthy after $max_attempts attempts"
+              return 1
+            }
+
+            # 1. Update Redis (if image changed - usually just restart)
+            echo "[1/5] Updating redis..."
+            docker-compose up -d --no-deps redis
+            wait_for_healthy redis 12 || { echo "Redis update failed"; exit 1; }
+
+            # 2. Update backend (build new image, start new container)
+            echo ""
+            echo "[2/5] Updating backend..."
+            docker-compose up -d --no-deps --build backend
+            wait_for_healthy backend 30 || { echo "Backend update failed"; exit 1; }
+
+            # Verify backend is responding to requests
+            echo "Verifying backend API..."
+            if ! curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Backend API not responding!"
+              exit 1
+            fi
+            echo "Backend API responding!"
+
+            # 3. Update celery-worker (build new image, start new container)
+            echo ""
+            echo "[3/5] Updating celery-worker..."
+            docker-compose up -d --no-deps --build celery-worker
+            wait_for_healthy celery-worker 30 || { echo "Celery worker update failed"; exit 1; }
+
+            # 4. Update celery-beat (build new image, start new container)
+            echo ""
+            echo "[4/5] Updating celery-beat..."
+            docker-compose up -d --no-deps --build celery-beat
+            wait_for_healthy celery-beat 20 || { echo "Celery beat update failed"; exit 1; }
+
+            # 5. Update frontend (build new image, start new container)
+            echo ""
+            echo "[5/5] Updating frontend..."
+            docker-compose up -d --no-deps --build frontend
+            # Frontend doesn't have health check in docker-compose, just wait a bit
+            sleep 10
+            echo "Frontend updated!"
+
+            echo ""
+            echo "=== Rolling Deployment Complete ==="
+            echo ""
+
+            # Show final status
             docker-compose ps
             df -h / | tail -1
 
-      - name: Health check with rollback
+      - name: Final health verification and cleanup
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -65,48 +131,77 @@ jobs:
           script: |
             cd ~/mediajanitor
 
-            echo "Waiting for backend to be ready..."
-            HEALTH_CHECK_PASSED=false
+            echo "=== Final Health Verification ==="
+            echo ""
 
-            for i in {1..30}; do
-              if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-                echo "Health check passed!"
-                HEALTH_CHECK_PASSED=true
-                break
+            # Verify all services are running and healthy
+            ALL_HEALTHY=true
+
+            # Check backend API
+            echo "Checking backend API..."
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "✓ Backend API is healthy"
+            else
+              echo "✗ Backend API not responding"
+              ALL_HEALTHY=false
+            fi
+
+            # Check container health statuses
+            for service in redis backend celery-worker celery-beat; do
+              health=$(docker-compose ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
+              if [ "$health" = "healthy" ]; then
+                echo "✓ $service container is healthy"
+              else
+                echo "✗ $service container status: $health"
+                ALL_HEALTHY=false
               fi
-              echo "Attempt $i/30 - waiting 5s..."
-              sleep 5
             done
 
-            if [ "$HEALTH_CHECK_PASSED" = true ]; then
-              echo "Deployment successful! Cleaning up previous images..."
+            # Check frontend is running (no health check defined)
+            if docker-compose ps frontend | grep -q "Up"; then
+              echo "✓ Frontend container is running"
+            else
+              echo "✗ Frontend container is not running"
+              ALL_HEALTHY=false
+            fi
+
+            echo ""
+
+            if [ "$ALL_HEALTHY" = true ]; then
+              echo "=== Deployment Successful! ==="
+              echo "Cleaning up previous images..."
               docker rmi mediajanitor-backend:previous 2>/dev/null || true
               docker rmi mediajanitor-frontend:previous 2>/dev/null || true
+              echo "Done!"
               exit 0
             fi
 
-            echo "Health check failed after 30 attempts"
-            echo "=== Backend logs ==="
-            docker-compose logs --tail=50 backend
+            echo "=== Deployment Verification Failed ==="
+            echo ""
+            echo "=== Service logs ==="
+            docker-compose logs --tail=30 backend
+            echo ""
+            docker-compose logs --tail=10 celery-worker
+            echo ""
 
             # Attempt rollback if previous images exist
             echo ""
-            echo "=== Attempting rollback ==="
+            echo "=== Attempting Rollback ==="
             if docker image inspect mediajanitor-backend:previous > /dev/null 2>&1; then
-              echo "Previous images found, rolling back..."
+              echo "Previous images found, rolling back all services..."
 
-              # Stop current containers
+              # Stop all current containers
               docker-compose down
 
               # Restore previous images
               docker tag mediajanitor-backend:previous mediajanitor-backend:latest
               docker tag mediajanitor-frontend:previous mediajanitor-frontend:latest
 
-              # Start with previous images
+              # Start all services with previous images
               docker-compose up -d
 
               echo "Rollback complete. Verifying..."
-              sleep 10
+              sleep 15
 
               if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
                 echo "Rollback successful - previous version is running"
@@ -115,6 +210,7 @@ jobs:
               fi
             else
               echo "No previous images available for rollback"
+              echo "Manual intervention required"
             fi
 
             exit 1

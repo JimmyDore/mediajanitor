@@ -496,8 +496,8 @@
       ],
       "context": "Infrastructure improvements. docker-compose down takes all services offline before rebuild - users experience downtime. Implement rolling deployment: 1) Pull latest code, 2) Build backend: docker-compose up -d --no-deps --build backend, 3) Wait for health check, 4) Build frontend: docker-compose up -d --no-deps --build frontend, 5) Build celery workers similarly. Document process in CLAUDE.md or deploy docs.",
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented rolling deployment in deploy.yml: Services updated one at a time (redis -> backend -> celery-worker -> celery-beat -> frontend) using 'docker-compose up -d --no-deps --build' pattern. Each service waits for health check before proceeding. Removed docker-compose down that caused downtime. Added wait_for_healthy() helper function. Final verification step checks all services are healthy before cleanup. Documented in CLAUDE.md Infrastructure section."
     },
     {
       "id": "US-62.7",

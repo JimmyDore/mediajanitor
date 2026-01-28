@@ -372,4 +372,26 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Renamed step from "Health check" to "Health check with rollback"
 - YAML syntax validated successfully
 
+**US-62.6: Implement rolling deployment**
+- Refactored `.github/workflows/deploy.yml` for zero-downtime deployments:
+  - Replaced `docker-compose down` + `docker-compose up -d` with rolling updates
+  - Services updated one at a time using `docker-compose up -d --no-deps --build <service>` pattern
+  - Deployment order: redis -> backend -> celery-worker -> celery-beat -> frontend
+  - Added `wait_for_healthy()` shell function to poll container health status
+  - Each service waits for health check before proceeding to next
+  - Backend additionally verified via curl to /health endpoint
+  - Frontend (no health check) waits 10 seconds after start
+- Updated final verification step:
+  - Renamed from "Health check with rollback" to "Final health verification and cleanup"
+  - Checks all container health statuses
+  - Checks frontend is "Up" (no health check defined)
+  - On failure: logs backend and celery-worker, attempts rollback
+- Documented in CLAUDE.md new "Rolling Deployment (Zero-Downtime)" section:
+  - Deployment order and rationale
+  - How `--no-deps --build` pattern works
+  - Benefits of rolling deployment
+  - Rollback mechanism explanation
+  - Manual rollback commands
+- YAML syntax validated successfully
+
 ---
