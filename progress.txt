@@ -298,4 +298,46 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
   - `TestTestTask` (3 tests): Success with input, empty string, special chars
 - All 856 tests pass, mypy clean
 
+**US-61.1: Fix CLAUDE.md port documentation**
+- Updated "Running the Project" section in `CLAUDE.md`:
+  - Docker section now shows `localhost:8080` with note "(mapped from container port 8000)"
+  - Backend Only section renamed to "Backend Only (without Docker)"
+  - Direct uvicorn command now includes port 8000 in comment
+- All port references now consistent:
+  - Docker context: `localhost:8080` for backend
+  - Direct uvicorn: `localhost:8000` for backend
+  - Frontend: `localhost:5173` in both contexts
+- No code changes, documentation only
+
+**US-61.2: Update CLAUDE.md skills list**
+- Listed all 21 skills in `CLAUDE.md` grouped by category:
+  - **PRD Management (4)**: prd, ralph-init, prd-sync, prd-archive
+  - **QA Skills (9)**: qa-accessibility, qa-api-contracts, qa-architecture, qa-documentation, qa-infra, qa-performance, qa-security, qa-test-coverage, qa-ux
+  - **UX & Product (2)**: ux-expert, product-ideation
+  - **Workflow & Utilities (6)**: morning-routine, review-suggestions, improve-claude-md, fix, skill-creator, setup-email
+- Removed non-existent `/original-script` reference
+- Updated project structure tree to show skill categories instead of individual files
+- No code changes, documentation only
+
+### 2026-01-28
+
+**US-61.3: Fix README.md git clone URLs**
+- Fixed inconsistent git clone URLs in `README.md`:
+  - Quick Start: Changed `https://github.com/jimmmydore/media-janitor.git` to `https://github.com/JimmyDore/mediajanitor.git`
+  - Installation: Changed `https://github.com/jimmy/media-janitor.git` to `https://github.com/JimmyDore/mediajanitor.git`
+- Also updated `cd` commands from `cd media-janitor` to `cd mediajanitor` for consistency
+- Verified correct GitHub username and repo name from git remote
+- No code changes, documentation only
+
+**US-62.1: Add Celery container health checks**
+- Added health check to `celery-worker` in `docker-compose.yml`:
+  - `celery -A app.celery_app inspect ping -d celery@$HOSTNAME`
+  - Pings the specific worker to verify it's processing tasks
+  - 30s interval, 10s timeout, 3 retries, 30s start_period
+- Added health check to `celery-beat` in `docker-compose.yml`:
+  - `pgrep -f 'celery.*beat'` to verify beat process is running
+  - 30s interval, 10s timeout, 3 retries, 10s start_period
+- Both services already have `restart: unless-stopped`, so unhealthy containers restart automatically
+- Docker-compose syntax validated successfully
+
 ---
