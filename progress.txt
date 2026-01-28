@@ -272,4 +272,30 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - Coverage: radarr.py 100% (all service functions tested)
 - All 834 tests pass, mypy clean
 
+**US-60.7: Add tasks module tests**
+- Created `backend/tests/test_tasks.py` with 24 tests covering all task functions:
+  - `TestGetConfiguredUserIds` (4 tests):
+    - test_returns_empty_list_when_no_users_configured: Empty list when no settings
+    - test_returns_user_ids_with_jellyfin_configured: Returns users with URL + API key
+    - test_excludes_users_with_only_server_url: Excludes incomplete configs
+    - test_excludes_users_with_only_api_key: Excludes incomplete configs
+  - `TestSendSyncFailureNotificationForCeleryLogic` (6 tests):
+    - test_notification_called_with_user_email: _get_user_email returns correct email
+    - test_fallback_email_when_user_not_found: Uses user_X format when no email
+    - test_get_user_email_returns_none_for_nonexistent_user: None for missing user
+    - test_notification_wrapper_logs_warning_on_exception: Logs warning, doesn't raise
+    - test_notification_wrapper_sends_with_correct_params: Correct service/error params
+    - test_notification_wrapper_uses_fallback_email: Fallback email used when None
+  - `TestSyncUserTaskLogic` (6 tests):
+    - test_run_sync_for_user_calls_service: Calls run_user_sync correctly
+    - test_sync_user_success_path: Returns sync result on success
+    - test_sync_user_failure_returns_error_dict: Returns failed status on exception
+    - test_sync_user_failure_sends_notification: Calls notification on failure
+    - test_sync_user_failure_logs_error: Logs error with user ID
+    - test_sync_user_logs_info_on_success: Logs start and completion
+  - `TestGetUserEmail` (2 tests): Email lookup, None for missing user
+  - `TestSyncAllUsersTask` (3 tests): Queues each user, handles empty list, logs info
+  - `TestTestTask` (3 tests): Success with input, empty string, special chars
+- All 856 tests pass, mypy clean
+
 ---
