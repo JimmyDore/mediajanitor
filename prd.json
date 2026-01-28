@@ -378,8 +378,8 @@
       ],
       "context": "Documentation updates. Backend port documented as localhost:8000 in 'Running the Project' section, but docker-compose maps to 8080:8000 - users running Docker access localhost:8080. Curl examples in other sections correctly use 8080. Update CLAUDE.md to clarify: Docker = 8080, direct uvicorn = 8000.",
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated 'Running the Project' section: Docker shows localhost:8080 (mapped from container port 8000), Backend Only section shows localhost:8000 for direct uvicorn. All port references are now consistent."
     },
     {
       "id": "US-61.2",

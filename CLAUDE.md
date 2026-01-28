@@ -550,16 +550,16 @@ SECRET_KEY=your-secret-key-here
 ### Development (Docker)
 ```bash
 docker-compose up
-# Backend: http://localhost:8000
+# Backend: http://localhost:8080  (mapped from container port 8000)
 # Frontend: http://localhost:5173
 ```
 
-### Backend Only
+### Backend Only (without Docker)
 ```bash
 cd backend
 uv sync --extra dev                 # Install dependencies
 uv run pytest                       # Run tests
-uv run uvicorn app.main:app --reload  # Run server
+uv run uvicorn app.main:app --reload  # Run server (http://localhost:8000)
 ```
 
 ### Frontend Only
