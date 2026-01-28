@@ -421,8 +421,8 @@
       ],
       "context": "Infrastructure improvements. Only backend and redis have health checks in docker-compose.yml. Celery worker and celery-beat could silently fail without detection. Add healthcheck using celery inspect ping or checking process status. Example: `celery -A app.tasks inspect ping` returns 'pong' if healthy. Set restart: unless-stopped with healthcheck to auto-restart on failure.",
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added health checks: celery-worker uses 'celery inspect ping' to verify worker responds to pings. celery-beat uses 'pgrep -f celery.*beat' to verify beat process is running. Both have 30s intervals, 10s timeout, 3 retries, and appropriate start_period (30s for worker, 10s for beat). Combined with existing restart: unless-stopped, unhealthy containers will automatically restart."
     },
     {
       "id": "US-62.2",
