@@ -567,3 +567,21 @@ npm run test                       # Run unit tests
 npm run test:e2e                   # Run E2E tests
 npm run dev                        # Run dev server
 ```
+
+## Infrastructure
+
+### Container Resource Limits
+
+Memory limits are configured in `docker-compose.yml` to prevent runaway processes from consuming all VPS memory:
+
+| Container      | Memory Limit | Rationale                                    |
+|----------------|--------------|----------------------------------------------|
+| backend        | 512MB        | FastAPI + SQLAlchemy, handles API requests   |
+| celery-worker  | 512MB        | Background sync tasks, API calls to Jellyfin |
+| celery-beat    | 128MB        | Lightweight scheduler, minimal memory needs  |
+| frontend       | 256MB        | Node.js serving static SvelteKit app         |
+| redis          | 256MB        | In-memory cache and Celery broker            |
+
+**Total**: ~1.7GB maximum memory across all containers.
+
+To adjust limits, edit the `deploy.resources.limits.memory` value for each service in `docker-compose.yml`.
