@@ -513,8 +513,8 @@
       ],
       "context": "Infrastructure improvements. /health at main.py:57 only returns {'status': 'healthy'} without checking DB or Redis. Enhance to: 1) Execute simple DB query (SELECT 1), 2) Ping Redis if REDIS_URL configured, 3) Return {'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}} on success, 4) Return 503 with {'status': 'unhealthy', 'dependencies': {'database': 'error: ...'}} on failure. Add unit tests mocking DB/Redis.",
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced /health endpoint with check_database_health() and check_redis_health() functions. Database check executes SELECT 1, Redis check sends PING. Returns 200 with {'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}} on success, 503 with {'status': 'unhealthy', 'dependencies': {...error details...}} on failure. Redis shows 'not configured' when redis_url is empty. Added 10 unit tests in TestHealthEndpoint class. All 864 tests pass, mypy clean."
     },
     {
       "id": "US-63.1",
