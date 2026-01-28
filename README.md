@@ -18,8 +18,8 @@ A self-hosted web application for Jellyfin users to analyze their media librarie
 ## Quick Start
 
 ```bash
-git clone https://github.com/jimmmydore/media-janitor.git
-cd media-janitor
+git clone https://github.com/JimmyDore/mediajanitor.git
+cd mediajanitor
 cp .env.example .env
 # Edit .env with your settings
 docker-compose up -d
@@ -33,8 +33,8 @@ Open http://localhost:5173 to access the application.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/jimmy/media-janitor.git
-   cd media-janitor
+   git clone https://github.com/JimmyDore/mediajanitor.git
+   cd mediajanitor
    ```
 
 2. Copy and configure environment variables:
