@@ -100,12 +100,11 @@ plex-dashboard/
 ├── prompt.md              # Ralph execution loop prompt
 ├── ralph.py               # Ralph CLI (task ralph:once, task ralph:run)
 ├── .claude/
-│   └── skills/
-│       ├── prd/SKILL.md           # /prd skill - PRD creation
-│       ├── ralph-init/SKILL.md    # /ralph-init skill - PRD to JSON
-│       ├── prd-sync/SKILL.md      # /prd-sync skill - Sync prd.json to PRD.md
-│       ├── improve-claude-md/SKILL.md  # /improve-claude-md skill - Extract learnings
-│       └── exploratory-qa/SKILL.md     # /exploratory-qa skill - Periodic QA review
+│   └── skills/            # 21 skills - see "Skills" section below for full list
+│       ├── prd/           # PRD management (prd, ralph-init, prd-sync, prd-archive)
+│       ├── qa-*/          # 9 QA skills (accessibility, api-contracts, architecture, etc.)
+│       ├── ux-expert/     # UX/UI review and redesign
+│       └── ...            # workflow utilities (fix, morning-routine, etc.)
 ├── docker-compose.yml     # Local development
 ├── .env.example           # Environment template
 │
@@ -148,38 +147,36 @@ Query status: `cat prd.json | jq '.userStories[] | {id, title, passes}'`
 
 ## Ralph Workflow
 
-### Skills (Human-driven, before Ralph)
+### Skills (21 total)
 
-1. **`/prd`** - Create well-structured PRD with right-sized stories
-   - Location: `.claude/skills/prd/SKILL.md`
-   - Ensures stories fit in one context window
-   - Adds verifiable acceptance criteria
+#### PRD Management
+- **`/prd`** - Create well-structured PRD with right-sized user stories
+- **`/ralph-init`** - Convert PRD.md to machine-readable prd.json
+- **`/prd-sync`** - Sync completion status from prd.json back to PRD.md
+- **`/prd-archive`** - Move completed epics to ARCHIVED_PRD.md
 
-2. **`/ralph-init`** - Convert PRD.md to prd.json
-   - Location: `.claude/skills/ralph-init/SKILL.md`
-   - Creates machine-readable task tracking
-   - Validates story sizing and dependencies
+#### QA Skills (add findings to SUGGESTIONS.md)
+- **`/qa-accessibility`** - Accessibility review using Puppeteer
+- **`/qa-api-contracts`** - Frontend/backend API alignment and type consistency
+- **`/qa-architecture`** - Code organization, patterns, refactoring opportunities
+- **`/qa-documentation`** - CLAUDE.md accuracy and code comments
+- **`/qa-infra`** - Database backups, Docker config, VPS health, deployment
+- **`/qa-performance`** - Query optimization, bundle size, caching
+- **`/qa-security`** - Auth, XSS, secrets, OWASP concerns
+- **`/qa-test-coverage`** - Missing tests and edge cases
+- **`/qa-ux`** - UX review using Puppeteer (does NOT implement changes)
 
-3. **`/prd-sync`** - Sync prd.json back to PRD.md
-   - Location: `.claude/skills/prd-sync/SKILL.md`
-   - Updates checkbox status and notes in PRD.md
-   - Keeps human-readable doc in sync after Ralph completes stories
+#### UX & Product
+- **`/ux-expert`** - Expert UX/UI designer for critical review and redesign
+- **`/product-ideation`** - Suggest features based on competitor analysis and pain points
 
-4. **`/improve-claude-md`** - Extract learnings from current session
-   - Location: `.claude/skills/improve-claude-md/SKILL.md`
-   - Captures new patterns for CLAUDE.md
-   - Called after completing implementation work
-
-5. **`/exploratory-qa`** - Periodic QA review
-   - Location: `.claude/skills/exploratory-qa/SKILL.md`
-   - Reviews app for cross-cutting concerns
-   - Updates SUGGESTIONS.md with observations
-
-6. **`/original-script`** - Debug using original script as source of truth
-   - Location: `.claude/skills/original-script/SKILL.md`
-   - Run original_script.py functions to validate app behavior
-   - Compare output counts/items between original and app
-   - Use when app results don't match expectations
+#### Workflow & Utilities
+- **`/morning-routine`** - Daily checklist to review progress and prepare sessions
+- **`/review-suggestions`** - Interactive triage of SUGGESTIONS.md items
+- **`/improve-claude-md`** - Extract learnings from session into CLAUDE.md
+- **`/fix`** - Systematic bug investigation and fixing
+- **`/skill-creator`** - Guide for creating new skills
+- **`/setup-email`** - Email setup guide (IONOS, o2switch, SMTP2GO)
 
 ### Ralph Loop (Autonomous execution)
 
