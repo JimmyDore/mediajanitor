@@ -34,36 +34,87 @@ jobs:
             echo "SLACK_WEBHOOK_SYNC_FAILURES=${{ secrets.SLACK_WEBHOOK_SYNC_FAILURES }}" >> .env
             echo "DISABLE_SIGNUPS=${{ secrets.DISABLE_SIGNUPS }}" >> .env
 
-            # Clean up old Docker resources to free disk space
-            echo "Cleaning up Docker resources..."
-            docker system prune -f --volumes
-            docker image prune -af --filter "until=24h"
+            # Tag current images as :previous for rollback capability
+            echo "Tagging current images for rollback..."
+            docker tag mediajanitor-backend:latest mediajanitor-backend:previous 2>/dev/null || echo "No existing backend image to tag"
+            docker tag mediajanitor-frontend:latest mediajanitor-frontend:previous 2>/dev/null || echo "No existing frontend image to tag"
 
-            # Rebuild and restart containers
-            docker-compose down
+            # Clean up old Docker resources to free disk space (but keep :previous tagged images)
+            echo "Cleaning up Docker resources..."
+            docker system prune -f
+            docker image prune -f --filter "until=24h" --filter "label!=rollback"
+
+            # Rebuild images (don't bring down containers yet)
+            echo "Building new images..."
             docker-compose build --no-cache
+
+            # Stop and restart containers with new images
+            docker-compose down
             docker-compose up -d
 
             # Show status
             docker-compose ps
             df -h / | tail -1
 
-      - name: Health check
+      - name: Health check with rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            cd ~/mediajanitor
+
             echo "Waiting for backend to be ready..."
+            HEALTH_CHECK_PASSED=false
+
             for i in {1..30}; do
-              if curl -sf http://localhost:8080/api/hello > /dev/null 2>&1; then
+              if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
                 echo "Health check passed!"
-                exit 0
+                HEALTH_CHECK_PASSED=true
+                break
               fi
               echo "Attempt $i/30 - waiting 5s..."
               sleep 5
             done
+
+            if [ "$HEALTH_CHECK_PASSED" = true ]; then
+              echo "Deployment successful! Cleaning up previous images..."
+              docker rmi mediajanitor-backend:previous 2>/dev/null || true
+              docker rmi mediajanitor-frontend:previous 2>/dev/null || true
+              exit 0
+            fi
+
             echo "Health check failed after 30 attempts"
-            docker-compose -f ~/mediajanitor/docker-compose.yml logs backend
+            echo "=== Backend logs ==="
+            docker-compose logs --tail=50 backend
+
+            # Attempt rollback if previous images exist
+            echo ""
+            echo "=== Attempting rollback ==="
+            if docker image inspect mediajanitor-backend:previous > /dev/null 2>&1; then
+              echo "Previous images found, rolling back..."
+
+              # Stop current containers
+              docker-compose down
+
+              # Restore previous images
+              docker tag mediajanitor-backend:previous mediajanitor-backend:latest
+              docker tag mediajanitor-frontend:previous mediajanitor-frontend:latest
+
+              # Start with previous images
+              docker-compose up -d
+
+              echo "Rollback complete. Verifying..."
+              sleep 10
+
+              if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+                echo "Rollback successful - previous version is running"
+              else
+                echo "Rollback health check failed - manual intervention required"
+              fi
+            else
+              echo "No previous images available for rollback"
+            fi
+
             exit 1

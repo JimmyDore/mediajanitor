@@ -467,8 +467,8 @@
       ],
       "context": "Infrastructure improvements. deploy.yml does docker-compose down then build --no-cache and up -d. If build fails, no automatic rollback. Add to deploy workflow: 1) Tag current images as :previous before build, 2) Build new images, 3) Start new containers, 4) Run health check on /health endpoint, 5) If health check fails, docker-compose down, retag :previous as :latest, docker-compose up -d.",
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented rollback mechanism: 1) Tags current backend/frontend images as :previous before building, 2) Builds new images with --no-cache, 3) Runs health check on /health endpoint (also fixes US-62.5), 4) On success: cleans up :previous images, 5) On failure: logs backend output, stops containers, restores :previous tags to :latest, starts containers, verifies rollback health. YAML syntax validated."
     },
     {
       "id": "US-62.5",
@@ -480,8 +480,8 @@
       ],
       "context": "Infrastructure improvements. deploy.yml (line 60) uses /api/hello for health check but backend has proper /health endpoint at main.py:57. Update deploy.yml to curl http://localhost:8080/health instead of /api/hello.",
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed as part of US-62.4. Health check now uses /health endpoint instead of /api/hello."
     },
     {
       "id": "US-62.6",
