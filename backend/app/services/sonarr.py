@@ -1,11 +1,23 @@
 """Sonarr service for API interactions and connection validation."""
 
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypedDict
+
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import UserSettings
 from app.services.encryption import decrypt_value, encrypt_value
+
+
+class EpisodeHistoryEntry(TypedDict):
+    """Episode download history entry from Sonarr."""
+
+    season: int
+    episode: int
+    title: str
+    added_at: str
 
 
 async def validate_sonarr_connection(server_url: str, api_key: str) -> bool:
@@ -187,3 +199,75 @@ async def delete_series_by_tmdb_id(
     if success:
         return True, "Series deleted successfully from Sonarr"
     return False, "Failed to delete series from Sonarr"
+
+
+async def get_sonarr_history_since(
+    server_url: str, api_key: str, days_back: int = 7
+) -> dict[int, list[EpisodeHistoryEntry]]:
+    """
+    Fetch download history from Sonarr since a specific date.
+
+    Uses Sonarr's history/since endpoint to get episode download events.
+    Returns a map of TMDB ID -> list of episode additions.
+
+    Args:
+        server_url: Sonarr server URL
+        api_key: Sonarr API key
+        days_back: Number of days to look back (default: 7)
+
+    Returns:
+        Dict mapping TMDB ID to list of EpisodeHistoryEntry dicts
+        Returns empty dict on any error (graceful degradation)
+    """
+    server_url = server_url.rstrip("/")
+
+    # Calculate cutoff date
+    cutoff_date = datetime.now(UTC) - timedelta(days=days_back)
+    date_param = cutoff_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/history/since",
+                headers={"X-Api-Key": api_key},
+                params={
+                    "date": date_param,
+                    "eventType": "downloadFolderImported",
+                    "includeSeries": "true",
+                    "includeEpisode": "true",
+                },
+            )
+            if response.status_code != 200:
+                return {}
+
+            history_items: list[dict[str, Any]] = response.json()
+
+            # Build map: tmdb_id -> list of episode additions
+            result: dict[int, list[EpisodeHistoryEntry]] = {}
+
+            for item in history_items:
+                series = item.get("series", {})
+                tmdb_id = series.get("tmdbId")
+
+                # Skip entries without TMDB ID
+                if tmdb_id is None:
+                    continue
+
+                episode_data = item.get("episode", {})
+
+                entry: EpisodeHistoryEntry = {
+                    "season": episode_data.get("seasonNumber", 0),
+                    "episode": episode_data.get("episodeNumber", 0),
+                    "title": episode_data.get("title", "Unknown"),
+                    "added_at": item.get("date", ""),
+                }
+
+                if tmdb_id not in result:
+                    result[tmdb_id] = []
+
+                result[tmdb_id].append(entry)
+
+            return result
+
+    except (httpx.RequestError, httpx.TimeoutException):
+        return {}
