@@ -17,6 +17,7 @@ from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
     ContentSummaryResponse,
+    EpisodeAdditionModel,
     InfoCategorySummary,
     IssueCategorySummary,
     LibraryItem,
@@ -870,6 +871,61 @@ def _get_recent_episodes_from_cached_data(
     return recent_episodes if recent_episodes else None
 
 
+def _get_episode_additions_from_sonarr_history(
+    request: CachedJellyseerrRequest,
+) -> list[EpisodeAdditionModel] | None:
+    """Generate episode_additions from Sonarr history for status 4 TV shows.
+
+    Per US-63.3 acceptance criteria:
+    - Status 5 (fully available) shows: return None (keep current season_info display)
+    - Status 4 (partial) shows: include episode_additions if Sonarr data available
+    - If no Sonarr data: return None (frontend uses fallback to season_info)
+    - Movies: always return None
+
+    Args:
+        request: CachedJellyseerrRequest with potential sonarr_history in raw_data
+
+    Returns:
+        List of EpisodeAdditionModel dicts, or None if not applicable
+    """
+    # Only generate episode_additions for status 4 (partial) TV shows
+    if request.media_type != "tv" or request.status != 4:
+        return None
+
+    raw_data = request.raw_data or {}
+    sonarr_history = raw_data.get("sonarr_history")
+
+    if not sonarr_history:
+        return None
+
+    # Build total_episodes_per_season from seasons data
+    seasons = raw_data.get("seasons", [])
+    total_episodes_per_season: dict[int, int] = {}
+    for season in seasons:
+        season_num = season.get("seasonNumber")
+        episode_count = season.get("episodeCount")
+        if season_num is not None and episode_count is not None:
+            total_episodes_per_season[season_num] = episode_count
+
+    # Group episodes using smart display logic
+    grouped = group_episodes_for_display(sonarr_history, total_episodes_per_season)
+
+    if not grouped:
+        return None
+
+    # Convert TypedDict to Pydantic model
+    return [
+        EpisodeAdditionModel(
+            added_date=g["added_date"],
+            display_text=g["display_text"],
+            season=g["season"],
+            episode_numbers=g["episode_numbers"],
+            is_full_season=g["is_full_season"],
+        )
+        for g in grouped
+    ]
+
+
 async def get_recently_available_count(
     db: AsyncSession,
     user_id: int,
@@ -995,6 +1051,9 @@ async def get_recently_available(
         # Get season/episode details for TV shows
         season_details = _get_season_episode_details(request)
 
+        # US-63.3: Generate episode_additions for status 4 TV shows with Sonarr history
+        episode_additions = _get_episode_additions_from_sonarr_history(request)
+
         response_items.append(
             RecentlyAvailableItem(
                 jellyseerr_id=request.jellyseerr_id,
@@ -1008,6 +1067,7 @@ async def get_recently_available(
                 episode_count=season_details.get("episode_count"),
                 available_episodes=season_details.get("available_episodes"),
                 total_episodes=season_details.get("total_episodes"),
+                episode_additions=episode_additions,
             )
         )
 

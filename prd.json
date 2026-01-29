@@ -573,8 +573,8 @@
       ],
       "context": "Episode-level Recently Available API. Add EpisodeAddition model to models/content.py with fields: added_date (str ISO), display_text (str like 'S2E5-E8'), season (int), episode_numbers (list[int]), is_full_season (bool). Add optional episode_additions field to RecentlyAvailableItem. In get_recently_available() at services/content.py, check request.raw_data.get('sonarr_history'), call group_episodes_for_display() if present. Status 5 shows keep current season_info (full availability). Status 4 shows get episode granularity. No Sonarr data = null episode_additions (frontend fallback to season_info).",
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added EpisodeAdditionModel Pydantic model to models/content.py. Added episode_additions field to RecentlyAvailableItem (list[EpisodeAdditionModel] | None). Created _get_episode_additions_from_sonarr_history() helper in content_queries.py that: returns None for movies and status 5 TV shows, applies group_episodes_for_display() for status 4 TV with sonarr_history. 7 comprehensive tests in TestRecentlyAvailableEpisodeAdditions class. All 937 tests pass, mypy clean, 37 integration tests pass."
     },
     {
       "id": "US-63.4",
