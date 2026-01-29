@@ -3,6 +3,15 @@
 	import { authenticatedFetch } from '$lib/stores';
 	import Toast from '$lib/components/Toast.svelte';
 
+	// US-63.4: Episode-level details from Sonarr history
+	interface EpisodeAddition {
+		added_date: string; // ISO date string (YYYY-MM-DD)
+		display_text: string; // e.g., "S2E5", "S2E5-E8", "Season 2", "S2E3, S2E5, S2E7"
+		season: number;
+		episode_numbers: number[];
+		is_full_season: boolean;
+	}
+
 	interface RecentlyAvailableItem {
 		jellyseerr_id: number;
 		title: string;
@@ -16,6 +25,8 @@
 		episode_count: number | null;
 		available_episodes: number | null;
 		total_episodes: number | null;
+		// US-63.4: Episode-level additions from Sonarr history
+		episode_additions: EpisodeAddition[] | null;
 	}
 
 	interface RecentlyAvailableResponse {
@@ -58,13 +69,26 @@
 
 	/**
 	 * Get the formatted details for display.
+	 * - TV with episode_additions (from Sonarr): show smart grouped display (e.g., "S2E5-E8")
 	 * - Fully available TV (status 5): "Seasons 1-3 (30 eps)"
-	 * - Partially available TV (status 4): "S4: 5/12 episodes"
+	 * - Partially available TV (status 4) without Sonarr: "S4: 5/12 episodes"
 	 * - Movies: "—"
 	 */
 	function getDetails(item: RecentlyAvailableItem): string {
 		if (item.media_type !== 'tv') {
 			return '—';
+		}
+
+		// US-63.4: Prefer episode_additions from Sonarr history when available
+		if (item.episode_additions && item.episode_additions.length > 0) {
+			// Show most recent addition (array is sorted by date descending)
+			// If multiple addition dates, show them comma-separated
+			const uniqueTexts = item.episode_additions.map((ea) => ea.display_text);
+			// Show up to 3 additions, with "..." if more
+			if (uniqueTexts.length <= 3) {
+				return uniqueTexts.join(', ');
+			}
+			return `${uniqueTexts.slice(0, 3).join(', ')}...`;
 		}
 
 		// Status 4 (partially available): has available_episodes and total_episodes
