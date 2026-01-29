@@ -593,8 +593,8 @@
       ],
       "context": "Episode-level Recently Available frontend. Add EpisodeAddition interface to frontend types matching backend model. Update /info/recent page getDetails() function to prefer episode_additions when available, fallback to season_info. Display episode_additions[0].display_text (most recent) or join multiple dates. Keep one row per show - don't create separate rows per episode. Style similar to current season_info display. Test with Sonarr configured user to verify episode-level display, test without Sonarr to verify fallback works.",
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added EpisodeAddition TypeScript interface matching backend model. Updated getDetails() to prefer episode_additions when available, showing up to 3 additions comma-separated with ellipsis for more. Falls back to season_info when episode_additions is null or empty. Updated recent-episode-details.test.ts with 8 new tests for US-63.4 (24 total). All 797 frontend tests pass, typecheck passes, verified in browser."
     }
   ]
 }
