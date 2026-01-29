@@ -82,8 +82,8 @@
       ],
       "context": "Accessibility improvements. Landing page (Landing.svelte) uses generic <div class='feature-card'> instead of semantic <article> elements. Replace divs with semantic HTML: <main> for main content, <section> for distinct sections, <article> for feature cards, <nav> for navigation. Ensure heading hierarchy: only one h1, then h2 for sections, h3 for subsections.",
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Changed outer wrapper from <div> to <main> element. Changed 4 feature card elements from <div class='feature-card'> to <article class='feature-card'>. Header already uses <header> with <nav>. Sections already use <section>. Headings already follow proper hierarchy: h1 for hero title, h2 for section titles, h3 for feature titles."
     },
     {
       "id": "US-57.1",
