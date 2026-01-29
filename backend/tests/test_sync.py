@@ -4016,3 +4016,276 @@ class TestCheckSeriesEpisodesLanguagesWithExemptions:
                 # Exemption is for different series, so S01E01 should still be problematic
                 assert len(result["problematic_episodes"]) == 1
                 assert result["problematic_episodes"][0]["identifier"] == "S01E01"
+
+
+class TestSonarrHistoryIntegration:
+    """Tests for Sonarr history integration during sync (US-63.1)."""
+
+    @pytest.mark.asyncio
+    async def test_cache_jellyseerr_requests_with_sonarr_history(self) -> None:
+        """Should store sonarr_history in raw_data for TV requests."""
+        from app.services.sync import cache_jellyseerr_requests
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a test user
+            user = User(
+                email="test@example.com",
+                hashed_password="hashed",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            # Jellyseerr requests data (TV show with TMDB ID 12345)
+            requests_data = [
+                {
+                    "id": 1,
+                    "status": 4,  # Partially available
+                    "media": {
+                        "id": 100,
+                        "tmdbId": 12345,
+                        "mediaType": "tv",
+                        "name": "Breaking Bad",
+                    },
+                    "requestedBy": {"displayName": "john"},
+                },
+                {
+                    "id": 2,
+                    "status": 2,  # Pending
+                    "media": {
+                        "id": 101,
+                        "tmdbId": 67890,
+                        "mediaType": "movie",
+                        "title": "Inception",
+                    },
+                    "requestedBy": {"displayName": "jane"},
+                },
+            ]
+
+            # Sonarr history for TMDB ID 12345
+            sonarr_history = {
+                12345: [
+                    {
+                        "season": 2,
+                        "episode": 5,
+                        "title": "Breakage",
+                        "added_at": "2026-01-15T10:30:00Z",
+                    },
+                    {
+                        "season": 2,
+                        "episode": 6,
+                        "title": "Peekaboo",
+                        "added_at": "2026-01-15T10:30:00Z",
+                    },
+                ],
+            }
+
+            # Cache with Sonarr history
+            count = await cache_jellyseerr_requests(
+                session, user.id, requests_data, sonarr_history=sonarr_history
+            )
+            assert count == 2
+
+            # Verify the TV show has sonarr_history in raw_data
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 12345,
+                )
+            )
+            cached_tv = result.scalar_one()
+            assert cached_tv.raw_data is not None
+            assert "sonarr_history" in cached_tv.raw_data
+            assert len(cached_tv.raw_data["sonarr_history"]) == 2
+            assert cached_tv.raw_data["sonarr_history"][0]["season"] == 2
+            assert cached_tv.raw_data["sonarr_history"][0]["episode"] == 5
+
+            # Verify the movie does NOT have sonarr_history (it's not a TV show)
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 67890,
+                )
+            )
+            cached_movie = result.scalar_one()
+            assert cached_movie.raw_data is not None
+            assert "sonarr_history" not in cached_movie.raw_data
+
+    @pytest.mark.asyncio
+    async def test_cache_jellyseerr_requests_without_sonarr_history(self) -> None:
+        """Should work without sonarr_history (graceful degradation)."""
+        from app.services.sync import cache_jellyseerr_requests
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a test user
+            user = User(
+                email="test2@example.com",
+                hashed_password="hashed",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            # Jellyseerr requests data
+            requests_data = [
+                {
+                    "id": 1,
+                    "status": 4,
+                    "media": {
+                        "id": 100,
+                        "tmdbId": 12345,
+                        "mediaType": "tv",
+                        "name": "Breaking Bad",
+                    },
+                    "requestedBy": {"displayName": "john"},
+                },
+            ]
+
+            # Cache without Sonarr history
+            count = await cache_jellyseerr_requests(session, user.id, requests_data)
+            assert count == 1
+
+            # Verify the request is cached but without sonarr_history
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 12345,
+                )
+            )
+            cached_tv = result.scalar_one()
+            assert cached_tv.raw_data is not None
+            # raw_data contains original request but no sonarr_history
+            assert "sonarr_history" not in cached_tv.raw_data
+
+    @pytest.mark.asyncio
+    async def test_cache_jellyseerr_requests_empty_sonarr_history(self) -> None:
+        """Should handle empty sonarr_history dict."""
+        from app.services.sync import cache_jellyseerr_requests
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a test user
+            user = User(
+                email="test3@example.com",
+                hashed_password="hashed",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            # Jellyseerr requests data
+            requests_data = [
+                {
+                    "id": 1,
+                    "status": 4,
+                    "media": {
+                        "id": 100,
+                        "tmdbId": 12345,
+                        "mediaType": "tv",
+                        "name": "Breaking Bad",
+                    },
+                    "requestedBy": {"displayName": "john"},
+                },
+            ]
+
+            # Cache with empty Sonarr history
+            count = await cache_jellyseerr_requests(
+                session, user.id, requests_data, sonarr_history={}
+            )
+            assert count == 1
+
+            # Verify request is cached without sonarr_history (no matching TMDB ID)
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 12345,
+                )
+            )
+            cached_tv = result.scalar_one()
+            assert cached_tv.raw_data is not None
+            assert "sonarr_history" not in cached_tv.raw_data
+
+    @pytest.mark.asyncio
+    async def test_sonarr_history_only_for_matching_tmdb_ids(self) -> None:
+        """Should only add sonarr_history for requests with matching TMDB IDs."""
+        from app.services.sync import cache_jellyseerr_requests
+
+        async with TestingAsyncSessionLocal() as session:
+            # Create a test user
+            user = User(
+                email="test4@example.com",
+                hashed_password="hashed",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            # Multiple TV shows
+            requests_data = [
+                {
+                    "id": 1,
+                    "status": 4,
+                    "media": {
+                        "id": 100,
+                        "tmdbId": 12345,
+                        "mediaType": "tv",
+                        "name": "Breaking Bad",
+                    },
+                    "requestedBy": {"displayName": "john"},
+                },
+                {
+                    "id": 2,
+                    "status": 4,
+                    "media": {
+                        "id": 101,
+                        "tmdbId": 99999,
+                        "mediaType": "tv",
+                        "name": "Game of Thrones",
+                    },
+                    "requestedBy": {"displayName": "jane"},
+                },
+            ]
+
+            # Sonarr history only for TMDB ID 12345
+            sonarr_history = {
+                12345: [
+                    {
+                        "season": 1,
+                        "episode": 1,
+                        "title": "Pilot",
+                        "added_at": "2026-01-15T10:30:00Z",
+                    },
+                ],
+            }
+
+            count = await cache_jellyseerr_requests(
+                session, user.id, requests_data, sonarr_history=sonarr_history
+            )
+            assert count == 2
+
+            # Verify Breaking Bad has sonarr_history
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 12345,
+                )
+            )
+            cached_bb = result.scalar_one()
+            assert "sonarr_history" in cached_bb.raw_data
+
+            # Verify Game of Thrones does NOT have sonarr_history
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(
+                    CachedJellyseerrRequest.user_id == user.id,
+                    CachedJellyseerrRequest.tmdb_id == 99999,
+                )
+            )
+            cached_got = result.scalar_one()
+            assert "sonarr_history" not in cached_got.raw_data

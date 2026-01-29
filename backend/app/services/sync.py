@@ -21,6 +21,7 @@ from app.database import (
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
+from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_history_since
 from app.services.ultra import fetch_ultra_stats, get_decrypted_ultra_api_key
 
 logger = logging.getLogger(__name__)
@@ -1444,11 +1445,21 @@ async def cache_media_items(db: AsyncSession, user_id: int, items: list[dict[str
 
 
 async def cache_jellyseerr_requests(
-    db: AsyncSession, user_id: int, requests: list[dict[str, Any]]
+    db: AsyncSession,
+    user_id: int,
+    requests: list[dict[str, Any]],
+    sonarr_history: dict[int, list[dict[str, Any]]] | None = None,
 ) -> int:
     """Cache Jellyseerr requests in database, replacing old data.
 
     Commits immediately after caching to release database locks.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        requests: List of Jellyseerr request dicts
+        sonarr_history: Optional dict mapping TMDB ID to list of episode additions.
+            If provided, TV show requests will have sonarr_history added to raw_data.
     """
     # Delete existing cached requests for this user
     await db.execute(
@@ -1470,19 +1481,28 @@ async def cache_jellyseerr_requests(
         # Extract release date (movies: releaseDate, TV: firstAirDate)
         release_date = extract_release_date_from_request(req)
 
+        # Build raw_data, optionally including Sonarr history for TV shows
+        raw_data = req.copy() if req else {}
+        tmdb_id = media.get("tmdbId")
+        media_type = media.get("mediaType", "unknown")
+
+        # Add Sonarr history for TV shows if available
+        if sonarr_history and media_type == "tv" and tmdb_id and tmdb_id in sonarr_history:
+            raw_data["sonarr_history"] = sonarr_history[tmdb_id]
+
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,
             jellyseerr_id=req.get("id", 0),
             jellyseerr_media_id=media.get("id"),  # media.id for deletion (distinct from request.id)
-            tmdb_id=media.get("tmdbId"),
-            media_type=media.get("mediaType", "unknown"),
+            tmdb_id=tmdb_id,
+            media_type=media_type,
             status=req.get("status", 0),
             title=title,
             title_fr=title_fr,
             requested_by=requested_by.get("displayName"),
             created_at_source=req.get("createdAt"),
             release_date=release_date,
-            raw_data=req,
+            raw_data=raw_data,
         )
         db.add(cached_request)
         cached_count += 1
@@ -1777,7 +1797,33 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
             requests_data = await fetch_jellyseerr_requests(
                 settings.jellyseerr_server_url, jellyseerr_api_key
             )
-            requests_count = await cache_jellyseerr_requests(db, user_id, requests_data)
+
+            # Fetch Sonarr history if Sonarr is configured (US-63.1)
+            # This provides episode-level download dates for "Recently Available"
+            sonarr_history: dict[int, list[dict[str, Any]]] | None = None
+            if settings.sonarr_server_url and settings.sonarr_api_key_encrypted:
+                try:
+                    sonarr_api_key = get_decrypted_sonarr_api_key(settings)
+                    if sonarr_api_key:
+                        # Use recently_available_days setting, default to 7
+                        days_back = settings.recently_available_days or 7
+                        raw_history = await get_sonarr_history_since(
+                            settings.sonarr_server_url, sonarr_api_key, days_back
+                        )
+                        # Cast TypedDict to dict for compatibility with raw_data storage
+                        if raw_history:
+                            sonarr_history = cast(dict[int, list[dict[str, Any]]], raw_history)
+                            logger.info(
+                                f"Fetched Sonarr history for {len(sonarr_history)} series "
+                                f"(last {days_back} days) for user {user_id}"
+                            )
+                except Exception as e:
+                    # Sonarr history failure is not critical - continue without it
+                    logger.warning(f"Failed to fetch Sonarr history for user {user_id}: {e}")
+
+            requests_count = await cache_jellyseerr_requests(
+                db, user_id, requests_data, sonarr_history=sonarr_history
+            )
             logger.info(f"Cached {requests_count} Jellyseerr requests for user {user_id}")
 
     except Exception as e:

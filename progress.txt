@@ -394,4 +394,49 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
   - Manual rollback commands
 - YAML syntax validated successfully
 
+**US-62.7: Enhance health endpoint with dependency checks**
+- Enhanced `/health` endpoint in `backend/app/main.py`:
+  - Added `check_database_health()` function: executes `SELECT 1` to verify DB connectivity
+  - Added `check_redis_health()` function: sends `PING` to verify Redis connectivity
+  - Returns 200 with `{'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}}` on success
+  - Returns 503 with `{'status': 'unhealthy', 'dependencies': {...error details...}}` on failure
+  - Redis shows `'not configured'` when `redis_url` is empty (graceful handling)
+- Added 10 unit tests in `TestHealthEndpoint` class (`backend/tests/test_main.py`):
+  - test_health_returns_200_when_all_dependencies_healthy
+  - test_health_returns_database_status
+  - test_health_returns_redis_status_when_configured
+  - test_health_returns_503_when_database_fails
+  - test_health_returns_503_when_redis_fails
+  - test_health_returns_detailed_dependency_status
+  - test_health_database_check_executes_query
+  - test_health_redis_not_configured_returns_not_configured
+  - test_health_database_failure_logged
+- Updated existing CORS tests to mock Redis (no Redis in test environment)
+- All 864 tests pass, mypy clean
+
+### 2026-01-29
+
+**US-63.1: Fetch Sonarr history during sync**
+- `get_sonarr_history_since()` was already implemented in `backend/app/services/sonarr.py`:
+  - Calls Sonarr API: `GET /api/v3/history/since?date={cutoff}&eventType=downloadFolderImported&includeSeries=true&includeEpisode=true`
+  - Returns `dict[int, list[EpisodeHistoryEntry]]` mapping TMDB ID to episode additions
+  - Gracefully returns empty dict on any error (timeout, connection error, non-200 response)
+- Updated `backend/app/services/sync.py`:
+  - Modified `cache_jellyseerr_requests()` to accept optional `sonarr_history` parameter
+  - When provided, merges Sonarr history into `raw_data.sonarr_history` for TV show requests
+  - Only TV shows (`media_type == "tv"`) with matching TMDB IDs get history attached
+  - Movies and shows without history are unaffected
+- Updated `run_user_sync()` in `sync.py`:
+  - If user has Sonarr configured, fetches history using `get_sonarr_history_since()`
+  - Uses `recently_available_days` setting (default 7) for days_back parameter
+  - Gracefully handles Sonarr API failures with warning log, continues sync
+  - Passes history to `cache_jellyseerr_requests()` for storage
+- Added 4 tests in `TestSonarrHistoryIntegration` class (`backend/tests/test_sync.py`):
+  - test_cache_jellyseerr_requests_with_sonarr_history
+  - test_cache_jellyseerr_requests_without_sonarr_history
+  - test_cache_jellyseerr_requests_empty_sonarr_history
+  - test_sonarr_history_only_for_matching_tmdb_ids
+- 11 existing tests in `TestGetSonarrHistorySince` class cover API functionality
+- All 918 tests pass, mypy clean, 37 integration tests pass
+
 ---
