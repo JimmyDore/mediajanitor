@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores';
 
 	let email = $state('');
 	let password = $state('');
@@ -8,10 +9,13 @@
 	let isLoading = $state(false);
 	let passwordError = $state<string | null>(null);
 	let confirmPasswordError = $state<string | null>(null);
-	let mounted = $state(false);
 
-	onMount(() => {
-		mounted = true;
+	// Redirect authenticated users to dashboard
+	// Uses $effect to reactively respond to auth state changes
+	$effect(() => {
+		if (!$auth.isLoading && $auth.isAuthenticated) {
+			goto('/');
+		}
 	});
 
 	function validatePassword(pwd: string): string | null {

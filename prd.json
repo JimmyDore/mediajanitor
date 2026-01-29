@@ -32,8 +32,8 @@
       ],
       "context": "Route fixes. Currently authenticated users can access /login and /register pages - sidebar is visible showing they're authenticated, but login form is still displayed. Check auth state in onMount or load function and redirect if user is already logged in. Use SvelteKit's goto() for client-side redirect.",
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented using Svelte 5 $effect() to reactively respond to auth state changes. When auth check completes (!isLoading) and user is authenticated, redirects to / using goto(). Login page redirects to the redirect query param if present (for post-login redirects), register page always redirects to /. Added 9 unit tests in auth-redirect.test.ts."
     },
     {
       "id": "US-55.1",
