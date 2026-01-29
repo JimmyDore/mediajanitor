@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores';
@@ -8,19 +7,16 @@
 	let password = $state('');
 	let error = $state<string | null>(null);
 	let isLoading = $state(false);
-	let mounted = $state(false);
 
 	// Get redirect path from query params (if any)
 	let redirectPath = $derived($page.url.searchParams.get('redirect') || '/');
 
-	onMount(() => {
-		mounted = true;
-		// If already authenticated, redirect to intended destination
-		auth.subscribe((authState) => {
-			if (authState.isAuthenticated && !authState.isLoading) {
-				goto(redirectPath);
-			}
-		})();
+	// Redirect authenticated users to dashboard (or intended destination)
+	// Uses $effect to reactively respond to auth state changes
+	$effect(() => {
+		if (!$auth.isLoading && $auth.isAuthenticated) {
+			goto(redirectPath);
+		}
 	});
 
 	async function handleSubmit(event: SubmitEvent) {
