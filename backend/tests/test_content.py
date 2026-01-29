@@ -6502,6 +6502,390 @@ class TestRecentlyAvailableSeasonEpisodeDetails:
         assert item["total_episodes"] is None
 
 
+class TestRecentlyAvailableEpisodeAdditions:
+    """Tests for US-63.3: Episode additions from Sonarr history in recently available API."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to create user and get auth token."""
+        password = "testpass123"
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        return login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_field_present_in_response(self, client: TestClient) -> None:
+        """episode_additions field should be present in RecentlyAvailableItem."""
+        token = self._get_auth_token(client, "ep-add-field@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6301,
+                tmdb_id=63001,
+                media_type="tv",
+                status=5,
+                title="Show Without Sonarr History",
+                raw_data={
+                    "media": {"mediaAddedAt": recent_date},
+                    "seasons": [{"seasonNumber": 1, "status": 5, "episodeCount": 10}],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # Field should exist (but be None when no Sonarr history)
+        assert "episode_additions" in item
+        assert item["episode_additions"] is None
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_from_sonarr_history_status_4(self, client: TestClient) -> None:
+        """Status 4 TV shows with Sonarr history should have episode_additions populated."""
+        token = self._get_auth_token(client, "ep-add-status4@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        today_date = datetime.now(UTC).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 TV show with Sonarr history
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6302,
+                tmdb_id=63002,
+                media_type="tv",
+                status=4,
+                title="Ongoing Show With Sonarr",
+                raw_data={
+                    "media": {"mediaAddedAt": recent_date},
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodeCount": 12,
+                            "episodes": [
+                                {"episodeNumber": 1, "airDate": recent_date},
+                                {"episodeNumber": 2, "airDate": recent_date},
+                                {"episodeNumber": 3, "airDate": today_date},
+                            ],
+                        },
+                    ],
+                    # Sonarr history data stored during sync
+                    "sonarr_history": [
+                        {
+                            "season": 2,
+                            "episode": 1,
+                            "title": "Episode 1",
+                            "added_at": f"{recent_date}T10:00:00Z",
+                        },
+                        {
+                            "season": 2,
+                            "episode": 2,
+                            "title": "Episode 2",
+                            "added_at": f"{recent_date}T10:00:00Z",
+                        },
+                        {
+                            "season": 2,
+                            "episode": 3,
+                            "title": "Episode 3",
+                            "added_at": f"{today_date}T10:00:00Z",
+                        },
+                    ],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        item = data["items"][0]
+        assert item["episode_additions"] is not None
+        assert len(item["episode_additions"]) >= 1
+
+        # Most recent episode addition should be first
+        first_addition = item["episode_additions"][0]
+        assert "added_date" in first_addition
+        assert "display_text" in first_addition
+        assert "season" in first_addition
+        assert "episode_numbers" in first_addition
+        assert "is_full_season" in first_addition
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_groups_consecutive_episodes(self, client: TestClient) -> None:
+        """Consecutive episodes added same day should be grouped as range."""
+        token = self._get_auth_token(client, "ep-add-consecutive@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        add_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6303,
+                tmdb_id=63003,
+                media_type="tv",
+                status=4,
+                title="Show With Consecutive Episodes",
+                raw_data={
+                    "media": {"mediaAddedAt": add_date},
+                    "seasons": [{"seasonNumber": 2, "status": 4, "episodeCount": 12}],
+                    "sonarr_history": [
+                        {
+                            "season": 2,
+                            "episode": 5,
+                            "title": "Ep 5",
+                            "added_at": f"{add_date}T10:00:00Z",
+                        },
+                        {
+                            "season": 2,
+                            "episode": 6,
+                            "title": "Ep 6",
+                            "added_at": f"{add_date}T10:05:00Z",
+                        },
+                        {
+                            "season": 2,
+                            "episode": 7,
+                            "title": "Ep 7",
+                            "added_at": f"{add_date}T10:10:00Z",
+                        },
+                        {
+                            "season": 2,
+                            "episode": 8,
+                            "title": "Ep 8",
+                            "added_at": f"{add_date}T10:15:00Z",
+                        },
+                    ],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["episode_additions"] is not None
+        assert len(item["episode_additions"]) == 1
+
+        addition = item["episode_additions"][0]
+        assert addition["display_text"] == "S2E5-E8"
+        assert addition["season"] == 2
+        assert addition["episode_numbers"] == [5, 6, 7, 8]
+        assert addition["is_full_season"] is False
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_full_season_display(self, client: TestClient) -> None:
+        """Full season added same day should show 'Season X'."""
+        token = self._get_auth_token(client, "ep-add-full-season@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        add_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Use status=4 (partial) since status=5 uses season_info per AC
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6304,
+                tmdb_id=63004,
+                media_type="tv",
+                status=4,  # Partial - full season just added
+                title="Full Season Drop",
+                raw_data={
+                    "media": {"mediaAddedAt": add_date},
+                    "seasons": [{"seasonNumber": 3, "status": 4, "episodeCount": 8}],
+                    "sonarr_history": [
+                        {
+                            "season": 3,
+                            "episode": i,
+                            "title": f"Ep {i}",
+                            "added_at": f"{add_date}T10:00:00Z",
+                        }
+                        for i in range(1, 9)  # Episodes 1-8
+                    ],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["episode_additions"] is not None
+        assert len(item["episode_additions"]) == 1
+
+        addition = item["episode_additions"][0]
+        assert addition["display_text"] == "Season 3"
+        assert addition["season"] == 3
+        assert addition["episode_numbers"] == list(range(1, 9))
+        assert addition["is_full_season"] is True
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_status_5_fully_available_no_additions(
+        self, client: TestClient
+    ) -> None:
+        """Status 5 shows should NOT have episode_additions (use season_info instead)."""
+        token = self._get_auth_token(client, "ep-add-status5@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        add_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 5 (fully available) - should keep current season_info display
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6305,
+                tmdb_id=63005,
+                media_type="tv",
+                status=5,
+                title="Fully Available Show",
+                raw_data={
+                    "media": {"mediaAddedAt": add_date},
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                        {"seasonNumber": 2, "status": 5, "episodeCount": 10},
+                    ],
+                    # Even with Sonarr history, status 5 should NOT show episode_additions
+                    "sonarr_history": [
+                        {
+                            "season": 2,
+                            "episode": i,
+                            "title": f"Ep {i}",
+                            "added_at": f"{add_date}T10:00:00Z",
+                        }
+                        for i in range(1, 11)
+                    ],
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # Status 5: use season_info, not episode_additions
+        assert item["season_info"] == "Seasons 1-2"
+        assert item["episode_additions"] is None
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_movie_always_none(self, client: TestClient) -> None:
+        """Movies should always have episode_additions as None."""
+        token = self._get_auth_token(client, "ep-add-movie@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        add_date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6306,
+                tmdb_id=63006,
+                media_type="movie",
+                status=5,
+                title="Test Movie",
+                raw_data={"media": {"mediaAddedAt": add_date}},
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        assert item["episode_additions"] is None
+
+    @pytest.mark.asyncio
+    async def test_episode_additions_fallback_when_no_sonarr_history(
+        self, client: TestClient
+    ) -> None:
+        """Status 4 shows without Sonarr history should have episode_additions as None."""
+        token = self._get_auth_token(client, "ep-add-no-history@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        recent_date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+
+        async with TestingAsyncSessionLocal() as session:
+            # Status 4 TV show WITHOUT Sonarr history
+            request = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=6307,
+                tmdb_id=63007,
+                media_type="tv",
+                status=4,
+                title="Ongoing Without Sonarr",
+                raw_data={
+                    "media": {"mediaAddedAt": recent_date},
+                    "seasons": [
+                        {"seasonNumber": 1, "status": 5, "episodeCount": 10},
+                        {
+                            "seasonNumber": 2,
+                            "status": 4,
+                            "episodeCount": 12,
+                            "episodes": [
+                                {"episodeNumber": 1, "airDate": recent_date},
+                            ],
+                        },
+                    ],
+                    # No sonarr_history key
+                },
+            )
+            session.add(request)
+            await session.commit()
+
+        response = client.get("/api/info/recent", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        item = data["items"][0]
+        # No Sonarr history -> episode_additions is None (frontend uses fallback)
+        assert item["episode_additions"] is None
+        # But season_info should still work
+        assert item["season_info"] == "Season 2 in progress"
+
+
 class TestCachedLanguageData:
     """Test US-52.2: Use cached language data in content service."""
 

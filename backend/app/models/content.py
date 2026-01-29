@@ -93,6 +93,20 @@ class ContentSummaryResponse(BaseModel):
     recently_available: InfoCategorySummary
 
 
+class EpisodeAdditionModel(BaseModel):
+    """Response model for grouped episode additions with smart display text.
+
+    Used in RecentlyAvailableItem to show episode-level download details
+    from Sonarr history.
+    """
+
+    added_date: str  # ISO date string (YYYY-MM-DD)
+    display_text: str  # e.g., "S2E5", "S2E5-E8", "Season 2", "S2E3, S2E5, S2E7"
+    season: int
+    episode_numbers: list[int]
+    is_full_season: bool
+
+
 class RecentlyAvailableItem(BaseModel):
     """Response model for a single recently available content item."""
 
@@ -108,6 +122,8 @@ class RecentlyAvailableItem(BaseModel):
     episode_count: int | None = None  # Total episodes (for status 5 TV shows)
     available_episodes: int | None = None  # Available episodes (for status 4)
     total_episodes: int | None = None  # Total episodes in current season (for status 4)
+    # US-63.3: Episode-level additions from Sonarr history
+    episode_additions: list[EpisodeAdditionModel] | None = None
 
 
 class RecentlyAvailableResponse(BaseModel):
