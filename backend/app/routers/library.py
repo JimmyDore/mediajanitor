@@ -60,8 +60,16 @@ async def get_library_endpoint(
         float | None,
         Query(description="Maximum size in GB filter"),
     ] = None,
+    page: Annotated[
+        int,
+        Query(description="Page number (1-indexed), default 1", ge=1),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        Query(description="Items per page (1-100), default 50", ge=1, le=100),
+    ] = 50,
 ) -> LibraryResponse:
-    """Get all cached media items for the current user.
+    """Get cached media items for the current user with pagination.
 
     Supports filtering by:
     - type: movie, series, or all
@@ -74,9 +82,14 @@ async def get_library_endpoint(
     - name (default), year, size, date_added, last_watched
     - order: asc (default) or desc
 
-    Returns items, total_count, total_size, and service URLs.
+    Supports pagination:
+    - page: page number (1-indexed), default 1
+    - page_size: items per page (1-100), default 50
+
+    Returns paginated items, total_count (all matching), total_size (all matching),
+    pagination info, and service URLs.
     """
-    # Get library items with filters and sorting
+    # Get library items with filters, sorting, and pagination
     response = await get_library(
         db=db,
         user_id=current_user.id,
@@ -89,6 +102,8 @@ async def get_library_endpoint(
         max_year=max_year,
         min_size_gb=min_size_gb,
         max_size_gb=max_size_gb,
+        page=page,
+        page_size=page_size,
     )
 
     # Add service URLs from user settings
