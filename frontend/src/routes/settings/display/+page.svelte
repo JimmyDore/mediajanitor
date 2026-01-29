@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { authenticatedFetch, theme, toasts, type ThemePreference } from '$lib/stores';
+	import { authenticatedFetch, theme, toasts, debounce, type ThemePreference } from '$lib/stores';
 
 	// Display preferences state
 	let themePreference = $state<ThemePreference>('system');
@@ -38,8 +38,15 @@
 		}
 	}
 
+	// Track pending saves to show loading indicator after 200ms
+	let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
 	async function savePreference(field: string, value: unknown) {
-		isSaving = true;
+		// Show loading indicator after 200ms
+		loadingTimeoutId = setTimeout(() => {
+			isSaving = true;
+		}, 200);
+
 		try {
 			const response = await authenticatedFetch('/api/settings/display', {
 				method: 'POST',
@@ -56,10 +63,16 @@
 			if (field === 'theme_preference') {
 				theme.setPreference(value as ThemePreference);
 			}
+
+			toasts.add('Saved', 'success');
 		} catch (e) {
 			console.error('Failed to save preference:', e);
 			toasts.add(e instanceof Error ? e.message : 'Failed to save preference', 'error');
 		} finally {
+			if (loadingTimeoutId) {
+				clearTimeout(loadingTimeoutId);
+				loadingTimeoutId = null;
+			}
 			isSaving = false;
 		}
 	}
@@ -70,12 +83,15 @@
 		savePreference('theme_preference', newTheme);
 	}
 
+	// Debounced save function for recently available days (300ms delay)
+	const debouncedSaveDays = debounce((value: number) => savePreference('recently_available_days', value), 300);
+
 	function handleDaysChange(event: Event) {
 		const input = event.target as HTMLInputElement;
 		const value = parseInt(input.value, 10);
 		if (value >= 1 && value <= 30) {
 			recentlyAvailableDays = value;
-			savePreference('recently_available_days', value);
+			debouncedSaveDays(value);
 		}
 	}
 
@@ -194,7 +210,7 @@
 						type="number"
 						id="recent-days"
 						value={recentlyAvailableDays}
-						onchange={handleDaysChange}
+						oninput={handleDaysChange}
 						min="1"
 						max="30"
 						disabled={isSaving}
