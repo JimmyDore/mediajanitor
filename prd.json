@@ -15,8 +15,8 @@
       ],
       "context": "Route fixes. Sidebar links to `/` for dashboard, but users expect `/dashboard` to work. Landing page mockup shows `mediajanitor.com/dashboard` in browser URL bar. Implement as SvelteKit route redirect from /dashboard to / OR create /dashboard route that renders same content as root.",
       "priority": 51,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented as SvelteKit route redirect using +page.ts with throw redirect(307, '/'). Navigating to /dashboard redirects to / showing the dashboard."
     },
     {
       "id": "US-53.2",
