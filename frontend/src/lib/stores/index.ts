@@ -356,3 +356,28 @@ function createThemeStore() {
 }
 
 export const theme = createThemeStore();
+
+/**
+ * Creates a debounced version of a function that delays execution until after
+ * the specified wait time has elapsed since the last call.
+ *
+ * @param fn - The function to debounce
+ * @param wait - The debounce delay in milliseconds
+ * @returns A debounced version of the function
+ */
+export function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
+	fn: T,
+	wait: number
+): (...args: Parameters<T>) => void {
+	let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	return (...args: Parameters<T>) => {
+		if (timeoutId) {
+			clearTimeout(timeoutId);
+		}
+		timeoutId = setTimeout(() => {
+			fn(...args);
+			timeoutId = null;
+		}, wait);
+	};
+}
