@@ -58,6 +58,7 @@ from app.services.content_queries import (
     # Constants
     DEFAULT_RECENTLY_AVAILABLE_DAYS,
     # Internal types (used by some callers)
+    EpisodeAddition,
     SeasonEpisodeDetails,
     # Issues
     get_content_issues,
@@ -78,6 +79,8 @@ from app.services.content_queries import (
     # User settings helpers
     get_user_recently_available_days,
     get_user_show_unreleased_setting,
+    # Episode grouping
+    group_episodes_for_display,
     resolve_display_name,
 )
 
@@ -121,6 +124,7 @@ __all__ = [
     "LanguageCheckResult",
     "UserThresholds",
     "SeasonEpisodeDetails",
+    "EpisodeAddition",
     # Cache management
     "get_user_settings",
     "lookup_jellyseerr_media_by_tmdb",
@@ -199,4 +203,5 @@ __all__ = [
     "get_unavailable_requests_count",
     "get_unavailable_requests",
     "get_library",
+    "group_episodes_for_display",
 ]

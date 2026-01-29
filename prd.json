@@ -553,8 +553,8 @@
       ],
       "context": "Episode-level Recently Available. Smart grouping improves readability when many episodes added at once. Grouping rules: all episodes of season = 'Season X', consecutive = 'S2E5-E8', non-consecutive = 'S2E3, S2E5, S2E7', single = 'S2E5'. Input is list of {season, episode, added_at} from Sonarr history. Need total_episodes_per_season from Jellyseerr/TMDB to know if full season. Return EpisodeAddition with display_text, season, episode_numbers list, is_full_season bool. Group by added_at date for same-day grouping.",
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented group_episodes_for_display() in content_queries.py with EpisodeAddition TypedDict. Groups episodes by (date, season) and applies smart display rules: full season -> 'Season X', consecutive -> 'S2E5-E8', non-consecutive -> comma list, single -> 'S2E5'. Deduplicates episodes, returns sorted by date descending. Added _is_consecutive() helper. Exported via content.py facade. 14 comprehensive tests in test_episode_grouping.py. All 895 tests pass, mypy clean."
     },
     {
       "id": "US-63.3",
