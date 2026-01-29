@@ -2,7 +2,7 @@
 	// Landing page hero component for unauthenticated visitors
 </script>
 
-<div class="landing">
+<main class="landing">
 	<!-- Public Header -->
 	<header class="public-header">
 		<div class="header-container">
@@ -41,7 +41,7 @@
 	<section class="features">
 		<h2 class="features-title">What Media Janitor Does</h2>
 		<div class="features-grid">
-			<div class="feature-card">
+			<article class="feature-card">
 				<div class="feature-icon feature-icon-red">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<circle cx="12" cy="12" r="10"/>
@@ -50,9 +50,9 @@
 				</div>
 				<h3 class="feature-title">Old Content Detection</h3>
 				<p class="feature-desc">Find movies and shows nobody has watched in months</p>
-			</div>
+			</article>
 
-			<div class="feature-card">
+			<article class="feature-card">
 				<div class="feature-icon feature-icon-yellow">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -62,9 +62,9 @@
 				</div>
 				<h3 class="feature-title">Large File Finder</h3>
 				<p class="feature-desc">Identify oversized files eating up your storage</p>
-			</div>
+			</article>
 
-			<div class="feature-card">
+			<article class="feature-card">
 				<div class="feature-icon feature-icon-blue">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -73,9 +73,9 @@
 				</div>
 				<h3 class="feature-title">Language Checker</h3>
 				<p class="feature-desc">Spot content missing audio tracks or subtitles</p>
-			</div>
+			</article>
 
-			<div class="feature-card">
+			<article class="feature-card">
 				<div class="feature-icon feature-icon-purple">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<circle cx="12" cy="12" r="10"/>
@@ -85,7 +85,7 @@
 				</div>
 				<h3 class="feature-title">Request Tracking</h3>
 				<p class="feature-desc">Monitor pending and unavailable Jellyseerr requests</p>
-			</div>
+			</article>
 		</div>
 	</section>
 
@@ -170,7 +170,7 @@
 			</div>
 		</div>
 	</section>
-</div>
+</main>
 
 <style>
 	.landing {
