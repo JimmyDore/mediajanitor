@@ -173,8 +173,8 @@
       ],
       "context": "Frontend architecture refactoring. issues/+page.svelte is 2797 lines combining data fetching, filtering, sorting, search, 3 modals (duration picker, delete confirmation, episode duration picker), row expansion, whitelist actions. Extract to lib/components/: DurationPickerModal.svelte (duration selection with preset buttons), DeleteConfirmModal.svelte (confirmation dialog with Arr/Jellyseerr checkboxes), IssueRow.svelte (single expandable row), IssueFilters.svelte (filter tabs + search). Pass data via props, emit events for actions.",
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted 4 components to lib/components/: DurationPickerModal.svelte (reusable for both item and episode whitelisting), DeleteConfirmModal.svelte (delete confirmation with Arr/Jellyseerr checkboxes), IssueRow.svelte (expandable row with badges, actions, episode list), IssueFilters.svelte (header, search, filter tabs, sub-filters). Issues page reduced from ~2800 to ~1300 lines (~54% reduction). All 824 unit tests pass, typecheck passes (0 errors), verified in browser: filters, search, row expansion, badges all working."
     },
     {
       "id": "US-59.1",
