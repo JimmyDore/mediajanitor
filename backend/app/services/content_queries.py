@@ -520,6 +520,114 @@ class SeasonEpisodeDetails(TypedDict, total=False):
     total_episodes: int | None
 
 
+class EpisodeAddition(TypedDict):
+    """Type for grouped episode additions with smart display text.
+
+    Used by group_episodes_for_display() to return structured episode data
+    for the Recently Available UI.
+    """
+
+    added_date: str  # ISO date string (YYYY-MM-DD)
+    display_text: str  # e.g., "S2E5", "S2E5-E8", "Season 2", "S2E3, S2E5, S2E7"
+    season: int
+    episode_numbers: list[int]
+    is_full_season: bool
+
+
+def group_episodes_for_display(
+    episodes: list[dict[str, Any]],
+    total_episodes_per_season: dict[int, int],
+) -> list[EpisodeAddition]:
+    """Group episode additions for smart display in the Recently Available UI.
+
+    Takes a list of episode download events (from Sonarr history) and groups them
+    intelligently based on when they were added:
+
+    Grouping rules:
+    - Group by (date, season)
+    - If all episodes of a season added same day -> "Season X"
+    - If consecutive episodes same day -> "SXEY-EZ" format
+    - If non-consecutive episodes same day -> comma-separated list "S2E3, S2E5, S2E7"
+    - If single episode -> "SXEY" format
+
+    Args:
+        episodes: List of EpisodeHistoryEntry dicts with season, episode, title, added_at
+        total_episodes_per_season: Dict mapping season number to total episode count
+
+    Returns:
+        List of EpisodeAddition dicts, sorted by date descending (most recent first)
+    """
+    if not episodes:
+        return []
+
+    from collections import defaultdict
+
+    # Group episodes by (date, season)
+    # Key: (date_str YYYY-MM-DD, season_number)
+    # Value: set of episode numbers (use set to deduplicate)
+    groups: dict[tuple[str, int], set[int]] = defaultdict(set)
+
+    for ep in episodes:
+        # Parse date from added_at (ISO format)
+        added_at = ep.get("added_at", "")
+        if not added_at:
+            continue
+
+        # Extract date part (YYYY-MM-DD)
+        date_str = added_at[:10]
+        season = ep.get("season", 0)
+        episode = ep.get("episode", 0)
+
+        groups[(date_str, season)].add(episode)
+
+    # Convert groups to EpisodeAddition list
+    result: list[EpisodeAddition] = []
+
+    for (date_str, season), episode_set in groups.items():
+        episode_numbers = sorted(episode_set)
+
+        # Determine if this is a full season
+        total_eps = total_episodes_per_season.get(season)
+        is_full_season = (
+            total_eps is not None
+            and len(episode_numbers) == total_eps
+            and episode_numbers == list(range(1, total_eps + 1))
+        )
+
+        # Generate display text
+        if is_full_season:
+            display_text = f"Season {season}"
+        elif len(episode_numbers) == 1:
+            display_text = f"S{season}E{episode_numbers[0]}"
+        elif _is_consecutive(episode_numbers):
+            display_text = f"S{season}E{episode_numbers[0]}-E{episode_numbers[-1]}"
+        else:
+            # Non-consecutive: comma-separated list
+            display_text = ", ".join(f"S{season}E{ep}" for ep in episode_numbers)
+
+        result.append(
+            EpisodeAddition(
+                added_date=date_str,
+                display_text=display_text,
+                season=season,
+                episode_numbers=episode_numbers,
+                is_full_season=is_full_season,
+            )
+        )
+
+    # Sort by date descending (most recent first)
+    result.sort(key=lambda x: x["added_date"], reverse=True)
+
+    return result
+
+
+def _is_consecutive(numbers: list[int]) -> bool:
+    """Check if a sorted list of numbers is consecutive."""
+    if len(numbers) <= 1:
+        return True
+    return numbers[-1] - numbers[0] == len(numbers) - 1
+
+
 def _get_availability_date(request: CachedJellyseerrRequest) -> datetime | None:
     """Extract availability date from a Jellyseerr request.
 

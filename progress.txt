@@ -439,4 +439,40 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
 - 11 existing tests in `TestGetSonarrHistorySince` class cover API functionality
 - All 918 tests pass, mypy clean, 37 integration tests pass
 
+**US-63.2: Smart episode grouping logic**
+- Created `group_episodes_for_display()` function in `backend/app/services/content_queries.py`:
+  - Takes list of episode additions (from Sonarr history) and total_episodes_per_season dict
+  - Groups episodes by (date, season) for smart display
+  - Applies grouping rules:
+    - Full season (all episodes same day) → "Season X"
+    - Consecutive episodes same day → "S2E5-E8" range format
+    - Non-consecutive same day → "S2E3, S2E5, S2E7" comma-separated list
+    - Single episode → "S2E5" format
+  - Deduplicates episodes (handles multiple download events for same episode)
+  - Returns sorted by date descending (most recent first)
+- Created `EpisodeAddition` TypedDict with fields:
+  - `added_date`: ISO date string (YYYY-MM-DD)
+  - `display_text`: Smart formatted string
+  - `season`: Season number
+  - `episode_numbers`: List of episode numbers
+  - `is_full_season`: Boolean indicating full season download
+- Added `_is_consecutive()` helper function for consecutive number detection
+- Exported via `content.py` facade for backwards compatibility
+- Created `backend/tests/test_episode_grouping.py` with 14 comprehensive tests:
+  - test_single_episode_returns_episode_format
+  - test_full_season_returns_season_format
+  - test_consecutive_episodes_same_day_returns_range_format
+  - test_non_consecutive_episodes_same_day_returns_list_format
+  - test_episodes_different_days_creates_multiple_groups
+  - test_multiple_seasons_same_day_creates_separate_groups
+  - test_empty_episodes_returns_empty_list
+  - test_full_season_detection_with_missing_total_episodes
+  - test_two_consecutive_episodes_uses_range_format
+  - test_mixed_consecutive_and_non_consecutive_same_day
+  - test_duplicate_episodes_are_deduplicated
+  - test_returns_groups_sorted_by_date_descending
+  - test_handles_specials_season_0
+  - test_complex_scenario_multiple_seasons_multiple_days
+- All 909 tests pass (895 unit + 14 new), mypy clean
+
 ---
