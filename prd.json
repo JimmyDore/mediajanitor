@@ -223,8 +223,8 @@
       ],
       "context": "Performance optimization. get_library() in services/content.py:2322-2473 fetches ALL items from CachedMediaItem then filters in Python. For 1000+ items this is slow. Push filtering to SQL: WHERE user_id=? AND media_type=? AND (name LIKE ? OR ...). Add LIMIT/OFFSET params (default limit=50, offset=0). Return total_count for pagination. Frontend needs pagination UI component with page numbers/prev/next.",
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented SQL-based filtering with WHERE clauses for media_type, search (ILIKE), watched status, year range, and size range. Added LIMIT/OFFSET pagination with default 50 items per page (configurable 1-100). LibraryResponse now includes page, page_size, total_pages fields. Total count and total size are calculated for ALL matching items (not just current page). Frontend has pagination UI with page numbers, prev/next buttons, ellipsis for skipped pages, and 'Page X of Y' info. 12 new backend pagination tests, 23 new frontend tests. All 912 backend tests pass, 847 frontend tests pass, mypy clean, verified in Docker and browser."
     },
     {
       "id": "US-59.4",

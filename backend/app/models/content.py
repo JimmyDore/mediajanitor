@@ -302,13 +302,17 @@ class LibraryItem(BaseModel):
 
 
 class LibraryResponse(BaseModel):
-    """Response model for library list."""
+    """Response model for library list with pagination."""
 
     items: list[LibraryItem]
     total_count: int
     total_size_bytes: int
     total_size_formatted: str
     service_urls: ServiceUrls | None = None
+    # Pagination fields (US-59.3)
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 1
 
 
 # US-52.3: Episode Language Exempt models

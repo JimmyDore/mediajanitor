@@ -760,3 +760,317 @@ class TestLibraryEndpoint:
         assert len(data["items"]) == 1
         # sonarr_title_slug should be null (not present or None)
         assert data["items"][0].get("sonarr_title_slug") is None
+
+
+class TestLibraryPagination:
+    """Test GET /api/library pagination functionality (US-59.3)."""
+
+    def _get_auth_token(self, client: TestClient, email: str = "pagination@example.com") -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    async def _create_many_items(self, user_id: int, count: int, prefix: str = "Item") -> None:
+        """Helper to create multiple cached media items."""
+        async with TestingAsyncSessionLocal() as session:
+            items = [
+                CachedMediaItem(
+                    user_id=user_id,
+                    jellyfin_id=f"{prefix}-{i}",
+                    name=f"{prefix} {i:03d}",  # Zero-pad for consistent sorting
+                    media_type="Movie",
+                    size_bytes=1_000_000_000,  # 1 GB each
+                )
+                for i in range(count)
+            ]
+            session.add_all(items)
+            await session.commit()
+
+    @pytest.mark.asyncio
+    async def test_default_pagination_returns_50_items(self, client: TestClient) -> None:
+        """Default pagination should return 50 items per page."""
+        token = self._get_auth_token(client, "pagination_default@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 75 items
+        await self._create_many_items(user_id, 75, "Pagination")
+
+        response = client.get("/api/library", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return only 50 items (default limit)
+        assert len(data["items"]) == 50
+        # total_count should reflect ALL matching items, not just current page
+        assert data["total_count"] == 75
+        # Should include pagination info
+        assert "page" in data
+        assert "page_size" in data
+        assert "total_pages" in data
+        assert data["page"] == 1
+        assert data["page_size"] == 50
+        assert data["total_pages"] == 2  # ceil(75 / 50)
+
+    @pytest.mark.asyncio
+    async def test_pagination_with_custom_limit(self, client: TestClient) -> None:
+        """Should support custom page_size (limit) parameter."""
+        token = self._get_auth_token(client, "pagination_limit@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 30 items
+        await self._create_many_items(user_id, 30, "Limit")
+
+        response = client.get("/api/library?page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 10
+        assert data["total_count"] == 30
+        assert data["page_size"] == 10
+        assert data["total_pages"] == 3  # ceil(30 / 10)
+
+    @pytest.mark.asyncio
+    async def test_pagination_page_2(self, client: TestClient) -> None:
+        """Should return correct items for page 2."""
+        token = self._get_auth_token(client, "pagination_page2@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 25 items with zero-padded names for consistent sorting
+        await self._create_many_items(user_id, 25, "Page")
+
+        # Get page 2 with 10 items per page
+        response = client.get("/api/library?page=2&page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 10
+        assert data["page"] == 2
+        assert data["total_count"] == 25
+        # Items should be Page 010 through Page 019 (sorted by name)
+        assert data["items"][0]["name"] == "Page 010"
+        assert data["items"][9]["name"] == "Page 019"
+
+    @pytest.mark.asyncio
+    async def test_pagination_last_page_partial(self, client: TestClient) -> None:
+        """Last page may have fewer items than page_size."""
+        token = self._get_auth_token(client, "pagination_last@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 25 items
+        await self._create_many_items(user_id, 25, "Last")
+
+        # Get page 3 with 10 items per page (should have only 5 items)
+        response = client.get("/api/library?page=3&page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 5
+        assert data["page"] == 3
+        assert data["total_pages"] == 3
+
+    @pytest.mark.asyncio
+    async def test_pagination_beyond_last_page_returns_empty(self, client: TestClient) -> None:
+        """Requesting page beyond total pages should return empty items."""
+        token = self._get_auth_token(client, "pagination_beyond@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 10 items
+        await self._create_many_items(user_id, 10, "Beyond")
+
+        # Request page 5 when there's only 1 page
+        response = client.get("/api/library?page=5&page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 0
+        assert data["page"] == 5
+        assert data["total_count"] == 10
+        assert data["total_pages"] == 1
+
+    @pytest.mark.asyncio
+    async def test_pagination_with_filters(self, client: TestClient) -> None:
+        """Pagination should work correctly with filters applied."""
+        token = self._get_auth_token(client, "pagination_filter@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 20 movies and 20 series
+        async with TestingAsyncSessionLocal() as session:
+            items = []
+            for i in range(20):
+                items.append(
+                    CachedMediaItem(
+                        user_id=user_id,
+                        jellyfin_id=f"movie-filter-{i}",
+                        name=f"Movie {i:03d}",
+                        media_type="Movie",
+                        size_bytes=1_000_000_000,
+                    )
+                )
+                items.append(
+                    CachedMediaItem(
+                        user_id=user_id,
+                        jellyfin_id=f"series-filter-{i}",
+                        name=f"Series {i:03d}",
+                        media_type="Series",
+                        size_bytes=2_000_000_000,
+                    )
+                )
+            session.add_all(items)
+            await session.commit()
+
+        # Filter by movies only, page 2 with 10 per page
+        response = client.get("/api/library?type=movie&page=2&page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return 10 items from movies only
+        assert len(data["items"]) == 10
+        assert data["total_count"] == 20  # Only movies, not series
+        assert data["total_pages"] == 2
+        # All items should be movies
+        for item in data["items"]:
+            assert item["media_type"] == "Movie"
+
+    @pytest.mark.asyncio
+    async def test_pagination_with_search(self, client: TestClient) -> None:
+        """Pagination should work correctly with search filter."""
+        token = self._get_auth_token(client, "pagination_search@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create items: 15 with "Matrix" in name, 15 without
+        async with TestingAsyncSessionLocal() as session:
+            items = []
+            for i in range(15):
+                items.append(
+                    CachedMediaItem(
+                        user_id=user_id,
+                        jellyfin_id=f"matrix-{i}",
+                        name=f"The Matrix {i:03d}",
+                        media_type="Movie",
+                        size_bytes=1_000_000_000,
+                    )
+                )
+                items.append(
+                    CachedMediaItem(
+                        user_id=user_id,
+                        jellyfin_id=f"other-{i}",
+                        name=f"Other Movie {i:03d}",
+                        media_type="Movie",
+                        size_bytes=1_000_000_000,
+                    )
+                )
+            session.add_all(items)
+            await session.commit()
+
+        # Search for "Matrix" with pagination
+        response = client.get("/api/library?search=Matrix&page=1&page_size=10", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 10
+        assert data["total_count"] == 15  # Only Matrix movies
+        assert data["total_pages"] == 2
+
+    @pytest.mark.asyncio
+    async def test_total_size_is_for_all_matching_items(self, client: TestClient) -> None:
+        """total_size should be calculated for all matching items, not just current page."""
+        token = self._get_auth_token(client, "pagination_size@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 20 items at 1 GB each = 20 GB total
+        await self._create_many_items(user_id, 20, "Size")
+
+        # Get page 1 with 5 items per page
+        response = client.get("/api/library?page=1&page_size=5", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data["items"]) == 5
+        # total_size_bytes should be for ALL 20 items, not just page 1
+        assert data["total_size_bytes"] == 20_000_000_000
+
+    @pytest.mark.asyncio
+    async def test_page_size_max_limit_rejects_over_100(self, client: TestClient) -> None:
+        """page_size over 100 should be rejected with 422."""
+        token = self._get_auth_token(client, "pagination_max@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Request 500 items per page - should be rejected (max is 100)
+        response = client.get("/api/library?page_size=500", headers=headers)
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_page_size_min_limit_rejects_zero(self, client: TestClient) -> None:
+        """page_size of 0 or less should be rejected with 422."""
+        token = self._get_auth_token(client, "pagination_min@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Request 0 items per page - should be rejected (min is 1)
+        response = client.get("/api/library?page_size=0", headers=headers)
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_page_size_100_is_valid(self, client: TestClient) -> None:
+        """page_size of 100 should be valid."""
+        token = self._get_auth_token(client, "pagination_100@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        # Create 110 items
+        await self._create_many_items(user_id, 110, "Max100")
+
+        response = client.get("/api/library?page_size=100", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 100
+        assert data["page_size"] == 100
+
+    @pytest.mark.asyncio
+    async def test_page_defaults_to_1(self, client: TestClient) -> None:
+        """page should default to 1 when not specified."""
+        token = self._get_auth_token(client, "pagination_default_page@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        await self._create_many_items(user_id, 10, "DefaultPage")
+
+        response = client.get("/api/library", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["page"] == 1

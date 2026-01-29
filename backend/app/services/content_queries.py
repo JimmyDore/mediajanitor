@@ -1205,8 +1205,10 @@ async def get_library(
     max_year: int | None = None,
     min_size_gb: float | None = None,
     max_size_gb: float | None = None,
+    page: int = 1,
+    page_size: int = 50,
 ) -> LibraryResponse:
-    """Get all cached media items for a user with filtering and sorting.
+    """Get cached media items for a user with SQL-based filtering, sorting, and pagination.
 
     Args:
         db: Database session
@@ -1220,13 +1222,24 @@ async def get_library(
         max_year: Maximum production year filter
         min_size_gb: Minimum size in GB filter
         max_size_gb: Maximum size in GB filter
+        page: Page number (1-indexed), default 1
+        page_size: Items per page (1-100), default 50
 
     Returns:
-        LibraryResponse with items, totals, and service URLs
+        LibraryResponse with paginated items, totals (for all matching items), and pagination info
     """
-    # Build Sonarr TMDB -> titleSlug map for enriching series items
+    from math import ceil
+
+    from sqlalchemy import asc, desc, func
+
     from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_tmdb_to_slug_map
 
+    # Clamp page_size to valid range (1-100)
+    page_size = max(1, min(100, page_size))
+    # Ensure page is at least 1
+    page = max(1, page)
+
+    # Build Sonarr TMDB -> titleSlug map for enriching series items
     sonarr_slug_map: dict[int, str] = {}
     settings_result = await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
     user_settings = settings_result.scalar_one_or_none()
@@ -1237,81 +1250,110 @@ async def get_library(
                 user_settings.sonarr_server_url, sonarr_api_key
             )
 
-    # Get all cached media items for the user
-    result = await db.execute(select(CachedMediaItem).where(CachedMediaItem.user_id == user_id))
-    all_items = list(result.scalars().all())
+    # Build base query with SQL WHERE clauses for filtering
+    query = select(CachedMediaItem).where(CachedMediaItem.user_id == user_id)
 
-    # Apply filters
-    filtered_items: list[CachedMediaItem] = []
-    for item in all_items:
-        # Filter by media type
-        if media_type:
-            if media_type.lower() == "movie" and item.media_type != "Movie":
-                continue
-            if media_type.lower() == "series" and item.media_type != "Series":
-                continue
+    # Apply media type filter
+    if media_type:
+        if media_type.lower() == "movie":
+            query = query.where(CachedMediaItem.media_type == "Movie")
+        elif media_type.lower() == "series":
+            query = query.where(CachedMediaItem.media_type == "Series")
 
-        # Filter by search string (case-insensitive name match)
-        if search:
-            if search.lower() not in item.name.lower():
-                continue
+    # Apply search filter (case-insensitive LIKE)
+    if search:
+        # Use LIKE with wildcards for case-insensitive search
+        # SQLite LIKE is case-insensitive by default for ASCII
+        search_pattern = f"%{search}%"
+        query = query.where(CachedMediaItem.name.ilike(search_pattern))
 
-        # Filter by watched status
-        if watched is not None:
-            if watched.lower() == "true" and not item.played:
-                continue
-            if watched.lower() == "false" and item.played:
-                continue
+    # Apply watched filter
+    if watched is not None:
+        if watched.lower() == "true":
+            query = query.where(CachedMediaItem.played == True)  # noqa: E712
+        elif watched.lower() == "false":
+            query = query.where(CachedMediaItem.played == False)  # noqa: E712
 
-        # Filter by year range
-        if min_year is not None and (
-            item.production_year is None or item.production_year < min_year
-        ):
-            continue
-        if max_year is not None and (
-            item.production_year is None or item.production_year > max_year
-        ):
-            continue
+    # Apply year range filters
+    if min_year is not None:
+        query = query.where(CachedMediaItem.production_year >= min_year)
+    if max_year is not None:
+        query = query.where(CachedMediaItem.production_year <= max_year)
 
-        # Filter by size range (convert GB to bytes)
-        if min_size_gb is not None:
-            min_bytes = int(min_size_gb * 1024 * 1024 * 1024)
-            if item.size_bytes is None or item.size_bytes < min_bytes:
-                continue
-        if max_size_gb is not None:
-            max_bytes = int(max_size_gb * 1024 * 1024 * 1024)
-            if item.size_bytes is None or item.size_bytes > max_bytes:
-                continue
+    # Apply size range filters (convert GB to bytes)
+    if min_size_gb is not None:
+        min_bytes = int(min_size_gb * 1024 * 1024 * 1024)
+        query = query.where(CachedMediaItem.size_bytes >= min_bytes)
+    if max_size_gb is not None:
+        max_bytes = int(max_size_gb * 1024 * 1024 * 1024)
+        query = query.where(CachedMediaItem.size_bytes <= max_bytes)
 
-        filtered_items.append(item)
+    # Get total count and total size for ALL matching items (before pagination)
+    count_query = select(
+        func.count(CachedMediaItem.id),
+        func.coalesce(func.sum(CachedMediaItem.size_bytes), 0),
+    ).where(CachedMediaItem.user_id == user_id)
 
-    # Sort items
-    reverse = order.lower() == "desc"
+    # Apply the same filters to count query
+    if media_type:
+        if media_type.lower() == "movie":
+            count_query = count_query.where(CachedMediaItem.media_type == "Movie")
+        elif media_type.lower() == "series":
+            count_query = count_query.where(CachedMediaItem.media_type == "Series")
+    if search:
+        search_pattern = f"%{search}%"
+        count_query = count_query.where(CachedMediaItem.name.ilike(search_pattern))
+    if watched is not None:
+        if watched.lower() == "true":
+            count_query = count_query.where(CachedMediaItem.played == True)  # noqa: E712
+        elif watched.lower() == "false":
+            count_query = count_query.where(CachedMediaItem.played == False)  # noqa: E712
+    if min_year is not None:
+        count_query = count_query.where(CachedMediaItem.production_year >= min_year)
+    if max_year is not None:
+        count_query = count_query.where(CachedMediaItem.production_year <= max_year)
+    if min_size_gb is not None:
+        min_bytes = int(min_size_gb * 1024 * 1024 * 1024)
+        count_query = count_query.where(CachedMediaItem.size_bytes >= min_bytes)
+    if max_size_gb is not None:
+        max_bytes = int(max_size_gb * 1024 * 1024 * 1024)
+        count_query = count_query.where(CachedMediaItem.size_bytes <= max_bytes)
 
-    def sort_key(item: CachedMediaItem) -> tuple[int, Any]:
-        """Generate sort key with null handling. Returns (is_null, value) tuple."""
-        if sort == "name":
-            return (0, item.name.lower())
-        elif sort == "year":
-            return (0 if item.production_year else 1, item.production_year or 0)
-        elif sort == "size":
-            return (0 if item.size_bytes else 1, item.size_bytes or 0)
-        elif sort == "date_added":
-            return (0 if item.date_created else 1, item.date_created or "")
-        elif sort == "last_watched":
-            return (0 if item.last_played_date else 1, item.last_played_date or "")
-        else:
-            # Default to name
-            return (0, item.name.lower())
+    count_result = await db.execute(count_query)
+    total_count, total_size_bytes = count_result.one()
+    total_size_bytes = int(total_size_bytes)
 
-    filtered_items.sort(key=sort_key, reverse=reverse)
+    # Calculate pagination info
+    total_pages = max(1, ceil(total_count / page_size))
 
-    # Calculate totals
-    total_size_bytes = sum(item.size_bytes or 0 for item in filtered_items)
+    # Apply sorting
+    # Use NULLS LAST to handle null values consistently
+    sort_column: Any = CachedMediaItem.name  # Default
+    if sort == "year":
+        sort_column = CachedMediaItem.production_year
+    elif sort == "size":
+        sort_column = CachedMediaItem.size_bytes
+    elif sort == "date_added":
+        sort_column = CachedMediaItem.date_created
+    elif sort == "last_watched":
+        sort_column = CachedMediaItem.last_played_date
+
+    if order.lower() == "desc":
+        query = query.order_by(desc(sort_column).nulls_last())
+    else:
+        query = query.order_by(asc(sort_column).nulls_last())
+
+    # Apply pagination with LIMIT and OFFSET
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    # Execute paginated query
+    result = await db.execute(query)
+    paginated_items = list(result.scalars().all())
 
     # Convert to response models
     response_items = []
-    for item in filtered_items:
+    for item in paginated_items:
         tmdb_id, _ = extract_provider_ids(item)
 
         # Look up Sonarr titleSlug for series items (for external links)
@@ -1341,7 +1383,10 @@ async def get_library(
 
     return LibraryResponse(
         items=response_items,
-        total_count=len(response_items),
+        total_count=total_count,
         total_size_bytes=total_size_bytes,
         total_size_formatted=format_size(total_size_bytes) if total_size_bytes > 0 else "0 B",
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
     )

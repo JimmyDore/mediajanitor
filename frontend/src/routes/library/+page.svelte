@@ -32,6 +32,10 @@
 		total_size_bytes: number;
 		total_size_formatted: string;
 		service_urls: ServiceUrls | null;
+		// Pagination fields (US-59.3)
+		page: number;
+		page_size: number;
+		total_pages: number;
 	}
 
 	type MediaTypeFilter = 'all' | 'movie' | 'series';
@@ -53,6 +57,10 @@
 	let maxSizeGb = $state<number | null>(null);
 	let sortField = $state<SortField>('name');
 	let sortOrder = $state<SortOrder>('asc');
+
+	// Pagination state (US-59.3)
+	let currentPage = $state(1);
+	let pageSize = $state(50);
 
 	// Debounce timer
 	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -182,6 +190,9 @@
 			}
 			params.set('sort', sortField);
 			params.set('order', sortOrder);
+			// Pagination params
+			params.set('page', currentPage.toString());
+			params.set('page_size', pageSize.toString());
 
 			const queryString = params.toString();
 			const url = queryString ? `/api/library?${queryString}` : '/api/library';
@@ -206,6 +217,7 @@
 
 	function setFilter(filter: MediaTypeFilter) {
 		activeFilter = filter;
+		currentPage = 1; // Reset pagination when filter changes
 		fetchLibrary();
 	}
 
@@ -218,12 +230,14 @@
 			clearTimeout(searchDebounceTimer);
 		}
 		searchDebounceTimer = setTimeout(() => {
+			currentPage = 1; // Reset pagination on new search
 			fetchLibrary();
 		}, 300);
 	}
 
 	function clearSearch() {
 		searchQuery = '';
+		currentPage = 1; // Reset pagination
 		if (searchDebounceTimer) {
 			clearTimeout(searchDebounceTimer);
 		}
@@ -233,41 +247,48 @@
 	function handleWatchedChange(event: Event) {
 		const target = event.target as HTMLSelectElement;
 		watchedFilter = target.value as WatchedFilter;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function handleMinYearChange(event: Event) {
 		const target = event.target as HTMLInputElement;
 		minYear = target.value ? parseInt(target.value, 10) : null;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function handleMaxYearChange(event: Event) {
 		const target = event.target as HTMLInputElement;
 		maxYear = target.value ? parseInt(target.value, 10) : null;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function handleMinSizeChange(event: Event) {
 		const target = event.target as HTMLInputElement;
 		minSizeGb = target.value ? parseFloat(target.value) : null;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function handleMaxSizeChange(event: Event) {
 		const target = event.target as HTMLInputElement;
 		maxSizeGb = target.value ? parseFloat(target.value) : null;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function handleSortChange(event: Event) {
 		const target = event.target as HTMLSelectElement;
 		sortField = target.value as SortField;
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
 	function toggleSortOrder() {
 		sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
 	}
 
@@ -280,6 +301,7 @@
 		maxSizeGb = null;
 		sortField = 'name';
 		sortOrder = 'asc';
+		currentPage = 1; // Reset pagination
 		if (searchDebounceTimer) {
 			clearTimeout(searchDebounceTimer);
 		}
@@ -293,7 +315,60 @@
 			sortField = field;
 			sortOrder = field === 'name' ? 'asc' : 'desc';
 		}
+		currentPage = 1; // Reset pagination
 		fetchLibrary();
+	}
+
+	// Pagination controls (US-59.3)
+	function goToPage(page: number) {
+		if (data && page >= 1 && page <= data.total_pages) {
+			currentPage = page;
+			fetchLibrary();
+		}
+	}
+
+	function previousPage() {
+		if (currentPage > 1) {
+			currentPage--;
+			fetchLibrary();
+		}
+	}
+
+	function nextPage() {
+		if (data && currentPage < data.total_pages) {
+			currentPage++;
+			fetchLibrary();
+		}
+	}
+
+	// Generate array of page numbers for pagination UI
+	function getPageNumbers(): number[] {
+		if (!data) return [];
+		const total = data.total_pages;
+		const current = currentPage;
+		const pages: number[] = [];
+
+		// Always show first page
+		pages.push(1);
+
+		// Show pages around current page
+		const start = Math.max(2, current - 1);
+		const end = Math.min(total - 1, current + 1);
+
+		// Add ellipsis indicator (use -1)
+		if (start > 2) pages.push(-1);
+
+		for (let i = start; i <= end; i++) {
+			pages.push(i);
+		}
+
+		// Add ellipsis indicator (use -2)
+		if (end < total - 1) pages.push(-2);
+
+		// Always show last page if more than 1 page
+		if (total > 1) pages.push(total);
+
+		return pages;
 	}
 
 	onMount(() => {
@@ -519,6 +594,49 @@
 					</tbody>
 				</table>
 			</div>
+
+			<!-- Pagination Controls (US-59.3) -->
+			{#if data.total_pages > 1}
+				<nav class="pagination" aria-label="Library pagination">
+					<button
+						class="pagination-btn"
+						onclick={previousPage}
+						disabled={currentPage === 1}
+						aria-label="Previous page"
+					>
+						←
+					</button>
+
+					{#each getPageNumbers() as pageNum}
+						{#if pageNum === -1 || pageNum === -2}
+							<span class="pagination-ellipsis" aria-hidden="true">…</span>
+						{:else}
+							<button
+								class="pagination-btn"
+								class:active={pageNum === currentPage}
+								onclick={() => goToPage(pageNum)}
+								aria-label={`Page ${pageNum}`}
+								aria-current={pageNum === currentPage ? 'page' : undefined}
+							>
+								{pageNum}
+							</button>
+						{/if}
+					{/each}
+
+					<button
+						class="pagination-btn"
+						onclick={nextPage}
+						disabled={currentPage === data.total_pages}
+						aria-label="Next page"
+					>
+						→
+					</button>
+
+					<span class="pagination-info">
+						Page {currentPage} of {data.total_pages}
+					</span>
+				</nav>
+			{/if}
 		{/if}
 	{/if}
 </div>
@@ -951,6 +1069,59 @@
 		color: var(--warning);
 	}
 
+	/* Pagination (US-59.3) */
+	.pagination {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		margin-top: var(--space-6);
+		padding: var(--space-4) 0;
+	}
+
+	.pagination-btn {
+		min-width: 36px;
+		height: 36px;
+		padding: var(--space-2);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-secondary);
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.pagination-btn:hover:not(:disabled) {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+		border-color: var(--border-hover);
+	}
+
+	.pagination-btn.active {
+		background: var(--accent);
+		color: white;
+		border-color: var(--accent);
+	}
+
+	.pagination-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.pagination-ellipsis {
+		color: var(--text-muted);
+		padding: 0 var(--space-1);
+	}
+
+	.pagination-info {
+		margin-left: var(--space-4);
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+	}
+
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
@@ -1004,6 +1175,18 @@
 
 		.col-watched {
 			display: none;
+		}
+
+		.pagination {
+			flex-wrap: wrap;
+			gap: var(--space-1);
+		}
+
+		.pagination-info {
+			width: 100%;
+			text-align: center;
+			margin-left: 0;
+			margin-top: var(--space-2);
 		}
 	}
 </style>
