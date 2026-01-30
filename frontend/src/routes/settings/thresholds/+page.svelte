@@ -1,18 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { authenticatedFetch } from '$lib/stores';
+	import { authenticatedFetch, toasts, debounce } from '$lib/stores';
 
 	// Analysis preferences state
 	let oldContentMonths = $state(4);
 	let minAgeMonths = $state(3);
 	let largeMovieSizeGb = $state(13);
 	let largeSeasonSizeGb = $state(15);
-	let analysisError = $state<string | null>(null);
-	let analysisSuccess = $state<string | null>(null);
-	let isAnalysisLoading = $state(false);
 
-	// Loading state
+	// Loading and status state
 	let isFetchingSettings = $state(true);
+	let isSaving = $state(false);
+
+	// Track pending saves to show loading indicator after 200ms
+	let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 	// Default values for reset
 	const DEFAULT_OLD_CONTENT_MONTHS = 4;
@@ -37,48 +38,90 @@
 			}
 		} catch (e) {
 			console.error('Failed to load analysis preferences:', e);
+			toasts.add('Failed to load threshold settings', 'error');
 		} finally {
 			isFetchingSettings = false;
 		}
 	}
 
-	async function handleAnalysisSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		analysisError = null;
-		analysisSuccess = null;
-		isAnalysisLoading = true;
+	async function savePreference(field: string, value: number) {
+		// Show loading indicator after 200ms
+		loadingTimeoutId = setTimeout(() => {
+			isSaving = true;
+		}, 200);
 
 		try {
 			const response = await authenticatedFetch('/api/settings/analysis', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					old_content_months: oldContentMonths,
-					min_age_months: minAgeMonths,
-					large_movie_size_gb: largeMovieSizeGb,
-					large_season_size_gb: largeSeasonSizeGb
-				})
+				body: JSON.stringify({ [field]: value })
 			});
 
-			const data = await response.json();
-
 			if (!response.ok) {
-				throw new Error(data.detail || 'Failed to save preferences');
+				const data = await response.json();
+				throw new Error(data.detail || 'Failed to save preference');
 			}
 
-			analysisSuccess = 'Saved';
-			setTimeout(() => (analysisSuccess = null), 3000);
+			toasts.add('Saved', 'success');
 		} catch (e) {
-			analysisError = e instanceof Error ? e.message : 'Failed to save preferences';
+			console.error('Failed to save preference:', e);
+			toasts.add(e instanceof Error ? e.message : 'Failed to save preference', 'error');
 		} finally {
-			isAnalysisLoading = false;
+			if (loadingTimeoutId) {
+				clearTimeout(loadingTimeoutId);
+				loadingTimeoutId = null;
+			}
+			isSaving = false;
+		}
+	}
+
+	// Debounced save functions for each threshold (300ms delay)
+	const debouncedSaveOldContent = debounce((value: number) => savePreference('old_content_months', value), 300);
+	const debouncedSaveMinAge = debounce((value: number) => savePreference('min_age_months', value), 300);
+	const debouncedSaveLargeMovie = debounce((value: number) => savePreference('large_movie_size_gb', value), 300);
+	const debouncedSaveLargeSeason = debounce((value: number) => savePreference('large_season_size_gb', value), 300);
+
+	function handleOldContentChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const value = parseInt(input.value, 10);
+		if (value >= 1 && value <= 24) {
+			oldContentMonths = value;
+			debouncedSaveOldContent(value);
+		}
+	}
+
+	function handleMinAgeChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const value = parseInt(input.value, 10);
+		if (value >= 0 && value <= 12) {
+			minAgeMonths = value;
+			debouncedSaveMinAge(value);
+		}
+	}
+
+	function handleLargeMovieChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const value = parseInt(input.value, 10);
+		if (value >= 1 && value <= 100) {
+			largeMovieSizeGb = value;
+			debouncedSaveLargeMovie(value);
+		}
+	}
+
+	function handleLargeSeasonChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const value = parseInt(input.value, 10);
+		if (value >= 1 && value <= 100) {
+			largeSeasonSizeGb = value;
+			debouncedSaveLargeSeason(value);
 		}
 	}
 
 	async function handleResetAnalysis() {
-		analysisError = null;
-		analysisSuccess = null;
-		isAnalysisLoading = true;
+		// Show loading indicator after 200ms
+		loadingTimeoutId = setTimeout(() => {
+			isSaving = true;
+		}, 200);
 
 		try {
 			const response = await authenticatedFetch('/api/settings/analysis', {
@@ -96,12 +139,15 @@
 			largeMovieSizeGb = DEFAULT_LARGE_MOVIE_SIZE_GB;
 			largeSeasonSizeGb = DEFAULT_LARGE_SEASON_SIZE_GB;
 
-			analysisSuccess = 'Reset to defaults';
-			setTimeout(() => (analysisSuccess = null), 3000);
+			toasts.add('Reset to defaults', 'success');
 		} catch (e) {
-			analysisError = e instanceof Error ? e.message : 'Failed to reset preferences';
+			toasts.add(e instanceof Error ? e.message : 'Failed to reset preferences', 'error');
 		} finally {
-			isAnalysisLoading = false;
+			if (loadingTimeoutId) {
+				clearTimeout(loadingTimeoutId);
+				loadingTimeoutId = null;
+			}
+			isSaving = false;
 		}
 	}
 </script>
@@ -117,14 +163,7 @@
 			<span class="spinner" aria-hidden="true"></span>
 		</div>
 	{:else}
-		<form onsubmit={handleAnalysisSubmit} class="thresholds-form">
-			{#if analysisError}
-				<div class="inline-error">{analysisError}</div>
-			{/if}
-			{#if analysisSuccess}
-				<div class="inline-success">{analysisSuccess}</div>
-			{/if}
-
+		<div class="settings-list" aria-live="polite">
 			<div class="threshold-row">
 				<div class="threshold-label-group">
 					<label for="old-content">Flag content unwatched for</label>
@@ -134,10 +173,11 @@
 					<input
 						type="number"
 						id="old-content"
-						bind:value={oldContentMonths}
+						value={oldContentMonths}
+						oninput={handleOldContentChange}
 						min="1"
 						max="24"
-						required
+						disabled={isSaving}
 					/>
 					<span class="unit">months</span>
 				</div>
@@ -152,10 +192,11 @@
 					<input
 						type="number"
 						id="min-age"
-						bind:value={minAgeMonths}
+						value={minAgeMonths}
+						oninput={handleMinAgeChange}
 						min="0"
 						max="12"
-						required
+						disabled={isSaving}
 					/>
 					<span class="unit">months</span>
 				</div>
@@ -170,10 +211,11 @@
 					<input
 						type="number"
 						id="large-size"
-						bind:value={largeMovieSizeGb}
+						value={largeMovieSizeGb}
+						oninput={handleLargeMovieChange}
 						min="1"
 						max="100"
-						required
+						disabled={isSaving}
 					/>
 					<span class="unit">GB</span>
 				</div>
@@ -188,28 +230,29 @@
 					<input
 						type="number"
 						id="large-season-size"
-						bind:value={largeSeasonSizeGb}
+						value={largeSeasonSizeGb}
+						oninput={handleLargeSeasonChange}
 						min="1"
 						max="100"
-						required
+						disabled={isSaving}
 					/>
 					<span class="unit">GB</span>
 				</div>
 			</div>
 
 			<div class="threshold-actions">
-				<button type="button" class="btn-reset" onclick={handleResetAnalysis} disabled={isAnalysisLoading}>
-					Reset
-				</button>
-				<button type="submit" class="btn-save" disabled={isAnalysisLoading}>
-					{#if isAnalysisLoading}
-						<span class="spinner-small"></span>
-					{:else}
-						Save
-					{/if}
+				<button type="button" class="btn-reset" onclick={handleResetAnalysis} disabled={isSaving}>
+					Reset to defaults
 				</button>
 			</div>
-		</form>
+		</div>
+
+		{#if isSaving}
+			<div class="saving-indicator" role="status">
+				<span class="spinner-small" aria-hidden="true"></span>
+				<span>Saving...</span>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -240,8 +283,8 @@
 		padding: var(--space-12);
 	}
 
-	/* Thresholds Form */
-	.thresholds-form {
+	/* Settings list */
+	.settings-list {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
@@ -252,7 +295,12 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
-		padding: var(--space-2) 0;
+		padding: var(--space-3) 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.threshold-row:last-of-type {
+		border-bottom: none;
 	}
 
 	.threshold-row label {
@@ -294,6 +342,11 @@
 		border-color: var(--accent);
 	}
 
+	.threshold-input input:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.unit {
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
@@ -303,7 +356,6 @@
 	.threshold-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: var(--space-3);
 		margin-top: var(--space-4);
 		padding-top: var(--space-4);
 		border-top: 1px solid var(--border);
@@ -331,49 +383,18 @@
 		cursor: not-allowed;
 	}
 
-	.btn-save {
-		padding: var(--space-2) var(--space-4);
-		font-size: var(--font-size-sm);
-		font-weight: var(--font-weight-medium);
-		color: white;
-		background: var(--accent);
-		border: none;
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		transition: background var(--transition-fast);
-		display: inline-flex;
+	/* Saving indicator */
+	.saving-indicator {
+		display: flex;
 		align-items: center;
-		justify-content: center;
-		min-width: 60px;
-		height: 34px;
-	}
-
-	.btn-save:hover:not(:disabled) {
-		background: var(--accent-hover);
-	}
-
-	.btn-save:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	/* Inline messages */
-	.inline-error,
-	.inline-success {
-		font-size: var(--font-size-sm);
+		gap: var(--space-2);
+		margin-top: var(--space-4);
 		padding: var(--space-2) var(--space-3);
+		font-size: var(--font-size-sm);
+		color: var(--text-muted);
+		background: var(--bg-secondary);
 		border-radius: var(--radius-md);
-		margin-bottom: var(--space-3);
-	}
-
-	.inline-error {
-		background: var(--danger-light);
-		color: var(--danger);
-	}
-
-	.inline-success {
-		background: var(--success-light);
-		color: var(--success);
+		width: fit-content;
 	}
 
 	/* Spinners */
@@ -389,8 +410,8 @@
 	.spinner-small {
 		width: 14px;
 		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: white;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
