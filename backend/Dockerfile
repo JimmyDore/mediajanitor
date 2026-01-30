@@ -26,3 +26,4 @@ EXPOSE 8000
 
 # Use entrypoint script to run migrations before starting the app
 ENTRYPOINT ["./entrypoint.sh"]
+
