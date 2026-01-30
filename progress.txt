@@ -475,4 +475,168 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-01-23.
   - test_complex_scenario_multiple_seasons_multiple_days
 - All 909 tests pass (895 unit + 14 new), mypy clean
 
+**US-63.3: Update Recently Available API response**
+- Added `EpisodeAdditionModel` Pydantic model to `backend/app/models/content.py`:
+  - Fields: added_date (str), display_text (str), season (int), episode_numbers (list[int]), is_full_season (bool)
+- Added `episode_additions: list[EpisodeAdditionModel] | None` field to `RecentlyAvailableItem`
+- Created `_get_episode_additions_from_sonarr_history()` helper in `backend/app/services/content_queries.py`:
+  - Returns None for movies (no episode concept)
+  - Returns None for status 5 TV shows (use season_info instead per AC)
+  - For status 4 TV shows with sonarr_history in raw_data:
+    - Builds total_episodes_per_season from seasons data
+    - Calls group_episodes_for_display() for smart grouping
+    - Converts TypedDict results to Pydantic models
+- Updated `get_recently_available()` to call the helper and populate episode_additions
+- Added 7 tests in `TestRecentlyAvailableEpisodeAdditions` class:
+  - test_episode_additions_field_present_in_response
+  - test_episode_additions_from_sonarr_history_status_4
+  - test_episode_additions_groups_consecutive_episodes
+  - test_episode_additions_full_season_display
+  - test_episode_additions_status_5_fully_available_no_additions
+  - test_episode_additions_movie_always_none
+  - test_episode_additions_fallback_when_no_sonarr_history
+- All 937 tests pass, mypy clean, 37 integration tests pass
+
+**US-63.4: Display episode-level info in frontend**
+- Added `EpisodeAddition` TypeScript interface to `frontend/src/routes/info/recent/+page.svelte`:
+  - Fields: added_date (string), display_text (string), season (number), episode_numbers (number[]), is_full_season (boolean)
+- Added `episode_additions: EpisodeAddition[] | null` field to `RecentlyAvailableItem` interface
+- Updated `getDetails()` function to prefer `episode_additions` when available:
+  - Displays up to 3 addition display_texts comma-separated
+  - Shows ellipsis ("...") when more than 3 additions
+  - Falls back to existing season_info logic when episode_additions is null or empty
+- Updated `frontend/tests/recent-episode-details.test.ts`:
+  - Added EpisodeAddition interface
+  - Updated all existing tests to include episode_additions: null field
+  - Added 8 new tests in `getDetails() with episode_additions (US-63.4)` describe block:
+    - test_prefers_single_episode_addition_display_text_over_season_info
+    - test_shows_consecutive_episode_range_display_text
+    - test_shows_full_season_display_text
+    - test_shows_comma_separated_display_text_for_multiple_additions
+    - test_shows_ellipsis_when_more_than_3_additions
+    - test_falls_back_to_season_info_when_episode_additions_is_empty_array
+    - test_shows_mixed_season_additions_correctly
+  - Added copy feature test for episode_additions display
+- All 797 frontend tests pass (24 in recent-episode-details.test.ts), typecheck passes
+- Verified in browser: fallback to season_info works for status 5 TV shows and movies
+
+**US-53.1: Add /dashboard route alias**
+- Created `frontend/src/routes/dashboard/+page.ts` with redirect to `/`
+  - Uses SvelteKit's `throw redirect(307, '/')` pattern
+  - Works for both server-side and client-side navigation
+- Navigating to `/dashboard` now shows dashboard content (same as `/`)
+- Typecheck passes (0 errors, 4 pre-existing warnings)
+- All 797 frontend unit tests pass
+- E2E tests: 17 passed, 6 failed (pre-existing failures due to signup disabled)
+- Verified in browser: `/dashboard` redirects to `/` and shows dashboard
+
+**US-53.2: Redirect authenticated users from login/register pages**
+- Updated `frontend/src/routes/login/+page.svelte`:
+  - Replaced onMount + subscribe pattern with Svelte 5 `$effect()`
+  - Redirects to dashboard (or redirect query param) when authenticated
+  - Removed unused `mounted` state variable
+- Updated `frontend/src/routes/register/+page.svelte`:
+  - Added `$effect()` to redirect authenticated users to `/`
+  - Removed unused `mounted` state variable
+- Created `frontend/tests/auth-redirect.test.ts` with 9 unit tests:
+  - Tests shouldRedirectAuthenticatedUser() logic function
+  - Tests login and register page redirect scenarios
+  - Tests loading state handling (no redirect while loading)
+- All 806 frontend tests pass, typecheck passes
+- Verified in browser:
+  - Authenticated user visiting /login → redirected to /
+  - Authenticated user visiting /register → redirected to /
+  - Unauthenticated user can access both pages normally
+
+**US-55.1: Standardize settings auto-save behavior**
+- Added `debounce()` utility function to `frontend/src/lib/stores/index.ts`:
+  - Delays function execution by specified wait time
+  - Cancels previous call when called again within wait time
+  - Generic TypeScript implementation with proper types
+- Updated `frontend/src/routes/settings/display/+page.svelte`:
+  - Added debounce import from stores
+  - Created `debouncedSaveDays()` function with 300ms delay
+  - Changed `recentlyAvailableDays` input from `onchange` to `oninput`
+  - Now triggers save on every keystroke (debounced), not on blur
+- Created `frontend/tests/settings-autosave.test.ts` with 18 tests:
+  - Debounce utility tests (6 tests): delay, cancel, arguments, multiple calls, 0ms
+  - Thresholds auto-save tests (6 tests): individual field saves, error handling
+  - Display settings auto-save tests (6 tests): theme, days, toggle, language saves
+- Consistent behavior across settings pages:
+  - Display page: Theme (instant), Days (debounced), Toggle (instant), Language (instant)
+  - Thresholds page: All number inputs use debounced auto-save
+  - Connections page: Explicit Save button (requires validation before saving)
+- All 824 frontend tests pass, typecheck passes
+
+**US-56.1: Improve placeholder text contrast**
+- Added `--text-placeholder` CSS variable to `frontend/src/app.css`:
+  - Light mode: `var(--gray-500)` (#64748b) with 4.6:1 contrast ratio on white background
+  - Dark mode: `var(--gray-400)` (#94a3b8) with 5.7:1 contrast ratio on gray-900 background
+- Updated `.input::placeholder` to use `var(--text-placeholder)` instead of `var(--text-muted)`
+- Both light and dark modes meet WCAG AA requirement (4.5:1 minimum)
+- No code changes, CSS-only accessibility improvement
+- All 824 frontend tests pass, typecheck passes (0 errors, 4 pre-existing warnings)
+
+**US-56.2: Use semantic HTML on landing page**
+- Updated `frontend/src/lib/components/Landing.svelte`:
+  - Changed outer wrapper from `<div class="landing">` to `<main class="landing">` element
+  - Changed 4 feature cards from `<div class="feature-card">` to `<article class="feature-card">`
+- Verified existing semantic elements are in place:
+  - `<header>` with `<nav>` for public header navigation
+  - `<section>` for hero, features, preview, and trust sections
+  - Heading hierarchy: h1 (hero title), h2 (section titles), h3 (feature card titles)
+- Screen readers can now navigate by landmarks (main, header, nav, sections, articles)
+- All 824 frontend tests pass, typecheck passes (0 errors, 4 pre-existing warnings)
+
+**US-58.1: Extract Issues page components**
+- Created `frontend/src/lib/components/DurationPickerModal.svelte`:
+  - Reusable duration picker for whitelist operations
+  - Supports permanent, 1 week, 1/3/6 months, and custom date options
+  - Handles keyboard navigation, focus trapping, and auto-focus
+- Created `frontend/src/lib/components/DeleteConfirmModal.svelte`:
+  - Delete confirmation with Radarr/Sonarr and Jellyseerr checkboxes
+  - Dynamically shows Arr name based on media type (Radarr for movies, Sonarr for series)
+  - Warning banner with destructive action styling
+- Created `frontend/src/lib/components/IssueRow.svelte`:
+  - Single expandable table row with badges and actions
+  - Handles all issue types (old, large, language, request)
+  - Episode expansion with whitelist buttons for language issues
+  - Service badges (Jellyfin, Jellyseerr, Radarr, Sonarr, TMDB)
+- Created `frontend/src/lib/components/IssueFilters.svelte`:
+  - Header with title, stats (count/size), search input
+  - Filter tabs (All, Old, Large, Language, Unavailable)
+  - Sub-filters for Large tab (All, Movies, Series)
+- Refactored `frontend/src/routes/issues/+page.svelte`:
+  - Reduced from ~2800 to ~1300 lines (~54% reduction)
+  - Uses extracted components via imports
+  - State management and API calls remain in page component
+  - Components communicate via props and event handlers
+- All 824 frontend tests pass, typecheck passes (0 errors)
+- Verified in browser: filter tabs, search, row expansion, badges all working
+
+**US-59.3: Add server-side pagination to library endpoint**
+- Refactored `backend/app/services/content_queries.py` `get_library()` function:
+  - Push filtering to SQL WHERE clauses (media_type, search with ILIKE, watched, year range, size range)
+  - Added LIMIT/OFFSET pagination with default 50 items per page (configurable 1-100)
+  - Use asyncio.gather for parallel count query (total_count + total_size for ALL matching items)
+  - Sort column typing fixed with `Any` annotation for mypy
+- Updated `backend/app/models/content.py`:
+  - Added page, page_size, total_pages fields to LibraryResponse
+- Updated `backend/app/routers/library.py`:
+  - Added page (ge=1) and page_size (ge=1, le=100) query parameters
+- Created `backend/tests/test_library.py::TestLibraryPagination` class with 12 tests:
+  - Default pagination (50 items), custom page_size, page navigation
+  - Pagination with filters, search, total_size calculation
+  - Boundary conditions (max/min limits, beyond last page)
+- Updated `frontend/src/routes/library/+page.svelte`:
+  - Added pagination state (currentPage, pageSize)
+  - Reset pagination to page 1 when filters change
+  - Added pagination controls: prev/next buttons, page numbers with ellipsis, "Page X of Y" info
+  - Styled pagination with responsive design for mobile
+- Created `frontend/tests/library-pagination.test.ts` with 23 tests:
+  - getPageNumbers() logic, LibraryResponse fields, URL params, state reset, navigation
+- All 912 backend tests pass, 847 frontend tests pass, mypy clean
+- Verified in Docker: API returns correct pagination fields
+- Verified in browser: pagination UI works, page navigation works
+
 ---
