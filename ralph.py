@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -57,6 +58,8 @@ QA_SKILLS = [
     "qa-infra",
 ]
 RETRY_WAIT_SECONDS = 60
+RATE_LIMIT_WAIT_SECONDS = 600  # 10 minutes between rate limit retries
+MAX_RATE_LIMIT_RETRIES = 32    # 32 retries × 10 min = 320 min (~5+ hours for overnight runs)
 DEFAULT_LOG_FILE = "ralph-output.log"
 RALPH_PROMPT = "@prompt.md"
 
@@ -178,15 +181,34 @@ def check_prd_completion() -> int:
         return 999
 
 
-def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None, skip_permissions: bool = False) -> subprocess.CompletedProcess:
+def run_claude(
+    prompt: str,
+    streaming: bool = False,
+    log_file: str | None = None,
+    skip_permissions: bool = False,
+    session_id: str | None = None,
+    is_resume: bool = False,
+) -> subprocess.CompletedProcess:
     """Run claude command and return result.
 
     Streams output in real-time (like shell's tee) while also writing to log file.
+
+    Args:
+        session_id: UUID for session management. If provided with is_resume=False,
+                    creates a new session. If is_resume=True, resumes existing session.
+        is_resume: If True, use --resume instead of --session-id
     """
     if skip_permissions:
         cmd = ["claude", "--dangerously-skip-permissions"]
     else:
         cmd = ["claude", "--permission-mode", "acceptEdits"]
+
+    # Add session management
+    if session_id:
+        if is_resume:
+            cmd.extend(["--resume", session_id])
+        else:
+            cmd.extend(["--session-id", session_id])
 
     if streaming:
         cmd.extend(["--output-format", "stream-json", "--verbose"])
@@ -256,37 +278,79 @@ def run_claude(prompt: str, streaming: bool = False, log_file: str | None = None
     )
 
 
-def run_with_retry(prompt: str, streaming: bool = False, log_file: str | None = None, skip_permissions: bool = False) -> None:
+def run_with_retry(
+    prompt: str,
+    streaming: bool = False,
+    log_file: str | None = None,
+    skip_permissions: bool = False,
+    session_id: str | None = None,
+    is_resume: bool = False,
+) -> None:
     """Run claude command with retry logic for rate limits."""
+    rate_limit_retries = 0
+
     while True:
-        result = run_claude(prompt, streaming=streaming, log_file=log_file, skip_permissions=skip_permissions)
+        result = run_claude(
+            prompt,
+            streaming=streaming,
+            log_file=log_file,
+            skip_permissions=skip_permissions,
+            session_id=session_id,
+            is_resume=is_resume,
+        )
 
         if result.returncode == 0:
             break
 
         output = (result.stdout or "") + (result.stderr or "")
+        output_lower = output.lower()
+
+        # OAuth token expiration - cannot retry, user must re-login
+        oauth_keywords = ["oauth token has expired", "please run /login", "authentication_error"]
+        if any(keyword in output_lower for keyword in oauth_keywords):
+            console.print("\n[red]OAuth token has expired. Please run '/login' and restart Ralph.[/red]")
+            raise typer.Exit(1)
+
+        # Rate limits - retry with backoff (includes daily limits that reset)
+        # Matches: "You've hit your limit · resets 2am", "rate limit", "quota", etc.
         rate_limit_keywords = [
+            "hit your limit",  # Daily limit: "You've hit your limit · resets 2am"
             "credit",
             "rate limit",
+            "rate_limit",
             "quota",
             "limit reached",
             "too many requests",
             "overloaded",
+            "capacity",
         ]
 
-        if any(keyword in output.lower() for keyword in rate_limit_keywords):
-            console.print(f"\n[yellow]Credit/rate limit detected. Waiting {RETRY_WAIT_SECONDS}s...[/yellow]")
+        is_rate_limit = any(keyword in output_lower for keyword in rate_limit_keywords)
+
+        if is_rate_limit:
+            rate_limit_retries += 1
+            if rate_limit_retries > MAX_RATE_LIMIT_RETRIES:
+                console.print(f"\n[red]Max rate limit retries ({MAX_RATE_LIMIT_RETRIES}) exceeded. Stopping.[/red]")
+                raise typer.Exit(1)
+            console.print(f"\n[yellow]Rate limit detected (retry {rate_limit_retries}/{MAX_RATE_LIMIT_RETRIES}). Waiting {RATE_LIMIT_WAIT_SECONDS}s...[/yellow]")
+            time.sleep(RATE_LIMIT_WAIT_SECONDS)
         else:
             console.print(f"\n[yellow]Claude failed (exit {result.returncode}). Waiting {RETRY_WAIT_SECONDS}s...[/yellow]")
+            time.sleep(RETRY_WAIT_SECONDS)
 
-        time.sleep(RETRY_WAIT_SECONDS)
         console.print("[cyan]Retrying...[/cyan]")
 
 
-def run_qa_skill(skill: str, log_file: str | None = None) -> None:
+def run_qa_skill(skill: str, log_file: str | None = None, session_id: str | None = None, is_resume: bool = False) -> None:
     """Run a single QA skill."""
     section_header(f"QA: {skill}")
-    run_with_retry(f"Use /{skill} skill to review the application", streaming=True, log_file=log_file)
+    run_with_retry(
+        f"Use /{skill} skill to review the application",
+        streaming=True,
+        log_file=log_file,
+        session_id=session_id,
+        is_resume=is_resume,
+    )
 
 
 def validate_qa_skills(skills: list[str]) -> list[str]:
@@ -412,17 +476,27 @@ def run(
         console.print(f"  (QA skills: {', '.join(qa_skills)})")
     console.print("=" * 50)
 
-    # Initial QA if requested
+    # Initial QA if requested (each QA skill gets its own session)
     if qa_first and qa_skills:
         section_header("Initial QA Review")
         console.print(f"Running {len(qa_skills)} QA skills: {', '.join(qa_skills)}\n")
         for skill in qa_skills:
-            run_qa_skill(skill, log_file=log_file)
+            qa_session = str(uuid.uuid4())
+            run_qa_skill(skill, log_file=log_file, session_id=qa_session, is_resume=False)
 
-    # Main development loop
+    # Main development loop (each iteration/story gets its own session)
     for i in range(1, iterations + 1):
+        iteration_session = str(uuid.uuid4())
         section_header(f"Iteration {i} of {iterations}")
-        run_with_retry(RALPH_PROMPT, streaming=True, log_file=log_file, skip_permissions=skip_permissions)
+        console.print(f"  Session: {iteration_session[:8]}...")
+        run_with_retry(
+            RALPH_PROMPT,
+            streaming=True,
+            log_file=log_file,
+            skip_permissions=skip_permissions,
+            session_id=iteration_session,
+            is_resume=False,  # Never resume between iterations - each story is fresh
+        )
         summary.iterations_completed = i
 
         remaining = check_prd_completion()
@@ -437,12 +511,13 @@ def run(
         else:
             console.print(f"\n[cyan]{remaining} stories remaining...[/cyan]")
 
-    # Final QA review
+    # Final QA review (each QA skill gets its own session)
     if qa_skills:
         section_header("Final QA Review")
         console.print(f"Running {len(qa_skills)} QA skills: {', '.join(qa_skills)}\n")
         for skill in qa_skills:
-            run_qa_skill(skill, log_file=log_file)
+            qa_session = str(uuid.uuid4())
+            run_qa_skill(skill, log_file=log_file, session_id=qa_session, is_resume=False)
 
     summary.end_time = datetime.now()
     summary.final_remaining = check_prd_completion()
