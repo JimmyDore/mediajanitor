@@ -29,7 +29,13 @@ def get_configured_user_ids() -> list[int]:
             )
             return [row[0] for row in result.fetchall()]
 
-    return asyncio.get_event_loop().run_until_complete(_get_users())
+    # Create a new event loop to avoid "Event loop is closed" errors
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_get_users())
+    finally:
+        loop.close()
 
 
 async def _run_sync_for_user(user_id: int) -> dict[str, Any]:
