@@ -61,4 +61,15 @@ Reusable patterns discovered during development. Update this section when you fi
 
 Task logs archived to ARCHIVED_PROGRESS.txt on 2026-02-02.
 
+### 2026-02-02: US-64.1 - Trigger Jellyfin Library Refresh Before Sync
+- **Files changed:**
+  - `backend/app/services/sync.py` - Added `trigger_jellyfin_library_refresh()` function
+  - `backend/tests/test_library_refresh.py` - New test file with 7 unit tests
+- **Implementation:**
+  - Function calls POST /Library/Refresh with X-Emby-Token header
+  - Returns True on 204 response, False on any failure
+  - Failures logged as warnings (non-blocking)
+  - Strips trailing slash from server URL
+- **Tests:** 7 unit tests covering success, various failure modes, logging
+
 ---

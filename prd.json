@@ -17,7 +17,7 @@
       ],
       "context": "Epic 64: Pre-Sync Library Refresh. Automatically trigger Jellyfin/Jellyseerr library scans at START of each sync to ensure freshest data. JELLYFIN API (verified): POST /Library/Refresh with X-Emby-Token header returns 204. All refresh failures are non-blocking - log warning and continue sync. NON-GOALS: No selective refresh (refresh all), no user toggle (always enabled).",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

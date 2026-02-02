@@ -27,6 +27,44 @@ from app.services.ultra import fetch_ultra_stats, get_decrypted_ultra_api_key
 logger = logging.getLogger(__name__)
 
 
+async def trigger_jellyfin_library_refresh(server_url: str, api_key: str) -> bool:
+    """
+    Trigger a Jellyfin library refresh/scan.
+
+    Calls POST {server_url}/Library/Refresh with X-Emby-Token header.
+    Returns True on 204 response, False on failure.
+    Failures are logged as warnings (not exceptions) - non-blocking.
+
+    Args:
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+
+    Returns:
+        True if refresh was triggered successfully, False otherwise
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{server_url}/Library/Refresh",
+                headers={"X-Emby-Token": api_key},
+            )
+
+            if response.status_code == 204:
+                logger.info("Jellyfin library refresh triggered successfully")
+                return True
+            else:
+                logger.warning(
+                    f"Failed to trigger Jellyfin library refresh: " f"status={response.status_code}"
+                )
+                return False
+
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to trigger Jellyfin library refresh: {e}")
+        return False
+
+
 async def send_sync_failure_notification(
     user_email: str,
     service: str,
