@@ -72,4 +72,64 @@ Task logs archived to ARCHIVED_PROGRESS.txt on 2026-02-02.
   - Strips trailing slash from server URL
 - **Tests:** 7 unit tests covering success, various failure modes, logging
 
+### 2026-02-02: US-64.2 - Poll Jellyfin Library Scan Completion
+- **Files changed:**
+  - `backend/app/services/sync.py` - Added `wait_for_jellyfin_scan_completion()` function
+  - `backend/tests/test_jellyfin_scan_polling.py` - New test file with 13 unit tests
+- **Implementation:**
+  - Polls GET /ScheduledTasks endpoint every 5 seconds (configurable)
+  - Finds task by Key="RefreshLibrary" (NOT Name - Name is localized e.g. "Analyser la médiathèque")
+  - Returns True when State=="Idle", False on timeout or error
+  - Configurable timeout (default 5 minutes) and poll interval
+  - Logs progress on each poll iteration
+- **Tests:** 13 unit tests covering idle state, running→idle transition, timeout, localized names, connection errors, custom intervals
+- **Learnings:**
+  - Use `MagicMock()` (not `AsyncMock()`) for response objects with sync `.json()` method
+  - Mock `asyncio.sleep` with `AsyncMock` for poll tests
+
+### 2026-02-02: US-64.3 - Trigger Jellyseerr Library Sync Before Sync
+- **Files changed:**
+  - `backend/app/services/sync.py` - Added `trigger_jellyseerr_library_sync()` function
+  - `backend/tests/test_jellyseerr_library_sync.py` - New test file with 9 unit tests
+- **Implementation:**
+  - Function calls POST /api/v1/settings/jellyfin/sync with X-Api-Key header
+  - Body must include {"start": true} (critical - required by Jellyseerr API)
+  - Returns True on 200 with running: true, False on failure
+  - Failures logged as warnings (non-blocking)
+  - Strips trailing slash from server URL
+- **Tests:** 9 unit tests covering success, running:false case, 401, 500, connection errors, timeout, trailing slash, logging
+
+### 2026-02-02: US-64.4 - Poll Jellyseerr Sync Completion
+- **Files changed:**
+  - `backend/app/services/sync.py` - Added `wait_for_jellyseerr_sync_completion()` function
+  - `backend/tests/test_jellyseerr_sync_polling.py` - New test file with 12 unit tests
+- **Implementation:**
+  - Polls GET /api/v1/settings/jellyfin/sync with X-Api-Key header
+  - Checks `running` field to determine completion (running==false means done)
+  - Configurable timeout (default 5 minutes) and poll interval (default 5 seconds)
+  - Logs progress with item counts (e.g., "Jellyseerr sync status: 30/69 items")
+  - Returns True on completion, False on timeout or error
+  - Strips trailing slash from server URL
+- **Tests:** 12 unit tests covering completion, polling transition, timeout, connection errors, HTTP errors, custom intervals, logging
+
+### 2026-02-02: US-64.5 - Integrate Library Refresh into Sync Flow
+- **Files changed:**
+  - `backend/app/services/sync.py` - Modified `run_user_sync()` to call library refresh functions before data fetch
+  - `backend/tests/test_library_refresh_integration.py` - New test file with 6 integration tests
+  - `backend/tests/test_sync_mocked_integration.py` - Added `mock_library_refresh_endpoints()` helper to existing tests
+- **Implementation:**
+  - Added "refreshing_libraries" step at START of sync (before syncing_media)
+  - Updated total_steps: 2 → 3 (with Jellyseerr), 1 → 2 (without)
+  - Order: 1) Trigger Jellyfin refresh + wait, 2) Trigger Jellyseerr sync + wait, 3) Fetch Jellyfin media, 4) Fetch Jellyseerr requests
+  - All refresh failures are non-blocking (log warning and continue)
+  - Works for both Celery scheduled syncs and manual sync triggers
+- **Tests:** 6 new integration tests covering:
+  - Jellyfin refresh called before fetch
+  - Jellyseerr sync called before request fetch
+  - Sync continues if Jellyfin refresh fails
+  - Sync continues if Jellyseerr sync fails
+  - Progress shows "refreshing_libraries" step
+  - Total steps includes refresh step
+- **Docker verification:** Confirmed with real Jellyfin/Jellyseerr APIs - logs show refresh triggered and completed before data fetch
+
 ---

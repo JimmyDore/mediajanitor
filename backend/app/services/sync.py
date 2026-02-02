@@ -1935,17 +1935,20 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     user = user_result.scalar_one_or_none()
     user_email = user.email if user else f"user_{user_id}"
 
-    # Determine total steps (1 for Jellyfin, +1 if Jellyseerr configured)
+    # Determine total steps:
+    # 1. refreshing_libraries (always)
+    # 2. syncing_media (always)
+    # 3. syncing_requests (if Jellyseerr configured)
     has_jellyseerr = settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted
-    total_steps = 2 if has_jellyseerr else 1
+    total_steps = 3 if has_jellyseerr else 2
 
-    # Mark sync as started with initial progress
+    # Mark sync as started with initial progress (refreshing_libraries step)
     await update_sync_status(
         db,
         user_id,
         "in_progress",
         started=True,
-        current_step="syncing_media",
+        current_step="refreshing_libraries",
         total_steps=total_steps,
     )
 
@@ -1953,9 +1956,49 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     requests_count = 0
     error_message = None
 
+    # Step 1: Refresh libraries BEFORE fetching data
+    # This ensures newly downloaded content is indexed before we fetch it
+    jellyfin_api_key = decrypt_value(settings.jellyfin_api_key_encrypted)
+
+    # Trigger Jellyfin library refresh and wait for completion
+    await update_sync_progress(
+        db,
+        user_id,
+        current_step="refreshing_libraries",
+    )
+
+    jellyfin_refresh_success = await trigger_jellyfin_library_refresh(
+        settings.jellyfin_server_url, jellyfin_api_key
+    )
+    if jellyfin_refresh_success:
+        # Wait for scan to complete (non-blocking on timeout)
+        await wait_for_jellyfin_scan_completion(settings.jellyfin_server_url, jellyfin_api_key)
+    else:
+        logger.warning(f"Jellyfin library refresh failed for user {user_id}, continuing with sync")
+
+    # Trigger Jellyseerr library sync if configured
+    if has_jellyseerr and settings.jellyseerr_server_url and settings.jellyseerr_api_key_encrypted:
+        jellyseerr_api_key = decrypt_value(settings.jellyseerr_api_key_encrypted)
+        jellyseerr_sync_success = await trigger_jellyseerr_library_sync(
+            settings.jellyseerr_server_url, jellyseerr_api_key
+        )
+        if jellyseerr_sync_success:
+            # Wait for sync to complete (non-blocking on timeout)
+            await wait_for_jellyseerr_sync_completion(
+                settings.jellyseerr_server_url, jellyseerr_api_key
+            )
+        else:
+            logger.warning(
+                f"Jellyseerr library sync failed for user {user_id}, continuing with sync"
+            )
+
     try:
-        # Fetch and cache Jellyfin data with progress updates
-        jellyfin_api_key = decrypt_value(settings.jellyfin_api_key_encrypted)
+        # Step 2: Fetch and cache Jellyfin data with progress updates
+        await update_sync_progress(
+            db,
+            user_id,
+            current_step="syncing_media",
+        )
         items = await fetch_jellyfin_media_with_progress(
             settings.jellyfin_server_url, jellyfin_api_key, db, user_id
         )

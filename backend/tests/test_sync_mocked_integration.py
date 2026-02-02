@@ -172,6 +172,51 @@ JELLYSEERR_MOVIE_DETAIL_2 = {
     "releaseDate": "2023-07-21",
 }
 
+# Library refresh mock responses (US-64.5)
+JELLYFIN_SCHEDULED_TASKS_IDLE = [
+    {"Key": "RefreshLibrary", "Name": "Scan Media Library", "State": "Idle"},
+    {"Key": "CleanLibrary", "Name": "Clean Library", "State": "Idle"},
+]
+
+JELLYSEERR_SYNC_COMPLETE = {
+    "running": False,
+    "progress": 100,
+    "total": 100,
+}
+
+JELLYSEERR_SYNC_STARTED = {
+    "running": True,
+    "progress": 0,
+    "total": 100,
+}
+
+
+def mock_library_refresh_endpoints(
+    jellyfin_base: str = "http://jellyfin.local",
+    jellyseerr_base: str | None = None,
+) -> None:
+    """Add mock responses for library refresh endpoints (US-64.5).
+
+    Call this at the start of any @respx.mock test that calls run_user_sync().
+    """
+    # Jellyfin library refresh - returns 204
+    respx.post(f"{jellyfin_base}/Library/Refresh").mock(return_value=Response(204))
+    # Jellyfin scheduled tasks - returns Idle state immediately (no polling needed)
+    respx.get(f"{jellyfin_base}/ScheduledTasks").mock(
+        return_value=Response(200, json=JELLYFIN_SCHEDULED_TASKS_IDLE)
+    )
+
+    # Jellyseerr library sync (if configured)
+    if jellyseerr_base:
+        # POST to trigger sync returns running: true
+        respx.post(f"{jellyseerr_base}/api/v1/settings/jellyfin/sync").mock(
+            return_value=Response(200, json=JELLYSEERR_SYNC_STARTED)
+        )
+        # GET to check status returns running: false (complete)
+        respx.get(f"{jellyseerr_base}/api/v1/settings/jellyfin/sync").mock(
+            return_value=Response(200, json=JELLYSEERR_SYNC_COMPLETE)
+        )
+
 
 class TestSuccessfulSyncStoresData:
     """Test: successful sync stores correct data in database."""
@@ -180,6 +225,9 @@ class TestSuccessfulSyncStoresData:
     @respx.mock
     async def test_successful_jellyfin_sync_stores_media_items(self) -> None:
         """Sync should store Jellyfin media items correctly in database."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         # Mock Jellyfin API
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
@@ -247,6 +295,12 @@ class TestSuccessfulSyncStoresData:
     @respx.mock
     async def test_successful_full_sync_with_jellyseerr(self) -> None:
         """Full sync stores both Jellyfin and Jellyseerr data."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(
+            jellyfin_base="http://jellyfin.local",
+            jellyseerr_base="http://jellyseerr.local",
+        )
+
         # Mock Jellyfin API
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
@@ -328,6 +382,9 @@ class TestSuccessfulSyncStoresData:
     @respx.mock
     async def test_sync_updates_sync_status(self) -> None:
         """Sync should update SyncStatus record in database."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
         )
@@ -375,6 +432,9 @@ class TestPartialJellyfinData:
     @respx.mock
     async def test_handles_missing_optional_fields(self) -> None:
         """Sync should handle items with missing optional fields."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         # Response with minimal data - missing many optional fields
         minimal_items = {
             "Items": [
@@ -435,6 +495,9 @@ class TestPartialJellyfinData:
     @respx.mock
     async def test_handles_empty_media_sources(self) -> None:
         """Sync should handle empty MediaSources array."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         items_empty_sources = {
             "Items": [
                 {
@@ -492,6 +555,12 @@ class TestJellyseerrDownDoesntBreakSync:
     @respx.mock
     async def test_jellyseerr_500_error_allows_jellyfin_sync(self) -> None:
         """Jellyfin data syncs even if Jellyseerr returns 500."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(
+            jellyfin_base="http://jellyfin.local",
+            jellyseerr_base="http://jellyseerr.local",
+        )
+
         # Jellyfin works
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
@@ -549,6 +618,12 @@ class TestJellyseerrDownDoesntBreakSync:
     @respx.mock
     async def test_jellyseerr_connection_error_allows_jellyfin_sync(self) -> None:
         """Jellyfin data syncs even if Jellyseerr is unreachable."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(
+            jellyfin_base="http://jellyfin.local",
+            jellyseerr_base="http://jellyseerr.local",
+        )
+
         # Jellyfin works
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
@@ -603,6 +678,9 @@ class TestEmptyResultsCreateEmptyCache:
     @respx.mock
     async def test_empty_jellyfin_library_syncs_successfully(self) -> None:
         """Empty Jellyfin library should not cause error."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=[{"Id": "user-1", "Name": "Admin"}])
         )
@@ -639,6 +717,12 @@ class TestEmptyResultsCreateEmptyCache:
     @respx.mock
     async def test_empty_jellyseerr_requests_syncs_successfully(self) -> None:
         """Empty Jellyseerr requests should not cause error."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(
+            jellyfin_base="http://jellyfin.local",
+            jellyseerr_base="http://jellyseerr.local",
+        )
+
         # Jellyfin has data
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=JELLYFIN_USERS_RESPONSE)
@@ -694,6 +778,9 @@ class TestEmptyResultsCreateEmptyCache:
     @respx.mock
     async def test_no_jellyfin_users_syncs_empty(self) -> None:
         """No Jellyfin users should result in empty media cache."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         respx.get("http://jellyfin.local/Users").mock(
             return_value=Response(200, json=[])  # No users
         )
@@ -724,6 +811,9 @@ class TestRealisticApiStructures:
     @respx.mock
     async def test_handles_real_jellyfin_response_structure(self) -> None:
         """Sync handles realistic Jellyfin API response format."""
+        # Mock library refresh endpoints (US-64.5)
+        mock_library_refresh_endpoints(jellyfin_base="http://jellyfin.local")
+
         # Very detailed response matching real Jellyfin API
         detailed_response = {
             "Items": [

@@ -98,7 +98,7 @@
       ],
       "context": "Epic 64: Pre-Sync Library Refresh. Integration story - depends on US-64.1 through US-64.4. Modify run_user_sync() in sync.py. Order: 1) Trigger Jellyfin refresh + wait, 2) Trigger Jellyseerr sync + wait, 3) Fetch Jellyfin media (existing), 4) Fetch Jellyseerr requests (existing). Add \"refreshing_libraries\" step to sync progress UI. All failures non-blocking. Works for both Celery scheduled syncs and manual triggers.",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]
