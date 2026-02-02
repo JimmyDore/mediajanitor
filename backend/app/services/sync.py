@@ -113,6 +113,72 @@ async def trigger_jellyseerr_library_sync(server_url: str, api_key: str) -> bool
         return False
 
 
+async def wait_for_jellyseerr_sync_completion(
+    server_url: str,
+    api_key: str,
+    timeout_seconds: int = 300,
+    poll_interval_seconds: int = 5,
+) -> bool:
+    """
+    Wait for Jellyseerr library sync to complete by polling the sync status endpoint.
+
+    Polls GET {server_url}/api/v1/settings/jellyfin/sync with X-Api-Key header
+    every poll_interval_seconds until running == false or timeout is reached.
+
+    Args:
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+        timeout_seconds: Maximum time to wait for sync completion (default: 300s/5min)
+        poll_interval_seconds: Time between poll attempts (default: 5s)
+
+    Returns:
+        True if sync completed successfully, False if timed out or error occurred
+    """
+    server_url = server_url.rstrip("/")
+    max_polls = timeout_seconds // poll_interval_seconds
+    poll_count = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            while poll_count < max_polls:
+                response = await client.get(
+                    f"{server_url}/api/v1/settings/jellyfin/sync",
+                    headers={"X-Api-Key": api_key},
+                )
+
+                if response.status_code != 200:
+                    logger.warning(
+                        f"Failed to get Jellyseerr sync status: status={response.status_code}"
+                    )
+                    return False
+
+                data = response.json()
+                running = data.get("running", False)
+                progress = data.get("progress", 0)
+                total = data.get("total", 0)
+
+                logger.info(
+                    f"Jellyseerr sync status: {progress}/{total} items "
+                    f"(poll {poll_count + 1}/{max_polls})"
+                )
+
+                if not running:
+                    logger.info("Jellyseerr library sync completed successfully")
+                    return True
+
+                poll_count += 1
+                if poll_count < max_polls:
+                    await asyncio.sleep(poll_interval_seconds)
+
+            # Timeout reached
+            logger.warning(f"Jellyseerr library sync timed out after {timeout_seconds} seconds")
+            return False
+
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to check Jellyseerr sync status: {e}")
+        return False
+
+
 async def wait_for_jellyfin_scan_completion(
     server_url: str,
     api_key: str,

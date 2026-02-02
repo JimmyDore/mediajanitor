@@ -78,7 +78,7 @@
       ],
       "context": "Epic 64: Pre-Sync Library Refresh. JELLYSEERR POLLING API (verified): GET /api/v1/settings/jellyfin/sync with X-Api-Key header. Response: {running: bool, progress: int, total: int, currentLibrary: {name, type}, libraries: [...]}. Poll until running==false. Default timeout 5 minutes, poll every 5 seconds. Log progress like \"Jellyseerr sync: 45/69 items\".",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
