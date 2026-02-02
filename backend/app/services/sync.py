@@ -65,6 +65,82 @@ async def trigger_jellyfin_library_refresh(server_url: str, api_key: str) -> boo
         return False
 
 
+async def wait_for_jellyfin_scan_completion(
+    server_url: str,
+    api_key: str,
+    timeout_seconds: int = 300,
+    poll_interval_seconds: int = 5,
+) -> bool:
+    """
+    Wait for Jellyfin library scan to complete by polling the ScheduledTasks endpoint.
+
+    Polls GET {server_url}/ScheduledTasks with X-Emby-Token header every poll_interval_seconds
+    until the RefreshLibrary task has State == "Idle" or timeout is reached.
+
+    IMPORTANT: Finds task by Key="RefreshLibrary", not Name (Name is localized).
+
+    Args:
+        server_url: Jellyfin server URL
+        api_key: Jellyfin API key
+        timeout_seconds: Maximum time to wait for scan completion (default: 300s/5min)
+        poll_interval_seconds: Time between poll attempts (default: 5s)
+
+    Returns:
+        True if scan completed successfully, False if timed out or error occurred
+    """
+    server_url = server_url.rstrip("/")
+    max_polls = timeout_seconds // poll_interval_seconds
+    poll_count = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            while poll_count < max_polls:
+                response = await client.get(
+                    f"{server_url}/ScheduledTasks",
+                    headers={"X-Emby-Token": api_key},
+                )
+
+                if response.status_code != 200:
+                    logger.warning(
+                        f"Failed to get Jellyfin scheduled tasks: status={response.status_code}"
+                    )
+                    return False
+
+                tasks = response.json()
+
+                # Find the RefreshLibrary task by Key (not Name - Name is localized)
+                refresh_task = None
+                for task in tasks:
+                    if task.get("Key") == "RefreshLibrary":
+                        refresh_task = task
+                        break
+
+                if refresh_task is None:
+                    logger.warning("RefreshLibrary task not found in Jellyfin scheduled tasks")
+                    return False
+
+                state = refresh_task.get("State", "Unknown")
+                logger.info(
+                    f"Jellyfin library scan status: {state} " f"(poll {poll_count + 1}/{max_polls})"
+                )
+
+                if state == "Idle":
+                    logger.info("Jellyfin library scan completed successfully")
+                    return True
+
+                poll_count += 1
+                if poll_count < max_polls:
+                    await asyncio.sleep(poll_interval_seconds)
+
+            # Timeout reached
+            logger.warning(f"Jellyfin library scan timed out after {timeout_seconds} seconds")
+            return False
+
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to check Jellyfin scan status: {e}")
+        return False
+
+
 async def send_sync_failure_notification(
     user_email: str,
     service: str,

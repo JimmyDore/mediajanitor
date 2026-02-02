@@ -38,7 +38,7 @@
       ],
       "context": "Epic 64: Pre-Sync Library Refresh. JELLYFIN POLLING API (verified): GET /ScheduledTasks returns array of tasks. Find task by Key==\"RefreshLibrary\" (NOT Name, which is localized e.g. \"Analyser la médiathèque\" in French). State field: \"Idle\" (done), \"Running\" (in progress), \"Cancelling\". Jellyfin scans can take 1-10+ minutes. Default timeout 5 minutes. Poll every 5 seconds.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
