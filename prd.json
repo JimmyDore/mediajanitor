@@ -58,7 +58,7 @@
       ],
       "context": "Epic 64: Pre-Sync Library Refresh. JELLYSEERR API (verified): POST /api/v1/settings/jellyfin/sync with headers X-Api-Key + Content-Type: application/json, body {\"start\": true}. CRITICAL: Body must include {\"start\": true} or sync won't trigger. Returns {running: true, progress: int, total: int, libraries: [...]}. All failures non-blocking - log warning and continue.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

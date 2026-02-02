@@ -65,6 +65,54 @@ async def trigger_jellyfin_library_refresh(server_url: str, api_key: str) -> boo
         return False
 
 
+async def trigger_jellyseerr_library_sync(server_url: str, api_key: str) -> bool:
+    """
+    Trigger a Jellyseerr library sync.
+
+    Calls POST {server_url}/api/v1/settings/jellyfin/sync with X-Api-Key header
+    and body {"start": true}. Returns True on 200 response with running: true,
+    False on failure.
+    Failures are logged as warnings (not exceptions) - non-blocking.
+
+    Args:
+        server_url: Jellyseerr server URL
+        api_key: Jellyseerr API key
+
+    Returns:
+        True if sync was triggered successfully (running: true), False otherwise
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{server_url}/api/v1/settings/jellyfin/sync",
+                headers={
+                    "X-Api-Key": api_key,
+                    "Content-Type": "application/json",
+                },
+                json={"start": True},
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("running") is True:
+                    logger.info("Jellyseerr library sync triggered successfully")
+                    return True
+                else:
+                    logger.warning("Jellyseerr library sync did not start (running: false)")
+                    return False
+            else:
+                logger.warning(
+                    f"Failed to trigger Jellyseerr library sync: status={response.status_code}"
+                )
+                return False
+
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Failed to trigger Jellyseerr library sync: {e}")
+        return False
+
+
 async def wait_for_jellyfin_scan_completion(
     server_url: str,
     api_key: str,
