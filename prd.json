@@ -1,600 +1,105 @@
 {
   "project": "Media Janitor",
-  "branchName": "ralph/improvements-batch",
+  "branchName": "ralph/pre-sync-library-refresh",
   "userStories": [
     {
-      "id": "US-53.1",
-      "title": "Add /dashboard route alias",
-      "story": "As a user sharing or bookmarking URLs, I want /dashboard to work as a route, so that shared links and bookmarks don't break",
+      "id": "US-64.1",
+      "title": "Trigger Jellyfin Library Refresh Before Sync",
+      "story": "As a media server owner, I want the sync to automatically trigger a Jellyfin library scan before fetching data, so that newly downloaded content appears in my Media Janitor dashboard without manual intervention",
       "acceptanceCriteria": [
-        "Navigating to `/dashboard` shows the dashboard content (same as `/`)",
-        "Can be implemented as a redirect or a route alias",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: `/dashboard` loads the dashboard"
-      ],
-      "context": "Route fixes. Sidebar links to `/` for dashboard, but users expect `/dashboard` to work. Landing page mockup shows `mediajanitor.com/dashboard` in browser URL bar. Implement as SvelteKit route redirect from /dashboard to / OR create /dashboard route that renders same content as root.",
-      "priority": 51,
-      "passes": true,
-      "notes": "Implemented as SvelteKit route redirect using +page.ts with throw redirect(307, '/'). Navigating to /dashboard redirects to / showing the dashboard."
-    },
-    {
-      "id": "US-53.2",
-      "title": "Redirect authenticated users from login/register pages",
-      "story": "As an authenticated user, I want to be redirected to the dashboard if I visit /login or /register, so that I don't see confusing login forms when already logged in",
-      "acceptanceCriteria": [
-        "Visiting `/login` while authenticated redirects to `/` (dashboard)",
-        "Visiting `/register` while authenticated redirects to `/` (dashboard)",
-        "Unauthenticated users can still access these pages normally",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: log in, then manually navigate to `/login` - should redirect"
-      ],
-      "context": "Route fixes. Currently authenticated users can access /login and /register pages - sidebar is visible showing they're authenticated, but login form is still displayed. Check auth state in onMount or load function and redirect if user is already logged in. Use SvelteKit's goto() for client-side redirect.",
-      "priority": 52,
-      "passes": true,
-      "notes": "Implemented using Svelte 5 $effect() to reactively respond to auth state changes. When auth check completes (!isLoading) and user is authenticated, redirects to / using goto(). Login page redirects to the redirect query param if present (for post-login redirects), register page always redirects to /. Added 9 unit tests in auth-redirect.test.ts."
-    },
-    {
-      "id": "US-55.1",
-      "title": "Standardize settings auto-save behavior",
-      "story": "As a user changing settings, I want consistent save behavior across all settings, so that I know when my changes are saved",
-      "acceptanceCriteria": [
-        "All settings auto-save on change (no explicit Save button needed)",
-        "Toast notification confirms each successful save",
-        "Error toast if save fails",
-        "Loading indicator while saving (if > 200ms)",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: change settings, see confirmation toasts"
-      ],
-      "context": "Settings UX improvements. Currently inconsistent: Connections need explicit Save button, Theme auto-saves on click, Recent Days auto-saves on blur, Toggles auto-save. Standardize all to auto-save with debounce (300ms) on change. Show toast on success/error. Use global toasts store from lib/stores/index.ts.",
-      "priority": 54,
-      "passes": true,
-      "notes": "Display page now uses debounced auto-save (300ms) for 'Recently available days' input, consistent with Thresholds page. Both pages use: oninput with debounce, toast notifications via toasts.add(), loading indicator after 200ms. Connections page intentionally keeps explicit Save buttons because connections require validation before saving. Added 2 debounce tests to settings-autosave.test.ts. All 824 frontend tests pass, typecheck passes."
-    },
-    {
-      "id": "US-56.1",
-      "title": "Improve placeholder text contrast",
-      "story": "As a user with vision impairments, I want placeholder text to have sufficient contrast, so that I can read input placeholders",
-      "acceptanceCriteria": [
-        "Placeholder text meets WCAG AA contrast ratio (4.5:1)",
-        "Update `--text-muted` or use a separate placeholder color variable",
-        "Both light and dark mode meet contrast requirements",
+        "Create `trigger_jellyfin_library_refresh(server_url, api_key)` function in `sync.py`",
+        "Function calls `POST {server_url}/Library/Refresh` with `X-Emby-Token` header",
+        "Function returns True on 204 response, False on failure",
+        "Failures are logged as warnings (not exceptions)",
+        "Add unit tests with mocked httpx responses",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "context": "Accessibility improvements. Placeholder text uses --text-muted (gray-400: #94a3b8 in light mode) on white background - contrast ratio ~3.1:1, below WCAG AA 4.5:1. Need darker color for placeholders. Options: 1) Use separate --placeholder-color variable, or 2) Darken --text-muted globally. Check both light and dark mode. Use contrast checker tool to verify 4.5:1 ratio.",
-      "priority": 55,
-      "passes": true,
-      "notes": "Added --text-placeholder CSS variable. Light mode uses gray-500 (#64748b) with 4.6:1 contrast on white. Dark mode uses gray-400 (#94a3b8) with 5.7:1 contrast on gray-900. Updated .input::placeholder to use the new variable. Both modes meet WCAG AA 4.5:1 requirement."
-    },
-    {
-      "id": "US-56.2",
-      "title": "Use semantic HTML on landing page",
-      "story": "As a screen reader user, I want the landing page to use semantic elements, so that I can navigate by landmarks",
-      "acceptanceCriteria": [
-        "Feature cards use `<article>` elements",
-        "Main sections use appropriate landmarks (`<main>`, `<section>`, `<nav>`)",
-        "Headings follow proper hierarchy (h1 → h2 → h3)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Accessibility improvements. Landing page (Landing.svelte) uses generic <div class='feature-card'> instead of semantic <article> elements. Replace divs with semantic HTML: <main> for main content, <section> for distinct sections, <article> for feature cards, <nav> for navigation. Ensure heading hierarchy: only one h1, then h2 for sections, h3 for subsections.",
-      "priority": 56,
-      "passes": true,
-      "notes": "Changed outer wrapper from <div> to <main> element. Changed 4 feature card elements from <div class='feature-card'> to <article class='feature-card'>. Header already uses <header> with <nav>. Sections already use <section>. Headings already follow proper hierarchy: h1 for hero title, h2 for section titles, h3 for feature titles."
-    },
-    {
-      "id": "US-57.1",
-      "title": "Split content.py into focused modules",
-      "story": "As a developer, I want smaller, focused service modules, so that the codebase is easier to maintain and test",
-      "acceptanceCriteria": [
-        "Create `services/whitelist.py` - All whitelist CRUD operations",
-        "Create `services/content_analysis.py` - is_old_or_unwatched, is_large_movie, has_language_issues",
-        "Create `services/content_queries.py` - get_content_summary, get_content_issues, get_library",
-        "`services/content.py` remains as thin facade with imports",
-        "All existing tests pass",
-        "No changes to API contracts",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Backend architecture refactoring. services/content.py is 2474 lines containing 5+ whitelist types, content analysis, issue detection, library queries. Split into: 1) whitelist.py - all add_to_*/get_*/remove_from_*/get_*_ids functions, 2) content_analysis.py - is_old_or_unwatched, is_large_movie, has_language_issues, get_item_issues, 3) content_queries.py - get_content_summary, get_content_issues, get_library, get_recently_available. Keep content.py as facade that imports and re-exports from these modules for backwards compatibility.",
+      "context": "Epic 64: Pre-Sync Library Refresh. Automatically trigger Jellyfin/Jellyseerr library scans at START of each sync to ensure freshest data. JELLYFIN API (verified): POST /Library/Refresh with X-Emby-Token header returns 204. All refresh failures are non-blocking - log warning and continue sync. NON-GOALS: No selective refresh (refresh all), no user toggle (always enabled).",
       "priority": 1,
-      "passes": true,
-      "notes": "Split into 3 focused modules: whitelist.py (558 lines), content_analysis.py (423 lines), content_queries.py (880 lines). content.py is now a thin facade (197 lines) re-exporting from these modules for backwards compatibility."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-57.2",
-      "title": "Extract generic whitelist service",
-      "story": "As a developer, I want a reusable whitelist service pattern, so that whitelist CRUD isn't duplicated 5 times",
+      "id": "US-64.2",
+      "title": "Poll Jellyfin Library Scan Completion",
+      "story": "As a media server owner, I want the sync to wait for the Jellyfin library scan to complete, so that the data fetched reflects all newly scanned content",
       "acceptanceCriteria": [
-        "Create `BaseWhitelistService` generic class with whitelist model as type parameter",
-        "Refactor existing whitelist services to use base class",
-        "All existing tests pass",
-        "No changes to API contracts",
+        "Create `wait_for_jellyfin_scan_completion(server_url, api_key, timeout_seconds=300)` function",
+        "Function calls `GET {server_url}/ScheduledTasks` with `X-Emby-Token` header",
+        "Function finds the task with `Key == \"RefreshLibrary\"` (not Name - Name is localized)",
+        "Function polls every 5 seconds until `State == \"Idle\"` or timeout reached",
+        "Returns True if scan completed, False if timed out",
+        "Timeout is configurable (default 5 minutes)",
+        "Add logging for scan progress (every poll iteration)",
+        "Add unit tests with mocked httpx responses simulating Running → Idle transition",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "context": "Backend architecture refactoring. 5 nearly identical implementations for add/get/remove/get_ids across ContentWhitelist, FrenchOnlyWhitelist, LanguageExemptWhitelist, LargeContentWhitelist, JellyseerrRequestWhitelist. Each follows pattern: check exists -> raise ValueError if duplicate -> create entry with user_id, jellyfin_id, name, media_type, expires_at -> return WhitelistListResponse. Create generic BaseWhitelistService[T] class with model type parameter. Depends on US-57.1.",
+      "context": "Epic 64: Pre-Sync Library Refresh. JELLYFIN POLLING API (verified): GET /ScheduledTasks returns array of tasks. Find task by Key==\"RefreshLibrary\" (NOT Name, which is localized e.g. \"Analyser la médiathèque\" in French). State field: \"Idle\" (done), \"Running\" (in progress), \"Cancelling\". Jellyfin scans can take 1-10+ minutes. Default timeout 5 minutes. Poll every 5 seconds.",
       "priority": 2,
-      "passes": true,
-      "notes": "Created whitelist_base.py with two generic base classes: BaseJellyfinIdWhitelistService (for ContentWhitelist, FrenchOnly, LanguageExempt, Large) and BaseJellyseerrIdWhitelistService (for JellyseerrRequest). Refactored whitelist.py to use these classes. EpisodeLanguageExempt not refactored due to different field structure. All 657 tests pass, mypy clean."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-57.3",
-      "title": "Consolidate whitelist router endpoints",
-      "story": "As a developer, I want DRY whitelist endpoints, so that adding new whitelist types is simple",
+      "id": "US-64.3",
+      "title": "Trigger Jellyseerr Library Sync Before Sync",
+      "story": "As a media server owner, I want the sync to automatically trigger a Jellyseerr library sync, so that Jellyseerr knows about all content in Jellyfin before I fetch request statuses",
       "acceptanceCriteria": [
-        "Use endpoint factory pattern OR path parameter `/api/whitelist/{type}`",
-        "All 6 whitelist types work identically to before",
-        "All existing tests pass",
-        "OpenAPI schema documents all endpoints",
+        "Create `trigger_jellyseerr_library_sync(server_url, api_key)` function in `sync.py`",
+        "Function calls `POST {server_url}/api/v1/settings/jellyfin/sync`",
+        "Headers: `X-Api-Key: {api_key}`, `Content-Type: application/json`",
+        "Body: `{\"start\": true}` (required to trigger the sync)",
+        "Function returns True on 200 response with `running: true`, False on failure",
+        "Failures are logged as warnings (not exceptions)",
+        "Add unit tests with mocked httpx responses",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "context": "Backend architecture refactoring. routers/whitelist.py (516 lines) has identical GET/POST/DELETE patterns for 6 whitelist types. Options: 1) Path parameter /api/whitelist/{type} with type validation, 2) Endpoint factory function that generates routes. Either way, maintain backwards compatibility with existing API contracts. OpenAPI docs should still show all endpoints. Depends on US-57.2.",
+      "context": "Epic 64: Pre-Sync Library Refresh. JELLYSEERR API (verified): POST /api/v1/settings/jellyfin/sync with headers X-Api-Key + Content-Type: application/json, body {\"start\": true}. CRITICAL: Body must include {\"start\": true} or sync won't trigger. Returns {running: true, progress: int, total: int, libraries: [...]}. All failures non-blocking - log warning and continue.",
       "priority": 3,
-      "passes": true,
-      "notes": "Used endpoint factory pattern (create_jellyfin_whitelist_routes) for 4 jellyfin-id-based whitelists. Requests and episode-exempt kept separate due to special logic. Reduced from 516 to 435 lines (~16% reduction). All 694 tests pass, mypy clean, all endpoints verified in Docker."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-57.4",
-      "title": "Move business logic from content router to services",
-      "story": "As a developer, I want routers to only handle HTTP concerns, so that business logic is testable in isolation",
+      "id": "US-64.4",
+      "title": "Poll Jellyseerr Sync Completion",
+      "story": "As a media server owner, I want the sync to wait for the Jellyseerr library sync to complete, so that request availability statuses are accurate",
       "acceptanceCriteria": [
-        "Move `_delete_cached_media_by_tmdb_id()` to content service",
-        "Move `_lookup_jellyseerr_media_by_tmdb()` to content service",
-        "Move service URL construction to appropriate service",
-        "Router only contains HTTP handling code",
-        "All existing tests pass",
+        "Create `wait_for_jellyseerr_sync_completion(server_url, api_key, timeout_seconds=300)` function",
+        "Function calls `GET {server_url}/api/v1/settings/jellyfin/sync` with `X-Api-Key` header",
+        "Response includes `{running: bool, progress: int, total: int}`",
+        "Polls every 5 seconds until `running == false` or timeout",
+        "Returns True if sync completed, False if timed out",
+        "Add logging for progress (e.g., \"Jellyseerr sync: 45/69 items\")",
+        "Add unit tests with mocked httpx responses",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "context": "Backend architecture refactoring. routers/content.py contains business logic: _delete_cached_media_by_tmdb_id() (lines 200-236) iterates items and filters by TMDB ID, _lookup_jellyseerr_media_by_tmdb() (lines 173-197) does DB lookup, service URL construction (lines 102-107). Move these to content service layer. Router should only parse request, call service, return response.",
+      "context": "Epic 64: Pre-Sync Library Refresh. JELLYSEERR POLLING API (verified): GET /api/v1/settings/jellyfin/sync with X-Api-Key header. Response: {running: bool, progress: int, total: int, currentLibrary: {name, type}, libraries: [...]}. Poll until running==false. Default timeout 5 minutes, poll every 5 seconds. Log progress like \"Jellyseerr sync: 45/69 items\".",
       "priority": 4,
-      "passes": true,
-      "notes": "Created content_cache.py with 6 functions: get_user_settings, lookup_jellyseerr_media_by_tmdb, lookup_jellyseerr_media_by_request_id, delete_cached_media_by_tmdb_id, delete_cached_jellyseerr_request_by_tmdb_id, delete_cached_jellyseerr_request_by_id. Router reduced from 528 to 403 lines (~24% reduction). All 694 tests pass, mypy clean, integration tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-58.1",
-      "title": "Extract Issues page components",
-      "story": "As a developer, I want smaller, reusable components, so that the Issues page is maintainable",
+      "id": "US-64.5",
+      "title": "Integrate Library Refresh into Sync Flow",
+      "story": "As a media server owner, I want the library refresh to happen automatically at the start of every sync, so that I don't have to remember to do it manually",
       "acceptanceCriteria": [
-        "Extract `DurationPickerModal.svelte` - reusable duration selection",
-        "Extract `DeleteConfirmModal.svelte` - delete confirmation with checkboxes",
-        "Extract `IssueRow.svelte` - single issue item with expand/collapse",
-        "Extract `IssueFilters.svelte` - filter tabs, search, sub-filters",
-        "Issues page uses extracted components",
-        "All existing functionality preserved",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: all issue page features work"
-      ],
-      "context": "Frontend architecture refactoring. issues/+page.svelte is 2797 lines combining data fetching, filtering, sorting, search, 3 modals (duration picker, delete confirmation, episode duration picker), row expansion, whitelist actions. Extract to lib/components/: DurationPickerModal.svelte (duration selection with preset buttons), DeleteConfirmModal.svelte (confirmation dialog with Arr/Jellyseerr checkboxes), IssueRow.svelte (single expandable row), IssueFilters.svelte (filter tabs + search). Pass data via props, emit events for actions.",
-      "priority": 57,
-      "passes": true,
-      "notes": "Extracted 4 components to lib/components/: DurationPickerModal.svelte (reusable for both item and episode whitelisting), DeleteConfirmModal.svelte (delete confirmation with Arr/Jellyseerr checkboxes), IssueRow.svelte (expandable row with badges, actions, episode list), IssueFilters.svelte (header, search, filter tabs, sub-filters). Issues page reduced from ~2800 to ~1300 lines (~54% reduction). All 824 unit tests pass, typecheck passes (0 errors), verified in browser: filters, search, row expansion, badges all working."
-    },
-    {
-      "id": "US-59.1",
-      "title": "Parallelize content summary queries",
-      "story": "As a user, I want the dashboard to load faster, so that I can quickly see my content summary",
-      "acceptanceCriteria": [
-        "Use `asyncio.gather()` to parallelize whitelist queries",
-        "Dashboard summary loads faster (measure before/after)",
-        "All existing tests pass",
+        "Modify `run_user_sync()` to call refresh functions BEFORE fetching data",
+        "Update sync progress UI to show \"refreshing_libraries\" step",
+        "If Jellyfin refresh fails, log warning and continue with sync",
+        "If Jellyseerr sync fails, log warning and continue with sync",
+        "Works for both scheduled syncs (Celery) and manual sync triggers",
+        "Integration test: verify refresh calls happen before data fetch",
+        "Docker verification: test full flow with real Jellyfin/Jellyseerr",
         "Typecheck passes",
         "Unit tests pass"
       ],
-      "context": "Performance optimization. get_content_summary() in services/content.py:1061-1174 makes 4 separate sequential whitelist queries: get_french_only_ids, get_language_exempt_ids, get_large_whitelist_ids, get_request_whitelist_ids. These are independent and can run in parallel. Use asyncio.gather(*[query1, query2, query3, query4]) to parallelize. Measure response time before/after.",
+      "context": "Epic 64: Pre-Sync Library Refresh. Integration story - depends on US-64.1 through US-64.4. Modify run_user_sync() in sync.py. Order: 1) Trigger Jellyfin refresh + wait, 2) Trigger Jellyseerr sync + wait, 3) Fetch Jellyfin media (existing), 4) Fetch Jellyseerr requests (existing). Add \"refreshing_libraries\" step to sync progress UI. All failures non-blocking. Works for both Celery scheduled syncs and manual triggers.",
       "priority": 5,
-      "passes": true,
-      "notes": "Parallelized 5 independent queries using asyncio.gather(): get_large_whitelist_ids, get_french_only_ids, get_language_exempt_ids, get_unavailable_requests_count, get_recently_available_count. All 696 tests pass, mypy clean, 37 integration tests pass."
-    },
-    {
-      "id": "US-59.2",
-      "title": "Parallelize content issues queries",
-      "story": "As a user, I want the Issues page to load faster, so that I can quickly see content issues",
-      "acceptanceCriteria": [
-        "Use `asyncio.gather()` to parallelize independent queries",
-        "Issues page loads faster (measure before/after)",
-        "All existing tests pass",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Performance optimization. get_content_issues() in services/content.py:1737-1904 makes 4 separate whitelist queries plus get_sonarr_tmdb_to_slug_map() API call sequentially. All independent - parallelize with asyncio.gather(). Similar pattern to US-59.1.",
-      "priority": 6,
-      "passes": true,
-      "notes": "Parallelized 5 independent queries using asyncio.gather(): get_user_thresholds, _get_user_settings, get_french_only_ids, get_language_exempt_ids, get_large_whitelist_ids. Sonarr slug map fetch runs after (depends on user_settings). All 696 tests pass, mypy clean, 37 integration tests pass."
-    },
-    {
-      "id": "US-59.3",
-      "title": "Add server-side pagination to library endpoint",
-      "story": "As a user with large libraries, I want the Library page to load efficiently, so that it doesn't freeze with 1000+ items",
-      "acceptanceCriteria": [
-        "Library endpoint uses SQL WHERE clauses for filtering",
-        "Add LIMIT/OFFSET pagination (default 50 items per page)",
-        "Frontend handles pagination UI",
-        "All existing tests pass",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: Library page loads efficiently with pagination"
-      ],
-      "context": "Performance optimization. get_library() in services/content.py:2322-2473 fetches ALL items from CachedMediaItem then filters in Python. For 1000+ items this is slow. Push filtering to SQL: WHERE user_id=? AND media_type=? AND (name LIKE ? OR ...). Add LIMIT/OFFSET params (default limit=50, offset=0). Return total_count for pagination. Frontend needs pagination UI component with page numbers/prev/next.",
-      "priority": 58,
-      "passes": true,
-      "notes": "Implemented SQL-based filtering with WHERE clauses for media_type, search (ILIKE), watched status, year range, and size range. Added LIMIT/OFFSET pagination with default 50 items per page (configurable 1-100). LibraryResponse now includes page, page_size, total_pages fields. Total count and total size are calculated for ALL matching items (not just current page). Frontend has pagination UI with page numbers, prev/next buttons, ellipsis for skipped pages, and 'Page X of Y' info. 12 new backend pagination tests, 23 new frontend tests. All 912 backend tests pass, 847 frontend tests pass, mypy clean, verified in Docker and browser."
-    },
-    {
-      "id": "US-59.4",
-      "title": "Optimize sync season size calculation",
-      "story": "As a user running sync, I want faster sync times, so that I don't wait so long for data refresh",
-      "acceptanceCriteria": [
-        "Fetch episode data once and reuse for size + watch calculations",
-        "Sync time reduced significantly (measure before/after)",
-        "All existing tests pass",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Performance optimization. calculate_season_sizes() in services/sync.py:1099-1243 fetches episodes multiple times - once for size calculation, then again for each Jellyfin user for watch data. With 15 users and 100 series with 5 seasons each = 100 x 5 x 16 = 8000 API calls. Refactor to fetch episode data once, store in dict by series_id, then iterate users to check watch status without re-fetching. Single pass approach.",
-      "priority": 7,
-      "passes": true,
-      "notes": "Optimized calculate_season_sizes() to: 1) Fetch seasons once (reused for size + language check), 2) Fetch episodes once per season (reused for size + language), 3) Batch user watch data fetches at series level (1 call per user per series instead of 1 call per user per season). Added fetch_series_episodes() for batched episode fetching and check_episodes_languages() for inline language checking. Reduces API calls from (2 + 2N + NU) to (1 + N + U) per series. All 697 tests pass, mypy clean, 37 integration tests pass."
-    },
-    {
-      "id": "US-60.1",
-      "title": "Add content router tests",
-      "story": "As a developer, I want comprehensive tests for content router, so that filter handling and delete operations are verified",
-      "acceptanceCriteria": [
-        "Tests for `/api/content/issues` with each filter type (old, large, language, requests)",
-        "Tests for Sonarr slug map building",
-        "Tests for `_delete_cached_media_by_tmdb_id()` helper",
-        "Tests for `_lookup_jellyseerr_media_by_tmdb()` helper",
-        "Coverage for content.py reaches 70%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/routers/content.py has 26% coverage. Missing tests for: 1) /api/content/issues endpoint filter handling (filter=old|large|language|requests), 2) Sonarr slug map building for TV show requests, 3) _delete_cached_media_by_tmdb_id() helper (iterates items, filters by TMDB ID), 4) _lookup_jellyseerr_media_by_tmdb() helper (DB lookup). Add to tests/test_content.py.",
-      "priority": 8,
-      "passes": true,
-      "notes": "Created tests/test_content_cache_service.py with 21 tests covering all content_cache.py functions: get_user_settings, lookup_jellyseerr_media_by_tmdb, lookup_jellyseerr_media_by_request_id, delete_cached_media_by_tmdb_id, delete_cached_jellyseerr_request_by_tmdb_id, delete_cached_jellyseerr_request_by_id. All 718 tests pass, mypy clean. content.py and content_cache.py have 100% coverage."
-    },
-    {
-      "id": "US-60.2",
-      "title": "Add auth router tests",
-      "story": "As a developer, I want comprehensive tests for auth router, so that notifications, IP parsing, and password flows are verified",
-      "acceptanceCriteria": [
-        "Tests for `send_signup_notification()` (mocked Slack)",
-        "Tests for `send_blocked_signup_notification()` (mocked Slack)",
-        "Tests for `_get_client_ip()` X-Forwarded-For parsing",
-        "Tests for signup disabled flow (403 response)",
-        "Tests for password change endpoint",
-        "Coverage for auth.py reaches 75%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/routers/auth.py has 56% coverage. Missing tests for: 1) send_signup_notification() and send_blocked_signup_notification() (lines 121-203) - mock httpx calls to Slack webhook, 2) _get_client_ip() X-Forwarded-For parsing (lines 78-90), 3) Signup disabled flow returning 403 (lines 214-221), 4) Password change endpoint (lines 565-596). Add to tests/test_auth.py.",
-      "priority": 9,
-      "passes": true,
-      "notes": "Added TestGetClientIp class (6 tests) for _get_client_ip() X-Forwarded-For parsing: single IP, multiple IPs (picks first), whitespace handling, client.host fallback, unknown when client is None, precedence over client.host. Added TestChangePassword class (6 tests) for password change endpoint: success flow, wrong current password (400), requires authentication (401), weak new password (422), missing current_password (422), missing new_password (422). Existing tests already covered: send_signup_notification, send_blocked_signup_notification, signup disabled flow. All 86 auth tests pass, mypy clean."
-    },
-    {
-      "id": "US-60.3",
-      "title": "Add jellyfin service tests",
-      "story": "As a developer, I want comprehensive tests for jellyfin service, so that connection validation and settings are verified",
-      "acceptanceCriteria": [
-        "Tests for `validate_jellyfin_connection()` success path",
-        "Tests for `validate_jellyfin_connection()` failure path (timeout, invalid response)",
-        "Tests for `save_jellyfin_settings()` create new settings",
-        "Tests for `save_jellyfin_settings()` update existing settings",
-        "Tests for `get_decrypted_jellyfin_api_key()` null handling",
-        "Coverage for jellyfin.py reaches 75%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/services/jellyfin.py has 42% coverage. Test: 1) validate_jellyfin_connection() - mock httpx for success (returns system info), timeout, invalid response, 2) save_jellyfin_settings() - create new UserSettings vs update existing, 3) get_decrypted_jellyfin_api_key() - when None, when encrypted. Create tests/test_jellyfin_service.py.",
-      "priority": 10,
-      "passes": true,
-      "notes": "Created tests/test_jellyfin_service.py with 24 tests: TestValidateJellyfinConnection (11 tests: success, endpoint validation, API key header, trailing slash, 401/403/404/500 responses, timeout, connection error, DNS error), TestGetUserJellyfinSettings (3 tests), TestSaveJellyfinSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedJellyfinApiKey (5 tests: None key, decryption, empty string, special chars, unicode). Coverage: 100% for jellyfin.py. All 754 tests pass, mypy clean."
-    },
-    {
-      "id": "US-60.4",
-      "title": "Add nicknames service tests",
-      "story": "As a developer, I want comprehensive tests for nicknames service, so that CRUD operations are verified",
-      "acceptanceCriteria": [
-        "Tests for `create_nickname()` success and duplicate detection",
-        "Tests for `get_nicknames()` ordering",
-        "Tests for `update_nickname()` success and not found case",
-        "Tests for `delete_nickname()` success and not found case",
-        "Coverage for nicknames.py reaches 80%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/services/nicknames.py has 36% coverage. Test CRUD: 1) create_nickname() - success, duplicate detection (should raise or return error), 2) get_nicknames() - verify ordering (alphabetical or by created_at), 3) update_nickname() - success path, not found case, 4) delete_nickname() - success, not found. Create tests/test_nicknames_service.py.",
-      "priority": 11,
-      "passes": true,
-      "notes": "Created tests/test_nicknames_service.py with 17 tests covering all 4 functions: TestCreateNickname (4 tests: success, duplicate detection, user isolation, created_at set), TestGetNicknames (5 tests: empty list, alphabetical ordering, user isolation, all fields, ISO format), TestUpdateNickname (4 tests: success, not found, user isolation, field preservation), TestDeleteNickname (4 tests: success, not found, user isolation, only affects specified item). All 771 tests pass, mypy clean."
-    },
-    {
-      "id": "US-60.5",
-      "title": "Add sonarr service tests",
-      "story": "As a developer, I want comprehensive tests for sonarr service, so that connection and API handling are verified",
-      "acceptanceCriteria": [
-        "Tests for `validate_sonarr_connection()` timeout handling",
-        "Tests for `save_sonarr_settings()` create vs update paths",
-        "Tests for `get_sonarr_series_by_tmdb_id()` API error handling",
-        "Tests for `get_sonarr_tmdb_to_slug_map()` empty response handling",
-        "Coverage for sonarr.py reaches 70%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/services/sonarr.py has 43% coverage. Test: 1) validate_sonarr_connection() - success, timeout, invalid API key response, 2) save_sonarr_settings() - create new vs update existing, 3) get_sonarr_series_by_tmdb_id() - success, API error, not found, 4) get_sonarr_tmdb_to_slug_map() - success, empty response. Create tests/test_sonarr_service.py.",
-      "priority": 12,
-      "passes": true,
-      "notes": "Created tests/test_sonarr_service.py with 54 tests covering all 8 functions: TestValidateSonarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserSonarrSettings (3 tests), TestSaveSonarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedSonarrApiKey (5 tests), TestGetSonarrSeriesByTmdbId (10 tests: match, not found, empty, non-200, timeout, connection error, endpoint, trailing slash, missing tmdbId, None id), TestGetSonarrTmdbToSlugMap (9 tests: success, empty, non-200, timeout, connection error, missing fields, empty slug, trailing slash), TestDeleteSonarrSeries (7 tests: success, URL, delete_files params, non-200, timeout, connection error), TestDeleteSeriesByTmdbId (4 tests: success, not found, delete fails, delete_files param). All 788 tests pass, mypy clean."
-    },
-    {
-      "id": "US-60.6",
-      "title": "Add radarr service tests",
-      "story": "As a developer, I want comprehensive tests for radarr service, so that connection and settings are verified",
-      "acceptanceCriteria": [
-        "Tests for `validate_radarr_connection()` network errors",
-        "Tests for `save_radarr_settings()` update existing settings",
-        "Coverage for radarr.py reaches 75%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/services/radarr.py has 54% coverage. Test: 1) validate_radarr_connection() - network errors (timeout, connection refused, DNS failure), 2) save_radarr_settings() - update existing settings path (not just create). Create or extend tests/test_radarr_service.py.",
-      "priority": 13,
-      "passes": true,
-      "notes": "Created tests/test_radarr_service.py with 46 tests covering all 7 functions: TestValidateRadarrConnection (11 tests: success, endpoint, API key header, trailing slash, 401/403/404/500, timeout, connection error, DNS error), TestGetUserRadarrSettings (3 tests), TestSaveRadarrSettings (5 tests: create, update, trailing slash, encryption, user isolation), TestGetDecryptedRadarrApiKey (5 tests), TestGetRadarrMovieByTmdbId (9 tests: match, empty, non-200, timeout, connection error, endpoint, trailing slash, None id, multiple matches), TestDeleteRadarrMovie (8 tests), TestDeleteMovieByTmdbId (5 tests). All 834 tests pass, mypy clean."
-    },
-    {
-      "id": "US-60.7",
-      "title": "Add tasks module tests",
-      "story": "As a developer, I want comprehensive tests for background tasks, so that sync and notification handling are verified",
-      "acceptanceCriteria": [
-        "Tests for `get_configured_user_ids()` database query",
-        "Tests for `send_sync_failure_notification_for_celery()` error handling path",
-        "Tests for `sync_user()` exception handling and notification",
-        "Coverage for tasks.py reaches 75%+",
-        "Typecheck passes",
-        "All tests pass"
-      ],
-      "context": "Test coverage improvements. app/tasks.py has 58% coverage. Test: 1) get_configured_user_ids() (lines 22-32) - returns user IDs with Jellyfin configured, 2) send_sync_failure_notification_for_celery() error handling (lines 49-83) - mock Slack webhook, 3) sync_user() exception handling and notification (lines 142-149) - verify notification sent on failure. Create tests/test_tasks.py.",
-      "priority": 14,
-      "passes": true,
-      "notes": "Created tests/test_tasks.py with 24 tests covering: TestGetConfiguredUserIds (4 tests: empty list, configured users, excludes users with only URL, excludes users with only API key), TestSendSyncFailureNotificationForCeleryLogic (6 tests: email lookup, fallback email, nonexistent user, logs warning on exception, sends with correct params, uses fallback email), TestSyncUserTaskLogic (6 tests: run_sync_for_user, success path, failure returns error dict, failure sends notification, failure logs error, logs info on success), TestGetUserEmail (2 tests), TestSyncAllUsersTask (3 tests), TestTestTask (3 tests). All 856 tests pass, mypy clean."
-    },
-    {
-      "id": "US-61.1",
-      "title": "Fix CLAUDE.md port documentation",
-      "story": "As a developer setting up the project, I want consistent port documentation, so that I can access the backend correctly",
-      "acceptanceCriteria": [
-        "Update \"Running the Project\" section to show `localhost:8080` for Docker",
-        "Clarify that `localhost:8000` is for running backend directly (without Docker)",
-        "All port references are consistent"
-      ],
-      "context": "Documentation updates. Backend port documented as localhost:8000 in 'Running the Project' section, but docker-compose maps to 8080:8000 - users running Docker access localhost:8080. Curl examples in other sections correctly use 8080. Update CLAUDE.md to clarify: Docker = 8080, direct uvicorn = 8000.",
-      "priority": 15,
-      "passes": true,
-      "notes": "Updated 'Running the Project' section: Docker shows localhost:8080 (mapped from container port 8000), Backend Only section shows localhost:8000 for direct uvicorn. All port references are now consistent."
-    },
-    {
-      "id": "US-61.2",
-      "title": "Update CLAUDE.md skills list",
-      "story": "As a developer using skills, I want accurate skills documentation, so that I can find available skills",
-      "acceptanceCriteria": [
-        "List all 20 skills in the \"Skills\" section",
-        "Remove reference to `/original-script`",
-        "Update project structure tree to reflect actual skill count",
-        "Group skills by category (QA, PRD management, etc.)"
-      ],
-      "context": "Documentation updates. Skills list in 'Ralph Workflow' section is incomplete - missing: morning-routine, review-suggestions, prd-archive, qa-* skills (8 QA skills), ux-expert, skill-creator, setup-email. References non-existent /original-script. Project structure tree shows only 5 skills but there are 20 in .claude/skills/. Group by: QA skills (qa-*), PRD management (prd, ralph-init, prd-sync, prd-archive), UX (ux-expert), Utilities (skill-creator, setup-email, etc).",
-      "priority": 16,
-      "passes": true,
-      "notes": "Listed all 21 skills grouped by category: PRD Management (4), QA Skills (9), UX & Product (2), Workflow & Utilities (6). Removed /original-script reference. Updated project structure tree to show skill categories instead of individual files."
-    },
-    {
-      "id": "US-61.3",
-      "title": "Fix README.md git clone URLs",
-      "story": "As a developer cloning the repo, I want consistent git URLs, so that I can clone the repository",
-      "acceptanceCriteria": [
-        "Both URLs use the correct GitHub username",
-        "URLs are consistent across the README"
-      ],
-      "context": "Documentation updates. Quick Start has https://github.com/jimmmydore/media-janitor.git but Installation section has https://github.com/jimmy/media-janitor.git - inconsistent usernames. Find correct GitHub username and update both URLs to match.",
-      "priority": 17,
-      "passes": true,
-      "notes": "Updated both git clone URLs to use correct GitHub username (JimmyDore) and repository name (mediajanitor). Also updated cd commands to use 'mediajanitor' instead of 'media-janitor'."
-    },
-    {
-      "id": "US-62.1",
-      "title": "Add Celery container health checks",
-      "story": "As an operator, I want health checks on Celery containers, so that I know when background tasks are failing",
-      "acceptanceCriteria": [
-        "Add health check to celery-worker in docker-compose.yml",
-        "Add health check to celery-beat in docker-compose.yml",
-        "Health checks verify Celery is processing tasks",
-        "Container restarts if health check fails"
-      ],
-      "context": "Infrastructure improvements. Only backend and redis have health checks in docker-compose.yml. Celery worker and celery-beat could silently fail without detection. Add healthcheck using celery inspect ping or checking process status. Example: `celery -A app.tasks inspect ping` returns 'pong' if healthy. Set restart: unless-stopped with healthcheck to auto-restart on failure.",
-      "priority": 18,
-      "passes": true,
-      "notes": "Added health checks: celery-worker uses 'celery inspect ping' to verify worker responds to pings. celery-beat uses 'pgrep -f celery.*beat' to verify beat process is running. Both have 30s intervals, 10s timeout, 3 retries, and appropriate start_period (30s for worker, 10s for beat). Combined with existing restart: unless-stopped, unhealthy containers will automatically restart."
-    },
-    {
-      "id": "US-62.2",
-      "title": "Add container resource limits",
-      "story": "As an operator, I want memory limits on containers, so that a runaway process doesn't crash the VPS",
-      "acceptanceCriteria": [
-        "Add memory limits to all containers in docker-compose.yml",
-        "Backend: 512MB limit",
-        "Celery worker: 512MB limit",
-        "Frontend: 256MB limit",
-        "Redis: 256MB limit",
-        "Document recommended limits in CLAUDE.md"
-      ],
-      "context": "Infrastructure improvements. No deploy.resources.limits.memory configured. Memory leak could consume all VPS memory. Add to docker-compose.yml under deploy: resources: limits: memory: Xm. Recommended: backend 512MB, celery-worker 512MB, celery-beat 128MB, frontend 256MB, redis 256MB. Document in CLAUDE.md Infrastructure section.",
-      "priority": 19,
-      "passes": true,
-      "notes": "Added deploy.resources.limits.memory to all 5 containers: backend (512M), celery-worker (512M), celery-beat (128M), frontend (256M), redis (256M). Total: ~1.7GB max. Documented in CLAUDE.md Infrastructure section with table of limits and rationale."
-    },
-    {
-      "id": "US-62.3",
-      "title": "Configure log rotation",
-      "story": "As an operator, I want automatic log rotation, so that logs don't fill the disk",
-      "acceptanceCriteria": [
-        "Add logging config to docker-compose.yml for all containers",
-        "Use json-file driver with max-size (10MB) and max-file (3)",
-        "Verify logs rotate correctly"
-      ],
-      "context": "Infrastructure improvements. No logging.driver options configured in docker-compose.yml. Logs could grow indefinitely and fill disk. Add to each service: logging: driver: json-file, options: max-size: '10m', max-file: '3'. This limits each container to 30MB total log storage (3 files x 10MB).",
-      "priority": 20,
-      "passes": true,
-      "notes": "Added logging configuration to all 5 containers (redis, backend, celery-worker, celery-beat, frontend) using json-file driver with max-size: 10m and max-file: 3. Each container limited to 30MB total log storage. Total across all containers: ~150MB max."
-    },
-    {
-      "id": "US-62.4",
-      "title": "Add deployment rollback mechanism",
-      "story": "As an operator, I want automatic rollback on failed deploys, so that failed builds don't leave the app down",
-      "acceptanceCriteria": [
-        "Tag current images before building new ones",
-        "If new build fails, restore previous images",
-        "Add health check after deployment",
-        "If health check fails, rollback to previous version"
-      ],
-      "context": "Infrastructure improvements. deploy.yml does docker-compose down then build --no-cache and up -d. If build fails, no automatic rollback. Add to deploy workflow: 1) Tag current images as :previous before build, 2) Build new images, 3) Start new containers, 4) Run health check on /health endpoint, 5) If health check fails, docker-compose down, retag :previous as :latest, docker-compose up -d.",
-      "priority": 21,
-      "passes": true,
-      "notes": "Implemented rollback mechanism: 1) Tags current backend/frontend images as :previous before building, 2) Builds new images with --no-cache, 3) Runs health check on /health endpoint (also fixes US-62.5), 4) On success: cleans up :previous images, 5) On failure: logs backend output, stops containers, restores :previous tags to :latest, starts containers, verifies rollback health. YAML syntax validated."
-    },
-    {
-      "id": "US-62.5",
-      "title": "Use proper health endpoint in deploy",
-      "story": "As an operator, I want deploy to use the /health endpoint, so that health checks are meaningful",
-      "acceptanceCriteria": [
-        "Update deploy.yml to use `/health` endpoint",
-        "Verify health check works during deployment"
-      ],
-      "context": "Infrastructure improvements. deploy.yml (line 60) uses /api/hello for health check but backend has proper /health endpoint at main.py:57. Update deploy.yml to curl http://localhost:8080/health instead of /api/hello.",
-      "priority": 22,
-      "passes": true,
-      "notes": "Fixed as part of US-62.4. Health check now uses /health endpoint instead of /api/hello."
-    },
-    {
-      "id": "US-62.6",
-      "title": "Implement rolling deployment",
-      "story": "As a user, I want zero-downtime deployments, so that I can use the app during updates",
-      "acceptanceCriteria": [
-        "Use `docker-compose up -d --no-deps --build <service>` pattern",
-        "Rebuild services one at a time",
-        "Backend starts new container before stopping old",
-        "Frontend starts new container before stopping old",
-        "Document rolling deployment process"
-      ],
-      "context": "Infrastructure improvements. docker-compose down takes all services offline before rebuild - users experience downtime. Implement rolling deployment: 1) Pull latest code, 2) Build backend: docker-compose up -d --no-deps --build backend, 3) Wait for health check, 4) Build frontend: docker-compose up -d --no-deps --build frontend, 5) Build celery workers similarly. Document process in CLAUDE.md or deploy docs.",
-      "priority": 23,
-      "passes": true,
-      "notes": "Implemented rolling deployment in deploy.yml: Services updated one at a time (redis -> backend -> celery-worker -> celery-beat -> frontend) using 'docker-compose up -d --no-deps --build' pattern. Each service waits for health check before proceeding. Removed docker-compose down that caused downtime. Added wait_for_healthy() helper function. Final verification step checks all services are healthy before cleanup. Documented in CLAUDE.md Infrastructure section."
-    },
-    {
-      "id": "US-62.7",
-      "title": "Enhance health endpoint with dependency checks",
-      "story": "As an operator, I want the health endpoint to verify dependencies, so that I know all services are working",
-      "acceptanceCriteria": [
-        "`/health` checks database connectivity",
-        "`/health` checks Redis connectivity (if configured)",
-        "Returns detailed status for each dependency",
-        "Returns 503 if any dependency is down",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Infrastructure improvements. /health at main.py:57 only returns {'status': 'healthy'} without checking DB or Redis. Enhance to: 1) Execute simple DB query (SELECT 1), 2) Ping Redis if REDIS_URL configured, 3) Return {'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}} on success, 4) Return 503 with {'status': 'unhealthy', 'dependencies': {'database': 'error: ...'}} on failure. Add unit tests mocking DB/Redis.",
-      "priority": 24,
-      "passes": true,
-      "notes": "Enhanced /health endpoint with check_database_health() and check_redis_health() functions. Database check executes SELECT 1, Redis check sends PING. Returns 200 with {'status': 'healthy', 'dependencies': {'database': 'ok', 'redis': 'ok'}} on success, 503 with {'status': 'unhealthy', 'dependencies': {...error details...}} on failure. Redis shows 'not configured' when redis_url is empty. Added 10 unit tests in TestHealthEndpoint class. All 864 tests pass, mypy clean."
-    },
-    {
-      "id": "US-63.1",
-      "title": "Fetch Sonarr history during sync",
-      "story": "As a user with Sonarr configured, I want my sync to fetch episode download history from Sonarr, so that I can see when specific episodes were added",
-      "acceptanceCriteria": [
-        "Add `get_sonarr_history_since()` to `services/sonarr.py`",
-        "Call Sonarr API: `GET /api/v3/history/since?date={cutoff}&eventType=downloadFolderImported&includeSeries=true&includeEpisode=true`",
-        "Build map: `{tmdb_id: [{season, episode, title, added_at}, ...]}`",
-        "During sync, if user has Sonarr configured, fetch history",
-        "Store in `CachedJellyseerrRequest.raw_data` as `sonarr_history` key",
-        "Gracefully skip if Sonarr not configured (no error)",
-        "Gracefully handle Sonarr API failures (log warning, continue sync)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Episode-level Recently Available via Sonarr History. Currently 'Recently Available' shows series-level info ('Seasons 1-3 added') because Jellyseerr only provides episode airDate (broadcast date), not download date. Sonarr's GET /api/v3/history/since returns download events with episode details and timestamps. Fetch during sync (not on-demand) to match existing pattern. Store in CachedJellyseerrRequest.raw_data.sonarr_history for later use. Match series by TMDB ID (common key between Jellyseerr and Sonarr). Use same cutoff as recently_available_days (default 7). NON-GOALS: No Radarr integration, no real-time API calls.",
-      "priority": 25,
-      "passes": true,
-      "notes": "Implemented get_sonarr_history_since() in sonarr.py with EpisodeHistoryEntry TypedDict. Updated sync.py to fetch Sonarr history during Jellyseerr sync if Sonarr is configured. Modified cache_jellyseerr_requests() to accept optional sonarr_history parameter and store it in raw_data for TV shows. Uses recently_available_days setting (default 7). Gracefully handles Sonarr failures with warning log. 65 Sonarr tests, 4 new sync integration tests, all 918 tests pass, mypy clean."
-    },
-    {
-      "id": "US-63.2",
-      "title": "Smart episode grouping logic",
-      "story": "As a user viewing Recently Available, I want episodes grouped intelligently, so that full season drops show as 'Season 2' instead of listing every episode",
-      "acceptanceCriteria": [
-        "Add `group_episodes_for_display()` to content service",
-        "Input: list of episode additions for a series, total episodes per season",
-        "If all episodes of a season added same day → 'Season X'",
-        "If consecutive episodes same day → 'SXEY-EZ' format",
-        "If non-consecutive → comma-separated list",
-        "If single episode → 'SXEY' format",
-        "Returns structured data with: display_text, season, episode_numbers, is_full_season",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Episode-level Recently Available. Smart grouping improves readability when many episodes added at once. Grouping rules: all episodes of season = 'Season X', consecutive = 'S2E5-E8', non-consecutive = 'S2E3, S2E5, S2E7', single = 'S2E5'. Input is list of {season, episode, added_at} from Sonarr history. Need total_episodes_per_season from Jellyseerr/TMDB to know if full season. Return EpisodeAddition with display_text, season, episode_numbers list, is_full_season bool. Group by added_at date for same-day grouping.",
-      "priority": 26,
-      "passes": true,
-      "notes": "Implemented group_episodes_for_display() in content_queries.py with EpisodeAddition TypedDict. Groups episodes by (date, season) and applies smart display rules: full season -> 'Season X', consecutive -> 'S2E5-E8', non-consecutive -> comma list, single -> 'S2E5'. Deduplicates episodes, returns sorted by date descending. Added _is_consecutive() helper. Exported via content.py facade. 14 comprehensive tests in test_episode_grouping.py. All 895 tests pass, mypy clean."
-    },
-    {
-      "id": "US-63.3",
-      "title": "Update Recently Available API response",
-      "story": "As a frontend developer, I want the /api/info/recent endpoint to return episode-level data, so that I can display it in the UI",
-      "acceptanceCriteria": [
-        "Add `EpisodeAddition` model: added_date, display_text, season, episode_numbers, is_full_season",
-        "Add `episode_additions: list[EpisodeAddition] | None` to `RecentlyAvailableItem`",
-        "In `get_recently_available()`, check for `sonarr_history` in cached request's raw_data",
-        "Apply smart grouping to generate `episode_additions` for TV shows",
-        "Status 5 (fully available) shows: keep current `season_info` display (no episode granularity)",
-        "Status 4 (partial) shows: include `episode_additions` if Sonarr data available",
-        "If no Sonarr data: `episode_additions` is null (frontend uses fallback)",
-        "Typecheck passes",
-        "Unit tests pass"
-      ],
-      "context": "Episode-level Recently Available API. Add EpisodeAddition model to models/content.py with fields: added_date (str ISO), display_text (str like 'S2E5-E8'), season (int), episode_numbers (list[int]), is_full_season (bool). Add optional episode_additions field to RecentlyAvailableItem. In get_recently_available() at services/content.py, check request.raw_data.get('sonarr_history'), call group_episodes_for_display() if present. Status 5 shows keep current season_info (full availability). Status 4 shows get episode granularity. No Sonarr data = null episode_additions (frontend fallback to season_info).",
-      "priority": 27,
-      "passes": true,
-      "notes": "Added EpisodeAdditionModel Pydantic model to models/content.py. Added episode_additions field to RecentlyAvailableItem (list[EpisodeAdditionModel] | None). Created _get_episode_additions_from_sonarr_history() helper in content_queries.py that: returns None for movies and status 5 TV shows, applies group_episodes_for_display() for status 4 TV with sonarr_history. 7 comprehensive tests in TestRecentlyAvailableEpisodeAdditions class. All 937 tests pass, mypy clean, 37 integration tests pass."
-    },
-    {
-      "id": "US-63.4",
-      "title": "Display episode-level info in frontend",
-      "story": "As a user viewing Recently Available, I want to see which episodes were added when, so that I know what new content is available",
-      "acceptanceCriteria": [
-        "Add `EpisodeAddition` TypeScript interface",
-        "Update `getDetails()` to use `episode_additions` when available",
-        "Display format: 'S2E5-E8' or 'Season 2' (from display_text)",
-        "If multiple addition dates, show most recent first",
-        "One row per show (grouped), not per episode",
-        "Fallback to current `season_info` display when `episode_additions` is null",
-        "Typecheck passes",
-        "Unit tests pass",
-        "Verify in browser: TV shows with Sonarr data show episode-level details"
-      ],
-      "context": "Episode-level Recently Available frontend. Add EpisodeAddition interface to frontend types matching backend model. Update /info/recent page getDetails() function to prefer episode_additions when available, fallback to season_info. Display episode_additions[0].display_text (most recent) or join multiple dates. Keep one row per show - don't create separate rows per episode. Style similar to current season_info display. Test with Sonarr configured user to verify episode-level display, test without Sonarr to verify fallback works.",
-      "priority": 59,
-      "passes": true,
-      "notes": "Added EpisodeAddition TypeScript interface matching backend model. Updated getDetails() to prefer episode_additions when available, showing up to 3 additions comma-separated with ellipsis for more. Falls back to season_info when episode_additions is null or empty. Updated recent-episode-details.test.ts with 8 new tests for US-63.4 (24 total). All 797 frontend tests pass, typecheck passes, verified in browser."
+      "passes": false,
+      "notes": ""
     }
   ]
 }
