@@ -2441,3 +2441,253 @@ Added manual dismiss button to all toast notifications with keyboard accessibili
 - Files changed: `frontend/src/routes/whitelist/+page.svelte`, `frontend/tests/whitelist-episode-exempt.test.ts`, `prd.json`
 - 14 new unit tests added (788 total frontend tests pass), typecheck passes
 - Verified in browser: Episode Exempt tab displays correctly with proper empty state
+
+### 2026-01-24
+
+**US-57.1: Split content.py into focused modules**
+- Created `backend/app/services/whitelist.py` (558 lines)
+  - All whitelist CRUD operations for 6 whitelist types
+- Created `backend/app/services/content_analysis.py` (423 lines)
+  - Analysis functions: is_old_or_unwatched, is_large_movie, has_language_issues, etc.
+  - Constants, types, and utility functions
+- Created `backend/app/services/content_queries.py` (880 lines)
+  - Query functions: get_content_summary, get_content_issues, get_library
+  - Recently available, unavailable requests, season/episode helpers
+- Updated `backend/app/services/content.py` (197 lines)
+  - Now a thin facade that re-exports all functions for backwards compatibility
+- All 694 tests pass, mypy clean, no API changes
+
+**US-57.2: Extract generic whitelist service base class**
+- Created `backend/app/services/whitelist_base.py` (~260 lines)
+  - BaseJellyfinIdWhitelistService for ContentWhitelist, FrenchOnly, LanguageExempt, Large
+  - BaseJellyseerrIdWhitelistService for JellyseerrRequest
+  - Generic CRUD: add(), get_list(), remove(), get_ids()
+- Refactored `backend/app/services/whitelist.py` (from 748 to ~330 lines)
+  - Service classes delegate to base classes
+  - EpisodeLanguageExempt kept as-is (different field structure)
+- Fixed test imports for _get_recent_episodes_from_cached_data
+- All 657 tests pass, mypy clean, no API changes
+
+**US-57.3: Consolidate whitelist router endpoints**
+- Refactored `backend/app/routers/whitelist.py` (from 516 to 435 lines, ~16% reduction)
+  - Created `create_jellyfin_whitelist_routes()` endpoint factory function
+  - Generates GET/POST/DELETE for 4 jellyfin-id-based whitelists (content, french-only, language-exempt, large)
+  - Requests endpoint kept separate (has special TMDB title lookup logic)
+  - Episode-exempt endpoint kept separate (different field structure)
+- All 6 whitelist types maintain exact same API contracts (URLs, request/response models)
+- OpenAPI schema documents all 18 endpoints properly
+- All 694 tests pass, mypy clean, Docker verified
+
+**US-57.4: Move business logic from content router to services**
+- Created `backend/app/services/content_cache.py` (~140 lines)
+  - get_user_settings: Get user settings from database
+  - lookup_jellyseerr_media_by_tmdb: Look up Jellyseerr media ID by TMDB ID
+  - lookup_jellyseerr_media_by_request_id: Look up media ID by request ID
+  - delete_cached_media_by_tmdb_id: Delete cached media by TMDB ID
+  - delete_cached_jellyseerr_request_by_tmdb_id: Delete cached request by TMDB
+  - delete_cached_jellyseerr_request_by_id: Delete cached request by ID
+- Updated `backend/app/services/content.py` to re-export cache functions
+- Refactored `backend/app/routers/content.py` (from 528 to 403 lines, ~24% reduction)
+  - Router now only handles HTTP concerns
+  - All business logic moved to services
+- All 694 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
+**US-59.1: Parallelize content summary queries**
+- Updated `backend/app/services/content_queries.py` `get_content_summary()` function
+  - Used `asyncio.gather()` to parallelize 5 independent whitelist queries:
+    - `get_large_whitelist_ids(db, user_id)`
+    - `get_french_only_ids(db, user_id)`
+    - `get_language_exempt_ids(db, user_id)`
+    - `get_unavailable_requests_count(db, user_id)`
+    - `get_recently_available_count(db, user_id)`
+  - These queries were previously called sequentially, now run in parallel
+- Added tests in `TestContentSummaryParallelization` class to verify whitelist handling
+- All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
+**US-59.2: Parallelize content issues queries**
+- Updated `backend/app/services/content_queries.py` `get_content_issues()` function
+  - Used `asyncio.gather()` to parallelize 5 independent queries:
+    - `get_user_thresholds(db, user_id)`
+    - `_get_user_settings(db, user_id)` (new helper function)
+    - `get_french_only_ids(db, user_id)`
+    - `get_language_exempt_ids(db, user_id)`
+    - `get_large_whitelist_ids(db, user_id)`
+  - Sonarr slug map fetch runs after (depends on user_settings result)
+- Added `_get_user_settings()` helper function for async user settings retrieval
+- All 696 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
+**US-59.4: Optimize sync season size calculation**
+- Optimized `backend/app/services/sync.py` `calculate_season_sizes()` function
+  - Added `fetch_series_episodes()`: Fetches all episodes for a series in one call (vs per-season)
+  - Added `check_episodes_languages()`: Inline language check on already-fetched episodes (vs separate API calls)
+  - Refactored `calculate_season_sizes()`:
+    - Fetch seasons ONCE per series (reused for size + language check)
+    - Fetch episodes ONCE per season (reused for size + language + watch data base)
+    - Batch user watch data at series level: 1 call per user per series (not per season)
+  - API call reduction: From (2 + 2N + N×U) to (1 + N + U) per series
+    - Example with 5 seasons, 15 users: 87 calls → 21 calls (76% reduction)
+- Added test `test_calculate_season_sizes_optimized_api_calls` to verify optimization
+- All 697 tests pass, mypy clean, 37 integration tests pass, Docker verified
+
+**US-60.1: Add content router tests**
+- Created `backend/tests/test_content_cache_service.py` with 21 tests covering:
+  - `TestGetUserSettings`: 3 tests for get_user_settings() function
+  - `TestLookupJellyseerrMediaByTmdb`: 4 tests for lookup by TMDB ID and media type
+  - `TestLookupJellyseerrMediaByRequestId`: 3 tests for lookup by Jellyseerr request ID
+  - `TestDeleteCachedMediaByTmdbId`: 5 tests for delete with TMDB ID filtering
+  - `TestDeleteCachedJellyseerrRequestByTmdbId`: 3 tests for delete requests by TMDB
+  - `TestDeleteCachedJellyseerrRequestById`: 3 tests for delete requests by ID
+- All tests verify user isolation (user_id filtering) and edge cases
+- Coverage: content.py (facade) 100%, content_cache.py 100%
+- Note: Functions were moved from router to service in US-57.4
+- All 718 tests pass, mypy clean
+
+**US-60.2: Add auth router tests**
+- Added `TestGetClientIp` class to `backend/tests/test_auth.py` with 6 tests:
+  - test_get_client_ip_from_x_forwarded_for_single_ip: Single IP extraction
+  - test_get_client_ip_from_x_forwarded_for_multiple_ips: Multiple IPs (picks first client IP)
+  - test_get_client_ip_from_x_forwarded_for_with_whitespace: Whitespace stripping
+  - test_get_client_ip_fallback_to_client_host: Fallback when X-Forwarded-For missing
+  - test_get_client_ip_unknown_when_no_client: Returns "unknown" when client is None
+  - test_get_client_ip_x_forwarded_for_takes_precedence: XFF takes precedence over client.host
+- Added `TestChangePassword` class with 6 tests:
+  - test_change_password_success: Full flow - change password, verify old fails, new works
+  - test_change_password_wrong_current_password: Returns 400 with error message
+  - test_change_password_requires_authentication: Returns 401 without token
+  - test_change_password_weak_new_password: Returns 422 for short password
+  - test_change_password_missing_current_password: Returns 422
+  - test_change_password_missing_new_password: Returns 422
+- Existing tests already cover: send_signup_notification (5 tests), send_blocked_signup_notification (2 tests), signup disabled flow (4 tests)
+- All 730 tests pass (728 unit + 2 integration skipped without Docker), mypy clean
+
+**US-60.3: Add jellyfin service tests**
+- Created `backend/tests/test_jellyfin_service.py` with 24 tests covering all 4 functions:
+  - `TestValidateJellyfinConnection` (11 tests)
+  - `TestGetUserJellyfinSettings` (3 tests)
+  - `TestSaveJellyfinSettings` (5 tests)
+  - `TestGetDecryptedJellyfinApiKey` (5 tests)
+- Coverage: jellyfin.py 100% (31/31 statements)
+- All 754 tests pass, mypy clean
+
+**US-60.4: Add nicknames service tests**
+- Created `backend/tests/test_nicknames_service.py` with 17 tests covering all 4 functions:
+  - `TestCreateNickname` (4 tests)
+  - `TestGetNicknames` (5 tests)
+  - `TestUpdateNickname` (4 tests)
+  - `TestDeleteNickname` (4 tests)
+- Coverage: nicknames.py 100%
+- All 771 tests pass, mypy clean
+
+**US-60.5: Add sonarr service tests**
+- Created `backend/tests/test_sonarr_service.py` with 54 tests covering all 8 functions
+- Coverage: sonarr.py 100%
+- All 788 tests pass, mypy clean
+
+**US-60.6: Add radarr service tests**
+- Created `backend/tests/test_radarr_service.py` with 46 tests covering all 7 functions
+- Coverage: radarr.py 100%
+- All 834 tests pass, mypy clean
+
+**US-60.7: Add tasks module tests**
+- Created `backend/tests/test_tasks.py` with 24 tests covering all task functions
+- All 856 tests pass, mypy clean
+
+**US-61.1: Fix CLAUDE.md port documentation**
+- Updated "Running the Project" section in `CLAUDE.md`
+- Docker section now shows `localhost:8080` (mapped from container port 8000)
+- Backend Only section shows `localhost:8000` for direct uvicorn
+- All port references now consistent
+
+**US-61.2: Update CLAUDE.md skills list**
+- Listed all 21 skills grouped by category
+- Removed non-existent `/original-script` reference
+- Updated project structure tree to show skill categories
+
+### 2026-01-28
+
+**US-61.3: Fix README.md git clone URLs**
+- Fixed inconsistent git clone URLs in `README.md`
+- Updated `cd` commands for consistency
+
+**US-62.1: Add Celery container health checks**
+- Added health check to `celery-worker` and `celery-beat` in `docker-compose.yml`
+
+**US-62.2: Add container resource limits**
+- Added `deploy.resources.limits.memory` to all 5 containers
+- Total maximum memory: ~1.7GB
+
+**US-62.3: Configure log rotation**
+- Added `logging` configuration to all 5 containers
+- Each container limited to 30MB total log storage
+
+**US-62.4: Add deployment rollback mechanism**
+- Tags current images as `:previous` before building
+- On failure: restores `:previous` to `:latest`
+
+**US-62.6: Implement rolling deployment**
+- Services updated one at a time using `docker-compose up -d --no-deps --build` pattern
+- Deployment order: redis -> backend -> celery-worker -> celery-beat -> frontend
+
+**US-62.7: Enhance health endpoint with dependency checks**
+- `/health` checks database connectivity (SELECT 1)
+- `/health` checks Redis connectivity (PING)
+- Returns 503 if any dependency is down
+- All 864 tests pass, mypy clean
+
+### 2026-01-29
+
+**US-63.1: Fetch Sonarr history during sync**
+- Implemented get_sonarr_history_since() in sonarr.py
+- Updated sync.py to fetch Sonarr history during Jellyseerr sync
+- All 918 tests pass, mypy clean
+
+**US-63.2: Smart episode grouping logic**
+- Implemented group_episodes_for_display() in content_queries.py
+- Groups by (date, season), applies smart display rules
+- 14 comprehensive tests in test_episode_grouping.py
+- All 895 tests pass, mypy clean
+
+**US-63.3: Update Recently Available API response**
+- Added EpisodeAdditionModel to models/content.py
+- Added episode_additions field to RecentlyAvailableItem
+- All 937 tests pass, mypy clean
+
+**US-63.4: Display episode-level info in frontend**
+- Added EpisodeAddition TypeScript interface
+- Updated getDetails() to prefer episode_additions when available
+- All 797 frontend tests pass, typecheck passes
+
+**US-53.1: Add /dashboard route alias**
+- Created `frontend/src/routes/dashboard/+page.ts` with redirect to `/`
+- Verified in browser: `/dashboard` redirects to `/`
+
+**US-53.2: Redirect authenticated users from login/register pages**
+- Updated login and register pages with Svelte 5 `$effect()` redirect logic
+- Added 9 unit tests in auth-redirect.test.ts
+- All 806 frontend tests pass, typecheck passes
+
+**US-55.1: Standardize settings auto-save behavior**
+- Added `debounce()` utility function
+- Display page now uses debounced auto-save (300ms)
+- 18 tests in settings-autosave.test.ts
+- All 824 frontend tests pass, typecheck passes
+
+**US-56.1: Improve placeholder text contrast**
+- Added `--text-placeholder` CSS variable
+- Light mode: 4.6:1 contrast, Dark mode: 5.7:1 contrast
+- Both modes meet WCAG AA 4.5:1 requirement
+
+**US-56.2: Use semantic HTML on landing page**
+- Changed outer wrapper to `<main>` element
+- Changed feature cards to `<article>` elements
+
+**US-58.1: Extract Issues page components**
+- Extracted 4 components to lib/components/
+- Issues page reduced from ~2800 to ~1300 lines (~54% reduction)
+- All 824 unit tests pass, typecheck passes
+
+**US-59.3: Add server-side pagination to library endpoint**
+- SQL-based filtering with WHERE clauses
+- LIMIT/OFFSET pagination (default 50 items per page)
+- Frontend pagination UI with page numbers
+- All 912 backend tests pass, 847 frontend tests pass
