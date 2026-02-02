@@ -218,6 +218,20 @@ async_engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=Sta
 TestingAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
 
+**respx Mocking for HTTP Integration Tests**: When tests use `@respx.mock` to mock external API calls, adding new external endpoints (e.g., library refresh) requires updating ALL integration tests that call the affected code path.
+```python
+# tests/test_sync_mocked_integration.py - helper function for common mocks
+def mock_library_refresh_endpoints(jellyfin_base: str, jellyseerr_base: str | None = None) -> None:
+    """Call at start of any @respx.mock test that calls run_user_sync()."""
+    respx.post(f"{jellyfin_base}/Library/Refresh").mock(return_value=Response(204))
+    respx.get(f"{jellyfin_base}/ScheduledTasks").mock(
+        return_value=Response(200, json=[{"Key": "RefreshLibrary", "State": "Idle"}])
+    )
+    if jellyseerr_base:
+        respx.post(f"{jellyseerr_base}/api/v1/settings/jellyfin/sync").mock(...)
+        respx.get(f"{jellyseerr_base}/api/v1/settings/jellyfin/sync").mock(...)
+```
+
 ### Database Migrations (Alembic) - CRITICAL WORKFLOW
 
 **⚠️ EVERY database model change MUST have a migration. No exceptions.**
