@@ -26,6 +26,7 @@ from app.models.content import (
 from app.services.whitelist_base import (
     BaseJellyfinIdWhitelistService,
     BaseJellyseerrIdWhitelistService,
+    _is_expired,
 )
 
 # ============================================================================
@@ -275,8 +276,13 @@ async def add_episode_language_exempt(
             EpisodeLanguageExempt.episode_number == episode_number,
         )
     )
-    if result.scalar_one_or_none():
-        raise ValueError("Episode already exempted from language checks")
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.expires_at is not None and _is_expired(existing.expires_at):
+            await db.delete(existing)
+            await db.flush()
+        else:
+            raise ValueError("Episode already exempted from language checks")
 
     entry = EpisodeLanguageExempt(
         user_id=user_id,

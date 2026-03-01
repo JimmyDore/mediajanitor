@@ -25,6 +25,14 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
+def _is_expired(expires_at: datetime) -> bool:
+    """Check if a datetime is in the past, handling naive (SQLite) and aware datetimes."""
+    now = datetime.now(UTC)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at <= now
+
+
 class BaseJellyfinIdWhitelistService(Generic[T]):
     """Generic service for whitelists that use jellyfin_id as the external identifier.
 
@@ -59,8 +67,13 @@ class BaseJellyfinIdWhitelistService(Generic[T]):
                 model_class.jellyfin_id == jellyfin_id,
             )
         )
-        if result.scalar_one_or_none():
-            raise ValueError(self.duplicate_error)
+        existing = result.scalar_one_or_none()
+        if existing:
+            if existing.expires_at is not None and _is_expired(existing.expires_at):
+                await db.delete(existing)
+                await db.flush()
+            else:
+                raise ValueError(self.duplicate_error)
 
         entry = model_class(
             user_id=user_id,
@@ -177,8 +190,13 @@ class BaseJellyseerrIdWhitelistService(Generic[R]):
                 model_class.jellyseerr_id == jellyseerr_id,
             )
         )
-        if result.scalar_one_or_none():
-            raise ValueError(self.duplicate_error)
+        existing = result.scalar_one_or_none()
+        if existing:
+            if existing.expires_at is not None and _is_expired(existing.expires_at):
+                await db.delete(existing)
+                await db.flush()
+            else:
+                raise ValueError(self.duplicate_error)
 
         entry = model_class(
             user_id=user_id,
