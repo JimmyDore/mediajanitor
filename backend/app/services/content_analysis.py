@@ -554,6 +554,19 @@ def is_unavailable_request(
     if request.status not in UNAVAILABLE_STATUS_CODES:
         return False
 
+    # media.status is the source of truth for availability. Jellyseerr sometimes
+    # leaves request.status stuck at APPROVED(2) after delivery (e.g. manual
+    # Jellyfin import with no Radarr webhook), while media.status correctly
+    # reflects AVAILABLE(5). Jellyseerr's own UI reads media.status for the
+    # "Disponible" badge, so we mirror that.
+    raw_data = request.raw_data or {}
+    if raw_data.get("media", {}).get("status") == 5:
+        if request.media_type == "tv":
+            if _is_tv_complete_for_released(request):
+                return False
+        else:
+            return False
+
     # For TV shows with status 4 (Partially Available), check if actually complete
     # This handles cases where Jellyseerr marks show as partial but all seasons are available
     if request.media_type == "tv" and request.status == 4:

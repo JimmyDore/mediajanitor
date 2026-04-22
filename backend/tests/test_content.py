@@ -3428,6 +3428,74 @@ class TestUnavailableRequests:
         assert data["unavailable_requests"]["count"] == 4
 
     @pytest.mark.asyncio
+    async def test_movie_with_stuck_request_status_but_media_available_is_not_unavailable(
+        self, client: TestClient
+    ) -> None:
+        """Movie requests where Jellyseerr left request.status at 2 (Approved) but
+        media.status=5 (Available) must NOT appear as unavailable.
+
+        Reproduces the Mission: Impossible case: Jellyseerr occasionally fails to
+        bump request.status from APPROVED to COMPLETED when media is delivered
+        outside the Radarr flow (e.g. manual Jellyfin import). media.status is
+        the source of truth for availability.
+        """
+        token = self._get_auth_token(client, "stuck-status@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        async with TestingAsyncSessionLocal() as session:
+            # Movie: stuck request.status=2 but media.status=5 (fully available)
+            # Release date > 3mo ago so it is not filtered by the "recent release" rule
+            stuck_movie = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3001,
+                tmdb_id=575265,
+                media_type="movie",
+                status=2,  # APPROVED - never bumped by Jellyseerr
+                title="Mission Impossible Stuck",
+                requested_by="matdub",
+                release_date="2025-05-17",
+                raw_data={
+                    "media": {
+                        "title": "Mission Impossible Stuck",
+                        "releaseDate": "2025-05-17",
+                        "status": 5,  # AVAILABLE per Jellyseerr's own UI
+                        "jellyfinMediaId": "abc123",
+                    }
+                },
+            )
+            # Control: a movie that really is unavailable (pending, media.status=2)
+            genuinely_unavailable = CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=3002,
+                tmdb_id=999999,
+                media_type="movie",
+                status=1,
+                title="Genuinely Unavailable",
+                requested_by="someone",
+                release_date="2020-01-01",
+                raw_data={
+                    "media": {
+                        "title": "Genuinely Unavailable",
+                        "releaseDate": "2020-01-01",
+                        "status": 2,
+                    }
+                },
+            )
+            session.add_all([stuck_movie, genuinely_unavailable])
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        # Only the genuinely unavailable one should be counted.
+        assert data["unavailable_requests"]["count"] == 1
+
+    @pytest.mark.asyncio
     async def test_issues_filter_requests_returns_unavailable_requests(
         self, client: TestClient
     ) -> None:
