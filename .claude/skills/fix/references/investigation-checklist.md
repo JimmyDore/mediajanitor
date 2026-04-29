@@ -26,6 +26,14 @@ Quick reference for systematic bug fixing.
 - [ ] Test output: `uv run pytest -v --tb=long`
 - [ ] Frontend checks: `npm run check`
 
+### 3.5. Investigate Production Data (data discrepancy bugs)
+- [ ] Query `cached_jellyseerr_requests` or `cached_media_items` for the affected item
+- [ ] Compare stored columns vs `raw_data` contents (e.g., `status` vs `raw_data.media.status`)
+- [ ] Call live Jellyseerr/Jellyfin API for the same item and compare
+- [ ] Run distribution analysis to understand scope (4 rows or 400?)
+- [ ] Run the app's analysis function against prod data to confirm behavior
+- [ ] See `prod-investigation.md` for reusable query patterns
+
 ### 4. Identify Root Cause
 - [ ] What is the bug? (behavior)
 - [ ] Why does it happen? (cause)
