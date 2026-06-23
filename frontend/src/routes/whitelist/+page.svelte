@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { authenticatedFetch } from '$lib/stores';
 	import Toast from '$lib/components/Toast.svelte';
+	import { sortWhitelistItems, SORT_OPTIONS, type WhitelistSortKey } from '$lib/whitelist-sort';
 
 	interface WhitelistItem {
 		id: number;
@@ -61,6 +62,16 @@
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 	let removingIds = $state<Set<number>>(new Set());
+	let sortKey = $state<WhitelistSortKey>('added-desc');
+
+	let sortedItems = $derived.by(() => {
+		const data = getCurrentData();
+		if (!data) return [];
+		return sortWhitelistItems<WhitelistItem | RequestWhitelistItem | EpisodeExemptItem>(
+			data.items,
+			sortKey
+		);
+	});
 
 	const tabLabels: Record<TabType, { label: string; desc: string }> = {
 		protected: { label: 'Protected', desc: 'Won\'t appear in old/unwatched list' },
@@ -273,8 +284,18 @@
 				</p>
 			</div>
 		{:else}
+			<div class="list-toolbar">
+				<label class="sort-control">
+					<span class="sort-label">Sort</span>
+					<select class="sort-select" bind:value={sortKey} aria-label="Sort whitelist items">
+						{#each SORT_OPTIONS as option}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
 			<div class="list">
-				{#each currentData.items as item}
+				{#each sortedItems as item (item.id)}
 					<div class="list-item" class:expired={isExpired(item.expires_at)}>
 						<div class="item-info">
 							<span class="item-name">
@@ -387,6 +408,47 @@
 		font-size: var(--font-size-sm);
 		color: var(--text-muted);
 		margin-bottom: var(--space-6);
+	}
+
+	/* Sort toolbar */
+	.list-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--space-3);
+	}
+
+	.sort-control {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.sort-label {
+		font-size: var(--font-size-xs);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.sort-select {
+		font-size: var(--font-size-sm);
+		font-family: inherit;
+		color: var(--text-primary);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+	}
+
+	.sort-select:hover {
+		border-color: var(--text-muted);
+	}
+
+	.sort-select:focus-visible {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	/* Loading */
