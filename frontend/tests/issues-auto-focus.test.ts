@@ -39,29 +39,6 @@ describe('Modal Auto-Focus and Focus Restoration', () => {
 			expect((focusable[0] as HTMLInputElement).value).toBe('permanent');
 		});
 
-		it('should focus Cancel button when delete modal opens (safer default)', () => {
-			// Delete modal should focus Cancel button as the safer default
-			// This prevents accidental deletion when pressing Enter right after modal opens
-			const mockModal = document.createElement('div');
-			mockModal.innerHTML = `
-				<div class="modal delete-modal" role="dialog">
-					<input type="checkbox" id="arr-checkbox" />
-					<input type="checkbox" id="jellyseerr-checkbox" />
-					<button class="btn-secondary">Cancel</button>
-					<button class="btn-danger">Delete</button>
-				</div>
-			`;
-			const focusable = getFocusableElements(mockModal.querySelector('.modal')!);
-
-			// Find the Cancel button (btn-secondary)
-			const cancelButton = focusable.find(
-				el => el.classList.contains('btn-secondary') && el.textContent === 'Cancel'
-			);
-
-			expect(cancelButton).toBeDefined();
-			expect(cancelButton?.tagName.toLowerCase()).toBe('button');
-		});
-
 		it('should call focus() on target element when modal opens', () => {
 			let focusCalled = false;
 

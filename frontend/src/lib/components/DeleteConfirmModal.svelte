@@ -20,6 +20,7 @@
 	let deleteFromArr = $state(true);
 	let deleteFromJellyseerr = $state(true);
 	let modalElement = $state<HTMLElement | null>(null);
+	let canConfirm = $derived(deleteFromArr || deleteFromJellyseerr);
 
 	function getFocusableElements(container: HTMLElement): HTMLElement[] {
 		const selector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -29,6 +30,16 @@
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
 			onclose();
+			return;
+		}
+
+		if (event.key === 'Enter') {
+			// Enter on Cancel keeps its native click; anywhere else it confirms
+			const cancelButton = modalElement?.querySelector('.btn-secondary');
+			if (document.activeElement === cancelButton) return;
+			event.preventDefault();
+			// Ignore key auto-repeat so holding Enter can't delete by accident
+			if (!event.repeat && canConfirm) handleConfirm();
 			return;
 		}
 
@@ -60,11 +71,9 @@
 
 	$effect(() => {
 		if (modalElement) {
-			// Focus the Cancel button as the safer default
-			const cancelButton = modalElement.querySelector<HTMLElement>('.btn-secondary');
-			if (cancelButton) {
-				cancelButton.focus();
-			}
+			// Focus Delete so Enter confirms; Escape or Tab to Cancel still back out
+			const deleteButton = modalElement.querySelector<HTMLElement>('.btn-danger');
+			deleteButton?.focus();
 		}
 	});
 </script>
@@ -120,7 +129,7 @@
 			<button
 				class="btn-danger"
 				onclick={handleConfirm}
-				disabled={!deleteFromArr && !deleteFromJellyseerr}
+				disabled={!canConfirm}
 			>
 				Delete
 			</button>
