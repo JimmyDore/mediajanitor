@@ -229,6 +229,7 @@
 </script>
 
 <tr
+	class="issue-row"
 	class:expandable={hasExpandableEpisodes(item)}
 	class:expanded={expanded}
 	onclick={handleRowClick}
@@ -239,21 +240,21 @@
 >
 	<td class="col-name">
 		<div class="name-cell">
-			<div class="title-row">
-				{#if hasExpandableEpisodes(item)}
-					<span class="expand-icon" aria-hidden="true">
-						{#if expanded}
-							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-								<polyline points="6 9 12 15 18 9"/>
-							</svg>
-						{:else}
-							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-								<polyline points="9 18 15 12 9 6"/>
-							</svg>
-						{/if}
-					</span>
-				{/if}
-				<span class="item-name" title={item.name}>{item.name}</span>
+			{#if hasExpandableEpisodes(item)}
+				<span class="expand-icon" aria-hidden="true">
+					{#if expanded}
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<polyline points="6 9 12 15 18 9"/>
+						</svg>
+					{:else}
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<polyline points="9 18 15 12 9 6"/>
+						</svg>
+					{/if}
+				</span>
+			{/if}
+			<span class="item-name" title={item.name}>{item.name}</span>
+			<span class="name-meta">
 				<span class="item-year">{item.production_year ?? '—'}</span>
 				{#if hasExpandableEpisodes(item)}
 					<span class="episode-count" title="Episodes with language issues">
@@ -265,28 +266,28 @@
 						S{item.missing_seasons.join(', S')}
 					</span>
 				{/if}
-			</div>
-			<span class="external-links">
-				{#if getJellyfinUrl(item)}
-					<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
-				{/if}
-				{#if getJellyseerrUrl(item)}
-					<ServiceBadge service="jellyseerr" url={getJellyseerrUrl(item) ?? ''} title="View in Jellyseerr" />
-				{/if}
-				{#if getRadarrUrl(item)}
-					<ServiceBadge service="radarr" url={getRadarrUrl(item) ?? ''} title="View in Radarr" />
-				{/if}
-				{#if getSonarrUrl(item)}
-					<ServiceBadge service="sonarr" url={getSonarrUrl(item) ?? ''} title="View in Sonarr" />
-				{/if}
-				{#if getTmdbUrl(item)}
-					<ServiceBadge service="tmdb" url={getTmdbUrl(item) ?? ''} title="View on TMDB" />
-				{/if}
+				<span class="external-links">
+					{#if getJellyfinUrl(item)}
+						<ServiceBadge service="jellyfin" url={getJellyfinUrl(item) ?? ''} title="View in Jellyfin" />
+					{/if}
+					{#if getJellyseerrUrl(item)}
+						<ServiceBadge service="jellyseerr" url={getJellyseerrUrl(item) ?? ''} title="View in Jellyseerr" />
+					{/if}
+					{#if getRadarrUrl(item)}
+						<ServiceBadge service="radarr" url={getRadarrUrl(item) ?? ''} title="View in Radarr" />
+					{/if}
+					{#if getSonarrUrl(item)}
+						<ServiceBadge service="sonarr" url={getSonarrUrl(item) ?? ''} title="View in Sonarr" />
+					{/if}
+					{#if getTmdbUrl(item)}
+						<ServiceBadge service="tmdb" url={getTmdbUrl(item) ?? ''} title="View on TMDB" />
+					{/if}
+				</span>
 			</span>
 		</div>
 	</td>
 	{#if activeFilter === 'requests'}
-		<td class="col-requester">
+		<td class="col-requester" class:is-empty={!item.requested_by} data-label="By">
 			{item.requested_by ?? '—'}
 		</td>
 	{/if}
@@ -389,7 +390,7 @@
 		</div>
 	</td>
 	{/if}
-	<td class="col-size">
+	<td class="col-size" class:is-empty={isRequestItem(item)}>
 		{#if isRequestItem(item)}
 			<span class="text-muted">—</span>
 		{:else if isSeriesItem(item) && item.largest_season_size_formatted}
@@ -401,7 +402,7 @@
 			{item.size_formatted}
 		{/if}
 	</td>
-	<td class="col-added">
+	<td class="col-added" class:is-empty={isRequestItem(item)} data-label="Added">
 		{#if isRequestItem(item)}
 			<span class="text-muted">—</span>
 		{:else}
@@ -409,11 +410,21 @@
 		{/if}
 	</td>
 	{#if activeFilter === 'requests'}
-		<td class="col-release" class:future={isFutureRelease(item.release_date)}>
+		<td
+			class="col-release"
+			class:future={isFutureRelease(item.release_date)}
+			class:is-empty={!item.release_date}
+			data-label="Release"
+		>
 			{formatReleaseDate(item.release_date)}
 		</td>
 	{/if}
-	<td class="col-watched" class:never={!isRequestItem(item) && !item.last_played_date && !item.played}>
+	<td
+		class="col-watched"
+		class:never={!isRequestItem(item) && !item.last_played_date && !item.played}
+		class:is-empty={isRequestItem(item) && !item.request_date}
+		data-label={isRequestItem(item) ? 'Requested' : 'Watched'}
+	>
 		{#if isRequestItem(item)}
 			{formatRequestDate(item.request_date)}
 		{:else}
@@ -526,12 +537,14 @@
 		background: var(--bg-secondary);
 	}
 
-	/* Name cell */
-	.col-name {
-		width: 32%;
-		min-width: 180px;
+	/* Cells (column widths are set on the <th>s in the Issues page) */
+	td {
+		padding: var(--space-3) var(--space-4);
+		text-align: left;
+		vertical-align: middle;
 	}
 
+	/* Name cell */
 	.name-cell {
 		display: flex;
 		align-items: center;
@@ -539,12 +552,11 @@
 		min-width: 0;
 	}
 
-	.title-row {
+	.name-meta {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		min-width: 0;
-		flex: 1;
+		flex-shrink: 0;
 	}
 
 	.expand-icon {
@@ -605,20 +617,13 @@
 
 	/* Column styles */
 	.col-requester {
-		width: 10%;
-		min-width: 80px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
-	}
-
-	.col-issues {
-		width: 28%;
-		min-width: 140px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.col-size {
-		width: 10%;
-		min-width: 80px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
@@ -637,6 +642,14 @@
 		font-size: var(--font-size-xs);
 		font-family: var(--font-sans);
 		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.col-size,
+	.col-added,
+	.col-release,
+	.col-watched {
+		white-space: nowrap;
 	}
 
 	.size-value {
@@ -644,16 +657,12 @@
 	}
 
 	.col-added {
-		width: 10%;
-		min-width: 80px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
 	}
 
 	.col-release {
-		width: 10%;
-		min-width: 80px;
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
@@ -666,8 +675,6 @@
 	}
 
 	.col-watched {
-		width: 10%;
-		min-width: 70px;
 		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		text-align: right;
@@ -678,7 +685,7 @@
 	}
 
 	.col-actions {
-		width: 48px;
+		padding: var(--space-2);
 		text-align: center;
 	}
 
@@ -958,6 +965,123 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* Responsive styles - keeping mobile adaptations at component level is complex */
-	/* The parent page handles the responsive table layout transforms */
+	/* Card layout when the table is too narrow for columns.
+	   The `issues-table` container is declared on .table-container in the Issues page,
+	   which also hides the <thead> and turns the table into blocks at the same width.
+	   Line 1: name + actions · Line 2: issue badges · Line 3: size / dates */
+	@container issues-table (max-width: 1020px) {
+		tr.issue-row {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: flex-start;
+			column-gap: var(--space-4);
+			row-gap: var(--space-2);
+			padding: var(--space-3) var(--space-4);
+		}
+
+		tr.issue-row td {
+			display: block;
+			padding: 0;
+			text-align: left;
+		}
+
+		/* Basis leaves room for the actions only, so the meta cells always start a new line
+		   (the requests view has no issues cell to force the break) */
+		tr.issue-row .col-name {
+			order: 0;
+			flex: 1 1 calc(100% - 64px - var(--space-4));
+			min-width: 0;
+		}
+
+		tr.issue-row .col-actions {
+			order: 1;
+			flex: 0 0 auto;
+		}
+
+		tr.issue-row .col-issues {
+			order: 2;
+			flex: 1 1 100%;
+		}
+
+		tr.issue-row .col-requester,
+		tr.issue-row .col-size,
+		tr.issue-row .col-added,
+		tr.issue-row .col-release,
+		tr.issue-row .col-watched {
+			order: 3;
+			flex: 0 1 auto;
+			min-width: 0;
+			font-size: var(--font-size-xs);
+		}
+
+		tr.issue-row td[data-label]::before {
+			content: attr(data-label) ' ';
+			font-family: var(--font-sans);
+			color: var(--text-muted);
+		}
+
+		tr.issue-row td.is-empty {
+			display: none;
+		}
+
+		/* Name wraps (max 2 lines) with year, episode count and links underneath */
+		.name-cell {
+			flex-wrap: wrap;
+			row-gap: var(--space-1);
+		}
+
+		.item-name {
+			flex: 1 1 0;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+			-webkit-box-orient: vertical;
+		}
+
+		.name-meta {
+			flex: 1 1 100%;
+			flex-wrap: wrap;
+		}
+
+		/* Align meta under the title when the expand chevron is present */
+		.expand-icon ~ .name-meta {
+			padding-left: calc(16px + var(--space-1) + var(--space-2));
+		}
+
+		.size-with-label {
+			flex-direction: row;
+			align-items: baseline;
+			gap: var(--space-1);
+		}
+
+		.size-label,
+		.size-value {
+			font-size: var(--font-size-xs);
+		}
+
+		/* Expanded episodes */
+		tr.episode-row {
+			display: block;
+		}
+
+		tr.episode-row td {
+			display: block;
+			width: 100%;
+		}
+
+		.episode-list {
+			padding: var(--space-3);
+		}
+
+		.episode-item {
+			flex-wrap: wrap;
+			row-gap: var(--space-1);
+		}
+
+		.episode-name {
+			flex: 1 1 120px;
+		}
+	}
 </style>

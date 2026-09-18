@@ -773,6 +773,19 @@
 		}
 	}
 
+	function getCardSortOptions(): [SortField, string][] {
+		if (activeFilter === 'requests') {
+			return [['name', 'Name'], ['requester', 'Requester'], ['release', 'Release'], ['date', 'Requested']];
+		}
+		return [['size', 'Size'], ['name', 'Name'], ['issues', 'Issues'], ['added', 'Added'], ['watched', 'Watched']];
+	}
+
+	function handleCardSortChange(e: Event) {
+		const field = (e.target as HTMLSelectElement).value as SortField;
+		sortField = field;
+		sortOrder = field === 'name' ? 'asc' : 'desc';
+	}
+
 	function getSortedItems(items: ContentIssueItem[]): ContentIssueItem[] {
 		return [...items].sort((a, b) => {
 			let comparison = 0;
@@ -873,6 +886,26 @@
 			<div class="empty" aria-live="polite">No matching items found</div>
 		{:else}
 			<div class="table-container" aria-live="polite">
+				<!-- Replaces the sortable header when rows are shown as cards -->
+				<div class="card-sort">
+					<label for="issues-card-sort">Sort by</label>
+					<select id="issues-card-sort" value={sortField} onchange={handleCardSortChange}>
+						{#if !getCardSortOptions().some(([value]) => value === sortField)}
+							<option value={sortField} disabled>Default</option>
+						{/if}
+						{#each getCardSortOptions() as [value, label]}
+							<option {value}>{label}</option>
+						{/each}
+					</select>
+					<button
+						class="card-sort-order"
+						onclick={() => (sortOrder = sortOrder === 'asc' ? 'desc' : 'asc')}
+						aria-label={sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+						title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+					>
+						{sortOrder === 'asc' ? '↑' : '↓'}
+					</button>
+				</div>
 				<table class="issues-table" class:requests-view={activeFilter === 'requests'}>
 					<thead>
 						<tr>
@@ -1030,8 +1063,9 @@
 		color: var(--text-muted);
 	}
 
-	/* Table */
+	/* Table - rows switch to cards below 1020px of available width (see IssueRow) */
 	.table-container {
+		container: issues-table / inline-size;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
 		overflow: hidden;
@@ -1043,18 +1077,22 @@
 		table-layout: fixed;
 	}
 
-	.issues-table th,
-	.issues-table td {
+	.issues-table th {
 		padding: var(--space-3) var(--space-4);
 		text-align: left;
-	}
-
-	.issues-table th {
 		background: var(--bg-secondary);
 		font-size: var(--font-size-xs);
 		font-weight: var(--font-weight-medium);
 		color: var(--text-muted);
 		border-bottom: 1px solid var(--border);
+		white-space: nowrap;
+	}
+
+	.issues-table th.col-size,
+	.issues-table th.col-added,
+	.issues-table th.col-release,
+	.issues-table th.col-watched {
+		text-align: right;
 	}
 
 	.issues-table :global(tr) {
@@ -1082,48 +1120,39 @@
 		color: var(--text-primary);
 	}
 
-	/* Column widths - base */
+	/* Column widths (table mode only, i.e. ≥1020px of table width).
+	   Data columns get fixed widths that fit their content; the name column takes the rest. */
 	.col-name {
-		width: 32%;
-		min-width: 180px;
-	}
-
-	.requests-view .col-name {
-		width: 42%;
-	}
-
-	.col-requester {
-		width: 10%;
-		min-width: 80px;
+		width: auto;
 	}
 
 	.col-issues {
-		width: 28%;
-		min-width: 140px;
+		width: 26%;
+	}
+
+	.col-requester {
+		width: 140px;
 	}
 
 	.col-size {
-		width: 10%;
-		min-width: 80px;
-		text-align: right;
+		width: 120px;
 	}
 
-	.col-added {
-		width: 10%;
-		min-width: 80px;
-		text-align: right;
+	.requests-view .col-size {
+		width: 80px;
 	}
 
+	.col-added,
 	.col-release {
-		width: 10%;
-		min-width: 80px;
-		text-align: right;
+		width: 112px;
 	}
 
 	.col-watched {
-		width: 10%;
-		min-width: 70px;
-		text-align: right;
+		width: 88px;
+	}
+
+	.requests-view .col-watched {
+		width: 104px;
 	}
 
 	.col-actions {
@@ -1132,182 +1161,64 @@
 	}
 
 	.requests-view .col-actions {
-		width: 72px;
-	}
-
-	/* Large desktop (≥1440px) */
-	@media (min-width: 1440px) {
-		.col-name {
-			width: 38%;
-			min-width: 260px;
-		}
-
-		.requests-view .col-name {
-			width: 48%;
-		}
-
-		.col-requester {
-			width: 9%;
-			min-width: 95px;
-		}
-
-		.col-issues {
-			width: 25%;
-			min-width: 160px;
-		}
-
-		.col-size {
-			width: 9%;
-			min-width: 90px;
-		}
-
-		.col-added {
-			width: 9%;
-			min-width: 95px;
-		}
-
-		.col-release {
-			width: 9%;
-			min-width: 95px;
-		}
-
-		.col-watched {
-			width: 9%;
-			min-width: 80px;
-		}
-	}
-
-	/* Ultrawide / 4K (≥1920px) */
-	@media (min-width: 1920px) {
-		.col-name {
-			width: 42%;
-			min-width: 340px;
-		}
-
-		.requests-view .col-name {
-			width: 52%;
-		}
-
-		.col-requester {
-			width: 8%;
-			min-width: 110px;
-		}
-
-		.col-issues {
-			width: 22%;
-			min-width: 180px;
-		}
-
-		.col-size {
-			width: 8%;
-			min-width: 100px;
-		}
-
-		.col-added {
-			width: 8%;
-			min-width: 110px;
-		}
-
-		.col-release {
-			width: 8%;
-			min-width: 110px;
-		}
-
-		.col-watched {
-			width: 8%;
-			min-width: 90px;
-		}
+		width: 84px;
 	}
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
 
-	/* Mobile/Tablet Responsive Styles */
-	@media (max-width: 1352px) {
-		.issues-page {
-			padding: var(--space-4);
+	.card-sort {
+		display: none;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-4);
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border);
+	}
+
+	.card-sort label {
+		font-size: var(--font-size-xs);
+		font-weight: var(--font-weight-medium);
+		color: var(--text-muted);
+		margin-right: auto;
+	}
+
+	.card-sort select,
+	.card-sort-order {
+		font-size: var(--font-size-sm);
+		font-family: inherit;
+		color: var(--text-primary);
+		background: var(--bg-primary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
+		cursor: pointer;
+	}
+
+	.card-sort-order {
+		min-width: 30px;
+	}
+
+	/* Card layout: the rows themselves are styled in IssueRow */
+	@container issues-table (max-width: 1020px) {
+		.card-sort {
+			display: flex;
 		}
 
-		/* Hide low-priority columns */
-		.col-watched,
-		.col-added,
-		.col-size,
-		.col-requester,
-		.col-release {
-			display: none;
+		.issues-table,
+		.issues-table tbody {
+			display: block;
 		}
 
-		/* Hide table header on mobile - use card layout */
 		.issues-table thead {
 			display: none;
 		}
-
-		/* Convert table to block layout */
-		.issues-table,
-		.issues-table tbody,
-		.issues-table :global(tr) {
-			display: block;
-		}
-
-		/* Each row becomes a card */
-		.issues-table :global(tr) {
-			padding: var(--space-3);
-			border-bottom: 1px solid var(--border);
-			display: grid;
-			grid-template-columns: 1fr auto;
-			grid-template-rows: auto auto;
-			gap: var(--space-2);
-			align-items: start;
-		}
-
-		/* Name cell spans left column */
-		.issues-table :global(td.col-name) {
-			grid-column: 1;
-			grid-row: 1;
-			width: 100%;
-			padding: 0;
-		}
-
-		/* Issues cell below name */
-		.issues-table :global(td.col-issues) {
-			grid-column: 1;
-			grid-row: 2;
-			width: 100%;
-			padding: 0;
-		}
-
-		/* Actions stay on right, vertically centered */
-		.issues-table :global(td.col-actions) {
-			grid-column: 2;
-			grid-row: 1 / 3;
-			display: flex;
-			align-items: center;
-			padding: 0;
-			padding-left: var(--space-3);
-		}
-
-		/* Episode expansion row on mobile */
-		.issues-table :global(tr.episode-row) {
-			display: block;
-			padding: 0;
-			grid-template-columns: none;
-		}
-
-		.issues-table :global(tr.episode-row td) {
-			display: block;
-			width: 100%;
-		}
 	}
 
-	/* Phone (≤480px) */
-	@media (max-width: 480px) {
+	@media (max-width: 1024px) {
 		.issues-page {
-			padding: var(--space-3);
-		}
-
-		.issues-table :global(tr) {
-			padding: var(--space-3);
+			padding: var(--space-4);
 		}
 	}
 </style>
