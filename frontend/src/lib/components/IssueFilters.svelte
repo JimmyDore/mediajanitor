@@ -128,15 +128,25 @@
 		font-family: var(--font-mono);
 	}
 
-	/* Filter nav - underline style */
+	/* Filter nav - underline style, scrolls horizontally when tabs don't fit.
+	   Inset shadow instead of border-bottom so the active underline isn't clipped by overflow. */
 	.filter-nav {
 		display: flex;
 		gap: var(--space-1);
-		border-bottom: 1px solid var(--border);
+		box-shadow: inset 0 -1px 0 var(--border);
 		margin-bottom: var(--space-6);
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.filter-nav::-webkit-scrollbar {
+		display: none;
 	}
 
 	.filter-tab {
+		flex-shrink: 0;
+		white-space: nowrap;
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--font-size-sm);
 		font-weight: var(--font-weight-medium);
@@ -144,7 +154,6 @@
 		background: transparent;
 		border: none;
 		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
 		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
@@ -186,13 +195,6 @@
 		background: var(--accent);
 		color: white;
 		border-color: var(--accent);
-	}
-
-	@media (max-width: 640px) {
-		.filter-nav {
-			overflow-x: auto;
-			-webkit-overflow-scrolling: touch;
-		}
 	}
 
 	@media (max-width: 380px) {

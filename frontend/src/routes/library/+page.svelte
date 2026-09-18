@@ -670,15 +670,23 @@
 		font-family: var(--font-mono);
 	}
 
-	/* Filter nav - underline style */
+	/* Filter nav - underline style (inset shadow so overflow doesn't clip the active underline) */
 	.filter-nav {
 		display: flex;
 		gap: var(--space-1);
-		border-bottom: 1px solid var(--border);
+		box-shadow: inset 0 -1px 0 var(--border);
 		margin-bottom: var(--space-6);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.filter-nav::-webkit-scrollbar {
+		display: none;
 	}
 
 	.filter-tab {
+		flex-shrink: 0;
+		white-space: nowrap;
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--font-size-sm);
 		font-weight: var(--font-weight-medium);
@@ -686,7 +694,6 @@
 		background: transparent;
 		border: none;
 		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
 		cursor: pointer;
 		transition: all var(--transition-fast);
 	}
@@ -895,6 +902,20 @@
 		letter-spacing: 0.05em;
 		color: var(--text-muted);
 		border-bottom: 1px solid var(--border);
+	}
+
+	/* Match the right-aligned values below (outranks `.library-table th`) */
+	.library-table th.col-year,
+	.library-table th.col-size,
+	.library-table th.col-added,
+	.library-table th.col-watched {
+		text-align: right;
+	}
+
+	.col-size,
+	.col-added,
+	.col-watched {
+		white-space: nowrap;
 	}
 
 	.library-table tr {
@@ -1137,10 +1158,6 @@
 			padding: var(--space-3);
 		}
 
-		.filter-group-range {
-			width: 100%;
-		}
-
 		.col-added {
 			display: none;
 		}
@@ -1152,29 +1169,68 @@
 	}
 
 	@media (max-width: 640px) {
-		.filter-nav {
-			overflow-x: auto;
-		}
-
+		/* 2x2 grid: Status | Sort by, Year | Size */
 		.filters-row {
-			flex-direction: column;
-			align-items: stretch;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-items: end;
 		}
 
 		.filter-group {
-			width: 100%;
+			min-width: 0;
+		}
+
+		.filter-group:nth-child(1) { order: 1; }
+		.filter-group:nth-child(4) { order: 2; }
+		.filter-group:nth-child(2) { order: 3; }
+		.filter-group:nth-child(3) { order: 4; }
+
+		.clear-filters-btn {
+			order: 5;
+			grid-column: 1 / -1;
 		}
 
 		.filter-select {
 			width: 100%;
+			min-width: 0;
+		}
+
+		.sort-controls .filter-select {
+			flex: 1;
 		}
 
 		.filter-input {
 			flex: 1;
+			width: auto;
+			min-width: 0;
 		}
 
 		.col-watched {
 			display: none;
+		}
+
+		/* Service links drop under the title so it isn't truncated to a few letters */
+		.name-cell {
+			flex-wrap: wrap;
+			row-gap: var(--space-1);
+		}
+
+		.item-name {
+			flex-basis: 100%;
+		}
+
+		.library-table th.col-name {
+			width: auto;
+		}
+
+		.library-table th.col-year,
+		.library-table td.col-year {
+			width: 56px;
+		}
+
+		.library-table th.col-size,
+		.library-table td.col-size {
+			width: 80px;
 		}
 
 		.pagination {

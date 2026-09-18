@@ -135,7 +135,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 100;
+		z-index: 500; /* above sidebar (200) and mobile top bar (300), below toasts */
 		animation: fade-in 0.15s ease-out;
 	}
 

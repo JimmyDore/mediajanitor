@@ -342,8 +342,9 @@
 </div>
 
 <style>
+	/* Wide enough for all six tabs on one line */
 	.whitelist-page {
-		max-width: 640px;
+		max-width: 800px;
 		margin: 0 auto;
 		padding: var(--space-6);
 	}
@@ -358,15 +359,25 @@
 		letter-spacing: -0.02em;
 	}
 
-	/* Tabs */
+	/* Tabs - scroll horizontally when they don't fit.
+	   Inset shadow instead of border-bottom so overflow doesn't clip the active underline. */
 	.tabs {
 		display: flex;
 		gap: var(--space-1);
-		border-bottom: 1px solid var(--border);
+		box-shadow: inset 0 -1px 0 var(--border);
 		margin-bottom: var(--space-2);
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.tabs::-webkit-scrollbar {
+		display: none;
 	}
 
 	.tab {
+		flex-shrink: 0;
+		white-space: nowrap;
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--font-size-sm);
 		font-weight: var(--font-weight-medium);
@@ -374,7 +385,6 @@
 		background: transparent;
 		border: none;
 		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
 		cursor: pointer;
 		transition: all var(--transition-fast);
 		display: flex;
@@ -608,8 +618,8 @@
 			padding: var(--space-4);
 		}
 
-		.tabs {
-			overflow-x: auto;
+		.item-meta {
+			overflow-wrap: anywhere;
 		}
 	}
 </style>

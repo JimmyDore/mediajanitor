@@ -260,23 +260,18 @@
 			width: 100%;
 		}
 
+		/* Wrap instead of scrolling so every section stays visible */
 		.nav-list {
 			flex-direction: row;
-			overflow-x: auto;
-			-webkit-overflow-scrolling: touch;
-			gap: var(--space-2);
-			padding-bottom: var(--space-2);
+			flex-wrap: wrap;
+			gap: var(--space-1) var(--space-2);
 		}
 
 		.nav-item {
-			flex-shrink: 0;
+			gap: var(--space-2);
 			padding: var(--space-2) var(--space-3);
+			font-size: var(--font-size-base);
 			white-space: nowrap;
-		}
-
-		/* On mobile, hide icon text, show only icon */
-		.nav-item span {
-			display: inline;
 		}
 
 		/* Add border under tabs on mobile */
@@ -293,7 +288,7 @@
 		}
 
 		.nav-item {
-			padding: var(--space-2);
+			padding: var(--space-2) var(--space-2);
 		}
 
 		.nav-item svg {

@@ -32,19 +32,29 @@
 
 <svelte:window onclick={closeUserMenu} />
 
-<!-- Mobile hamburger button -->
-<button class="mobile-menu-btn" onclick={toggleMobileMenu} aria-label="Toggle menu">
-	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-		{#if mobileMenuOpen}
-			<line x1="18" y1="6" x2="6" y2="18"/>
-			<line x1="6" y1="6" x2="18" y2="18"/>
-		{:else}
-			<line x1="3" y1="12" x2="21" y2="12"/>
-			<line x1="3" y1="6" x2="21" y2="6"/>
-			<line x1="3" y1="18" x2="21" y2="18"/>
-		{/if}
-	</svg>
-</button>
+<!-- Mobile top bar (hamburger + logo) -->
+<header class="mobile-topbar">
+	<button
+		class="mobile-menu-btn"
+		onclick={toggleMobileMenu}
+		aria-label="Toggle menu"
+		aria-expanded={mobileMenuOpen}
+	>
+		<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			{#if mobileMenuOpen}
+				<line x1="18" y1="6" x2="6" y2="18"/>
+				<line x1="6" y1="6" x2="18" y2="18"/>
+			{:else}
+				<line x1="3" y1="12" x2="21" y2="12"/>
+				<line x1="3" y1="6" x2="21" y2="6"/>
+				<line x1="3" y1="18" x2="21" y2="18"/>
+			{/if}
+		</svg>
+	</button>
+	<a href="/" class="logo" onclick={closeMobileMenu}>
+		<span class="logo-text">Media Janitor</span>
+	</a>
+</header>
 
 <!-- Mobile backdrop -->
 {#if mobileMenuOpen}
@@ -175,13 +185,25 @@
 </aside>
 
 <style>
-	/* Mobile menu button */
-	.mobile-menu-btn {
+	/* Mobile top bar */
+	.mobile-topbar {
 		display: none;
 		position: fixed;
-		top: var(--space-4);
-		left: var(--space-4);
+		top: 0;
+		left: 0;
+		right: 0;
+		height: var(--mobile-topbar-height);
+		align-items: center;
+		gap: var(--space-3);
+		padding: 0 var(--space-4);
+		background: var(--bg-primary);
+		border-bottom: 1px solid var(--border);
 		z-index: 300;
+	}
+
+	.mobile-menu-btn {
+		display: flex;
+		flex-shrink: 0;
 		width: 40px;
 		height: 40px;
 		align-items: center;
@@ -373,15 +395,19 @@
 
 	/* Mobile responsive */
 	@media (max-width: 768px) {
-		.mobile-menu-btn {
+		.mobile-topbar {
 			display: flex;
 		}
 
 		.mobile-backdrop {
 			display: block;
+			top: var(--mobile-topbar-height);
 		}
 
+		/* Drawer opens below the top bar, which already shows the logo */
 		.sidebar {
+			top: var(--mobile-topbar-height);
+			width: min(280px, 85vw);
 			transform: translateX(-100%);
 			visibility: hidden;
 			transition: transform var(--transition-base), visibility var(--transition-base);
@@ -390,6 +416,10 @@
 		.sidebar.open {
 			transform: translateX(0);
 			visibility: visible;
+		}
+
+		.sidebar-header {
+			display: none;
 		}
 	}
 </style>

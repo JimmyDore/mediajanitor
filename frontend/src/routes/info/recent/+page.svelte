@@ -458,11 +458,11 @@
 		color: var(--text-muted);
 	}
 
-	/* Table */
+	/* Table - scrolls instead of clipping the no-wrap Details column on mid widths */
 	.table-container {
 		border: 1px solid var(--border);
 		border-radius: var(--radius-md);
-		overflow: hidden;
+		overflow-x: auto;
 	}
 
 	.data-table {

@@ -67,6 +67,9 @@
 	--sidebar-width-lg: 260px;        /* ≥1440px: large desktop */
 	--sidebar-width-xl: 300px;        /* ≥1920px: ultrawide/4K */
 
+	/* Mobile top bar (≤768px, replaces the sidebar) */
+	--mobile-topbar-height: 56px;
+
 	/* Content Max Width - expands to use screen space on larger displays */
 	--content-max-width: 1200px;      /* Default: standard desktop */
 	--content-max-width-lg: 1600px;   /* ≥1440px: large desktop */

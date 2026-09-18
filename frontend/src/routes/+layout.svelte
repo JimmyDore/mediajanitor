@@ -100,11 +100,22 @@
 		color: var(--text-secondary);
 	}
 
-	/* Mobile responsive - remove sidebar margin */
+	/* Pages add their own inner padding, so the outer gutter shrinks with the viewport */
+	@media (max-width: 1024px) {
+		.content:not(.content-centered) {
+			padding: var(--space-4);
+		}
+	}
+
+	/* Mobile - sidebar becomes a drawer under a fixed top bar */
 	@media (max-width: 768px) {
 		.app.with-sidebar {
 			margin-left: 0;
-			padding-top: 60px; /* Space for hamburger button */
+			padding-top: var(--mobile-topbar-height);
+		}
+
+		.content:not(.content-centered) {
+			padding: 0;
 		}
 	}
 </style>

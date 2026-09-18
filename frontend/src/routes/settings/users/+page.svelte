@@ -571,7 +571,7 @@
 
 	.nicknames-header {
 		display: grid;
-		grid-template-columns: 1fr 24px 1fr 80px;
+		grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 80px;
 		gap: var(--space-2);
 		padding: var(--space-2) var(--space-3);
 		background: var(--bg-secondary);
@@ -585,7 +585,7 @@
 
 	.nickname-row {
 		display: grid;
-		grid-template-columns: 1fr 24px 1fr 80px;
+		grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 80px;
 		gap: var(--space-2);
 		padding: var(--space-3);
 		border-bottom: 1px solid var(--border);
@@ -757,13 +757,10 @@
 			gap: var(--space-3);
 		}
 
-		.nicknames-table {
-			overflow-x: auto;
-		}
-
+		/* Narrower arrow and actions columns so all four columns fit a phone */
 		.nicknames-header,
 		.nickname-row {
-			min-width: 400px;
+			grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 64px;
 		}
 
 		.add-nickname-row {

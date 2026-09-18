@@ -31,19 +31,20 @@
 </div>
 
 <style>
+	/* Width is capped on the wrapper so the clear button stays inside the input */
 	.search-container {
 		position: relative;
+		max-width: 300px;
 		margin-top: var(--space-3);
 	}
 
 	.search-input {
 		width: 100%;
-		max-width: 300px;
 		padding: var(--space-2) var(--space-3);
 		padding-right: var(--space-8);
 		font-size: var(--font-size-sm);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		border-radius: var(--radius-md);
 		background: var(--bg-primary);
 		color: var(--text-primary);
 		transition: border-color var(--transition-fast);
@@ -74,5 +75,16 @@
 
 	.search-clear:hover {
 		color: var(--text-primary);
+	}
+
+	@media (max-width: 640px) {
+		.search-container {
+			max-width: none;
+		}
+
+		/* 16px prevents iOS Safari from zooming in on focus */
+		.search-input {
+			font-size: 16px;
+		}
 	}
 </style>
