@@ -115,9 +115,7 @@ jobs:
             echo ""
             echo "[5/5] Updating frontend..."
             docker compose --compatibility up -d --no-deps --build frontend
-            # Frontend doesn't have health check in docker-compose, just wait a bit
-            sleep 10
-            echo "Frontend updated!"
+            wait_for_healthy frontend 24 || { echo "Frontend update failed"; exit 1; }
 
             echo ""
             echo "=== Rolling Deployment Complete ==="
@@ -162,11 +160,11 @@ jobs:
               fi
             done
 
-            # Check frontend is running (no health check defined)
-            if docker compose --compatibility ps frontend | grep -q "Up"; then
-              echo "✓ Frontend container is running"
+            health=$(docker compose --compatibility ps -q frontend | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
+            if [ "$health" = "healthy" ]; then
+              echo "✓ Frontend container is healthy"
             else
-              echo "✗ Frontend container is not running"
+              echo "✗ Frontend container is $health"
               ALL_HEALTHY=false
             fi
 
