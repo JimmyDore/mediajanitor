@@ -4,7 +4,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"  # Never expose publicly: Docker bypasses ufw
     volumes:
       - redis_data:/data
     restart: unless-stopped
