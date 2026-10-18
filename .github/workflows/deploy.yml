@@ -25,7 +25,8 @@ jobs:
             # Pull latest code
             git pull origin main
 
-            # Write environment variables from GitHub Secrets
+            # Write environment variables from GitHub Secrets (owner-only permissions)
+            install -m 600 /dev/null .env
             echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
             echo "SMTP2GO_API_KEY=${{ secrets.SMTP2GO_API_KEY }}" >> .env
             echo "SMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}" >> .env
