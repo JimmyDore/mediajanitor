@@ -40,8 +40,8 @@ jobs:
 
             # Tag current images as :previous for rollback capability
             echo "Tagging current images for rollback..."
-            docker tag mediajanitor-backend:latest mediajanitor-backend:previous 2>/dev/null || echo "No existing backend image to tag"
-            docker tag mediajanitor-frontend:latest mediajanitor-frontend:previous 2>/dev/null || echo "No existing frontend image to tag"
+            docker tag mediajanitor_backend:latest mediajanitor_backend:previous 2>/dev/null || echo "No existing backend image to tag"
+            docker tag mediajanitor_frontend:latest mediajanitor_frontend:previous 2>/dev/null || echo "No existing frontend image to tag"
 
             # Clean up old Docker resources to free disk space (but keep :previous tagged images)
             echo "Cleaning up Docker resources..."
@@ -66,7 +66,7 @@ jobs:
 
               echo "Waiting for $service to be healthy..."
               while [ $attempt -le $max_attempts ]; do
-                local health=$(docker compose ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
+                local health=$(docker compose --compatibility ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
                 if [ "$health" = "healthy" ]; then
                   echo "$service is healthy!"
                   return 0
@@ -81,13 +81,13 @@ jobs:
 
             # 1. Update Redis (if image changed - usually just restart)
             echo "[1/5] Updating redis..."
-            docker compose up -d --no-deps redis
+            docker compose --compatibility up -d --no-deps redis
             wait_for_healthy redis 12 || { echo "Redis update failed"; exit 1; }
 
             # 2. Update backend (build new image, start new container)
             echo ""
             echo "[2/5] Updating backend..."
-            docker compose up -d --no-deps --build backend
+            docker compose --compatibility up -d --no-deps --build backend
             wait_for_healthy backend 30 || { echo "Backend update failed"; exit 1; }
 
             # Verify backend is responding to requests
@@ -101,19 +101,19 @@ jobs:
             # 3. Update celery-worker (build new image, start new container)
             echo ""
             echo "[3/5] Updating celery-worker..."
-            docker compose up -d --no-deps --build celery-worker
+            docker compose --compatibility up -d --no-deps --build celery-worker
             wait_for_healthy celery-worker 30 || { echo "Celery worker update failed"; exit 1; }
 
             # 4. Update celery-beat (build new image, start new container)
             echo ""
             echo "[4/5] Updating celery-beat..."
-            docker compose up -d --no-deps --build celery-beat
+            docker compose --compatibility up -d --no-deps --build celery-beat
             wait_for_healthy celery-beat 20 || { echo "Celery beat update failed"; exit 1; }
 
             # 5. Update frontend (build new image, start new container)
             echo ""
             echo "[5/5] Updating frontend..."
-            docker compose up -d --no-deps --build frontend
+            docker compose --compatibility up -d --no-deps --build frontend
             # Frontend doesn't have health check in docker-compose, just wait a bit
             sleep 10
             echo "Frontend updated!"
@@ -123,7 +123,7 @@ jobs:
             echo ""
 
             # Show final status
-            docker compose ps
+            docker compose --compatibility ps
             df -h / | tail -1
 
       - name: Final health verification and cleanup
@@ -152,7 +152,7 @@ jobs:
 
             # Check container health statuses
             for service in redis backend celery-worker celery-beat; do
-              health=$(docker compose ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
+              health=$(docker compose --compatibility ps -q $service | xargs -r docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
               if [ "$health" = "healthy" ]; then
                 echo "✓ $service container is healthy"
               else
@@ -162,7 +162,7 @@ jobs:
             done
 
             # Check frontend is running (no health check defined)
-            if docker compose ps frontend | grep -q "Up"; then
+            if docker compose --compatibility ps frontend | grep -q "Up"; then
               echo "✓ Frontend container is running"
             else
               echo "✗ Frontend container is not running"
@@ -174,8 +174,8 @@ jobs:
             if [ "$ALL_HEALTHY" = true ]; then
               echo "=== Deployment Successful! ==="
               echo "Cleaning up previous images..."
-              docker rmi mediajanitor-backend:previous 2>/dev/null || true
-              docker rmi mediajanitor-frontend:previous 2>/dev/null || true
+              docker rmi mediajanitor_backend:previous 2>/dev/null || true
+              docker rmi mediajanitor_frontend:previous 2>/dev/null || true
               echo "Done!"
               exit 0
             fi
@@ -183,26 +183,26 @@ jobs:
             echo "=== Deployment Verification Failed ==="
             echo ""
             echo "=== Service logs ==="
-            docker compose logs --tail=30 backend
+            docker compose --compatibility logs --tail=30 backend
             echo ""
-            docker compose logs --tail=10 celery-worker
+            docker compose --compatibility logs --tail=10 celery-worker
             echo ""
 
             # Attempt rollback if previous images exist
             echo ""
             echo "=== Attempting Rollback ==="
-            if docker image inspect mediajanitor-backend:previous > /dev/null 2>&1; then
+            if docker image inspect mediajanitor_backend:previous > /dev/null 2>&1; then
               echo "Previous images found, rolling back all services..."
 
               # Stop all current containers
-              docker compose down
+              docker compose --compatibility down
 
               # Restore previous images
-              docker tag mediajanitor-backend:previous mediajanitor-backend:latest
-              docker tag mediajanitor-frontend:previous mediajanitor-frontend:latest
+              docker tag mediajanitor_backend:previous mediajanitor_backend:latest
+              docker tag mediajanitor_frontend:previous mediajanitor_frontend:latest
 
               # Start all services with previous images
-              docker compose up -d
+              docker compose --compatibility up -d
 
               echo "Rollback complete. Verifying..."
               sleep 15

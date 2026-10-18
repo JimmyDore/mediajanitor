@@ -135,7 +135,7 @@ ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'SELECT page_coun
 ssh your-server "sqlite3 ~/mediajanitor/data/plex_dashboard.db 'PRAGMA freelist_count;'"
 
 # Check migration status
-ssh your-server "docker exec mediajanitor-backend-1 alembic current"
+ssh your-server "docker exec mediajanitor_backend_1 alembic current"
 ```
 
 ### Step 5: Deployment Pipeline Review
@@ -171,7 +171,7 @@ Look for:
 # Check for missing or default values
 
 # List env vars in container
-ssh your-server "docker exec mediajanitor-backend-1 env | grep -v PASSWORD | grep -v KEY | sort"
+ssh your-server "docker exec mediajanitor_backend_1 env | grep -v PASSWORD | grep -v KEY | sort"
 ```
 
 Check for:

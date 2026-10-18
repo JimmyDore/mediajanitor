@@ -7,7 +7,7 @@ Reusable patterns for querying the production database and live APIs when debugg
 All prod queries run Python inside the backend Docker container via SSH:
 
 ```bash
-ssh vpsjim "docker exec mediajanitor-backend-1 python3 -c \"
+ssh vpsjim "docker exec mediajanitor_backend_1 python3 -c \"
 <python code here>
 \""
 ```
