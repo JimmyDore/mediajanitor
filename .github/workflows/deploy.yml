@@ -35,6 +35,9 @@ jobs:
             echo "DISABLE_SIGNUPS=${{ secrets.DISABLE_SIGNUPS }}" >> .env
             echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
 
+            # Never let prod fall back to the docker-compose dev password
+            grep -qE '^REDIS_PASSWORD=.{32,}$' .env || { echo "REDIS_PASSWORD secret missing or too short"; exit 1; }
+
             # Tag current images as :previous for rollback capability
             echo "Tagging current images for rollback..."
             docker tag mediajanitor-backend:latest mediajanitor-backend:previous 2>/dev/null || echo "No existing backend image to tag"
