@@ -33,6 +33,7 @@ jobs:
             echo "SLACK_WEBHOOK_NEW_USERS=${{ secrets.SLACK_WEBHOOK_NEW_USERS }}" >> .env
             echo "SLACK_WEBHOOK_SYNC_FAILURES=${{ secrets.SLACK_WEBHOOK_SYNC_FAILURES }}" >> .env
             echo "DISABLE_SIGNUPS=${{ secrets.DISABLE_SIGNUPS }}" >> .env
+            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
 
             # Tag current images as :previous for rollback capability
             echo "Tagging current images for rollback..."
