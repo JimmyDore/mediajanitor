@@ -159,18 +159,19 @@ def is_old_or_unwatched(
 ) -> bool:
     """Check if an item qualifies as old/unwatched content.
 
-    Returns True if:
-    - Item was never watched AND was added more than min_age_months ago
+    Returns True if the item was added more than min_age_months ago AND:
+    - Item was never watched, OR
     - Item was watched but last played more than months_cutoff ago
 
-    Note: min_age_months only applies to UNPLAYED items (per original script logic).
-    Played items are checked against last_played_date regardless of when added.
+    min_age_months applies to played items too: content re-added to the library
+    (date_created reset) keeps an old last_played_date and must not be flagged
+    the moment it comes back.
     """
     now = datetime.now(UTC)
     cutoff_date = now - timedelta(days=months_cutoff * 30)
     min_age_date = now - timedelta(days=min_age_months * 30)
 
-    # Check if item was added recently (for unplayed items check)
+    # Check if item was added recently
     date_created = parse_jellyfin_datetime(item.date_created)
     item_age_ok = True
     if date_created:
@@ -180,13 +181,13 @@ def is_old_or_unwatched(
         if date_created > min_age_date:
             item_age_ok = False  # Item is too new
 
-    # Never played - only include if item is old enough (min_age check)
+    if not item_age_ok:
+        return False
+
     if not item.played:
-        # min_age_months only applies to unplayed items
-        return item_age_ok
+        return True
 
     # Played but no last_played_date (treat as old)
-    # Note: min_age check does NOT apply to played items
     if not item.last_played_date:
         return True
 

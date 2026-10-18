@@ -158,11 +158,11 @@ class TestOldUnwatchedContent:
         assert data["items"][0]["jellyfin_id"] == "movie-old-watched"
 
     @pytest.mark.asyncio
-    async def test_min_age_only_applies_to_unplayed_items(self, client: TestClient) -> None:
-        """min_age_months should ONLY apply to unplayed items.
+    async def test_min_age_applies_to_readded_played_items(self, client: TestClient) -> None:
+        """min_age_months applies to played items too.
 
-        Bug fix: Original script applies min_age check only to never-watched items.
-        Played items should be checked against last_played_date regardless of when added.
+        Content removed then re-added gets a fresh date_created but keeps its old
+        last_played_date. It must not be flagged as old right after coming back.
         """
         token = self._get_auth_token(client, "minagefix@example.com")
         headers = {"Authorization": f"Bearer {token}"}
@@ -176,8 +176,7 @@ class TestOldUnwatchedContent:
             # Old watched date (5 months ago - outside months_cutoff window)
             old_watched_date = (datetime.now(UTC) - timedelta(days=150)).isoformat()
 
-            # Item 1: Added recently, PLAYED long ago -> SHOULD appear
-            # min_age check should NOT apply to played items
+            # Item 1: Re-added recently, PLAYED long ago -> should NOT appear
             item1 = CachedMediaItem(
                 user_id=user_id,
                 jellyfin_id="movie-recent-add-old-watch",
@@ -212,11 +211,8 @@ class TestOldUnwatchedContent:
         assert response.status_code == 200
         data = response.json()
 
-        # Only item1 should appear:
-        # - item1 is played (min_age doesn't apply), last_played > 4 months ago -> appears
-        # - item2 is unplayed AND recently added -> min_age applies, doesn't appear
-        assert data["total_count"] == 1
-        assert data["items"][0]["jellyfin_id"] == "movie-recent-add-old-watch"
+        # Neither item appears: both were added within the min_age window
+        assert data["total_count"] == 0
 
     @pytest.mark.asyncio
     async def test_excludes_whitelisted_content(self, client: TestClient) -> None:
