@@ -337,7 +337,7 @@ If you MUST delete a migration, first update production's alembic_version:
 ssh your-server
 cd ~/mediajanitor
 sudo sqlite3 data/plex_dashboard.db "UPDATE alembic_version SET version_num = 'NEW_REVISION';"
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Async/Sync Consistency (CRITICAL)
@@ -416,12 +416,12 @@ class UserSettings(Base):
 
 **Accessing production logs:**
 ```bash
-ssh your-server "docker logs mediajanitor_backend_1 --tail 100 2>&1"
+ssh your-server "docker logs mediajanitor-backend-1 --tail 100 2>&1"
 ```
 
 **Checking database schema in production:**
 ```bash
-ssh your-server "docker exec mediajanitor_backend_1 python3 -c \"
+ssh your-server "docker exec mediajanitor-backend-1 python3 -c \"
 import sqlite3
 conn = sqlite3.connect('/app/data/plex_dashboard.db')
 cursor = conn.execute('PRAGMA table_info(TABLE_NAME)')
@@ -614,9 +614,9 @@ The deployment workflow uses rolling updates to minimize downtime. Instead of st
 **How it works:**
 ```bash
 # Each service is updated independently
-docker-compose up -d --no-deps --build backend  # Build and start new container
+docker compose up -d --no-deps --build backend  # Build and start new container
 # Wait for health check to pass
-docker-compose up -d --no-deps --build celery-worker
+docker compose up -d --no-deps --build celery-worker
 # ... etc
 ```
 
@@ -635,8 +635,8 @@ docker-compose up -d --no-deps --build celery-worker
 ```bash
 ssh your-server
 cd ~/mediajanitor
-docker-compose down
+docker compose down
 docker tag mediajanitor-backend:previous mediajanitor-backend:latest
 docker tag mediajanitor-frontend:previous mediajanitor-frontend:latest
-docker-compose up -d
+docker compose up -d
 ```
