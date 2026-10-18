@@ -21,6 +21,12 @@ COPY alembic/ ./alembic/
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
+# Run as non-root (uid 1000 matches the host owner of ./data); /app must be
+# writable for celery-beat's schedule file
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app \
+    && chown -R app:app /app
+USER app
+
 # Expose port
 EXPOSE 8000
 
