@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     slack_webhook_new_users: str = ""
     slack_webhook_sync_failures: str = ""
 
+    # Hub App alerts (optional): off unless all three are set
+    hub_base_url: str = ""
+    hub_app_alert_token: str = ""
+    hub_alert_user_email: str = ""  # Only this account's syncs report to the Hub
+
     # SMTP2GO Email Configuration (for password reset)
     smtp2go_api_key: str = ""
     smtp_from_email: str = ""

@@ -18,6 +18,7 @@ from app.database import (
     UserNickname,
     UserSettings,
 )
+from app.services.app_alerts import SyncFailure, report_sync_to_hub
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
@@ -56,7 +57,7 @@ async def trigger_jellyfin_library_refresh(server_url: str, api_key: str) -> boo
                 return True
             else:
                 logger.warning(
-                    f"Failed to trigger Jellyfin library refresh: " f"status={response.status_code}"
+                    f"Failed to trigger Jellyfin library refresh: status={response.status_code}"
                 )
                 return False
 
@@ -235,7 +236,7 @@ async def wait_for_jellyfin_scan_completion(
 
                 state = refresh_task.get("State", "Unknown")
                 logger.info(
-                    f"Jellyfin library scan status: {state} " f"(poll {poll_count + 1}/{max_polls})"
+                    f"Jellyfin library scan status: {state} (poll {poll_count + 1}/{max_polls})"
                 )
 
                 if state == "Idle":
@@ -1955,6 +1956,7 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     media_count = 0
     requests_count = 0
     error_message = None
+    failure: SyncFailure | None = None
 
     # Step 1: Refresh libraries BEFORE fetching data
     # This ensures newly downloaded content is indexed before we fetch it
@@ -2044,6 +2046,7 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
             )
         except Exception:
             pass  # Don't let notification failure affect sync error handling
+        await report_sync_to_hub(db, user_id, user_email, SyncFailure("Jellyfin", str(e)))
         return {
             "status": "failed",
             "error": error_message,
@@ -2100,6 +2103,7 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     except Exception as e:
         # Jellyseerr sync failure is not critical - we still have Jellyfin data
         error_message = f"Jellyseerr sync failed: {str(e)}"
+        failure = SyncFailure("Jellyseerr", str(e))
         logger.warning(error_message)
         # Send sync failure notification (fire-and-forget)
         try:
@@ -2147,6 +2151,8 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
         media_count=media_count,
         requests_count=requests_count,
     )
+
+    await report_sync_to_hub(db, user_id, user_email, failure)
 
     return {
         "status": final_status,

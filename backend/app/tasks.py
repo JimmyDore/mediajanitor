@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.celery_app import celery_app
 from app.database import User, UserSettings, async_session_maker
+from app.services.app_alerts import SyncFailure, hub_reporting_enabled, report_sync_to_hub
 from app.services.sync import run_user_sync, send_sync_failure_notification
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,36 @@ def send_sync_failure_notification_for_celery(
         logger.warning(f"Failed to send sync failure notification for user {user_id}: {e}")
 
 
+def report_sync_failure_to_hub_for_celery(user_id: int, error_message: str) -> None:
+    """Send the Hub snapshot with `sync-failed` after an unhandled sync exception.
+
+    Synchronous wrapper for Celery, fire-and-forget like the Slack one: the
+    categories come from the last cached data. Never raises.
+    """
+    if not hub_reporting_enabled():
+        return
+
+    async def _report() -> None:
+        async with async_session_maker() as session:
+            result = await session.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if user is None:
+                return
+            await report_sync_to_hub(
+                session, user_id, user.email, SyncFailure("Sync", error_message)
+            )
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_report())
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"Failed to report sync failure to the Hub for user {user_id}: {e}")
+
+
 @celery_app.task(bind=True, name="test_task")  # type: ignore[untyped-decorator]
 def test_task(self: Any, value: str) -> dict[str, str]:
     """Test task to verify Celery is working.
@@ -152,4 +183,5 @@ def sync_user(self: Any, user_id: int) -> dict[str, Any]:
             user_id=user_id,
             error_message=str(e),
         )
+        report_sync_failure_to_hub_for_celery(user_id=user_id, error_message=str(e))
         return {"status": "failed", "error": str(e), "user_id": user_id}
