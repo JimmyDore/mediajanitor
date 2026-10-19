@@ -18,7 +18,7 @@ from app.database import (
     UserNickname,
     UserSettings,
 )
-from app.services.app_alerts import SyncFailure, ping_nightly_sync, report_sync_to_hub
+from app.services.app_alerts import SyncFailure, report_sync_end
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
@@ -57,7 +57,7 @@ async def trigger_jellyfin_library_refresh(server_url: str, api_key: str) -> boo
                 return True
             else:
                 logger.warning(
-                    f"Failed to trigger Jellyfin library refresh: status={response.status_code}"
+                    f"Failed to trigger Jellyfin library refresh: " f"status={response.status_code}"
                 )
                 return False
 
@@ -236,7 +236,7 @@ async def wait_for_jellyfin_scan_completion(
 
                 state = refresh_task.get("State", "Unknown")
                 logger.info(
-                    f"Jellyfin library scan status: {state} (poll {poll_count + 1}/{max_polls})"
+                    f"Jellyfin library scan status: {state} " f"(poll {poll_count + 1}/{max_polls})"
                 )
 
                 if state == "Idle":
@@ -1915,6 +1915,9 @@ async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False)
 
     `scheduled` is True when the nightly schedule started it: a scheduled sync
     of the Hub user pings the Hub's `mediajanitor-sync` Task at the end.
+    Every exit after the sync proper ends with report_sync_end, its last step:
+    a sync that returns has reported to the Hub, one that raises hasn't, and
+    app.tasks reports that one.
 
     Fetches data from Jellyfin and Jellyseerr (if configured),
     and caches it in the database.
@@ -2049,9 +2052,7 @@ async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False)
             )
         except Exception:
             pass  # Don't let notification failure affect sync error handling
-        await report_sync_to_hub(db, user_id, user_email, SyncFailure("Jellyfin", str(e)))
-        if scheduled:
-            await ping_nightly_sync(user_email)
+        await report_sync_end(db, user_id, user_email, SyncFailure("Jellyfin", str(e)), scheduled)
         return {
             "status": "failed",
             "error": error_message,
@@ -2157,9 +2158,7 @@ async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False)
         requests_count=requests_count,
     )
 
-    await report_sync_to_hub(db, user_id, user_email, failure)
-    if scheduled:
-        await ping_nightly_sync(user_email)
+    await report_sync_end(db, user_id, user_email, failure, scheduled)
 
     return {
         "status": final_status,

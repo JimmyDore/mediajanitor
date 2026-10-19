@@ -1,11 +1,12 @@
-"""Client for the Hub (hub.jimmydore.fr), modelled on the Slack client.
+"""Client for the Hub (hub.jimmydore.fr).
 
-Every call is fire-and-forget: a ~10-second timeout, no retry, failures are
-logged and never raised. The next sync sends the full state anyway.
+Every call is fire-and-forget, like the Slack client: a ~10-second timeout, no
+retry, any 2xx is success, and every other status or error is logged and never
+raised. The next sync sends the full state anyway.
 """
 
 import logging
-from typing import Any
+from collections.abc import Mapping
 
 import httpx
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 HUB_TIMEOUT_SECONDS = 10.0
 
 
-async def _send(method: str, url: str, token: str, payload: dict[str, Any] | None) -> bool:
+async def _send(method: str, url: str, token: str, payload: Mapping[str, object] | None) -> bool:
     try:
         async with httpx.AsyncClient(timeout=HUB_TIMEOUT_SECONDS) as client:
             response = await client.request(
@@ -32,7 +33,9 @@ async def _send(method: str, url: str, token: str, payload: dict[str, Any] | Non
         return False
 
 
-async def send_app_alerts(base_url: str, app: str, token: str, snapshot: dict[str, Any]) -> bool:
+async def send_app_alerts(
+    base_url: str, app: str, token: str, snapshot: Mapping[str, object]
+) -> bool:
     """Send an app's full App alerts snapshot: PUT /api/app-alerts/{app}.
 
     Returns True when the Hub accepted it, False otherwise. Never raises.

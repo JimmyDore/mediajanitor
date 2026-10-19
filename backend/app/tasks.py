@@ -5,15 +5,11 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.celery_app import celery_app
 from app.database import User, UserSettings, async_session_maker
-from app.services.app_alerts import (
-    SyncFailure,
-    hub_reporting_enabled,
-    ping_nightly_sync,
-    report_sync_to_hub,
-)
+from app.services.app_alerts import SyncFailure, report_sync_end
 from app.services.sync import run_user_sync, send_sync_failure_notification
 
 logger = logging.getLogger(__name__)
@@ -45,9 +41,35 @@ def get_configured_user_ids() -> list[int]:
 
 
 async def _run_sync_for_user(user_id: int, scheduled: bool = False) -> dict[str, Any]:
-    """Run sync for a single user (async helper)."""
+    """Run sync for a single user (async helper).
+
+    run_user_sync reports to the Hub at each of its exits. When it raises
+    instead, the Hub gets the sync-failed snapshot (and the ping, if scheduled)
+    here. An exception once it has returned, like closing the session, reports
+    nothing more: the snapshot already went.
+    """
     async with async_session_maker() as session:
-        return await run_user_sync(session, user_id, scheduled=scheduled)
+        try:
+            return await run_user_sync(session, user_id, scheduled=scheduled)
+        except Exception as e:
+            await _report_unhandled_failure(session, user_id, str(e), scheduled)
+            raise
+
+
+async def _report_unhandled_failure(
+    session: AsyncSession, user_id: int, error_message: str, scheduled: bool
+) -> None:
+    """Report a sync that raised to the Hub, from the last cached data. Never raises."""
+    try:
+        await session.rollback()
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is not None:
+            await report_sync_end(
+                session, user_id, user.email, SyncFailure("Sync", error_message), scheduled
+            )
+    except Exception as e:
+        logger.warning(f"Failed to report sync failure to the Hub for user {user_id}: {e!r}")
 
 
 async def _get_user_email(user_id: int) -> str | None:
@@ -93,42 +115,6 @@ def send_sync_failure_notification_for_celery(
             loop.close()
     except Exception as e:
         logger.warning(f"Failed to send sync failure notification for user {user_id}: {e}")
-
-
-def report_sync_failure_to_hub_for_celery(
-    user_id: int, error_message: str, scheduled: bool = False
-) -> None:
-    """Send the Hub snapshot with `sync-failed` after an unhandled sync exception.
-
-    Synchronous wrapper for Celery, fire-and-forget like the Slack one: the
-    categories come from the last cached data. A scheduled sync also pings the
-    Hub's `mediajanitor-sync` Task. Never raises.
-    """
-    if not hub_reporting_enabled() and not scheduled:
-        return
-
-    async def _report() -> None:
-        async with async_session_maker() as session:
-            result = await session.execute(select(User).where(User.id == user_id))
-            user = result.scalar_one_or_none()
-            if user is None:
-                return
-            if hub_reporting_enabled():
-                await report_sync_to_hub(
-                    session, user_id, user.email, SyncFailure("Sync", error_message)
-                )
-            if scheduled:
-                await ping_nightly_sync(user.email)
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(_report())
-        finally:
-            loop.close()
-    except Exception as e:
-        logger.warning(f"Failed to report sync failure to the Hub for user {user_id}: {e}")
 
 
 @celery_app.task(bind=True, name="test_task")  # type: ignore[untyped-decorator]
@@ -194,8 +180,5 @@ def sync_user(self: Any, user_id: int, scheduled: bool = False) -> dict[str, Any
         send_sync_failure_notification_for_celery(
             user_id=user_id,
             error_message=str(e),
-        )
-        report_sync_failure_to_hub_for_celery(
-            user_id=user_id, error_message=str(e), scheduled=scheduled
         )
         return {"status": "failed", "error": str(e), "user_id": user_id}

@@ -7,7 +7,7 @@ from the same per-user computation as the dashboard summary and issue lists.
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TypedDict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,18 +37,30 @@ class SyncFailure:
     error: str
 
 
-def hub_reporting_enabled() -> bool:
-    """True when the Hub URL, App alert token and reporting email are all set."""
-    settings = get_settings()
-    return bool(
-        settings.hub_base_url and settings.hub_app_alert_token and settings.hub_alert_user_email
-    )
+class AppAlert(TypedDict):
+    """One App alert, as the Hub's PUT /api/app-alerts/{app} takes it."""
+
+    key: str
+    title: str
+    context: str
+    url: str
+
+
+class Snapshot(TypedDict):
+    """Every App alert Media Janitor has open now: the body of PUT /api/app-alerts/{app}."""
+
+    name: str
+    url: str
+    push: bool
+    alerts: list[AppAlert]
 
 
 def _hub_settings_for(user_email: str) -> Settings | None:
-    if not hub_reporting_enabled():
-        return None
+    """The settings when the Hub URL and the reporting email are set and `user_email`
+    is that account (any case). Each caller still checks its own token."""
     settings = get_settings()
+    if not (settings.hub_base_url and settings.hub_alert_user_email):
+        return None
     if user_email.strip().lower() != settings.hub_alert_user_email.strip().lower():
         return None
     return settings
@@ -70,13 +82,13 @@ async def build_snapshot(
     user_id: int,
     frontend_url: str,
     failure: SyncFailure | None = None,
-) -> dict[str, Any]:
+) -> Snapshot:
     """Build the App alerts snapshot for a user from the cached data."""
     home = f"{frontend_url.rstrip('/')}/"
     summary = await get_content_summary(db, user_id)
     issues = await get_content_issues(db, user_id)
 
-    alerts: list[dict[str, Any]] = []
+    alerts: list[AppAlert] = []
 
     for key, label, category in (
         ("old", "Old content", summary.old_content),
@@ -87,55 +99,66 @@ async def build_snapshot(
             continue
         titles = [item.name for item in issues.items if key in item.issues]
         alerts.append(
-            {
-                "key": key,
-                "title": f"{label} · {category.count}",
-                "context": _titles_context(
-                    titles, category.count, size=category.total_size_formatted
-                ),
-                "url": f"{home}issues?filter={key}",
-            }
+            AppAlert(
+                key=key,
+                title=f"{label} · {category.count}",
+                context=_titles_context(titles, category.count, size=category.total_size_formatted),
+                url=f"{home}issues?filter={key}",
+            )
         )
 
     if summary.unavailable_requests.count:
         requests = await get_unavailable_requests(db, user_id)
         count = summary.unavailable_requests.count
         alerts.append(
-            {
-                "key": "requests",
-                "title": f"Unavailable requests · {count}",
-                "context": _titles_context([r.title for r in requests], count),
-                "url": f"{home}issues?filter=requests",
-            }
+            AppAlert(
+                key="requests",
+                title=f"Unavailable requests · {count}",
+                context=_titles_context([r.title for r in requests], count),
+                url=f"{home}issues?filter=requests",
+            )
         )
 
     if failure:
         alerts.append(
-            {
-                "key": "sync-failed",
-                "title": "Media Janitor sync failed",
-                "context": f"{failure.service}: {failure.error[:ERROR_MAX]}"[:CONTEXT_MAX],
-                "url": home,
-            }
+            AppAlert(
+                key="sync-failed",
+                title="Media Janitor sync failed",
+                context=f"{failure.service}: {failure.error[:ERROR_MAX]}"[:CONTEXT_MAX],
+                url=home,
+            )
         )
 
-    return {"name": APP_NAME, "url": home, "push": True, "alerts": alerts}
+    return Snapshot(name=APP_NAME, url=home, push=True, alerts=alerts)
 
 
-async def report_sync_to_hub(
+async def report_sync_end(
     db: AsyncSession,
     user_id: int,
     user_email: str,
     failure: SyncFailure | None = None,
+    scheduled: bool = False,
 ) -> None:
-    """Send the user's App alerts snapshot to the Hub at the end of a sync.
+    """Report the end of a user's sync to the Hub: the App alerts snapshot, then,
+    for a scheduled sync, the ping of the Hub's `mediajanitor-sync` Task.
 
-    Only for the account matching HUB_ALERT_USER_EMAIL, and only when the Hub
-    settings are set. Never raises: the sync must not depend on the Hub.
+    Called once per sync that reached the sync proper. Only for the account
+    matching HUB_ALERT_USER_EMAIL, and each part only when its token is set.
+    The ping goes whatever the outcome: a failure is reported by the
+    sync-failed App alert, never by the ping. Never raises: the sync must not
+    depend on the Hub.
     """
+    await _send_snapshot(db, user_id, user_email, failure)
+    if scheduled:
+        await _ping_nightly_sync(user_email)
+
+
+async def _send_snapshot(
+    db: AsyncSession, user_id: int, user_email: str, failure: SyncFailure | None
+) -> None:
     try:
         settings = _hub_settings_for(user_email)
-        if settings is None:
+        if settings is None or not settings.hub_app_alert_token:
             return
         snapshot = await build_snapshot(db, user_id, settings.frontend_url, failure)
         await send_app_alerts(
@@ -145,26 +168,10 @@ async def report_sync_to_hub(
         logger.warning(f"Failed to report sync of user {user_id} to the Hub: {e!r}")
 
 
-def _ping_settings_for(user_email: str) -> Settings | None:
-    settings = get_settings()
-    if not (settings.hub_base_url and settings.hub_ping_token and settings.hub_alert_user_email):
-        return None
-    if user_email.strip().lower() != settings.hub_alert_user_email.strip().lower():
-        return None
-    return settings
-
-
-async def ping_nightly_sync(user_email: str) -> None:
-    """Ping the Hub's `mediajanitor-sync` Task at the end of a scheduled sync.
-
-    Sent whatever the sync's outcome: a failure is reported by the sync-failed
-    App alert, never by the ping. Only for the account matching
-    HUB_ALERT_USER_EMAIL, and only when HUB_BASE_URL and HUB_PING_TOKEN are set.
-    Never raises.
-    """
+async def _ping_nightly_sync(user_email: str) -> None:
     try:
-        settings = _ping_settings_for(user_email)
-        if settings is None:
+        settings = _hub_settings_for(user_email)
+        if settings is None or not settings.hub_ping_token:
             return
         await send_ping(settings.hub_base_url, NIGHTLY_SYNC_TASK, settings.hub_ping_token)
     except Exception as e:

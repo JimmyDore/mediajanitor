@@ -6,7 +6,9 @@ the Hub, and checks only the ping sent to the Hub.
 """
 
 import asyncio
-from collections.abc import Generator
+import json
+from collections.abc import AsyncIterator, Generator
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import patch
 
@@ -14,6 +16,7 @@ import httpx
 import pytest
 import respx
 from httpx import Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.services.sync import run_user_sync
@@ -254,3 +257,29 @@ class TestCeleryWrappers:
 
         assert result["status"] == "failed"
         assert ping.call_count == 0
+
+    @respx.mock
+    async def test_exception_after_the_sync_reported_sends_no_second_report(self) -> None:
+        from app.tasks import sync_user
+
+        @asynccontextmanager
+        async def session_lost_on_close() -> AsyncIterator[AsyncSession]:
+            async with TestingAsyncSessionLocal() as session:
+                yield session
+            raise RuntimeError("connection lost on close")
+
+        mock_jellyfin(CLEAN_LIBRARY)
+        alerts = respx.put(HUB_ALERTS_URL).mock(return_value=Response(200, json={}))
+        ping = respx.post(PING_URL).mock(return_value=Response(200, text="OK"))
+        user_id = await create_user()
+
+        with (
+            patch("app.tasks.async_session_maker", session_lost_on_close),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id, scheduled=True)
+
+        assert result["status"] == "failed"
+        assert alerts.call_count == 1
+        assert json.loads(alerts.calls.last.request.content)["alerts"] == []
+        assert_pinged_once(ping)
