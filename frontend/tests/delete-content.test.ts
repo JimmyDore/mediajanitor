@@ -44,6 +44,26 @@ describe('Delete Content API Integration', () => {
 			expect(data.detail.toLowerCase()).toContain('radarr');
 		});
 
+		it('returns 409 with viewer names when movie is being watched', async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: () =>
+					Promise.resolve({
+						detail: 'Currently being watched by thibault. Try again once playback has stopped.'
+					})
+			});
+
+			const response = await fetch('/api/content/movie/12345', {
+				method: 'DELETE',
+				headers: { Authorization: 'Bearer jwt-token' }
+			});
+
+			expect(response.status).toBe(409);
+			const data = await response.json();
+			expect(data.detail).toContain('thibault');
+		});
+
 		it('returns success response when movie is deleted', async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: true,

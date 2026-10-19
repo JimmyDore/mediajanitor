@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import User, get_db
+from app.database import User, UserSettings, get_db
 from app.models.content import (
     ContentIssueItem,
     ContentIssuesResponse,
@@ -28,10 +28,12 @@ from app.services.content_cache import (
     delete_cached_jellyseerr_request_by_id,
     delete_cached_jellyseerr_request_by_tmdb_id,
     delete_cached_media_by_tmdb_id,
+    get_cached_jellyfin_ids_by_tmdb_id,
     get_user_settings,
     lookup_jellyseerr_media_by_request_id,
     lookup_jellyseerr_media_by_tmdb,
 )
+from app.services.jellyfin import get_active_viewers, get_decrypted_jellyfin_api_key
 from app.services.jellyseerr import (
     delete_jellyseerr_media,
     get_decrypted_jellyseerr_api_key,
@@ -171,6 +173,31 @@ async def get_issues(
 # US-15.4, US-15.5, US-15.6: Delete content endpoints
 
 
+async def ensure_not_being_watched(
+    db: AsyncSession, settings: UserSettings, user_id: int, tmdb_id: int
+) -> None:
+    """Raise 409 if someone is currently playing this content on Jellyfin."""
+    if not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:
+        return
+    jellyfin_api_key = get_decrypted_jellyfin_api_key(settings)
+    if not jellyfin_api_key:
+        return
+
+    jellyfin_ids = await get_cached_jellyfin_ids_by_tmdb_id(db, user_id, tmdb_id)
+    viewers = await get_active_viewers(
+        settings.jellyfin_server_url,
+        jellyfin_api_key,
+        tmdb_id=tmdb_id,
+        jellyfin_ids=jellyfin_ids,
+    )
+    if viewers:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Currently being watched by {', '.join(sorted(set(viewers)))}. "
+            "Try again once playback has stopped.",
+        )
+
+
 @router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
 async def delete_movie(
     tmdb_id: int,
@@ -200,6 +227,7 @@ async def delete_movie(
     delete_from_arr = delete_request.delete_from_arr if delete_request else True
 
     if delete_from_arr:
+        await ensure_not_being_watched(db, settings, current_user.id, tmdb_id)
         success, message = await delete_movie_by_tmdb_id(
             settings.radarr_server_url, radarr_api_key, tmdb_id
         )
@@ -291,6 +319,7 @@ async def delete_series(
     delete_from_arr = delete_request.delete_from_arr if delete_request else True
 
     if delete_from_arr:
+        await ensure_not_being_watched(db, settings, current_user.id, tmdb_id)
         success, message = await delete_series_by_tmdb_id(
             settings.sonarr_server_url, sonarr_api_key, tmdb_id
         )

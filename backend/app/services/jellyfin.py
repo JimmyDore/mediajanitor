@@ -1,11 +1,15 @@
 """Jellyfin service for API interactions and connection validation."""
 
+import logging
+
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import UserSettings
 from app.services.encryption import decrypt_value, encrypt_value
+
+logger = logging.getLogger(__name__)
 
 
 async def validate_jellyfin_connection(server_url: str, api_key: str) -> bool:
@@ -70,3 +74,46 @@ def get_decrypted_jellyfin_api_key(settings: UserSettings) -> str | None:
     if settings.jellyfin_api_key_encrypted:
         return decrypt_value(settings.jellyfin_api_key_encrypted)
     return None
+
+
+async def get_active_viewers(
+    server_url: str, api_key: str, tmdb_id: int, jellyfin_ids: set[str]
+) -> list[str]:
+    """Return the names of users currently playing (or paused on) the given content.
+
+    A session matches when its NowPlayingItem is the item itself (by Jellyfin ID or
+    TMDB ID) or an episode of it (by SeriesId).
+
+    Returns an empty list if Jellyfin can't be reached, so deletion isn't blocked
+    by a Jellyfin outage.
+    """
+    server_url = server_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{server_url}/Sessions",
+                headers={"X-Emby-Token": api_key},
+            )
+            response.raise_for_status()
+            sessions = response.json()
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as e:
+        logger.warning(f"Could not fetch Jellyfin sessions: {e}")
+        return []
+
+    tmdb_id_str = str(tmdb_id)
+    viewers = []
+    for session in sessions:
+        item = session.get("NowPlayingItem")
+        if not item:
+            continue
+        is_match = (
+            item.get("Id") in jellyfin_ids
+            or item.get("SeriesId") in jellyfin_ids
+            or (
+                item.get("Type") == "Movie"
+                and item.get("ProviderIds", {}).get("Tmdb") == tmdb_id_str
+            )
+        )
+        if is_match:
+            viewers.append(session.get("UserName") or "unknown user")
+    return viewers

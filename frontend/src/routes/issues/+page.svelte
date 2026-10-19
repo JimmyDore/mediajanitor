@@ -318,7 +318,7 @@
 			});
 
 			if (response.status === 401) { showToast('Session expired', 'error'); return; }
-			if (response.status === 400) {
+			if (response.status === 400 || response.status === 409) {
 				const errorData = await response.json();
 				showToast(errorData.detail || 'Deletion failed', 'error');
 				return;

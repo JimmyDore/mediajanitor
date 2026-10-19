@@ -2,8 +2,11 @@
 
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
+import respx
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy import select
 
 from tests.conftest import TestingAsyncSessionLocal
@@ -1846,3 +1849,191 @@ class TestDeleteRequestCachePersistence:
             assert (
                 result.scalar_one_or_none() is not None
             ), "CachedJellyseerrRequest should NOT be deleted on failure"
+
+
+class TestDeleteBlockedByActivePlayback:
+    """Deleting content someone is currently watching on Jellyfin is refused."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def _setup_services(self, client: TestClient, token: str) -> None:
+        """Configure Jellyfin, Radarr and Sonarr for the user."""
+        headers = {"Authorization": f"Bearer {token}"}
+        with (
+            patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock) as j,
+            patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock) as r,
+            patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock) as s,
+        ):
+            j.return_value = True
+            r.return_value = True
+            s.return_value = True
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "https://jellyfin.example.com", "api_key": "jf-key"},
+                headers=headers,
+            )
+            client.post(
+                "/api/settings/radarr",
+                json={"server_url": "https://radarr.example.com", "api_key": "radarr-key"},
+                headers=headers,
+            )
+            client.post(
+                "/api/settings/sonarr",
+                json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-key"},
+                headers=headers,
+            )
+
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    def test_delete_movie_refused_while_being_watched(
+        self,
+        mock_delete: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """A movie currently playing returns 409 and is not deleted from Radarr."""
+        mock_viewers.return_value = ["thibault"]
+        token = self._get_auth_token(client, "playing_movie@example.com")
+        self._setup_services(client, token)
+
+        response = client.delete(
+            "/api/content/movie/12345",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 409
+        assert "thibault" in response.json()["detail"]
+        mock_delete.assert_not_called()
+
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    def test_delete_series_refused_while_being_watched(
+        self,
+        mock_delete: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """A series with an episode currently playing returns 409."""
+        mock_viewers.return_value = ["lucas"]
+        token = self._get_auth_token(client, "playing_series@example.com")
+        self._setup_services(client, token)
+
+        response = client.delete(
+            "/api/content/series/67890",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 409
+        assert "lucas" in response.json()["detail"]
+        mock_delete.assert_not_called()
+
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    def test_delete_movie_allowed_when_nobody_watching(
+        self,
+        mock_delete: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """No active session on the movie: deletion goes through."""
+        mock_viewers.return_value = []
+        mock_delete.return_value = (True, "Movie deleted successfully from Radarr")
+        token = self._get_auth_token(client, "idle_movie@example.com")
+        self._setup_services(client, token)
+
+        response = client.delete(
+            "/api/content/movie/12345",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        mock_delete.assert_called_once()
+        assert mock_viewers.call_args.kwargs["tmdb_id"] == 12345
+
+
+class TestGetActiveViewers:
+    """Tests for the Jellyfin /Sessions lookup."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_matches_movie_by_tmdb_id(self) -> None:
+        from app.services.jellyfin import get_active_viewers
+
+        respx.get("https://jf.example.com/Sessions").mock(
+            return_value=Response(
+                200,
+                json=[
+                    {
+                        "UserName": "thibault",
+                        "NowPlayingItem": {
+                            "Id": "abc",
+                            "Type": "Movie",
+                            "ProviderIds": {"Tmdb": "12345"},
+                        },
+                    },
+                    {"UserName": "idle"},
+                    {
+                        "UserName": "other",
+                        "NowPlayingItem": {
+                            "Id": "zzz",
+                            "Type": "Movie",
+                            "ProviderIds": {"Tmdb": "999"},
+                        },
+                    },
+                ],
+            )
+        )
+
+        viewers = await get_active_viewers(
+            "https://jf.example.com", "key", tmdb_id=12345, jellyfin_ids=set()
+        )
+        assert viewers == ["thibault"]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_matches_episode_by_series_id(self) -> None:
+        from app.services.jellyfin import get_active_viewers
+
+        respx.get("https://jf.example.com/Sessions").mock(
+            return_value=Response(
+                200,
+                json=[
+                    {
+                        "UserName": "lucas",
+                        "NowPlayingItem": {
+                            "Id": "ep1",
+                            "Type": "Episode",
+                            "SeriesId": "series-1",
+                            "ProviderIds": {"Tmdb": "555"},
+                        },
+                    }
+                ],
+            )
+        )
+
+        viewers = await get_active_viewers(
+            "https://jf.example.com", "key", tmdb_id=67890, jellyfin_ids={"series-1"}
+        )
+        assert viewers == ["lucas"]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_returns_empty_when_jellyfin_unreachable(self) -> None:
+        from app.services.jellyfin import get_active_viewers
+
+        respx.get("https://jf.example.com/Sessions").mock(side_effect=httpx.ConnectError("down"))
+
+        viewers = await get_active_viewers(
+            "https://jf.example.com", "key", tmdb_id=12345, jellyfin_ids=set()
+        )
+        assert viewers == []

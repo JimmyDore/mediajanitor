@@ -76,6 +76,23 @@ async def lookup_jellyseerr_media_by_request_id(
     return row
 
 
+async def get_cached_jellyfin_ids_by_tmdb_id(
+    db: AsyncSession, user_id: int, tmdb_id: int
+) -> set[str]:
+    """Get Jellyfin IDs of cached media items matching a TMDB ID (raw_data.ProviderIds.Tmdb)."""
+    tmdb_id_str = str(tmdb_id)
+    result = await db.execute(
+        select(CachedMediaItem)
+        .where(CachedMediaItem.user_id == user_id)
+        .where(CachedMediaItem.raw_data.isnot(None))
+    )
+    return {
+        item.jellyfin_id
+        for item in result.scalars().all()
+        if (item.raw_data or {}).get("ProviderIds", {}).get("Tmdb") == tmdb_id_str
+    }
+
+
 async def delete_cached_media_by_tmdb_id(db: AsyncSession, user_id: int, tmdb_id: int) -> int:
     """Delete CachedMediaItem by TMDB ID stored in raw_data.ProviderIds.Tmdb.
 
