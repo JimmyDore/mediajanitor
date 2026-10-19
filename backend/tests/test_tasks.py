@@ -4,14 +4,32 @@ Tests for:
 - get_configured_user_ids() database query
 - send_sync_failure_notification_for_celery() error handling path
 - sync_user() exception handling and notification
+- what the sync tasks report to the Hub (App alerts, nightly ping)
 """
 
+import asyncio
+import json
+from collections.abc import AsyncIterator, Generator
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import respx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, UserSettings
 from tests.conftest import TestingAsyncSessionLocal
+from tests.test_sync_mocked_integration import (
+    CLEAN_LIBRARY,
+    alerts_by_key,
+    assert_pinged_once,
+    create_hub_user,
+    hub_library,
+    hub_sync,
+    mock_hub,
+    mock_hub_jellyfin,
+    sent_snapshot,
+)
 
 
 class TestGetConfiguredUserIds:
@@ -547,3 +565,148 @@ class TestTestTask:
         result = test_task("test@#$%^&*()")
 
         assert result == {"status": "success", "input": "test@#$%^&*()"}
+
+
+@pytest.fixture
+def celery_eager() -> Generator[None, None, None]:
+    from app.celery_app import celery_app
+
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    yield
+    celery_app.conf.task_always_eager = False
+    celery_app.conf.task_eager_propagates = False
+
+
+@pytest.mark.usefixtures("hub_configured", "celery_eager")
+class TestSyncUserReportsToHub:
+    """What the Celery wrappers send to the Hub: the unhandled-exception path and the
+    nightly ping. The run_user_sync cases are in test_sync_mocked_integration.py."""
+
+    @respx.mock
+    async def test_unhandled_exception_sends_sync_failed_with_cached_categories(self) -> None:
+        from app.tasks import sync_user
+
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+        await hub_sync(user_id)  # fills the cache
+
+        with (
+            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
+            patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id)
+
+        assert result["status"] == "failed"
+        assert alerts.call_count == 2
+        by_key = alerts_by_key(json.loads(alerts.calls.last.request.content))
+        assert set(by_key) == {"old", "large", "language", "sync-failed"}
+        assert by_key["sync-failed"]["context"] == "Sync: worker exploded"
+
+    @respx.mock
+    async def test_unhandled_exception_for_another_user_sends_nothing(self) -> None:
+        from app.tasks import sync_user
+
+        alerts, ping = mock_hub()
+        user_id = await create_hub_user(email="someone-else@example.com")
+
+        with (
+            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
+            patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id, scheduled=True)
+
+        assert result["status"] == "failed"
+        assert alerts.call_count == 0
+        assert ping.call_count == 0
+
+    @respx.mock
+    async def test_nightly_fan_out_pings_once(self) -> None:
+        from app.tasks import sync_all_users
+
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        with (
+            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
+            patch("app.tasks.get_configured_user_ids", return_value=[user_id]),
+        ):
+            await asyncio.to_thread(sync_all_users)
+
+        assert_pinged_once(ping)
+
+    @respx.mock
+    async def test_manual_sync_task_sends_no_ping(self) -> None:
+        from app.tasks import sync_user
+
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        with patch("app.tasks.async_session_maker", TestingAsyncSessionLocal):
+            result = await asyncio.to_thread(sync_user.delay, user_id)
+
+        assert result.get()["status"] == "success"
+        assert ping.call_count == 0
+
+    @respx.mock
+    async def test_unhandled_exception_in_scheduled_sync_pings_once(self) -> None:
+        from app.tasks import sync_user
+
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        with (
+            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
+            patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id, scheduled=True)
+
+        assert result["status"] == "failed"
+        assert_pinged_once(ping)
+
+    @respx.mock
+    async def test_unhandled_exception_in_manual_sync_sends_no_ping(self) -> None:
+        from app.tasks import sync_user
+
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        with (
+            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
+            patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id)
+
+        assert result["status"] == "failed"
+        assert ping.call_count == 0
+
+    @respx.mock
+    async def test_exception_after_the_sync_reported_sends_no_second_report(self) -> None:
+        from app.tasks import sync_user
+
+        @asynccontextmanager
+        async def session_lost_on_close() -> AsyncIterator[AsyncSession]:
+            async with TestingAsyncSessionLocal() as session:
+                yield session
+            raise RuntimeError("connection lost on close")
+
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        alerts, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        with (
+            patch("app.tasks.async_session_maker", session_lost_on_close),
+            patch("app.tasks.send_sync_failure_notification_for_celery"),
+        ):
+            result = await asyncio.to_thread(sync_user, user_id, scheduled=True)
+
+        assert result["status"] == "failed"
+        assert sent_snapshot(alerts)["alerts"] == []
+        assert_pinged_once(ping)

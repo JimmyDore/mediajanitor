@@ -149,3 +149,29 @@ def mock_jellyseerr_response() -> dict:
             },
         ],
     }
+
+
+# Hub App alerts (app.services.app_alerts): made-up settings for the reporting account.
+HUB = "https://hub.example.test"
+HUB_ALERTS_URL = f"{HUB}/api/app-alerts/mediajanitor"
+HUB_PING_URL = f"{HUB}/api/ping/mediajanitor-sync"
+HUB_APP_ALERT_TOKEN = "mj-test-token"
+HUB_PING_TOKEN = "hub-ping-test-token"
+HUB_USER_EMAIL = "me@example.com"
+HUB_FRONTEND = "https://mj.example.test"
+
+
+@pytest.fixture
+def hub_configured(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    """Every Hub setting set, reporting for HUB_USER_EMAIL; Slack sync failures off."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("HUB_BASE_URL", HUB)
+    monkeypatch.setenv("HUB_APP_ALERT_TOKEN", HUB_APP_ALERT_TOKEN)
+    monkeypatch.setenv("HUB_PING_TOKEN", HUB_PING_TOKEN)
+    monkeypatch.setenv("HUB_ALERT_USER_EMAIL", HUB_USER_EMAIL)
+    monkeypatch.setenv("FRONTEND_URL", HUB_FRONTEND)
+    monkeypatch.setenv("SLACK_WEBHOOK_SYNC_FAILURES", "")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

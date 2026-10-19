@@ -2,9 +2,15 @@
 Integration tests for sync with mocked Jellyfin/Jellyseerr APIs (US-27.2).
 
 These tests verify sync behavior with realistic mocked API responses,
-running without network access (fully offline).
+running without network access (fully offline), and what a sync reports to
+the Hub at its end (App alerts, nightly ping).
 """
 
+import json
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -13,6 +19,7 @@ from sqlalchemy import select
 from app.database import (
     CachedJellyseerrRequest,
     CachedMediaItem,
+    ContentWhitelist,
     SyncStatus,
     User,
     UserSettings,
@@ -21,7 +28,15 @@ from app.services.encryption import encrypt_value
 from app.services.sync import (
     run_user_sync,
 )
-from tests.conftest import TestingAsyncSessionLocal
+from tests.conftest import (
+    HUB_ALERTS_URL,
+    HUB_APP_ALERT_TOKEN,
+    HUB_FRONTEND,
+    HUB_PING_TOKEN,
+    HUB_PING_URL,
+    HUB_USER_EMAIL,
+    TestingAsyncSessionLocal,
+)
 
 # Realistic Jellyfin API responses based on actual API documentation
 JELLYFIN_USERS_RESPONSE = [
@@ -959,3 +974,463 @@ class TestRealisticApiStructures:
             assert item.played is True
             assert item.play_count == 3
             assert item.last_played_date == "2024-01-10T20:00:00.0000000Z"
+
+
+# --- Hub App alerts and the nightly ping, sent at the end of run_user_sync ---------------
+#
+# Drives run_user_sync end to end with respx mocking Jellyfin, Jellyseerr and the Hub,
+# and checks only what is sent to the Hub (app.services.app_alerts).
+
+HUB_JELLYFIN = "http://jellyfin.local"
+HUB_JELLYSEERR = "http://jellyseerr.local"
+
+GIB = 1024 * 1024 * 1024
+BOTH_AUDIO = [
+    {"Type": "Audio", "Language": "eng"},
+    {"Type": "Audio", "Language": "fre"},
+]
+ENGLISH_ONLY = [{"Type": "Audio", "Language": "eng"}]
+FRENCH_ONLY = [{"Type": "Audio", "Language": "fre"}]
+
+
+def _movie(
+    jellyfin_id: str,
+    name: str,
+    size_bytes: int,
+    streams: list[dict[str, str]],
+    last_played: str | None = None,
+) -> dict[str, Any]:
+    user_data: dict[str, Any] = {"Played": False, "PlayCount": 0}
+    if last_played:
+        user_data = {"Played": True, "PlayCount": 1, "LastPlayedDate": last_played}
+    return {
+        "Id": jellyfin_id,
+        "Name": name,
+        "Type": "Movie",
+        "ProductionYear": 2000,
+        "DateCreated": "2023-01-15T10:00:00Z",
+        "Path": f"/media/movies/{name}/movie.mkv",
+        "UserData": user_data,
+        "MediaSources": [{"Size": size_bytes, "MediaStreams": streams}],
+    }
+
+
+def _recently() -> str:
+    return (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def hub_library() -> list[dict[str, Any]]:
+    """A library with 5 old, 1 large, 2 language-issue items and 1 clean one.
+
+    Old (largest first): Dune 20, Heat 4, Alien 3, Arrival 2, Brazil 0.5 GiB = 29.5 GiB
+    Large: Dune 20 GiB
+    Language: Arrival 2 (EN only), Amelie 1 (FR only) = 3 GiB
+    """
+    return [
+        _movie("dune", "Dune", 20 * GIB, BOTH_AUDIO, last_played="2023-06-15T10:00:00Z"),
+        _movie("heat", "Heat", 4 * GIB, BOTH_AUDIO),
+        _movie("alien", "Alien", 3 * GIB, BOTH_AUDIO),
+        _movie("arrival", "Arrival", 2 * GIB, ENGLISH_ONLY),
+        _movie("brazil", "Brazil", GIB // 2, BOTH_AUDIO),
+        _movie("amelie", "Amelie", 1 * GIB, FRENCH_ONLY, last_played=_recently()),
+        _movie("fresh", "Fresh", 1 * GIB, BOTH_AUDIO, last_played=_recently()),
+    ]
+
+
+CLEAN_LIBRARY = [
+    _movie("fresh", "Fresh", 1 * GIB, BOTH_AUDIO, last_played=_recently()),
+]
+
+
+def mock_hub_jellyfin(items: list[dict[str, Any]]) -> None:
+    mock_library_refresh_endpoints(jellyfin_base=HUB_JELLYFIN)
+    respx.get(f"{HUB_JELLYFIN}/Users").mock(
+        return_value=Response(200, json=[{"Id": "jf-user", "Name": "Admin"}])
+    )
+    respx.get(f"{HUB_JELLYFIN}/Users/jf-user/Items").mock(
+        return_value=Response(200, json={"Items": items, "TotalRecordCount": len(items)})
+    )
+    respx.get(f"{HUB_JELLYFIN}/Items").mock(return_value=Response(200, json={"Items": []}))
+
+
+def _request(request_id: int, tmdb_id: int, media_status: int) -> dict[str, Any]:
+    return {
+        "id": request_id,
+        "status": 2,  # Approved
+        "createdAt": f"2024-01-0{request_id}T10:00:00Z",
+        "media": {
+            "id": request_id,
+            "tmdbId": tmdb_id,
+            "mediaType": "movie",
+            "status": media_status,
+        },
+        "requestedBy": {"displayName": "Admin"},
+    }
+
+
+# Unavailable: Solaris, Stalker, Ran, Ikiru (newest first). Available: Amadeus.
+HUB_REQUESTS = [
+    (1, 101, "Ikiru", 2),
+    (2, 102, "Ran", 2),
+    (3, 103, "Stalker", 2),
+    (4, 104, "Solaris", 2),
+    (5, 105, "Amadeus", 5),
+]
+
+
+def mock_hub_jellyseerr() -> None:
+    mock_library_refresh_endpoints(jellyfin_base=HUB_JELLYFIN, jellyseerr_base=HUB_JELLYSEERR)
+    respx.get(f"{HUB_JELLYSEERR}/api/v1/user").mock(
+        return_value=Response(200, json={"results": []})
+    )
+    respx.get(f"{HUB_JELLYSEERR}/api/v1/request").mock(
+        return_value=Response(
+            200,
+            json={
+                "pageInfo": {"pages": 1, "results": len(HUB_REQUESTS)},
+                "results": [_request(rid, tmdb, status) for rid, tmdb, _, status in HUB_REQUESTS],
+            },
+        )
+    )
+    for _, tmdb_id, title, _ in HUB_REQUESTS:
+        respx.get(f"{HUB_JELLYSEERR}/api/v1/movie/{tmdb_id}").mock(
+            return_value=Response(
+                200, json={"id": tmdb_id, "title": title, "releaseDate": "2020-01-01"}
+            )
+        )
+
+
+def mock_hub_jellyseerr_401() -> None:
+    """Jellyseerr refuses the requests: the sync ends partial."""
+    mock_library_refresh_endpoints(jellyfin_base=HUB_JELLYFIN, jellyseerr_base=HUB_JELLYSEERR)
+    respx.get(f"{HUB_JELLYSEERR}/api/v1/user").mock(
+        return_value=Response(200, json={"results": []})
+    )
+    respx.get(f"{HUB_JELLYSEERR}/api/v1/request").mock(
+        return_value=Response(401, json={"error": "Unauthorized"})
+    )
+
+
+def mock_hub(
+    alerts_response: Response | None = None, ping_response: Response | None = None
+) -> tuple[respx.Route, respx.Route]:
+    """The Hub's App alerts and ping endpoints: (alerts, ping) routes."""
+    alerts = respx.put(HUB_ALERTS_URL).mock(return_value=alerts_response or Response(200))
+    ping = respx.post(HUB_PING_URL).mock(return_value=ping_response or Response(200, text="OK"))
+    return alerts, ping
+
+
+def sent_snapshot(route: respx.Route) -> dict[str, Any]:
+    assert route.call_count == 1, f"expected one snapshot, got {route.call_count}"
+    request = route.calls.last.request
+    assert request.headers["Authorization"] == f"Bearer {HUB_APP_ALERT_TOKEN}"
+    body: dict[str, Any] = json.loads(request.content)
+    return body
+
+
+def alerts_by_key(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {alert["key"]: alert for alert in snapshot["alerts"]}
+
+
+def assert_pinged_once(ping: respx.Route) -> None:
+    assert ping.call_count == 1, f"expected one ping, got {ping.call_count}"
+    assert ping.calls.last.request.headers["Authorization"] == f"Bearer {HUB_PING_TOKEN}"
+
+
+async def create_hub_user(email: str = HUB_USER_EMAIL, with_jellyseerr: bool = False) -> int:
+    async with TestingAsyncSessionLocal() as session:
+        user = User(email=email, hashed_password="fakehash")
+        session.add(user)
+        await session.flush()
+        settings = UserSettings(
+            user_id=user.id,
+            jellyfin_server_url=HUB_JELLYFIN,
+            jellyfin_api_key_encrypted=encrypt_value("jellyfin-key"),
+        )
+        if with_jellyseerr:
+            settings.jellyseerr_server_url = HUB_JELLYSEERR
+            settings.jellyseerr_api_key_encrypted = encrypt_value("jellyseerr-key")
+        session.add(settings)
+        await session.commit()
+        return user.id
+
+
+async def hub_sync(user_id: int, scheduled: bool = False) -> dict[str, Any]:
+    async with TestingAsyncSessionLocal() as session:
+        return await run_user_sync(session, user_id, scheduled=scheduled)
+
+
+@pytest.mark.usefixtures("hub_configured")
+class TestHubSnapshotAfterSync:
+    @respx.mock
+    async def test_sends_old_content_alert(self) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "success"
+        snapshot = sent_snapshot(alerts)
+        assert snapshot["name"] == "Media Janitor"
+        assert snapshot["url"] == f"{HUB_FRONTEND}/"
+        assert snapshot["push"] is True
+        assert alerts_by_key(snapshot)["old"] == {
+            "key": "old",
+            "title": "Old content · 5",
+            "context": "29.5 GB · Dune, Heat, Alien, +2",
+            "url": f"{HUB_FRONTEND}/issues?filter=old",
+        }
+
+    @respx.mock
+    async def test_sends_large_and_language_alerts(self) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+
+        await hub_sync(user_id)
+
+        by_key = alerts_by_key(sent_snapshot(alerts))
+        assert set(by_key) == {"old", "large", "language"}
+        assert by_key["large"] == {
+            "key": "large",
+            "title": "Large content · 1",
+            "context": "20.0 GB · Dune",
+            "url": f"{HUB_FRONTEND}/issues?filter=large",
+        }
+        assert by_key["language"] == {
+            "key": "language",
+            "title": "Language issues · 2",
+            "context": "3.0 GB · Arrival, Amelie",
+            "url": f"{HUB_FRONTEND}/issues?filter=language",
+        }
+
+    @respx.mock
+    async def test_whitelisted_media_are_left_out(self) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+        async with TestingAsyncSessionLocal() as session:
+            session.add(
+                ContentWhitelist(
+                    user_id=user_id, jellyfin_id="heat", name="Heat", media_type="Movie"
+                )
+            )
+            await session.commit()
+
+        await hub_sync(user_id)
+
+        old = alerts_by_key(sent_snapshot(alerts))["old"]
+        assert old["title"] == "Old content · 4"
+        assert old["context"] == "25.5 GB · Dune, Alien, Arrival, +1"
+
+    @respx.mock
+    async def test_clean_sync_sends_an_empty_snapshot(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+
+        await hub_sync(user_id)
+
+        assert sent_snapshot(alerts) == {
+            "name": "Media Janitor",
+            "url": f"{HUB_FRONTEND}/",
+            "push": True,
+            "alerts": [],
+        }
+
+    @respx.mock
+    async def test_sends_unavailable_requests_with_titles_only(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        mock_hub_jellyseerr()
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user(with_jellyseerr=True)
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "success"
+        assert sent_snapshot(alerts)["alerts"] == [
+            {
+                "key": "requests",
+                "title": "Unavailable requests · 4",
+                "context": "Solaris, Stalker, Ran, +1",
+                "url": f"{HUB_FRONTEND}/issues?filter=requests",
+            }
+        ]
+
+
+@pytest.mark.usefixtures("hub_configured")
+class TestHubSyncFailedAlert:
+    @respx.mock
+    async def test_partial_sync_adds_sync_failed(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        mock_hub_jellyseerr_401()
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user(with_jellyseerr=True)
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "partial"
+        sent = sent_snapshot(alerts)["alerts"]
+        assert [a["key"] for a in sent] == ["sync-failed"]
+        failed = sent[0]
+        assert failed["title"] == "Media Janitor sync failed"
+        assert failed["url"] == f"{HUB_FRONTEND}/"
+        assert failed["context"].startswith("Jellyseerr: ")
+        assert "401" in failed["context"]
+        assert len(failed["context"]) <= 300
+
+    @respx.mock
+    async def test_failed_sync_still_sends_categories_from_the_cache(self) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        user_id = await create_hub_user()
+        await hub_sync(user_id)  # fills the cache
+        respx.get(f"{HUB_JELLYFIN}/Users").mock(return_value=Response(401, json={"error": "no"}))
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "failed"
+        assert alerts.call_count == 2
+        by_key = alerts_by_key(json.loads(alerts.calls.last.request.content))
+        assert set(by_key) == {"old", "large", "language", "sync-failed"}
+        assert by_key["old"]["title"] == "Old content · 5"
+        assert by_key["sync-failed"]["context"].startswith("Jellyfin: ")
+        assert "401" in by_key["sync-failed"]["context"]
+
+
+@pytest.mark.usefixtures("hub_configured")
+class TestHubOnlyMySyncsReport:
+    @respx.mock
+    async def test_another_users_sync_sends_nothing(self) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, ping = mock_hub()
+        user_id = await create_hub_user(email="someone-else@example.com")
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "success"
+        assert alerts.call_count == 0
+        assert ping.call_count == 0
+
+    @respx.mock
+    async def test_jellyfin_not_configured_sends_nothing(self) -> None:
+        alerts, ping = mock_hub()
+        async with TestingAsyncSessionLocal() as session:
+            user = User(email=HUB_USER_EMAIL, hashed_password="fakehash")
+            session.add(user)
+            await session.commit()
+            user_id = user.id
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["error"] == "Jellyfin not configured"
+        assert alerts.call_count == 0
+        assert ping.call_count == 0
+
+
+@pytest.mark.usefixtures("hub_configured")
+class TestHubNightlyPing:
+    @respx.mock
+    async def test_successful_scheduled_sync_pings_once(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "success"
+        assert_pinged_once(ping)
+
+    @respx.mock
+    async def test_partial_scheduled_sync_pings_once(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        mock_hub_jellyseerr_401()
+        _, ping = mock_hub()
+        user_id = await create_hub_user(with_jellyseerr=True)
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "partial"
+        assert_pinged_once(ping)
+
+    @respx.mock
+    async def test_failed_scheduled_sync_pings_once(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        respx.get(f"{HUB_JELLYFIN}/Users").mock(return_value=Response(401, json={"error": "no"}))
+        _, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "failed"
+        assert_pinged_once(ping)
+
+    @respx.mock
+    async def test_manual_sync_sends_no_ping(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        alerts, ping = mock_hub()
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id, scheduled=False)
+
+        assert result["status"] == "success"
+        assert alerts.call_count == 1
+        assert ping.call_count == 0
+
+
+@pytest.mark.usefixtures("hub_configured")
+class TestHubDownDoesntBreakSync:
+    @respx.mock
+    async def test_hub_500_is_logged_and_sync_ends_normally(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub(alerts_response=Response(500, json={"error": "boom"}))
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "success"
+        assert alerts.call_count == 1
+        assert any("500" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+
+    @respx.mock
+    async def test_hub_timeout_is_logged_and_sync_ends_normally(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_hub_jellyfin(hub_library())
+        alerts = respx.put(HUB_ALERTS_URL).mock(side_effect=httpx.ReadTimeout("too slow"))
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id)
+
+        assert result["status"] == "success"
+        assert alerts.call_count == 1
+        assert any("Hub" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+
+    @respx.mock
+    async def test_ping_error_does_not_change_the_outcome(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        _, ping = mock_hub(ping_response=Response(500, text="boom"))
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "success"
+        assert ping.call_count == 1
+        assert any("500" in r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+
+    @respx.mock
+    async def test_ping_timeout_does_not_change_the_outcome(self) -> None:
+        mock_hub_jellyfin(CLEAN_LIBRARY)
+        respx.put(HUB_ALERTS_URL).mock(return_value=Response(200))
+        ping = respx.post(HUB_PING_URL).mock(side_effect=httpx.ReadTimeout("too slow"))
+        user_id = await create_hub_user()
+
+        result = await hub_sync(user_id, scheduled=True)
+
+        assert result["status"] == "success"
+        assert ping.call_count == 1
