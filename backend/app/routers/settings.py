@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ from app.models.settings import (
     UltraThresholdsCreate,
     UltraThresholdsResponse,
 )
+from app.services.app_alerts import refresh_app_alerts
 from app.services.auth import get_current_user
 from app.services.encryption import decrypt_value
 from app.services.jellyfin import (
@@ -453,6 +454,7 @@ async def save_analysis_preferences(
     prefs: AnalysisPreferencesCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> SettingsSaveResponse:
     """Save analysis preferences (thresholds) for the user.
 
@@ -470,6 +472,7 @@ async def save_analysis_preferences(
     if prefs.large_season_size_gb is not None:
         settings.large_season_size_gb = prefs.large_season_size_gb
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return SettingsSaveResponse(
         success=True,
         message="Analysis preferences saved successfully.",
@@ -480,6 +483,7 @@ async def save_analysis_preferences(
 async def reset_analysis_preferences(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> SettingsSaveResponse:
     """Reset analysis preferences to defaults."""
     result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
@@ -491,6 +495,7 @@ async def reset_analysis_preferences(
         settings.large_movie_size_gb = None
         settings.large_season_size_gb = None
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return SettingsSaveResponse(
         success=True,
         message="Analysis preferences reset to defaults.",
@@ -540,6 +545,7 @@ async def save_display_preferences(
     prefs: DisplayPreferencesCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> SettingsSaveResponse:
     """Save display preferences for the user.
 
@@ -557,6 +563,7 @@ async def save_display_preferences(
     if prefs.title_language is not None:
         settings.title_language = prefs.title_language
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return SettingsSaveResponse(
         success=True,
         message="Display preferences saved successfully.",

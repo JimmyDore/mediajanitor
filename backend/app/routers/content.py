@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, UserSettings, get_db
@@ -17,6 +17,7 @@ from app.models.content import (
     OldUnwatchedResponse,
     ServiceUrls,
 )
+from app.services.app_alerts import refresh_app_alerts
 from app.services.auth import get_current_user
 from app.services.content import (
     get_content_issues,
@@ -203,6 +204,7 @@ async def delete_movie(
     tmdb_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
     delete_request: DeleteContentRequest | None = None,
 ) -> DeleteContentResponse:
     """Delete a movie from Radarr by TMDB ID.
@@ -282,6 +284,9 @@ async def delete_movie(
         not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
     )
 
+    if arr_deleted:
+        await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
+
     return DeleteContentResponse(
         success=overall_success,
         message="; ".join(messages) if messages else "No actions performed",
@@ -295,6 +300,7 @@ async def delete_series(
     tmdb_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
     delete_request: DeleteContentRequest | None = None,
 ) -> DeleteContentResponse:
     """Delete a TV series from Sonarr by TMDB ID.
@@ -374,6 +380,9 @@ async def delete_series(
         not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
     )
 
+    if arr_deleted:
+        await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
+
     return DeleteContentResponse(
         success=overall_success,
         message="; ".join(messages) if messages else "No actions performed",
@@ -387,6 +396,7 @@ async def delete_request_endpoint(
     jellyseerr_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> DeleteRequestResponse:
     """Delete a media entry from Jellyseerr by request ID.
 
@@ -427,5 +437,6 @@ async def delete_request_endpoint(
 
     # Delete from cache after successful Jellyseerr deletion
     await delete_cached_jellyseerr_request_by_id(db, current_user.id, jellyseerr_id)
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
 
     return DeleteRequestResponse(success=True, message=message)

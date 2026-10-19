@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from app.models.content import (
     WhitelistListResponse,
     WhitelistRemoveResponse,
 )
+from app.services.app_alerts import refresh_app_alerts
 from app.services.auth import get_current_user
 from app.services.whitelist import (
     add_episode_language_exempt,
@@ -115,6 +116,7 @@ def create_jellyfin_whitelist_routes(
         request: WhitelistAddRequest,
         current_user: Annotated[User, Depends(get_current_user)],
         db: Annotated[AsyncSession, Depends(get_db)],
+        background_tasks: BackgroundTasks,
     ) -> WhitelistAddResponse:
         try:
             await add_func(
@@ -131,6 +133,7 @@ def create_jellyfin_whitelist_routes(
                 detail=str(e),
             )
 
+        await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
         return WhitelistAddResponse(
             message=f"Added to {whitelist_name}",
             jellyfin_id=request.jellyfin_id,
@@ -148,6 +151,7 @@ def create_jellyfin_whitelist_routes(
         whitelist_id: int,
         current_user: Annotated[User, Depends(get_current_user)],
         db: Annotated[AsyncSession, Depends(get_db)],
+        background_tasks: BackgroundTasks,
     ) -> WhitelistRemoveResponse:
         removed = await remove_func(
             db,
@@ -161,6 +165,7 @@ def create_jellyfin_whitelist_routes(
                 detail="Whitelist entry not found",
             )
 
+        await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
         return WhitelistRemoveResponse(message=f"Removed from {whitelist_name}")
 
     remove_from_whitelist_endpoint.__doc__ = remove_description
@@ -266,6 +271,7 @@ async def add_to_requests(
     request: RequestWhitelistAddRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WhitelistAddResponse:
     """Add a Jellyseerr request to the user's request whitelist.
 
@@ -300,6 +306,7 @@ async def add_to_requests(
             detail=str(e),
         )
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return WhitelistAddResponse(
         message="Added to request whitelist",
         jellyfin_id=str(request.jellyseerr_id),  # Reusing existing response model
@@ -341,6 +348,7 @@ async def remove_from_requests(
     whitelist_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WhitelistRemoveResponse:
     """Remove an item from the user's request whitelist.
 
@@ -358,6 +366,7 @@ async def remove_from_requests(
             detail="Whitelist entry not found",
         )
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return WhitelistRemoveResponse(message="Removed from request whitelist")
 
 
@@ -385,6 +394,7 @@ async def add_episode_to_exempt(
     request: EpisodeExemptAddRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WhitelistAddResponse:
     """Add an episode to the user's episode language exempt list.
 
@@ -408,6 +418,7 @@ async def add_episode_to_exempt(
             detail=str(e),
         )
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     identifier = f"S{request.season_number:02d}E{request.episode_number:02d}"
     return WhitelistAddResponse(
         message="Added to episode language exempt list",
@@ -421,6 +432,7 @@ async def remove_episode_from_exempt(
     exempt_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ) -> WhitelistRemoveResponse:
     """Remove an episode from the user's episode language exempt list.
 
@@ -438,4 +450,5 @@ async def remove_episode_from_exempt(
             detail="Episode exempt entry not found",
         )
 
+    await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
     return WhitelistRemoveResponse(message="Removed from episode language exempt list")

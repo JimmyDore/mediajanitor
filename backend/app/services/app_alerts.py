@@ -1,4 +1,4 @@
-"""App alerts: what Media Janitor reports to the Hub at the end of a sync.
+"""App alerts: what Media Janitor reports to the Hub after a sync or an action.
 
 One App alert per non-empty issue category (old, large, language, requests),
 plus `sync-failed` when the sync failed or was partial. The categories come
@@ -6,12 +6,16 @@ from the same per-user computation as the dashboard summary and issue lists.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import TypedDict
 
+from fastapi import BackgroundTasks
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
+from app.database import SyncStatus
 from app.services.content_queries import (
     get_content_issues,
     get_content_summary,
@@ -176,3 +180,49 @@ async def _ping_nightly_sync(user_email: str) -> None:
         await send_ping(settings.hub_base_url, NIGHTLY_SYNC_TASK, settings.hub_ping_token)
     except Exception as e:
         logger.warning(f"Failed to ping the Hub's {NIGHTLY_SYNC_TASK} Task: {e!r}")
+
+
+_STORED_FAILURE = re.compile(r"^(?P<service>\w+) sync failed: (?P<error>.*)$", re.DOTALL)
+
+
+async def _last_sync_failure(db: AsyncSession, user_id: int) -> SyncFailure | None:
+    """The failure of the user's last sync, read back from the stored sync status,
+    when it failed or ended partial."""
+    result = await db.execute(select(SyncStatus).where(SyncStatus.user_id == user_id))
+    status = result.scalar_one_or_none()
+    if status is None or status.last_sync_status not in ("failed", "partial"):
+        return None
+    error = status.last_sync_error or status.last_sync_status
+    match = _STORED_FAILURE.match(error)
+    if match:
+        return SyncFailure(match["service"], match["error"])
+    return SyncFailure("Sync", error)
+
+
+async def refresh_app_alerts(
+    background_tasks: BackgroundTasks, db: AsyncSession, user_id: int, user_email: str
+) -> None:
+    """Send the App alerts snapshot again after an action that can change a category
+    (a whitelist, a deletion, a threshold), without waiting for the next sync.
+
+    The snapshot is built now, from the request's session so it sees the action,
+    and sent after the response with `push: false`. It keeps `sync-failed` when the
+    last sync failed or ended partial. Only for the account matching
+    HUB_ALERT_USER_EMAIL with the App alert token set. Never raises.
+    """
+    try:
+        settings = _hub_settings_for(user_email)
+        if settings is None or not settings.hub_app_alert_token:
+            return
+        failure = await _last_sync_failure(db, user_id)
+        snapshot = await build_snapshot(db, user_id, settings.frontend_url, failure)
+        snapshot["push"] = False
+        background_tasks.add_task(
+            send_app_alerts,
+            settings.hub_base_url,
+            APP_SLUG,
+            settings.hub_app_alert_token,
+            snapshot,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to refresh the App alerts of user {user_id}: {e!r}")
