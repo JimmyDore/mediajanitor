@@ -307,7 +307,7 @@ class TestSyncUserTaskLogic:
 
             result = await _run_sync_for_user(123)
 
-            mock_run_sync.assert_called_once_with(mock_session, 123)
+            mock_run_sync.assert_called_once_with(mock_session, 123, scheduled=False)
             assert result == expected_result
 
     def test_sync_user_success_path(self) -> None:
@@ -461,9 +461,9 @@ class TestSyncAllUsersTask:
                 result = sync_all_users()
 
                 assert mock_sync.call_count == 3
-                mock_sync.assert_any_call(1)
-                mock_sync.assert_any_call(2)
-                mock_sync.assert_any_call(3)
+                mock_sync.assert_any_call(1, scheduled=True)
+                mock_sync.assert_any_call(2, scheduled=True)
+                mock_sync.assert_any_call(3, scheduled=True)
                 assert result == {"users_synced": 3, "status": "completed"}
         finally:
             celery_app.conf.task_always_eager = False
