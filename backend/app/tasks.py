@@ -8,7 +8,12 @@ from sqlalchemy import select
 
 from app.celery_app import celery_app
 from app.database import User, UserSettings, async_session_maker
-from app.services.app_alerts import SyncFailure, hub_reporting_enabled, report_sync_to_hub
+from app.services.app_alerts import (
+    SyncFailure,
+    hub_reporting_enabled,
+    ping_nightly_sync,
+    report_sync_to_hub,
+)
 from app.services.sync import run_user_sync, send_sync_failure_notification
 
 logger = logging.getLogger(__name__)
@@ -39,10 +44,10 @@ def get_configured_user_ids() -> list[int]:
         loop.close()
 
 
-async def _run_sync_for_user(user_id: int) -> dict[str, Any]:
+async def _run_sync_for_user(user_id: int, scheduled: bool = False) -> dict[str, Any]:
     """Run sync for a single user (async helper)."""
     async with async_session_maker() as session:
-        return await run_user_sync(session, user_id)
+        return await run_user_sync(session, user_id, scheduled=scheduled)
 
 
 async def _get_user_email(user_id: int) -> str | None:
@@ -90,13 +95,16 @@ def send_sync_failure_notification_for_celery(
         logger.warning(f"Failed to send sync failure notification for user {user_id}: {e}")
 
 
-def report_sync_failure_to_hub_for_celery(user_id: int, error_message: str) -> None:
+def report_sync_failure_to_hub_for_celery(
+    user_id: int, error_message: str, scheduled: bool = False
+) -> None:
     """Send the Hub snapshot with `sync-failed` after an unhandled sync exception.
 
     Synchronous wrapper for Celery, fire-and-forget like the Slack one: the
-    categories come from the last cached data. Never raises.
+    categories come from the last cached data. A scheduled sync also pings the
+    Hub's `mediajanitor-sync` Task. Never raises.
     """
-    if not hub_reporting_enabled():
+    if not hub_reporting_enabled() and not scheduled:
         return
 
     async def _report() -> None:
@@ -105,9 +113,12 @@ def report_sync_failure_to_hub_for_celery(user_id: int, error_message: str) -> N
             user = result.scalar_one_or_none()
             if user is None:
                 return
-            await report_sync_to_hub(
-                session, user_id, user.email, SyncFailure("Sync", error_message)
-            )
+            if hub_reporting_enabled():
+                await report_sync_to_hub(
+                    session, user_id, user.email, SyncFailure("Sync", error_message)
+                )
+            if scheduled:
+                await ping_nightly_sync(user.email)
 
     try:
         loop = asyncio.new_event_loop()
@@ -149,17 +160,18 @@ def sync_all_users(self: Any) -> dict[str, Any]:
 
     for user_id in user_ids:
         # Queue each user's sync as a separate task
-        sync_user.delay(user_id)
+        sync_user.delay(user_id, scheduled=True)
 
     return {"users_synced": len(user_ids), "status": "completed"}
 
 
 @celery_app.task(bind=True, name="sync_user")  # type: ignore[untyped-decorator]
-def sync_user(self: Any, user_id: int) -> dict[str, Any]:
+def sync_user(self: Any, user_id: int, scheduled: bool = False) -> dict[str, Any]:
     """Sync data for a single user.
 
     Args:
         user_id: The user ID to sync data for
+        scheduled: True when the nightly fan-out queued it, False for a manual sync
 
     Returns:
         Dict with sync status and results
@@ -170,7 +182,7 @@ def sync_user(self: Any, user_id: int) -> dict[str, Any]:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            result = loop.run_until_complete(_run_sync_for_user(user_id))
+            result = loop.run_until_complete(_run_sync_for_user(user_id, scheduled))
         finally:
             loop.close()
 
@@ -183,5 +195,7 @@ def sync_user(self: Any, user_id: int) -> dict[str, Any]:
             user_id=user_id,
             error_message=str(e),
         )
-        report_sync_failure_to_hub_for_celery(user_id=user_id, error_message=str(e))
+        report_sync_failure_to_hub_for_celery(
+            user_id=user_id, error_message=str(e), scheduled=scheduled
+        )
         return {"status": "failed", "error": str(e), "user_id": user_id}

@@ -118,9 +118,9 @@ class TestSyncAllUsersTask:
                 result = sync_all_users()
 
                 assert mock_sync.call_count == 3
-                mock_sync.assert_any_call(1)
-                mock_sync.assert_any_call(2)
-                mock_sync.assert_any_call(3)
+                mock_sync.assert_any_call(1, scheduled=True)
+                mock_sync.assert_any_call(2, scheduled=True)
+                mock_sync.assert_any_call(3, scheduled=True)
                 assert result == {"users_synced": 3, "status": "completed"}
         finally:
             celery_app.conf.task_always_eager = False

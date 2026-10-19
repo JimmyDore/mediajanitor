@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # Hub App alerts (optional): off unless all three are set
     hub_base_url: str = ""
     hub_app_alert_token: str = ""
+    hub_ping_token: str = ""  # Nightly sync pings the Hub's mediajanitor-sync Task
     hub_alert_user_email: str = ""  # Only this account's syncs report to the Hub
 
     # SMTP2GO Email Configuration (for password reset)

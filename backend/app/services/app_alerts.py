@@ -17,12 +17,13 @@ from app.services.content_queries import (
     get_content_summary,
     get_unavailable_requests,
 )
-from app.services.hub import send_app_alerts
+from app.services.hub import send_app_alerts, send_ping
 
 logger = logging.getLogger(__name__)
 
 APP_SLUG = "mediajanitor"
 APP_NAME = "Media Janitor"
+NIGHTLY_SYNC_TASK = "mediajanitor-sync"
 TITLES_SHOWN = 3
 CONTEXT_MAX = 300
 ERROR_MAX = 200
@@ -142,3 +143,29 @@ async def report_sync_to_hub(
         )
     except Exception as e:
         logger.warning(f"Failed to report sync of user {user_id} to the Hub: {e!r}")
+
+
+def _ping_settings_for(user_email: str) -> Settings | None:
+    settings = get_settings()
+    if not (settings.hub_base_url and settings.hub_ping_token and settings.hub_alert_user_email):
+        return None
+    if user_email.strip().lower() != settings.hub_alert_user_email.strip().lower():
+        return None
+    return settings
+
+
+async def ping_nightly_sync(user_email: str) -> None:
+    """Ping the Hub's `mediajanitor-sync` Task at the end of a scheduled sync.
+
+    Sent whatever the sync's outcome: a failure is reported by the sync-failed
+    App alert, never by the ping. Only for the account matching
+    HUB_ALERT_USER_EMAIL, and only when HUB_BASE_URL and HUB_PING_TOKEN are set.
+    Never raises.
+    """
+    try:
+        settings = _ping_settings_for(user_email)
+        if settings is None:
+            return
+        await send_ping(settings.hub_base_url, NIGHTLY_SYNC_TASK, settings.hub_ping_token)
+    except Exception as e:
+        logger.warning(f"Failed to ping the Hub's {NIGHTLY_SYNC_TASK} Task: {e!r}")

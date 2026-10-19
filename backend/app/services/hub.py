@@ -39,3 +39,12 @@ async def send_app_alerts(base_url: str, app: str, token: str, snapshot: dict[st
     """
     url = f"{base_url.rstrip('/')}/api/app-alerts/{app}"
     return await _send("PUT", url, token, snapshot)
+
+
+async def send_ping(base_url: str, task: str, token: str) -> bool:
+    """Ping a Hub Task as succeeded: POST /api/ping/{task}, no body.
+
+    Returns True when the Hub accepted it, False otherwise. Never raises.
+    """
+    url = f"{base_url.rstrip('/')}/api/ping/{task}"
+    return await _send("POST", url, token, None)

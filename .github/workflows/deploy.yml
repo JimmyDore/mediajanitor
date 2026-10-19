@@ -35,6 +35,7 @@ jobs:
             echo "SLACK_WEBHOOK_SYNC_FAILURES=${{ secrets.SLACK_WEBHOOK_SYNC_FAILURES }}" >> .env
             echo "HUB_BASE_URL=${{ secrets.HUB_BASE_URL }}" >> .env
             echo "HUB_APP_ALERT_TOKEN=${{ secrets.HUB_APP_ALERT_TOKEN }}" >> .env
+            echo "HUB_PING_TOKEN=${{ secrets.HUB_PING_TOKEN }}" >> .env
             echo "HUB_ALERT_USER_EMAIL=${{ secrets.HUB_ALERT_USER_EMAIL }}" >> .env
             echo "DISABLE_SIGNUPS=${{ secrets.DISABLE_SIGNUPS }}" >> .env
             echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env

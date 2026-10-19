@@ -18,7 +18,7 @@ from app.database import (
     UserNickname,
     UserSettings,
 )
-from app.services.app_alerts import SyncFailure, report_sync_to_hub
+from app.services.app_alerts import SyncFailure, ping_nightly_sync, report_sync_to_hub
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
@@ -1909,9 +1909,12 @@ async def get_sync_status(db: AsyncSession, user_id: int) -> SyncStatus | None:
     return result.scalar_one_or_none()
 
 
-async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
+async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False) -> dict[str, Any]:
     """
     Run a full sync for a user.
+
+    `scheduled` is True when the nightly schedule started it: a scheduled sync
+    of the Hub user pings the Hub's `mediajanitor-sync` Task at the end.
 
     Fetches data from Jellyfin and Jellyseerr (if configured),
     and caches it in the database.
@@ -2047,6 +2050,8 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
         except Exception:
             pass  # Don't let notification failure affect sync error handling
         await report_sync_to_hub(db, user_id, user_email, SyncFailure("Jellyfin", str(e)))
+        if scheduled:
+            await ping_nightly_sync(user_email)
         return {
             "status": "failed",
             "error": error_message,
@@ -2153,6 +2158,8 @@ async def run_user_sync(db: AsyncSession, user_id: int) -> dict[str, Any]:
     )
 
     await report_sync_to_hub(db, user_id, user_email, failure)
+    if scheduled:
+        await ping_nightly_sync(user_email)
 
     return {
         "status": final_status,
