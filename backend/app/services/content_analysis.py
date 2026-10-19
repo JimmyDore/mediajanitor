@@ -160,8 +160,8 @@ def is_old_or_unwatched(
     """Check if an item qualifies as old/unwatched content.
 
     Returns True if the item was added more than min_age_months ago AND:
-    - Item was never watched, OR
-    - Item was watched but last played more than months_cutoff ago
+    - Item has no last_played_date (never watched), OR
+    - Item was last played more than months_cutoff ago
 
     min_age_months applies to played items too: content re-added to the library
     (date_created reset) keeps an old last_played_date and must not be flagged
@@ -184,10 +184,9 @@ def is_old_or_unwatched(
     if not item_age_ok:
         return False
 
-    if not item.played:
-        return True
-
-    # Played but no last_played_date (treat as old)
+    # A series is only `played` once every episode is watched, so a partially
+    # watched series has played=False but a last_played_date from its episodes.
+    # Any last_played_date means it was watched: let the date decide.
     if not item.last_played_date:
         return True
 

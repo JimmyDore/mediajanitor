@@ -215,6 +215,62 @@ class TestOldUnwatchedContent:
         assert data["total_count"] == 0
 
     @pytest.mark.asyncio
+    async def test_partially_watched_series_uses_last_played_date(self, client: TestClient) -> None:
+        """A series is only `played` once every episode is watched.
+
+        A partially watched series has played=False but a last_played_date
+        aggregated from its episodes. That date must decide, not the flag.
+        """
+        token = self._get_auth_token(client, "partialseries@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        async with TestingAsyncSessionLocal() as session:
+            old_date = (datetime.now(UTC) - timedelta(days=200)).isoformat()
+            recent_watched = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+            old_watched = (datetime.now(UTC) - timedelta(days=150)).isoformat()
+
+            # Episode watched 1 month ago -> should NOT appear
+            item1 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-partial-recent",
+                name="Partial Recent Series",
+                media_type="Series",
+                production_year=2026,
+                date_created=old_date,
+                path="/media/tv/Partial Recent",
+                size_bytes=14_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=recent_watched,
+            )
+            # Episode watched 5 months ago -> should appear
+            item2 = CachedMediaItem(
+                user_id=user_id,
+                jellyfin_id="series-partial-old",
+                name="Partial Old Series",
+                media_type="Series",
+                production_year=2020,
+                date_created=old_date,
+                path="/media/tv/Partial Old",
+                size_bytes=9_000_000_000,
+                played=False,
+                play_count=0,
+                last_played_date=old_watched,
+            )
+            session.add_all([item1, item2])
+            await session.commit()
+
+        response = client.get("/api/content/old-unwatched", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 1
+        assert data["items"][0]["jellyfin_id"] == "series-partial-old"
+
+    @pytest.mark.asyncio
     async def test_excludes_whitelisted_content(self, client: TestClient) -> None:
         """Should not return content that is in user's whitelist."""
         token = self._get_auth_token(client, "whitelist@example.com")
