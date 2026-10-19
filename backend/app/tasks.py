@@ -2,17 +2,39 @@
 
 import asyncio
 import logging
-from typing import Any
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.celery_app import celery_app
-from app.database import User, UserSettings, async_session_maker
+from app.database import User, UserSettings, async_engine, async_session_maker
 from app.services.app_alerts import SyncFailure, report_sync_end
 from app.services.sync import run_user_sync, send_sync_failure_notification
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def _run_in_new_loop(coro: Coroutine[Any, Any, T]) -> T:
+    """Run a coroutine in a new event loop, as each Celery task needs.
+
+    The pooled database connections are disposed of before the loop closes:
+    a connection keeps asyncio locks bound to the loop that first waited on
+    them, so the next task's loop could not use it ("bound to a different
+    event loop").
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            loop.run_until_complete(async_engine.dispose())
+        finally:
+            loop.close()
 
 
 def get_configured_user_ids() -> list[int]:
@@ -31,13 +53,7 @@ def get_configured_user_ids() -> list[int]:
             )
             return [row[0] for row in result.fetchall()]
 
-    # Create a new event loop to avoid "Event loop is closed" errors
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(_get_users())
-    finally:
-        loop.close()
+    return _run_in_new_loop(_get_users())
 
 
 async def _run_sync_for_user(user_id: int, scheduled: bool = False) -> dict[str, Any]:
@@ -107,12 +123,7 @@ def send_sync_failure_notification_for_celery(
         )
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(_send_notification())
-        finally:
-            loop.close()
+        _run_in_new_loop(_send_notification())
     except Exception as e:
         logger.warning(f"Failed to send sync failure notification for user {user_id}: {e}")
 
@@ -164,13 +175,7 @@ def sync_user(self: Any, user_id: int, scheduled: bool = False) -> dict[str, Any
     """
     logger.info(f"Starting sync for user {user_id}")
     try:
-        # Run the async sync function in the event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(_run_sync_for_user(user_id, scheduled))
-        finally:
-            loop.close()
+        result = _run_in_new_loop(_run_sync_for_user(user_id, scheduled))
 
         logger.info(f"Sync completed for user {user_id}: {result}")
         return result

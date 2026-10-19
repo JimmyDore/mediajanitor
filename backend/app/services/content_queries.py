@@ -1321,7 +1321,7 @@ async def get_library(
 
     count_result = await db.execute(count_query)
     total_count, total_size_bytes = count_result.one()
-    total_size_bytes = int(total_size_bytes)
+    total_size_bytes = int(total_size_bytes or 0)
 
     # Calculate pagination info
     total_pages = max(1, ceil(total_count / page_size))

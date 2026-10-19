@@ -31,7 +31,7 @@ def init_worker(**kwargs: object) -> None:
     This ensures SQLite WAL mode and busy_timeout are set for Celery connections,
     matching the FastAPI backend configuration.
     """
-    from app.database import init_db_settings
+    from app.database import async_engine, init_db_settings
 
     try:
         loop = asyncio.new_event_loop()
@@ -40,6 +40,8 @@ def init_worker(**kwargs: object) -> None:
             loop.run_until_complete(init_db_settings())
             logger.info("Celery worker: SQLite WAL mode and busy_timeout initialized")
         finally:
+            # No pooled connection may outlive this loop: each task runs in its own.
+            loop.run_until_complete(async_engine.dispose())
             loop.close()
     except Exception as e:
         logger.warning(f"Celery worker: Failed to initialize DB settings: {e}")

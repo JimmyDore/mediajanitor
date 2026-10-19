@@ -7,6 +7,7 @@ Provides DRY implementation for the 5 whitelist types that share identical patte
 EpisodeLanguageExempt is NOT included here - it has different fields (season/episode numbers).
 """
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 
@@ -102,7 +103,7 @@ class BaseJellyfinIdWhitelistService(Generic[T]):
         result = await db.execute(
             select(model_class).where(model_class.user_id == user_id).order_by(order_col)
         )
-        entries = result.scalars().all()
+        entries: Sequence[Any] = result.scalars().all()
 
         items = [
             WhitelistItem(
@@ -220,7 +221,7 @@ class BaseJellyseerrIdWhitelistService(Generic[R]):
         result = await db.execute(
             select(model_class).where(model_class.user_id == user_id).order_by(model_class.title)
         )
-        entries = result.scalars().all()
+        entries: Sequence[Any] = result.scalars().all()
 
         items = [
             RequestWhitelistItem(

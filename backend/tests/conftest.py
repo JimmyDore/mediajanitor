@@ -59,6 +59,9 @@ async def setup_database() -> AsyncGenerator[None, None]:
     yield
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    # Each test runs in its own event loop: its connection must not outlive it,
+    # or the next test waits on locks bound to this loop.
+    await async_engine.dispose()
 
 
 @pytest.fixture

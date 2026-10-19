@@ -11,21 +11,27 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Generator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import respx
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from app.database import User, UserSettings
-from tests.conftest import TestingAsyncSessionLocal
+from app.database import Base, User, UserSettings
+from app.services.encryption import encrypt_value
+from tests.conftest import HUB_USER_EMAIL, TestingAsyncSessionLocal
 from tests.test_sync_mocked_integration import (
     CLEAN_LIBRARY,
+    HUB_JELLYFIN,
     alerts_by_key,
     assert_pinged_once,
-    create_hub_user,
     hub_library,
-    hub_sync,
     mock_hub,
     mock_hub_jellyfin,
     sent_snapshot,
@@ -578,22 +584,73 @@ def celery_eager() -> Generator[None, None, None]:
     celery_app.conf.task_eager_propagates = False
 
 
+@pytest.fixture
+def worker_engine(tmp_path: Path) -> Generator[AsyncEngine, None, None]:
+    """A pooled aiosqlite engine on a file, built like app.database's, for the
+    Celery task wrappers.
+
+    Each task runs in its own event loop, like in the worker. The in-memory
+    StaticPool test engine shares one connection with the test's loop, which
+    production never does (the API and the worker are separate processes).
+    """
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'worker.db'}",
+        connect_args={"check_same_thread": False, "timeout": 30.0},
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+    )
+    session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    with (
+        patch("app.tasks.async_engine", engine),
+        patch("app.tasks.async_session_maker", session_maker),
+    ):
+        yield engine
+    asyncio.run(engine.dispose())
+
+
+async def _create_worker_user(engine: AsyncEngine, email: str) -> int:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        user = User(email=email, hashed_password="fakehash")
+        session.add(user)
+        await session.flush()
+        session.add(
+            UserSettings(
+                user_id=user.id,
+                jellyfin_server_url=HUB_JELLYFIN,
+                jellyfin_api_key_encrypted=encrypt_value("jellyfin-key"),
+            )
+        )
+        await session.commit()
+        return user.id
+
+
+async def create_worker_users(engine: AsyncEngine, *emails: str) -> list[int]:
+    """Create users in the worker database, from a loop of their own."""
+    return await asyncio.to_thread(
+        lambda: [asyncio.run(_create_worker_user(engine, email)) for email in emails]
+    )
+
+
 @pytest.mark.usefixtures("hub_configured", "celery_eager")
 class TestSyncUserReportsToHub:
     """What the Celery wrappers send to the Hub: the unhandled-exception path and the
     nightly ping. The run_user_sync cases are in test_sync_mocked_integration.py."""
 
     @respx.mock
-    async def test_unhandled_exception_sends_sync_failed_with_cached_categories(self) -> None:
+    async def test_unhandled_exception_sends_sync_failed_with_cached_categories(
+        self, worker_engine: AsyncEngine
+    ) -> None:
         from app.tasks import sync_user
 
         mock_hub_jellyfin(hub_library())
         alerts, _ = mock_hub()
-        user_id = await create_hub_user()
-        await hub_sync(user_id)  # fills the cache
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
+        await asyncio.to_thread(sync_user, user_id)  # fills the cache
 
         with (
-            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
             patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
             patch("app.tasks.send_sync_failure_notification_for_celery"),
         ):
@@ -606,14 +663,15 @@ class TestSyncUserReportsToHub:
         assert by_key["sync-failed"]["context"] == "Sync: worker exploded"
 
     @respx.mock
-    async def test_unhandled_exception_for_another_user_sends_nothing(self) -> None:
+    async def test_unhandled_exception_for_another_user_sends_nothing(
+        self, worker_engine: AsyncEngine
+    ) -> None:
         from app.tasks import sync_user
 
         alerts, ping = mock_hub()
-        user_id = await create_hub_user(email="someone-else@example.com")
+        (user_id,) = await create_worker_users(worker_engine, "someone-else@example.com")
 
         with (
-            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
             patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
             patch("app.tasks.send_sync_failure_notification_for_celery"),
         ):
@@ -624,44 +682,41 @@ class TestSyncUserReportsToHub:
         assert ping.call_count == 0
 
     @respx.mock
-    async def test_nightly_fan_out_pings_once(self) -> None:
+    async def test_nightly_fan_out_pings_once(self, worker_engine: AsyncEngine) -> None:
         from app.tasks import sync_all_users
 
         mock_hub_jellyfin(CLEAN_LIBRARY)
         _, ping = mock_hub()
-        user_id = await create_hub_user()
+        user_ids = await create_worker_users(worker_engine, HUB_USER_EMAIL)
 
-        with (
-            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
-            patch("app.tasks.get_configured_user_ids", return_value=[user_id]),
-        ):
+        with patch("app.tasks.get_configured_user_ids", return_value=user_ids):
             await asyncio.to_thread(sync_all_users)
 
         assert_pinged_once(ping)
 
     @respx.mock
-    async def test_manual_sync_task_sends_no_ping(self) -> None:
+    async def test_manual_sync_task_sends_no_ping(self, worker_engine: AsyncEngine) -> None:
         from app.tasks import sync_user
 
         mock_hub_jellyfin(CLEAN_LIBRARY)
         _, ping = mock_hub()
-        user_id = await create_hub_user()
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
 
-        with patch("app.tasks.async_session_maker", TestingAsyncSessionLocal):
-            result = await asyncio.to_thread(sync_user.delay, user_id)
+        result = await asyncio.to_thread(sync_user.delay, user_id)
 
         assert result.get()["status"] == "success"
         assert ping.call_count == 0
 
     @respx.mock
-    async def test_unhandled_exception_in_scheduled_sync_pings_once(self) -> None:
+    async def test_unhandled_exception_in_scheduled_sync_pings_once(
+        self, worker_engine: AsyncEngine
+    ) -> None:
         from app.tasks import sync_user
 
         _, ping = mock_hub()
-        user_id = await create_hub_user()
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
 
         with (
-            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
             patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
             patch("app.tasks.send_sync_failure_notification_for_celery"),
         ):
@@ -671,14 +726,15 @@ class TestSyncUserReportsToHub:
         assert_pinged_once(ping)
 
     @respx.mock
-    async def test_unhandled_exception_in_manual_sync_sends_no_ping(self) -> None:
+    async def test_unhandled_exception_in_manual_sync_sends_no_ping(
+        self, worker_engine: AsyncEngine
+    ) -> None:
         from app.tasks import sync_user
 
         _, ping = mock_hub()
-        user_id = await create_hub_user()
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
 
         with (
-            patch("app.tasks.async_session_maker", TestingAsyncSessionLocal),
             patch("app.tasks.run_user_sync", side_effect=RuntimeError("worker exploded")),
             patch("app.tasks.send_sync_failure_notification_for_celery"),
         ):
@@ -688,18 +744,22 @@ class TestSyncUserReportsToHub:
         assert ping.call_count == 0
 
     @respx.mock
-    async def test_exception_after_the_sync_reported_sends_no_second_report(self) -> None:
+    async def test_exception_after_the_sync_reported_sends_no_second_report(
+        self, worker_engine: AsyncEngine
+    ) -> None:
         from app.tasks import sync_user
+
+        worker_sessions = async_sessionmaker(worker_engine, expire_on_commit=False)
 
         @asynccontextmanager
         async def session_lost_on_close() -> AsyncIterator[AsyncSession]:
-            async with TestingAsyncSessionLocal() as session:
+            async with worker_sessions() as session:
                 yield session
             raise RuntimeError("connection lost on close")
 
         mock_hub_jellyfin(CLEAN_LIBRARY)
         alerts, ping = mock_hub()
-        user_id = await create_hub_user()
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
 
         with (
             patch("app.tasks.async_session_maker", session_lost_on_close),
@@ -710,3 +770,53 @@ class TestSyncUserReportsToHub:
         assert result["status"] == "failed"
         assert sent_snapshot(alerts)["alerts"] == []
         assert_pinged_once(ping)
+
+
+@pytest.mark.usefixtures("hub_configured", "celery_eager")
+class TestSyncTasksInOneWorker:
+    """Celery runs each task in a new event loop, in the same process: every task
+    must reach the database and the Hub whatever tasks ran before it."""
+
+    @respx.mock
+    async def test_two_sync_tasks_in_a_row_both_report(self, worker_engine: AsyncEngine) -> None:
+        from app.tasks import sync_user
+
+        mock_hub_jellyfin(hub_library())
+        alerts, _ = mock_hub()
+        (user_id,) = await create_worker_users(worker_engine, HUB_USER_EMAIL)
+
+        with patch("app.services.app_alerts.logger") as alerts_logger:
+            first = await asyncio.to_thread(sync_user, user_id)
+            second = await asyncio.to_thread(sync_user, user_id)
+
+        assert first["status"] == "success"
+        assert second["status"] == "success"
+        alerts_logger.warning.assert_not_called()
+        assert alerts.call_count == 2
+        for call in alerts.calls:
+            assert set(alerts_by_key(json.loads(call.request.content))) == {
+                "old",
+                "large",
+                "language",
+            }
+
+    @respx.mock
+    async def test_nightly_fan_out_reports_every_night(self, worker_engine: AsyncEngine) -> None:
+        from app.tasks import sync_all_users
+
+        mock_hub_jellyfin(hub_library())
+        alerts, ping = mock_hub()
+        user_ids = await create_worker_users(
+            worker_engine, "first@example.com", HUB_USER_EMAIL, "last@example.com"
+        )
+
+        with (
+            patch("app.tasks.get_configured_user_ids", return_value=user_ids),
+            patch("app.services.app_alerts.logger") as alerts_logger,
+        ):
+            await asyncio.to_thread(sync_all_users)
+            await asyncio.to_thread(sync_all_users)
+
+        alerts_logger.warning.assert_not_called()
+        assert alerts.call_count == 2
+        assert ping.call_count == 2
