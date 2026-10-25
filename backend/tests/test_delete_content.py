@@ -2037,3 +2037,270 @@ class TestGetActiveViewers:
             "https://jf.example.com", "key", tmdb_id=12345, jellyfin_ids=set()
         )
         assert viewers == []
+
+
+class TestDeleteContentNotManagedByArr:
+    """Content added to Jellyfin by hand (absent from Radarr/Sonarr) is deleted via Jellyfin."""
+
+    def _get_auth_token(self, client: TestClient, email: str) -> str:
+        """Helper to register and login a user, returning JWT token."""
+        client.post(
+            "/api/auth/register",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": email, "password": "SecurePassword123!"},
+        )
+        return login_response.json()["access_token"]
+
+    def _get_user_id(self, client: TestClient, token: str) -> int:
+        """Helper to get user ID from token."""
+        response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        return response.json()["id"]
+
+    def _setup_services(self, client: TestClient, token: str) -> None:
+        """Configure Jellyfin, Radarr and Sonarr for the user."""
+        headers = {"Authorization": f"Bearer {token}"}
+        with (
+            patch("app.routers.settings.validate_jellyfin_connection", new_callable=AsyncMock) as j,
+            patch("app.routers.settings.validate_radarr_connection", new_callable=AsyncMock) as r,
+            patch("app.routers.settings.validate_sonarr_connection", new_callable=AsyncMock) as s,
+        ):
+            j.return_value = True
+            r.return_value = True
+            s.return_value = True
+            client.post(
+                "/api/settings/jellyfin",
+                json={"server_url": "https://jellyfin.example.com", "api_key": "jf-key"},
+                headers=headers,
+            )
+            client.post(
+                "/api/settings/radarr",
+                json={"server_url": "https://radarr.example.com", "api_key": "radarr-key"},
+                headers=headers,
+            )
+            client.post(
+                "/api/settings/sonarr",
+                json={"server_url": "https://sonarr.example.com", "api_key": "sonarr-key"},
+                headers=headers,
+            )
+
+    async def _add_cached_item(
+        self, user_id: int, jellyfin_id: str, media_type: str, tmdb_id: str
+    ) -> None:
+        from app.database import CachedMediaItem
+
+        async with TestingAsyncSessionLocal() as session:
+            session.add(
+                CachedMediaItem(
+                    user_id=user_id,
+                    jellyfin_id=jellyfin_id,
+                    name=jellyfin_id,
+                    media_type=media_type,
+                    raw_data={"ProviderIds": {"Tmdb": tmdb_id}},
+                )
+            )
+            await session.commit()
+
+    async def _cached_ids(self, user_id: int) -> set[str]:
+        from app.database import CachedMediaItem
+
+        async with TestingAsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CachedMediaItem.jellyfin_id).where(CachedMediaItem.user_id == user_id)
+            )
+            return set(result.scalars().all())
+
+    @pytest.mark.asyncio
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyfin_item", new_callable=AsyncMock)
+    @patch("app.routers.content.is_series_in_sonarr", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_series_not_in_sonarr_is_deleted_from_jellyfin(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_in_sonarr: AsyncMock,
+        mock_delete_jellyfin: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Band of Brothers (TMDB 4613) sat in Jellyfin without Sonarr: delete it via Jellyfin."""
+        mock_viewers.return_value = []
+        mock_delete_series.return_value = (False, "Series with TMDB ID 4613 not found in Sonarr")
+        mock_in_sonarr.return_value = False
+        mock_delete_jellyfin.return_value = True
+        token = self._get_auth_token(client, "unmanaged_series@example.com")
+        user_id = self._get_user_id(client, token)
+        self._setup_services(client, token)
+        await self._add_cached_item(user_id, "jf-band-of-brothers", "Series", "4613")
+        # A movie sharing the TMDB number (different TMDB namespace) must be left alone
+        await self._add_cached_item(user_id, "jf-movie-4613", "Movie", "4613")
+
+        response = client.request(
+            "DELETE",
+            "/api/content/series/4613",
+            headers={"Authorization": f"Bearer {token}"},
+            # Same body as the frontend sends
+            json={"tmdb_id": 4613, "delete_from_arr": True, "delete_from_jellyseerr": True},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["arr_deleted"] is False
+        assert data["jellyfin_deleted"] is True
+        assert "jellyfin" in data["message"].lower()
+        mock_delete_jellyfin.assert_called_once_with(
+            "https://jellyfin.example.com", "jf-key", "jf-band-of-brothers"
+        )
+        assert await self._cached_ids(user_id) == {"jf-movie-4613"}
+
+    @pytest.mark.asyncio
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyfin_item", new_callable=AsyncMock)
+    @patch("app.routers.content.is_movie_in_radarr", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_movie_by_tmdb_id", new_callable=AsyncMock)
+    async def test_movie_not_in_radarr_is_deleted_from_jellyfin(
+        self,
+        mock_delete_movie: AsyncMock,
+        mock_in_radarr: AsyncMock,
+        mock_delete_jellyfin: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Migration (TMDB 940551) was a loose file in Movies/: delete it via Jellyfin."""
+        mock_viewers.return_value = []
+        mock_delete_movie.return_value = (False, "Movie with TMDB ID 940551 not found in Radarr")
+        mock_in_radarr.return_value = False
+        mock_delete_jellyfin.return_value = True
+        token = self._get_auth_token(client, "unmanaged_movie@example.com")
+        user_id = self._get_user_id(client, token)
+        self._setup_services(client, token)
+        await self._add_cached_item(user_id, "jf-migration", "Movie", "940551")
+
+        response = client.delete(
+            "/api/content/movie/940551",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["jellyfin_deleted"] is True
+        mock_delete_jellyfin.assert_called_once_with(
+            "https://jellyfin.example.com", "jf-key", "jf-migration"
+        )
+        assert await self._cached_ids(user_id) == set()
+
+    @pytest.mark.asyncio
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyfin_item", new_callable=AsyncMock)
+    @patch("app.routers.content.is_series_in_sonarr", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_no_jellyfin_fallback_when_sonarr_unreachable(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_in_sonarr: AsyncMock,
+        mock_delete_jellyfin: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Sonarr down: we can't tell whether it manages the series, so don't touch files."""
+        mock_viewers.return_value = []
+        mock_delete_series.return_value = (False, "Series with TMDB ID 4613 not found in Sonarr")
+        mock_in_sonarr.return_value = None
+        token = self._get_auth_token(client, "sonarr_down@example.com")
+        user_id = self._get_user_id(client, token)
+        self._setup_services(client, token)
+        await self._add_cached_item(user_id, "jf-band-of-brothers", "Series", "4613")
+
+        response = client.delete(
+            "/api/content/series/4613",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is False
+        mock_delete_jellyfin.assert_not_called()
+        assert await self._cached_ids(user_id) == {"jf-band-of-brothers"}
+
+    @pytest.mark.asyncio
+    @patch("app.routers.content.get_active_viewers", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_jellyfin_item", new_callable=AsyncMock)
+    @patch("app.routers.content.is_series_in_sonarr", new_callable=AsyncMock)
+    @patch("app.routers.content.delete_series_by_tmdb_id", new_callable=AsyncMock)
+    async def test_jellyfin_failure_keeps_cache(
+        self,
+        mock_delete_series: AsyncMock,
+        mock_in_sonarr: AsyncMock,
+        mock_delete_jellyfin: AsyncMock,
+        mock_viewers: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Jellyfin refuses the deletion: report failure and keep the item."""
+        mock_viewers.return_value = []
+        mock_delete_series.return_value = (False, "Series with TMDB ID 4613 not found in Sonarr")
+        mock_in_sonarr.return_value = False
+        mock_delete_jellyfin.return_value = False
+        token = self._get_auth_token(client, "jellyfin_refuses@example.com")
+        user_id = self._get_user_id(client, token)
+        self._setup_services(client, token)
+        await self._add_cached_item(user_id, "jf-band-of-brothers", "Series", "4613")
+
+        response = client.delete(
+            "/api/content/series/4613",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        data = response.json()
+        assert data["success"] is False
+        assert data["jellyfin_deleted"] is False
+        assert await self._cached_ids(user_id) == {"jf-band-of-brothers"}
+
+
+class TestArrMembershipAndJellyfinDelete:
+    """Service helpers behind the Jellyfin fallback."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_is_series_in_sonarr(self) -> None:
+        from app.services.sonarr import is_series_in_sonarr
+
+        respx.get("https://sonarr.example.com/api/v3/series").mock(
+            return_value=Response(200, json=[{"id": 1, "tmdbId": 96677}])
+        )
+        assert await is_series_in_sonarr("https://sonarr.example.com", "k", 96677) is True
+        assert await is_series_in_sonarr("https://sonarr.example.com", "k", 4613) is False
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_is_series_in_sonarr_unknown_on_error(self) -> None:
+        from app.services.sonarr import is_series_in_sonarr
+
+        respx.get("https://sonarr.example.com/api/v3/series").mock(return_value=Response(500))
+        assert await is_series_in_sonarr("https://sonarr.example.com", "k", 4613) is None
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_is_movie_in_radarr(self) -> None:
+        from app.services.radarr import is_movie_in_radarr
+
+        route = respx.get("https://radarr.example.com/api/v3/movie")
+        route.mock(return_value=Response(200, json=[]))
+        assert await is_movie_in_radarr("https://radarr.example.com", "k", 940551) is False
+        route.mock(return_value=Response(200, json=[{"id": 27, "tmdbId": 940551}]))
+        assert await is_movie_in_radarr("https://radarr.example.com", "k", 940551) is True
+        route.mock(side_effect=httpx.ConnectError("down"))
+        assert await is_movie_in_radarr("https://radarr.example.com", "k", 940551) is None
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_delete_jellyfin_item(self) -> None:
+        from app.services.jellyfin import delete_jellyfin_item
+
+        route = respx.delete("https://jf.example.com/Items/abc").mock(return_value=Response(204))
+        assert await delete_jellyfin_item("https://jf.example.com/", "key", "abc") is True
+        assert route.calls[0].request.headers["X-Emby-Token"] == "key"
+        route.mock(return_value=Response(401))
+        assert await delete_jellyfin_item("https://jf.example.com", "key", "abc") is False

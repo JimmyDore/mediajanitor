@@ -28,13 +28,18 @@ from app.services.content import (
 from app.services.content_cache import (
     delete_cached_jellyseerr_request_by_id,
     delete_cached_jellyseerr_request_by_tmdb_id,
+    delete_cached_media_by_jellyfin_ids,
     delete_cached_media_by_tmdb_id,
     get_cached_jellyfin_ids_by_tmdb_id,
     get_user_settings,
     lookup_jellyseerr_media_by_request_id,
     lookup_jellyseerr_media_by_tmdb,
 )
-from app.services.jellyfin import get_active_viewers, get_decrypted_jellyfin_api_key
+from app.services.jellyfin import (
+    delete_jellyfin_item,
+    get_active_viewers,
+    get_decrypted_jellyfin_api_key,
+)
 from app.services.jellyseerr import (
     delete_jellyseerr_media,
     get_decrypted_jellyseerr_api_key,
@@ -42,11 +47,13 @@ from app.services.jellyseerr import (
 from app.services.radarr import (
     delete_movie_by_tmdb_id,
     get_decrypted_radarr_api_key,
+    is_movie_in_radarr,
 )
 from app.services.sonarr import (
     delete_series_by_tmdb_id,
     get_decrypted_sonarr_api_key,
     get_sonarr_tmdb_to_slug_map,
+    is_series_in_sonarr,
 )
 
 logger = logging.getLogger(__name__)
@@ -199,6 +206,56 @@ async def ensure_not_being_watched(
         )
 
 
+async def delete_unmanaged_from_jellyfin(
+    db: AsyncSession,
+    settings: UserSettings,
+    user_id: int,
+    tmdb_id: int,
+    media_type: str,
+    arr_api_key: str,
+) -> tuple[bool, str] | None:
+    """Delete content that Radarr/Sonarr doesn't manage straight from Jellyfin.
+
+    Covers files added to the library by hand. Only kicks in when the *arr
+    confirms it doesn't know the TMDB ID: if it can't be reached, we can't rule
+    out that it manages the files, so we leave them alone.
+
+    Returns (deleted, message), or None when the fallback doesn't apply.
+    """
+    if not settings.jellyfin_server_url or not settings.jellyfin_api_key_encrypted:
+        return None
+    jellyfin_api_key = get_decrypted_jellyfin_api_key(settings)
+    if not jellyfin_api_key:
+        return None
+
+    jellyfin_ids = await get_cached_jellyfin_ids_by_tmdb_id(db, user_id, tmdb_id, media_type)
+    if not jellyfin_ids:
+        return None
+
+    if media_type == "Movie":
+        arr_name = "Radarr"
+        in_arr = await is_movie_in_radarr(settings.radarr_server_url or "", arr_api_key, tmdb_id)
+    else:
+        arr_name = "Sonarr"
+        in_arr = await is_series_in_sonarr(settings.sonarr_server_url or "", arr_api_key, tmdb_id)
+    if in_arr is not False:
+        return None
+
+    deleted_ids = {
+        jellyfin_id
+        for jellyfin_id in sorted(jellyfin_ids)
+        if await delete_jellyfin_item(settings.jellyfin_server_url, jellyfin_api_key, jellyfin_id)
+    }
+    if deleted_ids:
+        await delete_cached_media_by_jellyfin_ids(db, user_id, deleted_ids)
+    if deleted_ids != jellyfin_ids:
+        return False, f"Not managed by {arr_name}, and Jellyfin refused the deletion"
+
+    request_type = "movie" if media_type == "Movie" else "tv"
+    await delete_cached_jellyseerr_request_by_tmdb_id(db, user_id, tmdb_id, request_type)
+    return True, f"Not managed by {arr_name}: deleted from Jellyfin"
+
+
 @router.delete("/movie/{tmdb_id}", response_model=DeleteContentResponse)
 async def delete_movie(
     tmdb_id: int,
@@ -225,6 +282,7 @@ async def delete_movie(
 
     # Delete from Radarr
     arr_deleted = False
+    jellyfin_deleted = False
     arr_message = ""
     delete_from_arr = delete_request.delete_from_arr if delete_request else True
 
@@ -235,6 +293,12 @@ async def delete_movie(
         )
         arr_deleted = success
         arr_message = message
+        if not arr_deleted:
+            fallback = await delete_unmanaged_from_jellyfin(
+                db, settings, current_user.id, tmdb_id, "Movie", radarr_api_key
+            )
+            if fallback:
+                jellyfin_deleted, arr_message = fallback
     else:
         arr_message = "Skipped Radarr deletion"
 
@@ -280,17 +344,18 @@ async def delete_movie(
         else:
             messages.append(jellyseerr_message)
 
-    overall_success = (not delete_from_arr or arr_deleted) and (
+    overall_success = (not delete_from_arr or arr_deleted or jellyfin_deleted) and (
         not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
     )
 
-    if arr_deleted:
+    if arr_deleted or jellyfin_deleted:
         await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
 
     return DeleteContentResponse(
         success=overall_success,
         message="; ".join(messages) if messages else "No actions performed",
         arr_deleted=arr_deleted,
+        jellyfin_deleted=jellyfin_deleted,
         jellyseerr_deleted=jellyseerr_deleted,
     )
 
@@ -321,6 +386,7 @@ async def delete_series(
 
     # Delete from Sonarr
     arr_deleted = False
+    jellyfin_deleted = False
     arr_message = ""
     delete_from_arr = delete_request.delete_from_arr if delete_request else True
 
@@ -331,6 +397,12 @@ async def delete_series(
         )
         arr_deleted = success
         arr_message = message
+        if not arr_deleted:
+            fallback = await delete_unmanaged_from_jellyfin(
+                db, settings, current_user.id, tmdb_id, "Series", sonarr_api_key
+            )
+            if fallback:
+                jellyfin_deleted, arr_message = fallback
     else:
         arr_message = "Skipped Sonarr deletion"
 
@@ -376,17 +448,18 @@ async def delete_series(
         else:
             messages.append(jellyseerr_message)
 
-    overall_success = (not delete_from_arr or arr_deleted) and (
+    overall_success = (not delete_from_arr or arr_deleted or jellyfin_deleted) and (
         not delete_from_jellyseerr or not jellyseerr_media_id or jellyseerr_deleted
     )
 
-    if arr_deleted:
+    if arr_deleted or jellyfin_deleted:
         await refresh_app_alerts(background_tasks, db, current_user.id, current_user.email)
 
     return DeleteContentResponse(
         success=overall_success,
         message="; ".join(messages) if messages else "No actions performed",
         arr_deleted=arr_deleted,
+        jellyfin_deleted=jellyfin_deleted,
         jellyseerr_deleted=jellyseerr_deleted,
     )
 

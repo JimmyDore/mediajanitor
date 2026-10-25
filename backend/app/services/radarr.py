@@ -99,6 +99,29 @@ async def get_radarr_movie_by_tmdb_id(server_url: str, api_key: str, tmdb_id: in
         return None
 
 
+async def is_movie_in_radarr(server_url: str, api_key: str, tmdb_id: int) -> bool | None:
+    """
+    Check whether Radarr manages a movie with this TMDB ID.
+
+    Returns None if Radarr couldn't be reached, so callers can tell
+    "not in Radarr" apart from "don't know".
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/movie",
+                headers={"X-Api-Key": api_key},
+                params={"tmdbId": tmdb_id},
+            )
+            if response.status_code != 200:
+                return None
+            return any(movie.get("tmdbId") == tmdb_id for movie in response.json())
+    except (httpx.RequestError, httpx.TimeoutException, ValueError):
+        return None
+
+
 async def delete_radarr_movie(
     server_url: str, api_key: str, radarr_id: int, delete_files: bool = True
 ) -> bool:

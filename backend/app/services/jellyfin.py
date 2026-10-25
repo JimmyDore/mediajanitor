@@ -117,3 +117,24 @@ async def get_active_viewers(
         if is_match:
             viewers.append(session.get("UserName") or "unknown user")
     return viewers
+
+
+async def delete_jellyfin_item(server_url: str, api_key: str, item_id: str) -> bool:
+    """Delete an item from Jellyfin, files on disk included.
+
+    Returns True if Jellyfin confirmed the deletion (204), False otherwise.
+    """
+    server_url = server_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(
+                f"{server_url}/Items/{item_id}",
+                headers={"X-Emby-Token": api_key},
+            )
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        logger.warning(f"Could not delete Jellyfin item {item_id}: {e}")
+        return False
+    if response.status_code != 204:
+        logger.warning(f"Jellyfin refused to delete item {item_id}: {response.status_code}")
+        return False
+    return True

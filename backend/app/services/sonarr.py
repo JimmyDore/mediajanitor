@@ -114,6 +114,28 @@ async def get_sonarr_series_by_tmdb_id(server_url: str, api_key: str, tmdb_id: i
         return None
 
 
+async def is_series_in_sonarr(server_url: str, api_key: str, tmdb_id: int) -> bool | None:
+    """
+    Check whether Sonarr manages a series with this TMDB ID.
+
+    Returns None if Sonarr couldn't be reached, so callers can tell
+    "not in Sonarr" apart from "don't know".
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/series",
+                headers={"X-Api-Key": api_key},
+            )
+            if response.status_code != 200:
+                return None
+            return any(series.get("tmdbId") == tmdb_id for series in response.json())
+    except (httpx.RequestError, httpx.TimeoutException, ValueError):
+        return None
+
+
 async def get_sonarr_tmdb_to_slug_map(server_url: str, api_key: str) -> dict[int, str]:
     """
     Build a mapping from TMDB ID to Sonarr titleSlug.

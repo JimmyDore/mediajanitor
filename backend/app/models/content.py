@@ -272,6 +272,7 @@ class DeleteContentResponse(BaseModel):
     success: bool
     message: str
     arr_deleted: bool = False  # Whether deleted from Radarr/Sonarr
+    jellyfin_deleted: bool = False  # Not managed by Radarr/Sonarr, deleted via Jellyfin instead
     jellyseerr_deleted: bool = False  # Whether deleted from Jellyseerr
 
 

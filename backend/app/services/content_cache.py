@@ -77,20 +77,38 @@ async def lookup_jellyseerr_media_by_request_id(
 
 
 async def get_cached_jellyfin_ids_by_tmdb_id(
-    db: AsyncSession, user_id: int, tmdb_id: int
+    db: AsyncSession, user_id: int, tmdb_id: int, media_type: str | None = None
 ) -> set[str]:
-    """Get Jellyfin IDs of cached media items matching a TMDB ID (raw_data.ProviderIds.Tmdb)."""
+    """Get Jellyfin IDs of cached media items matching a TMDB ID (raw_data.ProviderIds.Tmdb).
+
+    Movies and series have separate TMDB ID spaces, so pass media_type ("Movie" or
+    "Series") whenever the result is used to act on a specific item.
+    """
     tmdb_id_str = str(tmdb_id)
-    result = await db.execute(
+    query = (
         select(CachedMediaItem)
         .where(CachedMediaItem.user_id == user_id)
         .where(CachedMediaItem.raw_data.isnot(None))
     )
+    if media_type:
+        query = query.where(CachedMediaItem.media_type == media_type)
+    result = await db.execute(query)
     return {
         item.jellyfin_id
         for item in result.scalars().all()
         if (item.raw_data or {}).get("ProviderIds", {}).get("Tmdb") == tmdb_id_str
     }
+
+
+async def delete_cached_media_by_jellyfin_ids(
+    db: AsyncSession, user_id: int, jellyfin_ids: set[str]
+) -> None:
+    """Delete the user's CachedMediaItems with these Jellyfin IDs."""
+    await db.execute(
+        delete(CachedMediaItem)
+        .where(CachedMediaItem.user_id == user_id)
+        .where(CachedMediaItem.jellyfin_id.in_(jellyfin_ids))
+    )
 
 
 async def delete_cached_media_by_tmdb_id(db: AsyncSession, user_id: int, tmdb_id: int) -> int:
