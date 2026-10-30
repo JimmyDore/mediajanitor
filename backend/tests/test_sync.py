@@ -4114,6 +4114,50 @@ class TestSonarrHistoryIntegration:
             assert "sonarr_history" not in cached_movie.raw_data
 
     @pytest.mark.asyncio
+    async def test_cache_jellyseerr_requests_with_sonarr_complete_seasons(self) -> None:
+        """Should store Sonarr's complete seasons in raw_data for TV requests only."""
+        from app.services.sync import cache_jellyseerr_requests
+
+        async with TestingAsyncSessionLocal() as session:
+            user = User(email="complete-seasons@example.com", hashed_password="hashed")
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+            requests_data = [
+                {
+                    "id": 1,
+                    "status": 2,
+                    "media": {"id": 100, "tmdbId": 1668, "mediaType": "tv", "name": "Friends"},
+                    "requestedBy": {"displayName": "john"},
+                },
+                {
+                    "id": 2,
+                    "status": 2,
+                    "media": {"id": 101, "tmdbId": 1668, "mediaType": "movie", "title": "Clash"},
+                    "requestedBy": {"displayName": "jane"},
+                },
+            ]
+
+            await cache_jellyseerr_requests(
+                session,
+                user.id,
+                requests_data,
+                sonarr_complete_seasons={1668: [1, 2, 3, 4]},
+            )
+
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(CachedJellyseerrRequest).where(CachedJellyseerrRequest.user_id == user.id)
+            )
+            by_type = {r.media_type: r for r in result.scalars()}
+            assert by_type["tv"].raw_data is not None
+            assert by_type["tv"].raw_data["sonarr_complete_seasons"] == [1, 2, 3, 4]
+            assert by_type["movie"].raw_data is not None
+            assert "sonarr_complete_seasons" not in by_type["movie"].raw_data
+
+    @pytest.mark.asyncio
     async def test_cache_jellyseerr_requests_without_sonarr_history(self) -> None:
         """Should work without sonarr_history (graceful degradation)."""
         from app.services.sync import cache_jellyseerr_requests

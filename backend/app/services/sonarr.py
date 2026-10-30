@@ -168,6 +168,46 @@ async def get_sonarr_tmdb_to_slug_map(server_url: str, api_key: str) -> dict[int
         return {}
 
 
+async def get_sonarr_complete_seasons(server_url: str, api_key: str) -> dict[int, list[int]]:
+    """
+    Map each series' TMDB ID to the seasons Sonarr has every monitored episode of.
+
+    Seerr only marks a season available when Jellyfin's episode count equals
+    TMDB's exactly, so seasons numbered differently on TVDB (e.g. Friends S04:
+    24 episodes on TVDB, 23 on TMDB) stay "Partially Available" forever.
+    Sonarr's file counts tell us the season is actually on disk.
+
+    Returns empty dict on any error (graceful degradation).
+    """
+    server_url = server_url.rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{server_url}/api/v3/series",
+                headers={"X-Api-Key": api_key},
+            )
+            if response.status_code != 200:
+                return {}
+
+            result: dict[int, list[int]] = {}
+            for series in response.json():
+                tmdb_id = series.get("tmdbId")
+                if not tmdb_id:
+                    continue
+                complete = []
+                for season in series.get("seasons", []):
+                    stats = season.get("statistics", {})
+                    episode_count = stats.get("episodeCount", 0)
+                    if episode_count > 0 and stats.get("episodeFileCount", 0) >= episode_count:
+                        complete.append(season.get("seasonNumber"))
+                if complete:
+                    result[int(tmdb_id)] = sorted(complete)
+            return result
+    except (httpx.RequestError, httpx.TimeoutException, ValueError):
+        return {}
+
+
 async def delete_sonarr_series(
     server_url: str, api_key: str, sonarr_id: int, delete_files: bool = True
 ) -> bool:

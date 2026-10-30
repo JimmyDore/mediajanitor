@@ -22,7 +22,11 @@ from app.services.app_alerts import SyncFailure, report_sync_end
 from app.services.encryption import decrypt_value
 from app.services.retry import retry_with_backoff
 from app.services.slack import send_slack_message
-from app.services.sonarr import get_decrypted_sonarr_api_key, get_sonarr_history_since
+from app.services.sonarr import (
+    get_decrypted_sonarr_api_key,
+    get_sonarr_complete_seasons,
+    get_sonarr_history_since,
+)
 from app.services.ultra import fetch_ultra_stats, get_decrypted_ultra_api_key
 
 logger = logging.getLogger(__name__)
@@ -1678,6 +1682,7 @@ async def cache_jellyseerr_requests(
     user_id: int,
     requests: list[dict[str, Any]],
     sonarr_history: dict[int, list[dict[str, Any]]] | None = None,
+    sonarr_complete_seasons: dict[int, list[int]] | None = None,
 ) -> int:
     """Cache Jellyseerr requests in database, replacing old data.
 
@@ -1689,6 +1694,8 @@ async def cache_jellyseerr_requests(
         requests: List of Jellyseerr request dicts
         sonarr_history: Optional dict mapping TMDB ID to list of episode additions.
             If provided, TV show requests will have sonarr_history added to raw_data.
+        sonarr_complete_seasons: Optional dict mapping TMDB ID to the seasons Sonarr
+            has every episode of. Stored in raw_data for TV requests.
     """
     # Delete existing cached requests for this user
     await db.execute(
@@ -1718,6 +1725,14 @@ async def cache_jellyseerr_requests(
         # Add Sonarr history for TV shows if available
         if sonarr_history and media_type == "tv" and tmdb_id and tmdb_id in sonarr_history:
             raw_data["sonarr_history"] = sonarr_history[tmdb_id]
+
+        if (
+            sonarr_complete_seasons
+            and media_type == "tv"
+            and tmdb_id
+            and tmdb_id in sonarr_complete_seasons
+        ):
+            raw_data["sonarr_complete_seasons"] = sonarr_complete_seasons[tmdb_id]
 
         cached_request = CachedJellyseerrRequest(
             user_id=user_id,
@@ -2081,6 +2096,7 @@ async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False)
             # Fetch Sonarr history if Sonarr is configured (US-63.1)
             # This provides episode-level download dates for "Recently Available"
             sonarr_history: dict[int, list[dict[str, Any]]] | None = None
+            sonarr_complete_seasons: dict[int, list[int]] | None = None
             if settings.sonarr_server_url and settings.sonarr_api_key_encrypted:
                 try:
                     sonarr_api_key = get_decrypted_sonarr_api_key(settings)
@@ -2097,12 +2113,20 @@ async def run_user_sync(db: AsyncSession, user_id: int, scheduled: bool = False)
                                 f"Fetched Sonarr history for {len(sonarr_history)} series "
                                 f"(last {days_back} days) for user {user_id}"
                             )
+                        # Seasons fully on disk, to catch requests Seerr never completes
+                        sonarr_complete_seasons = await get_sonarr_complete_seasons(
+                            settings.sonarr_server_url, sonarr_api_key
+                        )
                 except Exception as e:
                     # Sonarr history failure is not critical - continue without it
                     logger.warning(f"Failed to fetch Sonarr history for user {user_id}: {e}")
 
             requests_count = await cache_jellyseerr_requests(
-                db, user_id, requests_data, sonarr_history=sonarr_history
+                db,
+                user_id,
+                requests_data,
+                sonarr_history=sonarr_history,
+                sonarr_complete_seasons=sonarr_complete_seasons,
             )
             logger.info(f"Cached {requests_count} Jellyseerr requests for user {user_id}")
 

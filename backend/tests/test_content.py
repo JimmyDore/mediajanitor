@@ -3548,6 +3548,59 @@ class TestUnavailableRequests:
         assert data["unavailable_requests"]["count"] == 1
 
     @pytest.mark.asyncio
+    async def test_tv_request_complete_in_sonarr_is_not_unavailable(
+        self, client: TestClient
+    ) -> None:
+        """TV requests whose requested seasons all have their files in Sonarr must NOT
+        appear as unavailable, even when Seerr still says Partially Available.
+
+        Reproduces the Friends S04 case: TMDB lists 23 episodes, TVDB/Sonarr 24.
+        Seerr requires an exact episode count match, so the season stays partial
+        forever although every episode is on disk.
+        """
+        token = self._get_auth_token(client, "sonarr-complete@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = client.get("/api/auth/me", headers=headers)
+        user_id = me_response.json()["id"]
+
+        from app.database import CachedJellyseerrRequest
+
+        def friends_request(jellyseerr_id: int, complete: list[int]) -> CachedJellyseerrRequest:
+            return CachedJellyseerrRequest(
+                user_id=user_id,
+                jellyseerr_id=jellyseerr_id,
+                tmdb_id=1668,
+                media_type="tv",
+                status=2,  # APPROVED - Seerr never completes it
+                title="Friends",
+                requested_by="jbouron",
+                release_date="1994-09-22",
+                raw_data={
+                    "seasons": [
+                        {"seasonNumber": 3, "status": 5},
+                        {"seasonNumber": 4, "status": 2},
+                    ],
+                    "media": {"firstAirDate": "1994-09-22", "status": 4},
+                    "sonarr_complete_seasons": complete,
+                },
+            )
+
+        async with TestingAsyncSessionLocal() as session:
+            session.add_all(
+                [
+                    friends_request(4001, complete=[1, 2, 3, 4]),
+                    # Control: season 4 still downloading in Sonarr
+                    friends_request(4002, complete=[1, 2, 3]),
+                ]
+            )
+            await session.commit()
+
+        response = client.get("/api/content/summary", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["unavailable_requests"]["count"] == 1
+
+    @pytest.mark.asyncio
     async def test_issues_filter_requests_returns_unavailable_requests(
         self, client: TestClient
     ) -> None:

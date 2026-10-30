@@ -21,6 +21,7 @@ from app.services.sonarr import (
     delete_series_by_tmdb_id,
     delete_sonarr_series,
     get_decrypted_sonarr_api_key,
+    get_sonarr_complete_seasons,
     get_sonarr_series_by_tmdb_id,
     get_sonarr_tmdb_to_slug_map,
     get_user_sonarr_settings,
@@ -1376,3 +1377,67 @@ class TestGetSonarrHistorySince:
             call_args = mock_client.get.call_args
             url = call_args[0][0]
             assert "//api" not in url
+
+
+class TestGetSonarrCompleteSeasons:
+    """Tests for get_sonarr_complete_seasons function."""
+
+    @staticmethod
+    def _season(number: int, files: int, episodes: int) -> dict[str, object]:
+        return {
+            "seasonNumber": number,
+            "statistics": {"episodeFileCount": files, "episodeCount": episodes},
+        }
+
+    @pytest.mark.asyncio
+    async def test_returns_seasons_with_every_episode_on_disk(self) -> None:
+        """Seasons whose files cover all monitored episodes are complete; empty ones are not."""
+        with patch("app.services.sonarr.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = [
+                {
+                    "tmdbId": 1668,
+                    "seasons": [
+                        self._season(0, 0, 0),
+                        self._season(3, 25, 25),
+                        self._season(4, 24, 24),
+                        self._season(5, 0, 0),
+                        self._season(6, 10, 24),
+                    ],
+                },
+                {"tmdbId": None, "seasons": [self._season(1, 10, 10)]},
+            ]
+            mock_client.get.return_value = mock_response
+
+            result = await get_sonarr_complete_seasons("https://sonarr.example.com", "key")
+
+            assert result == {1668: [3, 4]}
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_dict_on_non_200_response(self) -> None:
+        """Should return empty dict when API returns non-200."""
+        with patch("app.services.sonarr.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.status_code = 401
+            mock_client.get.return_value = mock_response
+
+            result = await get_sonarr_complete_seasons("https://sonarr.example.com", "bad")
+
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_dict_on_network_error(self) -> None:
+        """Should return empty dict when Sonarr can't be reached."""
+        with patch("app.services.sonarr.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_client.get.side_effect = httpx.ConnectError("down")
+
+            result = await get_sonarr_complete_seasons("https://sonarr.example.com", "key")
+
+            assert result == {}

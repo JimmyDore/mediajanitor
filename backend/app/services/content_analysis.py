@@ -534,6 +534,23 @@ def _is_tv_complete_for_released(request: CachedJellyseerrRequest) -> bool:
     return False
 
 
+def _requested_seasons_complete_in_sonarr(request: CachedJellyseerrRequest) -> bool:
+    """Check if Sonarr has every episode of every season in the request.
+
+    Seerr keeps a season "Partially Available" when Jellyfin's episode count
+    differs from TMDB's, even if it is higher (TVDB vs TMDB numbering, e.g.
+    Friends S04). The request then never completes, although it's on disk.
+    """
+    raw_data = request.raw_data or {}
+    complete = set(raw_data.get("sonarr_complete_seasons", []))
+    requested = {
+        season.get("seasonNumber")
+        for season in raw_data.get("seasons", [])
+        if season.get("seasonNumber")
+    }
+    return bool(requested) and requested <= complete
+
+
 def is_unavailable_request(
     request: CachedJellyseerrRequest,
     show_unreleased: bool = False,
@@ -572,6 +589,9 @@ def is_unavailable_request(
     if request.media_type == "tv" and request.status == 4:
         if _is_tv_complete_for_released(request):
             return False
+
+    if request.media_type == "tv" and _requested_seasons_complete_in_sonarr(request):
+        return False
 
     return _should_include_request(request, show_unreleased)
 
